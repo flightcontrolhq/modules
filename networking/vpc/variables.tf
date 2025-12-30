@@ -80,6 +80,11 @@ variable "public_subnet_cidrs" {
     condition     = var.public_subnet_cidrs == null || alltrue([for cidr in var.public_subnet_cidrs : can(cidrhost(cidr, 0))])
     error_message = "All public_subnet_cidrs must be valid IPv4 CIDR blocks."
   }
+
+  validation {
+    condition     = var.public_subnet_cidrs == null || length(var.public_subnet_cidrs) == var.subnet_count
+    error_message = "The number of public_subnet_cidrs must equal subnet_count."
+  }
 }
 
 variable "private_subnet_cidrs" {
@@ -90,6 +95,11 @@ variable "private_subnet_cidrs" {
   validation {
     condition     = var.private_subnet_cidrs == null || alltrue([for cidr in var.private_subnet_cidrs : can(cidrhost(cidr, 0))])
     error_message = "All private_subnet_cidrs must be valid IPv4 CIDR blocks."
+  }
+
+  validation {
+    condition     = var.private_subnet_cidrs == null || length(var.private_subnet_cidrs) == var.subnet_count
+    error_message = "The number of private_subnet_cidrs must equal subnet_count."
   }
 }
 

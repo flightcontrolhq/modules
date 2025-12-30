@@ -176,7 +176,7 @@ run "nat_gateway_disabled" {
 }
 
 # Test 7: IPv6 enabled
-run "ipv6_enabled" {
+run "enable_ipv6" {
   command = plan
 
   variables {
