@@ -13,32 +13,32 @@ This repository contains reusable infrastructure modules designed for enterprise
 
 ## Module Directory
 
-| Category | Module | Description | Status |
-|----------|--------|-------------|--------|
-| `cache/` | `elasticache` | AWS ElastiCache clusters | Planned |
-| `cdn/` | `cloudfront` | AWS CloudFront distributions | Planned |
-| `compute/` | `autoscaling` | AWS Auto Scaling groups | Planned |
-| `compute/` | `ec2` | AWS EC2 instances | Planned |
-| `compute/` | `ecs` | AWS ECS clusters and services | Planned |
-| `compute/` | `lambda` | AWS Lambda functions | Planned |
-| `database/` | `aurora` | AWS Aurora clusters | Planned |
-| `database/` | `dynamodb` | AWS DynamoDB tables | Planned |
-| `database/` | `rds` | AWS RDS instances | Planned |
-| `kubernetes/` | - | Kubernetes resources | Planned |
-| `messaging/` | `sns` | AWS SNS topics and subscriptions | Planned |
-| `messaging/` | `sqs` | AWS SQS queues | Planned |
-| `monitoring/` | `cloudwatch` | AWS CloudWatch alarms and dashboards | Planned |
-| `networking/` | `alb` | AWS Application Load Balancers | v1.0.0 |
-| `networking/` | `nlb` | AWS Network Load Balancers | Planned |
-| `networking/` | `route53` | AWS Route53 hosted zones and records | Planned |
-| `networking/` | `security-group` | AWS Security Groups | Planned |
-| `networking/` | `vpc` | AWS VPC and subnets | v1.0.0 |
-| `security/` | `iam` | AWS IAM roles and policies | Planned |
-| `security/` | `kms` | AWS KMS keys | Planned |
-| `security/` | `secrets-manager` | AWS Secrets Manager secrets | Planned |
-| `storage/` | `ebs` | AWS EBS volumes | Planned |
-| `storage/` | `efs` | AWS EFS file systems | Planned |
-| `storage/` | `s3` | AWS S3 buckets | Planned |
+| Category      | Module            | Description                                                            | Status  |
+| ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
+| `cache/`      | `elasticache`     | AWS ElastiCache clusters                                               | Planned |
+| `cdn/`        | `cloudfront`      | AWS CloudFront distributions                                           | Planned |
+| `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | Planned |
+| `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
+| `compute/`    | `ecs`             | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs | v1.0.0  |
+| `compute/`    | `lambda`          | AWS Lambda functions                                                   | Planned |
+| `database/`   | `aurora`          | AWS Aurora clusters                                                    | Planned |
+| `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | Planned |
+| `database/`   | `rds`             | AWS RDS instances                                                      | Planned |
+| `kubernetes/` | -                 | Kubernetes resources                                                   | Planned |
+| `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
+| `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
+| `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
+| `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
+| `networking/` | `nlb`             | AWS Network Load Balancers                                             | Planned |
+| `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | Planned |
+| `networking/` | `security-group`  | AWS Security Groups                                                    | Planned |
+| `networking/` | `vpc`             | AWS VPC and subnets                                                    | v1.0.0  |
+| `security/`   | `iam`             | AWS IAM roles and policies                                             | Planned |
+| `security/`   | `kms`             | AWS KMS keys                                                           | Planned |
+| `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
+| `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
+| `storage/`    | `efs`             | AWS EFS file systems                                                   | Planned |
+| `storage/`    | `s3`              | AWS S3 buckets                                                         | Planned |
 
 ## Usage
 
@@ -114,6 +114,7 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 See the [LICENSE](LICENSE) file for the full license text.
 
 This means:
+
 - You can use, modify, and distribute this code
 - If you modify and use this code (including as a network service), you must make your source code available under the same license
 - Commercial use in closed-source projects is not permitted without a separate license agreement
