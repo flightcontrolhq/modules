@@ -2,6 +2,13 @@
 # Public Application Load Balancer
 ################################################################################
 
+check "public_alb_subnet_requirement" {
+  assert {
+    condition     = !var.enable_public_alb || length(var.public_subnet_ids) >= 2
+    error_message = "At least 2 public_subnet_ids are required when enable_public_alb is true. ALBs require subnets in at least 2 availability zones for high availability."
+  }
+}
+
 module "public_alb" {
   count = var.enable_public_alb ? 1 : 0
 
@@ -41,6 +48,13 @@ module "public_alb" {
 ################################################################################
 # Private Application Load Balancer
 ################################################################################
+
+check "private_alb_subnet_requirement" {
+  assert {
+    condition     = !var.enable_private_alb || length(var.private_subnet_ids) >= 2
+    error_message = "At least 2 private_subnet_ids are required when enable_private_alb is true. ALBs require subnets in at least 2 availability zones for high availability."
+  }
+}
 
 module "private_alb" {
   count = var.enable_private_alb ? 1 : 0
