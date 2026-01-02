@@ -350,44 +350,44 @@ module "nlb" {
 
 ## Requirements
 
-| Name | Version |
-|------|---------|
+| Name               | Version   |
+| ------------------ | --------- |
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 5.0 |
+| aws                | >= 5.0    |
 
 ## Inputs
 
 ### General
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| name | Name prefix for all resources created by this module. | `string` | n/a | yes |
-| vpc_id | The ID of the VPC where the NLB will be created. | `string` | n/a | yes |
-| subnet_ids | A list of subnet IDs for the NLB. | `list(string)` | n/a | yes |
-| tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
+| Name       | Description                                           | Type           | Default | Required |
+| ---------- | ----------------------------------------------------- | -------------- | ------- | -------- |
+| name       | Name prefix for all resources created by this module. | `string`       | n/a     | yes      |
+| vpc_id     | The ID of the VPC where the NLB will be created.      | `string`       | n/a     | yes      |
+| subnet_ids | A list of subnet IDs for the NLB.                     | `list(string)` | n/a     | yes      |
+| tags       | A map of tags to assign to all resources.             | `map(string)`  | `{}`    | no       |
 
 ### NLB Settings
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| internal | If true, the NLB will be internal (not internet-facing). | `bool` | `false` | no |
-| security_group_ids | A list of security group IDs to attach to the NLB. | `list(string)` | `[]` | no |
-| enable_deletion_protection | Enable deletion protection on the NLB. | `bool` | `false` | no |
-| enable_cross_zone_load_balancing | Enable cross-zone load balancing. | `bool` | `false` | no |
-| dns_record_client_routing_policy | How traffic is distributed among NLB AZs. | `string` | `null` | no |
+| Name                             | Description                                              | Type           | Default | Required |
+| -------------------------------- | -------------------------------------------------------- | -------------- | ------- | -------- |
+| internal                         | If true, the NLB will be internal (not internet-facing). | `bool`         | `false` | no       |
+| security_group_ids               | A list of security group IDs to attach to the NLB.       | `list(string)` | `[]`    | no       |
+| enable_deletion_protection       | Enable deletion protection on the NLB.                   | `bool`         | `false` | no       |
+| enable_cross_zone_load_balancing | Enable cross-zone load balancing.                        | `bool`         | `false` | no       |
+| dns_record_client_routing_policy | How traffic is distributed among NLB AZs.                | `string`       | `null`  | no       |
 
 ### Elastic IPs
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| enable_elastic_ips | Enable static IP addresses using Elastic IPs. | `bool` | `false` | no |
-| elastic_ip_allocation_ids | A list of Elastic IP allocation IDs, one per subnet. | `list(string)` | `[]` | no |
+| Name                      | Description                                          | Type           | Default | Required |
+| ------------------------- | ---------------------------------------------------- | -------------- | ------- | -------- |
+| enable_elastic_ips        | Enable static IP addresses using Elastic IPs.        | `bool`         | `false` | no       |
+| elastic_ip_allocation_ids | A list of Elastic IP allocation IDs, one per subnet. | `list(string)` | `[]`    | no       |
 
 ### Target Groups
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| target_groups | Map of target groups to create. See structure below. | `map(object)` | `{default = {...}}` | no |
+| Name          | Description                                          | Type          | Default             | Required |
+| ------------- | ---------------------------------------------------- | ------------- | ------------------- | -------- |
+| target_groups | Map of target groups to create. See structure below. | `map(object)` | `{default = {...}}` | no       |
 
 **Target Group Object Structure:**
 
@@ -418,9 +418,9 @@ target_groups = {
 
 ### Listeners
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| listeners | Map of listeners to create. See structure below. | `map(object)` | `{}` | no |
+| Name      | Description                                      | Type          | Default | Required |
+| --------- | ------------------------------------------------ | ------------- | ------- | -------- |
+| listeners | Map of listeners to create. See structure below. | `map(object)` | `{}`    | no       |
 
 **Listener Object Structure:**
 
@@ -440,31 +440,31 @@ listeners = {
 
 ### Access Logs
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| enable_access_logs | Enable access logging for the NLB. | `bool` | `false` | no |
-| access_logs_bucket_arn | ARN of an existing S3 bucket for access logs. | `string` | `null` | no |
-| access_logs_prefix | The S3 prefix for access logs. | `string` | `""` | no |
-| access_logs_retention_days | Days to retain access logs in S3. | `number` | `90` | no |
-| access_logs_kms_key_id | KMS key ID for S3 bucket encryption. If null, uses AES256. | `string` | `null` | no |
-| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket. | `bool` | `false` | no |
+| Name                           | Description                                                | Type     | Default | Required |
+| ------------------------------ | ---------------------------------------------------------- | -------- | ------- | -------- |
+| enable_access_logs             | Enable access logging for the NLB.                         | `bool`   | `false` | no       |
+| access_logs_bucket_arn         | ARN of an existing S3 bucket for access logs.              | `string` | `null`  | no       |
+| access_logs_prefix             | The S3 prefix for access logs.                             | `string` | `""`    | no       |
+| access_logs_retention_days     | Days to retain access logs in S3.                          | `number` | `90`    | no       |
+| access_logs_kms_key_id         | KMS key ID for S3 bucket encryption. If null, uses AES256. | `string` | `null`  | no       |
+| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket.           | `bool`   | `false` | no       |
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| nlb_id | The ID of the Network Load Balancer. |
-| nlb_arn | The ARN of the Network Load Balancer. |
-| nlb_arn_suffix | The ARN suffix of the NLB for use with CloudWatch Metrics. |
-| nlb_dns_name | The DNS name of the Network Load Balancer. |
-| nlb_zone_id | The canonical hosted zone ID of the NLB (for Route53 alias records). |
-| listener_arns | Map of listener ARNs keyed by listener name. |
-| listener_ids | Map of listener IDs keyed by listener name. |
-| target_group_arns | Map of target group ARNs keyed by target group name. |
-| target_group_arn_suffixes | Map of target group ARN suffixes keyed by target group name. |
-| target_group_names | Map of target group names keyed by target group key. |
-| access_logs_bucket_name | The name of the S3 bucket for access logs. |
-| access_logs_bucket_arn | The ARN of the S3 bucket for access logs. |
+| Name                      | Description                                                          |
+| ------------------------- | -------------------------------------------------------------------- |
+| nlb_id                    | The ID of the Network Load Balancer.                                 |
+| nlb_arn                   | The ARN of the Network Load Balancer.                                |
+| nlb_arn_suffix            | The ARN suffix of the NLB for use with CloudWatch Metrics.           |
+| nlb_dns_name              | The DNS name of the Network Load Balancer.                           |
+| nlb_zone_id               | The canonical hosted zone ID of the NLB (for Route53 alias records). |
+| listener_arns             | Map of listener ARNs keyed by listener name.                         |
+| listener_ids              | Map of listener IDs keyed by listener name.                          |
+| target_group_arns         | Map of target group ARNs keyed by target group name.                 |
+| target_group_arn_suffixes | Map of target group ARN suffixes keyed by target group name.         |
+| target_group_names        | Map of target group names keyed by target group key.                 |
+| access_logs_bucket_name   | The name of the S3 bucket for access logs.                           |
+| access_logs_bucket_arn    | The ARN of the S3 bucket for access logs.                            |
 
 ## Accessing Outputs
 
@@ -530,18 +530,18 @@ Internet ─────────▶ │  │     NLB     │                
 
 ## ALB vs NLB Comparison
 
-| Feature | ALB | NLB |
-|---------|-----|-----|
-| OSI Layer | Layer 7 (HTTP/HTTPS) | Layer 4 (TCP/UDP/TLS) |
-| Protocols | HTTP, HTTPS | TCP, UDP, TLS, TCP_UDP |
-| Latency | Low (~ms) | Ultra-low (~µs) |
-| Static IPs | No | Yes (via Elastic IPs) |
-| Security Groups | Yes (required) | Optional |
-| Path-based routing | Yes | No |
-| Host-based routing | Yes | No |
-| WebSocket | Yes | Yes (TCP) |
-| WAF Integration | Yes | No |
-| Use Case | Web applications | High-performance TCP/UDP services |
+| Feature            | ALB                  | NLB                               |
+| ------------------ | -------------------- | --------------------------------- |
+| OSI Layer          | Layer 7 (HTTP/HTTPS) | Layer 4 (TCP/UDP/TLS)             |
+| Protocols          | HTTP, HTTPS          | TCP, UDP, TLS, TCP_UDP            |
+| Latency            | Low (~ms)            | Ultra-low (~µs)                   |
+| Static IPs         | No                   | Yes (via Elastic IPs)             |
+| Security Groups    | Yes (required)       | Optional                          |
+| Path-based routing | Yes                  | No                                |
+| Host-based routing | Yes                  | No                                |
+| WebSocket          | Yes                  | Yes (TCP)                         |
+| WAF Integration    | Yes                  | No                                |
+| Use Case           | Web applications     | High-performance TCP/UDP services |
 
 ## When to Use NLB
 
@@ -564,16 +564,19 @@ Internet ─────────▶ │  │     NLB     │                
 The module validates configuration at plan time:
 
 **Missing protocol:**
+
 ```
 Error: Listener protocol must be one of: TCP, TLS, UDP, TCP_UDP.
 ```
 
 **TLS without certificate:**
+
 ```
 Error: certificate_arn is required for TLS protocol listeners.
 ```
 
 **Invalid target group reference:**
+
 ```
 Error: All listener target_group_key values must reference valid keys in target_groups.
 ```
