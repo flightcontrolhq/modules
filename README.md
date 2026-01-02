@@ -29,7 +29,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
 | `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
-| `networking/` | `nlb`             | AWS Network Load Balancers                                             | Planned |
+| `networking/` | `nlb`             | AWS Network Load Balancers                                             | v1.0.0  |
 | `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | Planned |
 | `networking/` | `security-group`  | AWS Security Groups                                                    | Planned |
 | `networking/` | `vpc`             | AWS VPC and subnets                                                    | v1.0.0  |
