@@ -279,3 +279,20 @@ variable "access_logs_retention_days" {
     error_message = "The access_logs_retention_days must be at least 1."
   }
 }
+
+variable "access_logs_kms_key_id" {
+  type        = string
+  description = "KMS key ID for S3 bucket encryption. If null, uses AES256 (SSE-S3)."
+  default     = null
+
+  validation {
+    condition     = var.access_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.access_logs_kms_key_id))
+    error_message = "The access_logs_kms_key_id must be a valid KMS key ARN or alias."
+  }
+}
+
+variable "access_logs_versioning_enabled" {
+  type        = bool
+  description = "Enable versioning for the access logs S3 bucket."
+  default     = false
+}

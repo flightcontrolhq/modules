@@ -253,6 +253,8 @@ spec:
 | access_logs_bucket_arn | The ARN of an existing S3 bucket for access logs. If null and access logs are enabled, a new bucket will be created. | `string` | `null` | no |
 | access_logs_prefix | The S3 prefix for access logs. | `string` | `""` | no |
 | access_logs_retention_days | The number of days to retain access logs in S3. | `number` | `90` | no |
+| access_logs_kms_key_id | KMS key ID for S3 bucket encryption. If null, uses AES256. | `string` | `null` | no |
+| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket. | `bool` | `false` | no |
 | web_acl_arn | The ARN of a WAFv2 Web ACL to associate with the ALB. | `string` | `null` | no |
 
 ## Outputs

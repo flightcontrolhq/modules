@@ -183,6 +183,8 @@ module "vpc" {
 | flow_logs_s3_bucket_arn | The ARN of an existing S3 bucket for VPC Flow Logs. If null and destination is 's3', a new bucket will be created. | `string` | `null` | no |
 | flow_logs_retention_days | The number of days to retain VPC Flow Logs in CloudWatch. Set to 0 for indefinite retention. | `number` | `30` | no |
 | flow_logs_traffic_type | The type of traffic to capture in VPC Flow Logs. Valid values: 'ACCEPT', 'REJECT', or 'ALL'. | `string` | `"ALL"` | no |
+| flow_logs_kms_key_id | KMS key ID for S3 bucket encryption. If null, uses AES256. | `string` | `null` | no |
+| flow_logs_versioning_enabled | Enable versioning for the flow logs S3 bucket. | `bool` | `false` | no |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
 
 ## Outputs

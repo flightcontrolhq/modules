@@ -446,6 +446,8 @@ listeners = {
 | access_logs_bucket_arn | ARN of an existing S3 bucket for access logs. | `string` | `null` | no |
 | access_logs_prefix | The S3 prefix for access logs. | `string` | `""` | no |
 | access_logs_retention_days | Days to retain access logs in S3. | `number` | `90` | no |
+| access_logs_kms_key_id | KMS key ID for S3 bucket encryption. If null, uses AES256. | `string` | `null` | no |
+| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket. | `bool` | `false` | no |
 
 ## Outputs
 

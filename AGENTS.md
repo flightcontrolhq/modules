@@ -33,17 +33,32 @@ Every module **MUST** contain the following files:
 
 | File | Purpose | Requirements |
 |------|---------|--------------|
-| `main.tf` | Primary resource definitions | All resources for the module |
 | `variables.tf` | Input variables | All variables with `type`, `description`, and `validation` where applicable |
 | `outputs.tf` | Output values | All outputs with `description` |
 | `versions.tf` | Version constraints | OpenTofu/Terraform and provider version requirements |
 | `README.md` | Module documentation | Usage examples, input/output documentation, requirements |
 
+### File Organization
+
+Each resource type should be defined in its own dedicated file, named after the resource it contains. This improves code organization, readability, and makes it easier to locate specific resources.
+
+**Guidelines:**
+- Name files after the primary resource they contain (e.g., `sqs_queue.tf`, `iam_role.tf`, `s3_bucket.tf`)
+- Group closely related resources in the same file (e.g., an IAM role and its policy attachments)
+- Use `locals.tf` for local values when needed
+- Use `data.tf` for data sources when needed
+
 ### Example Module Structure
 
 ```
-messaging/sqs/
-├── main.tf
+networking/vpc/
+├── vpc.tf              # aws_vpc resource
+├── subnets.tf          # aws_subnet resources
+├── internet_gateway.tf # aws_internet_gateway resource
+├── nat_gateway.tf      # aws_nat_gateway and aws_eip resources
+├── route_tables.tf     # aws_route_table and aws_route resources
+├── locals.tf           # Local values
+├── data.tf             # Data sources
 ├── variables.tf
 ├── outputs.tf
 ├── versions.tf
@@ -224,7 +239,7 @@ tofu validate
 ### When Creating New Modules
 
 1. Create the directory structure: `<category>/<module-name>/`
-2. Create all required files: `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`, `README.md`
+2. Create all required files: `variables.tf`, `outputs.tf`, `versions.tf`, `README.md`
 3. Follow all naming conventions and standards in this document
 4. Add validation to variables where applicable
 5. Include comprehensive examples in the module README

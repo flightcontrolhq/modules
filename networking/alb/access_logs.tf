@@ -30,8 +30,19 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.access_logs_kms_key_id != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.access_logs_kms_key_id
     }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "access_logs" {
+  count = local.create_access_logs_bucket ? 1 : 0
+
+  bucket = aws_s3_bucket.access_logs[0].id
+
+  versioning_configuration {
+    status = var.access_logs_versioning_enabled ? "Enabled" : "Disabled"
   }
 }
 

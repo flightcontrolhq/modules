@@ -185,3 +185,20 @@ variable "flow_logs_traffic_type" {
     error_message = "The flow_logs_traffic_type must be 'ACCEPT', 'REJECT', or 'ALL'."
   }
 }
+
+variable "flow_logs_kms_key_id" {
+  type        = string
+  description = "KMS key ID for S3 bucket encryption. If null, uses AES256 (SSE-S3)."
+  default     = null
+
+  validation {
+    condition     = var.flow_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.flow_logs_kms_key_id))
+    error_message = "The flow_logs_kms_key_id must be a valid KMS key ARN or alias."
+  }
+}
+
+variable "flow_logs_versioning_enabled" {
+  type        = bool
+  description = "Enable versioning for the flow logs S3 bucket."
+  default     = false
+}
