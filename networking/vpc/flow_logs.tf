@@ -47,10 +47,8 @@ resource "aws_iam_role_policy" "flow_logs" {
     Statement = [
       {
         Action = [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
         Effect   = "Allow"
