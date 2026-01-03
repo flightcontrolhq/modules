@@ -1,6 +1,6 @@
 # ECS Cluster Module
 
-This module creates an Amazon ECS cluster with configurable capacity providers (Fargate, Fargate Spot, EC2) and optional Application Load Balancers.
+This module creates an Amazon ECS cluster with configurable capacity providers (Fargate, Fargate Spot, EC2) and optional Application Load Balancers and Network Load Balancers.
 
 ## Features
 
@@ -10,6 +10,8 @@ This module creates an Amazon ECS cluster with configurable capacity providers (
 - EC2 capacity provider with Auto Scaling Group and managed scaling
 - Optional public (internet-facing) Application Load Balancer
 - Optional private (internal) Application Load Balancer
+- Optional public (internet-facing) Network Load Balancer
+- Optional private (internal) Network Load Balancer
 - Full launch template support for EC2 instances
 - IMDSv2 enforcement for enhanced security
 - Mixed instances policy with Spot support
@@ -127,6 +129,80 @@ module "ecs" {
 }
 ```
 
+### With Network Load Balancer
+
+```hcl
+module "ecs" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs?ref=v1.0.0"
+
+  name   = "my-app"
+  vpc_id = "vpc-12345678"
+
+  private_subnet_ids = ["subnet-private-1", "subnet-private-2"]
+  public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
+
+  # Public NLB with TCP listener
+  enable_public_nlb = true
+
+  public_nlb_target_groups = {
+    tcp = {
+      port        = 8080
+      protocol    = "TCP"
+      target_type = "ip"
+      health_check = {
+        protocol = "TCP"
+        port     = "traffic-port"
+      }
+    }
+  }
+
+  public_nlb_listeners = {
+    tcp = {
+      port             = 80
+      protocol         = "TCP"
+      target_group_key = "tcp"
+    }
+  }
+}
+```
+
+### With TLS-enabled NLB
+
+```hcl
+module "ecs" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs?ref=v1.0.0"
+
+  name   = "my-app"
+  vpc_id = "vpc-12345678"
+
+  private_subnet_ids = ["subnet-private-1", "subnet-private-2"]
+  public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
+
+  # Public NLB with TLS termination
+  enable_public_nlb = true
+
+  public_nlb_target_groups = {
+    app = {
+      port        = 8080
+      protocol    = "TCP"
+      target_type = "ip"
+    }
+  }
+
+  public_nlb_listeners = {
+    tls = {
+      port             = 443
+      protocol         = "TLS"
+      target_group_key = "app"
+      certificate_arn  = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+      ssl_policy       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+    }
+  }
+
+  public_nlb_enable_cross_zone_load_balancing = true
+}
+```
+
 ## Requirements
 
 | Name | Version |
@@ -222,6 +298,36 @@ module "ecs" {
 | private_alb_enable_access_logs | Enable access logs | `bool` | `false` | no |
 | private_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 
+### Public NLB
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_public_nlb | Enable public NLB | `bool` | `false` | no |
+| public_nlb_target_groups | Map of target groups to create | `map(object)` | `{}` | no |
+| public_nlb_listeners | Map of listeners to create | `map(object)` | `{}` | no |
+| public_nlb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
+| public_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
+| public_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
+| public_nlb_enable_access_logs | Enable access logs | `bool` | `false` | no |
+| public_nlb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
+| public_nlb_enable_elastic_ips | Enable static IPs | `bool` | `false` | no |
+| public_nlb_elastic_ip_allocation_ids | Elastic IP allocation IDs | `list(string)` | `[]` | no |
+
+### Private NLB
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_private_nlb | Enable private NLB | `bool` | `false` | no |
+| private_nlb_target_groups | Map of target groups to create | `map(object)` | `{}` | no |
+| private_nlb_listeners | Map of listeners to create | `map(object)` | `{}` | no |
+| private_nlb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
+| private_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
+| private_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
+| private_nlb_enable_access_logs | Enable access logs | `bool` | `false` | no |
+| private_nlb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
+| private_nlb_enable_elastic_ips | Enable static IPs | `bool` | `false` | no |
+| private_nlb_elastic_ip_allocation_ids | Elastic IP allocation IDs | `list(string)` | `[]` | no |
+
 ## Outputs
 
 ### ECS Cluster
@@ -279,6 +385,30 @@ module "ecs" {
 | private_alb_http_listener_arn | Private ALB HTTP listener ARN |
 | private_alb_https_listener_arn | Private ALB HTTPS listener ARN |
 
+### Public NLB
+
+| Name | Description |
+|------|-------------|
+| public_nlb_arn | Public NLB ARN |
+| public_nlb_id | Public NLB ID |
+| public_nlb_dns_name | Public NLB DNS name |
+| public_nlb_zone_id | Public NLB hosted zone ID |
+| public_nlb_arn_suffix | Public NLB ARN suffix |
+| public_nlb_target_group_arns | Map of target group ARNs |
+| public_nlb_listener_arns | Map of listener ARNs |
+
+### Private NLB
+
+| Name | Description |
+|------|-------------|
+| private_nlb_arn | Private NLB ARN |
+| private_nlb_id | Private NLB ID |
+| private_nlb_dns_name | Private NLB DNS name |
+| private_nlb_zone_id | Private NLB hosted zone ID |
+| private_nlb_arn_suffix | Private NLB ARN suffix |
+| private_nlb_target_group_arns | Map of target group ARNs |
+| private_nlb_listener_arns | Map of listener ARNs |
+
 ## Architecture
 
 ```
@@ -312,6 +442,11 @@ module "ecs" {
 │  │  │        Public ALB            │  │          Private ALB             │ ││
 │  │  │    (Internet-facing)         │  │         (Internal)               │ ││
 │  │  └──────────────────────────────┘  └──────────────────────────────────┘ ││
+│  │                                                                          ││
+│  │  ┌──────────────────────────────┐  ┌──────────────────────────────────┐ ││
+│  │  │        Public NLB            │  │          Private NLB             │ ││
+│  │  │    (Internet-facing)         │  │         (Internal)               │ ││
+│  │  └──────────────────────────────┘  └──────────────────────────────────┘ ││
 │  └──────────────────────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -323,4 +458,6 @@ module "ecs" {
 - EC2 instances automatically register with the ECS cluster via user data
 - IMDSv2 is enforced by default for enhanced security
 - The EC2 security group automatically allows traffic from enabled ALBs
+- NLBs require explicit target group and listener configuration (passthrough to the NLB module)
+- NLB target groups support TCP, TLS, UDP, and TCP_UDP protocols
 

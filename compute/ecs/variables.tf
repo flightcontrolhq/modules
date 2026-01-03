@@ -493,3 +493,347 @@ variable "private_alb_access_logs_bucket_arn" {
   }
 }
 
+################################################################################
+# Public NLB
+################################################################################
+
+variable "enable_public_nlb" {
+  type        = bool
+  description = "Enable a public (internet-facing) Network Load Balancer."
+  default     = false
+}
+
+variable "public_nlb_target_groups" {
+  type = map(object({
+    port                   = number
+    protocol               = optional(string, "TCP")
+    target_type            = optional(string, "ip")
+    deregistration_delay   = optional(number, 300)
+    preserve_client_ip     = optional(bool, true)
+    proxy_protocol_v2      = optional(bool, false)
+    connection_termination = optional(bool, false)
+    health_check = optional(object({
+      enabled             = optional(bool, true)
+      protocol            = optional(string, "TCP")
+      port                = optional(string, "traffic-port")
+      path                = optional(string, null)
+      matcher             = optional(string, null)
+      healthy_threshold   = optional(number, 3)
+      unhealthy_threshold = optional(number, 3)
+      interval            = optional(number, 30)
+      timeout             = optional(number, null)
+    }), {})
+  }))
+  description = "Map of target groups to create for the public NLB. Each key becomes the target group name suffix."
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_target_groups : contains(["TCP", "TLS", "UDP", "TCP_UDP"], v.protocol)
+    ])
+    error_message = "Target group protocol must be one of: TCP, TLS, UDP, TCP_UDP."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_target_groups : contains(["ip", "instance", "alb"], v.target_type)
+    ])
+    error_message = "Target group target_type must be one of: ip, instance, alb."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_target_groups : v.port >= 1 && v.port <= 65535
+    ])
+    error_message = "Target group port must be between 1 and 65535."
+  }
+}
+
+variable "public_nlb_listeners" {
+  type = map(object({
+    port                        = number
+    protocol                    = string
+    target_group_key            = string
+    certificate_arn             = optional(string, null)
+    ssl_policy                  = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
+    alpn_policy                 = optional(string, null)
+    additional_certificate_arns = optional(list(string), [])
+  }))
+  description = "Map of listeners to create for the public NLB. Each references a target group by key."
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_listeners : contains(["TCP", "TLS", "UDP", "TCP_UDP"], v.protocol)
+    ])
+    error_message = "Listener protocol must be one of: TCP, TLS, UDP, TCP_UDP."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_listeners : v.protocol != "TLS" || v.certificate_arn != null
+    ])
+    error_message = "certificate_arn is required for TLS protocol listeners."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_listeners : v.port >= 1 && v.port <= 65535
+    ])
+    error_message = "Listener port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_listeners :
+      v.certificate_arn == null || can(regex("^arn:aws:acm:", v.certificate_arn))
+    ])
+    error_message = "certificate_arn must be a valid ACM certificate ARN."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_listeners :
+      v.alpn_policy == null || contains(["HTTP1Only", "HTTP2Only", "HTTP2Optional", "HTTP2Preferred", "None"], v.alpn_policy)
+    ])
+    error_message = "alpn_policy must be one of: HTTP1Only, HTTP2Only, HTTP2Optional, HTTP2Preferred, None."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.public_nlb_listeners :
+      alltrue([for arn in v.additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    ])
+    error_message = "All additional_certificate_arns must be valid ACM certificate ARNs."
+  }
+}
+
+variable "public_nlb_enable_deletion_protection" {
+  type        = bool
+  description = "Enable deletion protection for the public NLB."
+  default     = false
+}
+
+variable "public_nlb_enable_cross_zone_load_balancing" {
+  type        = bool
+  description = "Enable cross-zone load balancing for the public NLB."
+  default     = false
+}
+
+variable "public_nlb_security_group_ids" {
+  type        = list(string)
+  description = "A list of security group IDs to attach to the public NLB."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.public_nlb_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All public_nlb_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
+}
+
+variable "public_nlb_enable_access_logs" {
+  type        = bool
+  description = "Enable access logging for the public NLB."
+  default     = false
+}
+
+variable "public_nlb_access_logs_bucket_arn" {
+  type        = string
+  description = "The ARN of an existing S3 bucket for public NLB access logs."
+  default     = null
+
+  validation {
+    condition     = var.public_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_nlb_access_logs_bucket_arn))
+    error_message = "The public_nlb_access_logs_bucket_arn must be a valid S3 bucket ARN."
+  }
+}
+
+variable "public_nlb_enable_elastic_ips" {
+  type        = bool
+  description = "Enable static IP addresses for the public NLB using Elastic IPs."
+  default     = false
+}
+
+variable "public_nlb_elastic_ip_allocation_ids" {
+  type        = list(string)
+  description = "A list of Elastic IP allocation IDs for the public NLB, one per subnet."
+  default     = []
+
+  validation {
+    condition     = alltrue([for eip in var.public_nlb_elastic_ip_allocation_ids : can(regex("^eipalloc-", eip))])
+    error_message = "All public_nlb_elastic_ip_allocation_ids must be valid Elastic IP allocation IDs starting with 'eipalloc-'."
+  }
+}
+
+################################################################################
+# Private NLB
+################################################################################
+
+variable "enable_private_nlb" {
+  type        = bool
+  description = "Enable a private (internal) Network Load Balancer."
+  default     = false
+}
+
+variable "private_nlb_target_groups" {
+  type = map(object({
+    port                   = number
+    protocol               = optional(string, "TCP")
+    target_type            = optional(string, "ip")
+    deregistration_delay   = optional(number, 300)
+    preserve_client_ip     = optional(bool, true)
+    proxy_protocol_v2      = optional(bool, false)
+    connection_termination = optional(bool, false)
+    health_check = optional(object({
+      enabled             = optional(bool, true)
+      protocol            = optional(string, "TCP")
+      port                = optional(string, "traffic-port")
+      path                = optional(string, null)
+      matcher             = optional(string, null)
+      healthy_threshold   = optional(number, 3)
+      unhealthy_threshold = optional(number, 3)
+      interval            = optional(number, 30)
+      timeout             = optional(number, null)
+    }), {})
+  }))
+  description = "Map of target groups to create for the private NLB. Each key becomes the target group name suffix."
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_target_groups : contains(["TCP", "TLS", "UDP", "TCP_UDP"], v.protocol)
+    ])
+    error_message = "Target group protocol must be one of: TCP, TLS, UDP, TCP_UDP."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_target_groups : contains(["ip", "instance", "alb"], v.target_type)
+    ])
+    error_message = "Target group target_type must be one of: ip, instance, alb."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_target_groups : v.port >= 1 && v.port <= 65535
+    ])
+    error_message = "Target group port must be between 1 and 65535."
+  }
+}
+
+variable "private_nlb_listeners" {
+  type = map(object({
+    port                        = number
+    protocol                    = string
+    target_group_key            = string
+    certificate_arn             = optional(string, null)
+    ssl_policy                  = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
+    alpn_policy                 = optional(string, null)
+    additional_certificate_arns = optional(list(string), [])
+  }))
+  description = "Map of listeners to create for the private NLB. Each references a target group by key."
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_listeners : contains(["TCP", "TLS", "UDP", "TCP_UDP"], v.protocol)
+    ])
+    error_message = "Listener protocol must be one of: TCP, TLS, UDP, TCP_UDP."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_listeners : v.protocol != "TLS" || v.certificate_arn != null
+    ])
+    error_message = "certificate_arn is required for TLS protocol listeners."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_listeners : v.port >= 1 && v.port <= 65535
+    ])
+    error_message = "Listener port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_listeners :
+      v.certificate_arn == null || can(regex("^arn:aws:acm:", v.certificate_arn))
+    ])
+    error_message = "certificate_arn must be a valid ACM certificate ARN."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_listeners :
+      v.alpn_policy == null || contains(["HTTP1Only", "HTTP2Only", "HTTP2Optional", "HTTP2Preferred", "None"], v.alpn_policy)
+    ])
+    error_message = "alpn_policy must be one of: HTTP1Only, HTTP2Only, HTTP2Optional, HTTP2Preferred, None."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.private_nlb_listeners :
+      alltrue([for arn in v.additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    ])
+    error_message = "All additional_certificate_arns must be valid ACM certificate ARNs."
+  }
+}
+
+variable "private_nlb_enable_deletion_protection" {
+  type        = bool
+  description = "Enable deletion protection for the private NLB."
+  default     = false
+}
+
+variable "private_nlb_enable_cross_zone_load_balancing" {
+  type        = bool
+  description = "Enable cross-zone load balancing for the private NLB."
+  default     = false
+}
+
+variable "private_nlb_security_group_ids" {
+  type        = list(string)
+  description = "A list of security group IDs to attach to the private NLB."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.private_nlb_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All private_nlb_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
+}
+
+variable "private_nlb_enable_access_logs" {
+  type        = bool
+  description = "Enable access logging for the private NLB."
+  default     = false
+}
+
+variable "private_nlb_access_logs_bucket_arn" {
+  type        = string
+  description = "The ARN of an existing S3 bucket for private NLB access logs."
+  default     = null
+
+  validation {
+    condition     = var.private_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_nlb_access_logs_bucket_arn))
+    error_message = "The private_nlb_access_logs_bucket_arn must be a valid S3 bucket ARN."
+  }
+}
+
+variable "private_nlb_enable_elastic_ips" {
+  type        = bool
+  description = "Enable static IP addresses for the private NLB using Elastic IPs."
+  default     = false
+}
+
+variable "private_nlb_elastic_ip_allocation_ids" {
+  type        = list(string)
+  description = "A list of Elastic IP allocation IDs for the private NLB, one per subnet."
+  default     = []
+
+  validation {
+    condition     = alltrue([for eip in var.private_nlb_elastic_ip_allocation_ids : can(regex("^eipalloc-", eip))])
+    error_message = "All private_nlb_elastic_ip_allocation_ids must be valid Elastic IP allocation IDs starting with 'eipalloc-'."
+  }
+}
+

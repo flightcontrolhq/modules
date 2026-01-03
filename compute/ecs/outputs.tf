@@ -168,3 +168,81 @@ output "private_alb_https_listener_arn" {
   value       = var.enable_private_alb && var.private_alb_enable_https ? module.private_alb[0].https_listener_arn : null
 }
 
+################################################################################
+# Public NLB
+################################################################################
+
+output "public_nlb_arn" {
+  description = "The ARN of the public NLB (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_arn : null
+}
+
+output "public_nlb_id" {
+  description = "The ID of the public NLB (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_id : null
+}
+
+output "public_nlb_dns_name" {
+  description = "The DNS name of the public NLB (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_dns_name : null
+}
+
+output "public_nlb_zone_id" {
+  description = "The canonical hosted zone ID of the public NLB (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_zone_id : null
+}
+
+output "public_nlb_arn_suffix" {
+  description = "The ARN suffix of the public NLB for CloudWatch Metrics (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_arn_suffix : null
+}
+
+output "public_nlb_target_group_arns" {
+  description = "Map of target group ARNs for the public NLB (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].target_group_arns : null
+}
+
+output "public_nlb_listener_arns" {
+  description = "Map of listener ARNs for the public NLB (null if disabled)."
+  value       = var.enable_public_nlb ? module.public_nlb[0].listener_arns : null
+}
+
+################################################################################
+# Private NLB
+################################################################################
+
+output "private_nlb_arn" {
+  description = "The ARN of the private NLB (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_arn : null
+}
+
+output "private_nlb_id" {
+  description = "The ID of the private NLB (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_id : null
+}
+
+output "private_nlb_dns_name" {
+  description = "The DNS name of the private NLB (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_dns_name : null
+}
+
+output "private_nlb_zone_id" {
+  description = "The canonical hosted zone ID of the private NLB (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_zone_id : null
+}
+
+output "private_nlb_arn_suffix" {
+  description = "The ARN suffix of the private NLB for CloudWatch Metrics (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_arn_suffix : null
+}
+
+output "private_nlb_target_group_arns" {
+  description = "Map of target group ARNs for the private NLB (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].target_group_arns : null
+}
+
+output "private_nlb_listener_arns" {
+  description = "Map of listener ARNs for the private NLB (null if disabled)."
+  value       = var.enable_private_nlb ? module.private_nlb[0].listener_arns : null
+}
+
