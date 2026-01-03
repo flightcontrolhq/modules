@@ -6,7 +6,7 @@ locals {
   # Default tags for all resources
   default_tags = {
     ManagedBy = "terraform"
-    Module    = "compute/ecs"
+    Module    = "compute/ecs_cluster"
   }
 
   tags = merge(local.default_tags, var.tags)
@@ -54,4 +54,5 @@ locals {
     var.ec2_spot_instance_types
   ) : []
 }
+
 

@@ -231,7 +231,7 @@ run "resource_tagging" {
   }
 
   assert {
-    condition     = aws_ecs_cluster.this.tags["Module"] == "compute/ecs"
+    condition     = aws_ecs_cluster.this.tags["Module"] == "compute/ecs_cluster"
     error_message = "ECS cluster should have default Module tag"
   }
 }

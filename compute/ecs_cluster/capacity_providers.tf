@@ -22,3 +22,4 @@ resource "aws_ecs_capacity_provider" "ec2" {
   tags = local.tags
 }
 
+
