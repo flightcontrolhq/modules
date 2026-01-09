@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -157,4 +159,101 @@ func RouteTableHasNatGatewayRoute(t *testing.T, routeTableId string, region stri
 	}
 
 	return false
+}
+
+// getELBv2Client creates an ELBv2 client for the specified region.
+func getELBv2Client(t *testing.T, region string) *elbv2.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return elbv2.NewFromConfig(cfg)
+}
+
+// GetLoadBalancerState returns the state of an Application Load Balancer.
+// Returns the state code (active, provisioning, active_impaired, failed).
+func GetLoadBalancerState(t *testing.T, albArn string, region string) elbv2types.LoadBalancerStateEnum {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeLoadBalancersInput{
+		LoadBalancerArns: []string{albArn},
+	}
+
+	result, err := client.DescribeLoadBalancers(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe load balancer %s", albArn)
+	require.Len(t, result.LoadBalancers, 1, "Expected exactly one load balancer with ARN %s", albArn)
+
+	return result.LoadBalancers[0].State.Code
+}
+
+// LoadBalancerExists checks if a load balancer with the given ARN exists.
+func LoadBalancerExists(t *testing.T, albArn string, region string) bool {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeLoadBalancersInput{
+		LoadBalancerArns: []string{albArn},
+	}
+
+	result, err := client.DescribeLoadBalancers(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.LoadBalancers) > 0
+}
+
+// SecurityGroupExists checks if a security group with the given ID exists.
+func SecurityGroupExists(t *testing.T, securityGroupId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeSecurityGroupsInput{
+		GroupIds: []string{securityGroupId},
+	}
+
+	result, err := client.DescribeSecurityGroups(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.SecurityGroups) > 0
+}
+
+// SecurityGroupHasIngressRule checks if a security group has an ingress rule for the specified port.
+// It checks for TCP rules that allow traffic on the given port.
+func SecurityGroupHasIngressRule(t *testing.T, securityGroupId string, port int32, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeSecurityGroupRulesInput{
+		Filters: []types.Filter{
+			{
+				Name:   stringPtr("group-id"),
+				Values: []string{securityGroupId},
+			},
+		},
+	}
+
+	result, err := client.DescribeSecurityGroupRules(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe security group rules for %s", securityGroupId)
+
+	for _, rule := range result.SecurityGroupRules {
+		// Check for ingress rules (not egress)
+		if rule.IsEgress != nil && *rule.IsEgress {
+			continue
+		}
+
+		// Check if the rule allows traffic on the specified port
+		if rule.FromPort != nil && rule.ToPort != nil {
+			if *rule.FromPort <= port && port <= *rule.ToPort {
+				// Check for TCP protocol (-1 means all protocols, 6 is TCP)
+				if rule.IpProtocol != nil && (*rule.IpProtocol == "tcp" || *rule.IpProtocol == "-1" || *rule.IpProtocol == "6") {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// stringPtr returns a pointer to the given string.
+func stringPtr(s string) *string {
+	return &s
 }
