@@ -64,6 +64,28 @@ variable "subnet_ids" {
   }
 }
 
+variable "network_type" {
+  type        = string
+  description = "The network type for the replication group. Valid values are ipv4, ipv6, or dual_stack."
+  default     = "ipv4"
+
+  validation {
+    condition     = contains(["ipv4", "ipv6", "dual_stack"], var.network_type)
+    error_message = "The network_type must be 'ipv4', 'ipv6', or 'dual_stack'."
+  }
+}
+
+variable "ip_discovery" {
+  type        = string
+  description = "The IP address discovery method. Valid values are ipv4 or ipv6."
+  default     = "ipv4"
+
+  validation {
+    condition     = contains(["ipv4", "ipv6"], var.ip_discovery)
+    error_message = "The ip_discovery must be 'ipv4' or 'ipv6'."
+  }
+}
+
 ################################################################################
 # Security Group
 ################################################################################
@@ -98,12 +120,23 @@ variable "allowed_security_group_ids" {
 
 variable "allowed_cidr_blocks" {
   type        = list(string)
-  description = "A list of CIDR blocks allowed to access the ElastiCache cluster."
+  description = "A list of IPv4 CIDR blocks allowed to access the ElastiCache cluster."
   default     = []
 
   validation {
     condition     = alltrue([for cidr in var.allowed_cidr_blocks : can(cidrhost(cidr, 0))])
     error_message = "All allowed_cidr_blocks must be valid IPv4 CIDR blocks."
+  }
+}
+
+variable "allowed_ipv6_cidr_blocks" {
+  type        = list(string)
+  description = "A list of IPv6 CIDR blocks allowed to access the ElastiCache cluster."
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.allowed_ipv6_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All allowed_ipv6_cidr_blocks must be valid IPv6 CIDR blocks."
   }
 }
 
@@ -206,7 +239,7 @@ variable "kms_key_arn" {
   default     = null
 
   validation {
-    condition     = var.kms_key_arn == null || can(regex("^arn:aws:kms:", var.kms_key_arn))
+    condition     = var.kms_key_arn == null || can(regex("^arn:aws(-[a-z]+)?:kms:", var.kms_key_arn))
     error_message = "The kms_key_arn must be a valid KMS key ARN."
   }
 }
@@ -220,6 +253,39 @@ variable "automatic_failover_enabled" {
 variable "multi_az_enabled" {
   type        = bool
   description = "Enable Multi-AZ support for Redis/Valkey replication group."
+  default     = false
+}
+
+variable "log_delivery_configuration" {
+  type = list(object({
+    destination      = string
+    destination_type = string
+    log_format       = string
+    log_type         = string
+  }))
+  description = "Log delivery configuration for Redis/Valkey. Supports slow-log and engine-log delivery to CloudWatch Logs or Kinesis Firehose."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for config in var.log_delivery_configuration :
+      contains(["cloudwatch-logs", "kinesis-firehose"], config.destination_type) &&
+      contains(["text", "json"], config.log_format) &&
+      contains(["slow-log", "engine-log"], config.log_type)
+    ])
+    error_message = "Invalid log_delivery_configuration. destination_type must be 'cloudwatch-logs' or 'kinesis-firehose', log_format must be 'text' or 'json', log_type must be 'slow-log' or 'engine-log'."
+  }
+}
+
+variable "global_replication_group_id" {
+  type        = string
+  description = "The ID of the global replication group to which this replication group should belong. Use this for cross-region disaster recovery."
+  default     = null
+}
+
+variable "data_tiering_enabled" {
+  type        = bool
+  description = "Enable data tiering for r6gd or r7gd node types. Data tiering stores less frequently used data on SSD."
   default     = false
 }
 
@@ -311,7 +377,7 @@ variable "notification_topic_arn" {
   default     = null
 
   validation {
-    condition     = var.notification_topic_arn == null || can(regex("^arn:aws:sns:", var.notification_topic_arn))
+    condition     = var.notification_topic_arn == null || can(regex("^arn:aws(-[a-z]+)?:sns:", var.notification_topic_arn))
     error_message = "The notification_topic_arn must be a valid SNS topic ARN."
   }
 }
@@ -356,6 +422,39 @@ variable "cloudwatch_alarm_connections_threshold" {
   validation {
     condition     = var.cloudwatch_alarm_connections_threshold >= 1
     error_message = "The cloudwatch_alarm_connections_threshold must be at least 1."
+  }
+}
+
+variable "cloudwatch_alarm_evictions_threshold" {
+  type        = number
+  description = "The evictions threshold for the CloudWatch alarm."
+  default     = 100
+
+  validation {
+    condition     = var.cloudwatch_alarm_evictions_threshold >= 0
+    error_message = "The cloudwatch_alarm_evictions_threshold must be at least 0."
+  }
+}
+
+variable "cloudwatch_alarm_evaluation_periods" {
+  type        = number
+  description = "The number of periods over which data is compared to the threshold."
+  default     = 2
+
+  validation {
+    condition     = var.cloudwatch_alarm_evaluation_periods >= 1
+    error_message = "The cloudwatch_alarm_evaluation_periods must be at least 1."
+  }
+}
+
+variable "cloudwatch_alarm_period" {
+  type        = number
+  description = "The period in seconds over which the statistic is applied."
+  default     = 300
+
+  validation {
+    condition     = contains([10, 30, 60, 300, 900, 3600], var.cloudwatch_alarm_period)
+    error_message = "The cloudwatch_alarm_period must be one of: 10, 30, 60, 300, 900, or 3600 seconds."
   }
 }
 

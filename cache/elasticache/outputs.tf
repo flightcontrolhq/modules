@@ -116,12 +116,12 @@ output "security_group_arn" {
 
 output "subnet_group_name" {
   description = "The name of the ElastiCache subnet group."
-  value       = aws_elasticache_subnet_group.this.name
+  value       = local.is_serverless ? null : aws_elasticache_subnet_group.this[0].name
 }
 
 output "subnet_group_arn" {
   description = "The ARN of the ElastiCache subnet group."
-  value       = aws_elasticache_subnet_group.this.arn
+  value       = local.is_serverless ? null : aws_elasticache_subnet_group.this[0].arn
 }
 
 ################################################################################

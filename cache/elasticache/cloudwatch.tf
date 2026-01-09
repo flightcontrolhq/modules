@@ -8,12 +8,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
   alarm_name          = "${var.name}-elasticache-cpu-utilization"
   alarm_description   = "ElastiCache CPU utilization for ${var.name}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = var.cloudwatch_alarm_evaluation_periods
   metric_name         = "CPUUtilization"
   namespace           = "AWS/ElastiCache"
-  period              = 300
+  period              = var.cloudwatch_alarm_period
   statistic           = "Average"
   threshold           = var.cloudwatch_alarm_cpu_threshold
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     CacheClusterId = local.cloudwatch_dimension_value
@@ -31,12 +32,13 @@ resource "aws_cloudwatch_metric_alarm" "database_memory_usage" {
   alarm_name          = "${var.name}-elasticache-memory-usage"
   alarm_description   = "ElastiCache database memory usage for ${var.name}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = var.cloudwatch_alarm_evaluation_periods
   metric_name         = "DatabaseMemoryUsagePercentage"
   namespace           = "AWS/ElastiCache"
-  period              = 300
+  period              = var.cloudwatch_alarm_period
   statistic           = "Average"
   threshold           = var.cloudwatch_alarm_memory_threshold
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     CacheClusterId = local.cloudwatch_dimension_value
@@ -54,12 +56,13 @@ resource "aws_cloudwatch_metric_alarm" "current_connections" {
   alarm_name          = "${var.name}-elasticache-current-connections"
   alarm_description   = "ElastiCache current connections for ${var.name}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = var.cloudwatch_alarm_evaluation_periods
   metric_name         = "CurrConnections"
   namespace           = "AWS/ElastiCache"
-  period              = 300
+  period              = var.cloudwatch_alarm_period
   statistic           = "Average"
   threshold           = var.cloudwatch_alarm_connections_threshold
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     CacheClusterId = local.cloudwatch_dimension_value
@@ -77,12 +80,13 @@ resource "aws_cloudwatch_metric_alarm" "evictions" {
   alarm_name          = "${var.name}-elasticache-evictions"
   alarm_description   = "ElastiCache evictions for ${var.name}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = var.cloudwatch_alarm_evaluation_periods
   metric_name         = "Evictions"
   namespace           = "AWS/ElastiCache"
-  period              = 300
+  period              = var.cloudwatch_alarm_period
   statistic           = "Sum"
-  threshold           = 100
+  threshold           = var.cloudwatch_alarm_evictions_threshold
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     CacheClusterId = local.cloudwatch_dimension_value
