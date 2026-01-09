@@ -28,39 +28,6 @@ output "nlb_zone_id" {
 }
 
 ################################################################################
-# Listeners
-################################################################################
-
-output "listener_arns" {
-  description = "Map of listener ARNs keyed by listener name."
-  value       = { for k, v in aws_lb_listener.this : k => v.arn }
-}
-
-output "listener_ids" {
-  description = "Map of listener IDs keyed by listener name."
-  value       = { for k, v in aws_lb_listener.this : k => v.id }
-}
-
-################################################################################
-# Target Groups
-################################################################################
-
-output "target_group_arns" {
-  description = "Map of target group ARNs keyed by target group name."
-  value       = { for k, v in aws_lb_target_group.this : k => v.arn }
-}
-
-output "target_group_arn_suffixes" {
-  description = "Map of target group ARN suffixes keyed by target group name (for CloudWatch Metrics)."
-  value       = { for k, v in aws_lb_target_group.this : k => v.arn_suffix }
-}
-
-output "target_group_names" {
-  description = "Map of target group names keyed by target group key."
-  value       = { for k, v in aws_lb_target_group.this : k => v.name }
-}
-
-################################################################################
 # Access Logs
 ################################################################################
 

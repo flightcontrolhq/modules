@@ -20,6 +20,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | Planned |
 | `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs | v1.0.0  |
+| `compute/`    | `ecs_service`     | AWS ECS services with task definitions, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | Planned |
 | `database/`   | `aurora`          | AWS Aurora clusters                                                    | Planned |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | Planned |

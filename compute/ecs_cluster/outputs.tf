@@ -197,16 +197,6 @@ output "public_nlb_arn_suffix" {
   value       = var.enable_public_nlb ? module.public_nlb[0].nlb_arn_suffix : null
 }
 
-output "public_nlb_target_group_arns" {
-  description = "Map of target group ARNs for the public NLB (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].target_group_arns : null
-}
-
-output "public_nlb_listener_arns" {
-  description = "Map of listener ARNs for the public NLB (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].listener_arns : null
-}
-
 ################################################################################
 # Private NLB
 ################################################################################
@@ -234,15 +224,5 @@ output "private_nlb_zone_id" {
 output "private_nlb_arn_suffix" {
   description = "The ARN suffix of the private NLB for CloudWatch Metrics (null if disabled)."
   value       = var.enable_private_nlb ? module.private_nlb[0].nlb_arn_suffix : null
-}
-
-output "private_nlb_target_group_arns" {
-  description = "Map of target group ARNs for the private NLB (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].target_group_arns : null
-}
-
-output "private_nlb_listener_arns" {
-  description = "Map of listener ARNs for the private NLB (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].listener_arns : null
 }
 

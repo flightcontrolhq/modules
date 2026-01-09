@@ -141,32 +141,12 @@ module "ecs" {
   private_subnet_ids = ["subnet-private-1", "subnet-private-2"]
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
-  # Public NLB with TCP listener
+  # Public NLB (listeners and target groups created by service modules)
   enable_public_nlb = true
-
-  public_nlb_target_groups = {
-    tcp = {
-      port        = 8080
-      protocol    = "TCP"
-      target_type = "ip"
-      health_check = {
-        protocol = "TCP"
-        port     = "traffic-port"
-      }
-    }
-  }
-
-  public_nlb_listeners = {
-    tcp = {
-      port             = 80
-      protocol         = "TCP"
-      target_group_key = "tcp"
-    }
-  }
 }
 ```
 
-### With TLS-enabled NLB
+### With NLB and Cross-Zone Load Balancing
 
 ```hcl
 module "ecs" {
@@ -178,28 +158,29 @@ module "ecs" {
   private_subnet_ids = ["subnet-private-1", "subnet-private-2"]
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
-  # Public NLB with TLS termination
+  # Public NLB (listeners and target groups created by service modules)
   enable_public_nlb = true
-
-  public_nlb_target_groups = {
-    app = {
-      port        = 8080
-      protocol    = "TCP"
-      target_type = "ip"
-    }
-  }
-
-  public_nlb_listeners = {
-    tls = {
-      port             = 443
-      protocol         = "TLS"
-      target_group_key = "app"
-      certificate_arn  = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
-      ssl_policy       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-    }
-  }
-
   public_nlb_enable_cross_zone_load_balancing = true
+}
+
+# Service modules create their own listeners and target groups
+module "api_service" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+
+  # ... service configuration ...
+
+  load_balancer_attachment = {
+    nlb_arn = module.ecs.public_nlb_arn
+    nlb_listener = {
+      port            = 443
+      protocol        = "TLS"
+      certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+    }
+    target_group = {
+      port     = 8080
+      protocol = "TCP"
+    }
+  }
 }
 ```
 
@@ -303,8 +284,6 @@ module "ecs" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_public_nlb | Enable public NLB | `bool` | `false` | no |
-| public_nlb_target_groups | Map of target groups to create | `map(object)` | `{}` | no |
-| public_nlb_listeners | Map of listeners to create | `map(object)` | `{}` | no |
 | public_nlb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
 | public_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
 | public_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
@@ -318,8 +297,6 @@ module "ecs" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_private_nlb | Enable private NLB | `bool` | `false` | no |
-| private_nlb_target_groups | Map of target groups to create | `map(object)` | `{}` | no |
-| private_nlb_listeners | Map of listeners to create | `map(object)` | `{}` | no |
 | private_nlb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
 | private_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
 | private_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |

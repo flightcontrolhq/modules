@@ -45,12 +45,5 @@ resource "aws_lb" "this" {
       condition     = !var.enable_elastic_ips || length(var.elastic_ip_allocation_ids) == length(var.subnet_ids)
       error_message = "When enable_elastic_ips is true, elastic_ip_allocation_ids must have the same number of elements as subnet_ids."
     }
-
-    precondition {
-      condition = alltrue([
-        for k, v in var.listeners : contains(keys(var.target_groups), v.target_group_key)
-      ])
-      error_message = "All listener target_group_key values must reference valid keys in target_groups."
-    }
   }
 }

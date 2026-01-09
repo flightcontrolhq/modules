@@ -1,12 +1,14 @@
 # AWS Network Load Balancer
 
-Creates a Network Load Balancer (NLB) with flexible TCP, TLS, and UDP listeners, multiple target groups, access logging, and static IP support.
+Creates a Network Load Balancer (NLB) infrastructure with access logging and static IP support.
 
 Network Load Balancers operate at Layer 4 (Transport Layer) and are designed for high-performance TCP/UDP traffic. They support millions of requests per second with ultra-low latencies.
 
+> **Note:** This module creates only the NLB infrastructure. Target groups and listeners are created by service modules (e.g., `ecs_service`) that use the NLB.
+
 ## Usage
 
-### Basic NLB with TCP Listener
+### Basic NLB
 
 ```hcl
 module "nlb" {
@@ -15,144 +17,34 @@ module "nlb" {
   name       = "main"
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
-
-  target_groups = {
-    web = {
-      port     = 8080
-      protocol = "TCP"
-    }
-  }
-
-  listeners = {
-    http = {
-      port             = 80
-      protocol         = "TCP"
-      target_group_key = "web"
-    }
-  }
 
   tags = {
     Environment = "production"
   }
 }
-```
 
-### NLB with TLS Termination
+# Service modules create their own listeners and target groups
+module "api_service" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ecs_service?ref=v1.0.0"
 
-To enable TLS termination at the NLB, set `protocol = "TLS"` and provide a `certificate_arn`:
+  # ... service configuration ...
 
-```hcl
-module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
-
-  name       = "main"
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnet_ids
-
-  target_groups = {
-    web = {
+  load_balancer_attachment = {
+    nlb_arn = module.nlb.nlb_arn
+    nlb_listener = {
+      port     = 443
+      protocol = "TLS"
+      # ... listener configuration ...
+    }
+    target_group = {
       port     = 8080
       protocol = "TCP"
     }
   }
-
-  listeners = {
-    https = {
-      port             = 443
-      protocol         = "TLS"
-      target_group_key = "web"
-      certificate_arn  = aws_acm_certificate.main.arn
-    }
-  }
 }
 ```
 
-### Multiple Listeners Sharing a Target Group
-
-Multiple listeners can forward to the same target group - useful for HTTP/HTTPS on the same backend:
-
-```hcl
-module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
-
-  name       = "web"
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnet_ids
-
-  target_groups = {
-    web = {
-      port     = 8080
-      protocol = "TCP"
-      health_check = {
-        protocol = "HTTP"
-        path     = "/health"
-      }
-    }
-  }
-
-  listeners = {
-    http = {
-      port             = 80
-      protocol         = "TCP"
-      target_group_key = "web"
-    }
-    https = {
-      port             = 443
-      protocol         = "TLS"
-      target_group_key = "web"
-      certificate_arn  = aws_acm_certificate.main.arn
-    }
-    legacy = {
-      port             = 8080
-      protocol         = "TCP"
-      target_group_key = "web"
-    }
-  }
-}
-```
-
-### Multiple Services on One NLB
-
-```hcl
-module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
-
-  name       = "multi-service"
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnet_ids
-
-  target_groups = {
-    api = {
-      port     = 3000
-      protocol = "TCP"
-      health_check = {
-        protocol = "HTTP"
-        path     = "/api/health"
-      }
-    }
-    grpc = {
-      port     = 50051
-      protocol = "TCP"
-    }
-  }
-
-  listeners = {
-    api = {
-      port             = 443
-      protocol         = "TLS"
-      target_group_key = "api"
-      certificate_arn  = aws_acm_certificate.main.arn
-    }
-    grpc = {
-      port             = 50051
-      protocol         = "TCP"
-      target_group_key = "grpc"
-    }
-  }
-}
-```
-
-### Internal NLB with Custom Health Check
+### Internal NLB
 
 ```hcl
 module "nlb" {
@@ -162,26 +54,6 @@ module "nlb" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
   internal   = true
-
-  target_groups = {
-    app = {
-      port     = 8080
-      protocol = "TCP"
-      health_check = {
-        protocol = "HTTP"
-        path     = "/health"
-        port     = "8080"
-      }
-    }
-  }
-
-  listeners = {
-    app = {
-      port             = 80
-      protocol         = "TCP"
-      target_group_key = "app"
-    }
-  }
 }
 ```
 
@@ -208,22 +80,6 @@ module "nlb" {
 
   enable_elastic_ips        = true
   elastic_ip_allocation_ids = aws_eip.nlb[*].allocation_id
-
-  target_groups = {
-    web = {
-      port     = 8080
-      protocol = "TCP"
-    }
-  }
-
-  listeners = {
-    https = {
-      port             = 443
-      protocol         = "TLS"
-      target_group_key = "web"
-      certificate_arn  = aws_acm_certificate.main.arn
-    }
-  }
 }
 ```
 
@@ -240,48 +96,6 @@ module "nlb" {
   # Access Logs - creates S3 bucket automatically
   enable_access_logs         = true
   access_logs_retention_days = 365
-
-  target_groups = {
-    web = {
-      port     = 8080
-      protocol = "TCP"
-    }
-  }
-
-  listeners = {
-    http = {
-      port             = 80
-      protocol         = "TCP"
-      target_group_key = "web"
-    }
-  }
-}
-```
-
-### NLB for UDP Traffic (DNS, Gaming, etc.)
-
-```hcl
-module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
-
-  name       = "dns"
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnet_ids
-
-  target_groups = {
-    dns = {
-      port     = 53
-      protocol = "UDP"
-    }
-  }
-
-  listeners = {
-    dns = {
-      port             = 53
-      protocol         = "UDP"
-      target_group_key = "dns"
-    }
-  }
 }
 ```
 
@@ -298,53 +112,6 @@ module "nlb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   enable_cross_zone_load_balancing = true
-
-  target_groups = {
-    web = {
-      port     = 8080
-      protocol = "TCP"
-    }
-  }
-
-  listeners = {
-    http = {
-      port             = 80
-      protocol         = "TCP"
-      target_group_key = "web"
-    }
-  }
-}
-```
-
-### TLS Listener with SNI (Multiple Certificates)
-
-```hcl
-module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
-
-  name       = "multi-domain"
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnet_ids
-
-  target_groups = {
-    web = {
-      port     = 8080
-      protocol = "TCP"
-    }
-  }
-
-  listeners = {
-    https = {
-      port             = 443
-      protocol         = "TLS"
-      target_group_key = "web"
-      certificate_arn  = aws_acm_certificate.primary.arn
-      additional_certificate_arns = [
-        aws_acm_certificate.secondary.arn,
-        aws_acm_certificate.tertiary.arn,
-      ]
-    }
-  }
 }
 ```
 
@@ -368,13 +135,14 @@ module "nlb" {
 
 ### NLB Settings
 
-| Name                             | Description                                              | Type           | Default | Required |
-| -------------------------------- | -------------------------------------------------------- | -------------- | ------- | -------- |
-| internal                         | If true, the NLB will be internal (not internet-facing). | `bool`         | `false` | no       |
-| security_group_ids               | A list of security group IDs to attach to the NLB.       | `list(string)` | `[]`    | no       |
-| enable_deletion_protection       | Enable deletion protection on the NLB.                   | `bool`         | `false` | no       |
-| enable_cross_zone_load_balancing | Enable cross-zone load balancing.                        | `bool`         | `false` | no       |
-| dns_record_client_routing_policy | How traffic is distributed among NLB AZs.                | `string`       | `null`  | no       |
+| Name                                                       | Description                                                   | Type           | Default | Required |
+| ---------------------------------------------------------- | ------------------------------------------------------------- | -------------- | ------- | -------- |
+| internal                                                   | If true, the NLB will be internal (not internet-facing).      | `bool`         | `false` | no       |
+| security_group_ids                                         | A list of security group IDs to attach to the NLB.            | `list(string)` | `[]`    | no       |
+| enable_deletion_protection                                 | Enable deletion protection on the NLB.                        | `bool`         | `false` | no       |
+| enable_cross_zone_load_balancing                           | Enable cross-zone load balancing.                             | `bool`         | `false` | no       |
+| dns_record_client_routing_policy                           | How traffic is distributed among NLB AZs.                     | `string`       | `null`  | no       |
+| enforce_security_group_inbound_rules_on_private_link_traffic | Whether inbound SG rules are enforced for PrivateLink traffic. | `string`       | `null`  | no       |
 
 ### Elastic IPs
 
@@ -382,61 +150,6 @@ module "nlb" {
 | ------------------------- | ---------------------------------------------------- | -------------- | ------- | -------- |
 | enable_elastic_ips        | Enable static IP addresses using Elastic IPs.        | `bool`         | `false` | no       |
 | elastic_ip_allocation_ids | A list of Elastic IP allocation IDs, one per subnet. | `list(string)` | `[]`    | no       |
-
-### Target Groups
-
-| Name          | Description                                          | Type          | Default             | Required |
-| ------------- | ---------------------------------------------------- | ------------- | ------------------- | -------- |
-| target_groups | Map of target groups to create. See structure below. | `map(object)` | `{default = {...}}` | no       |
-
-**Target Group Object Structure:**
-
-```hcl
-target_groups = {
-  <key> = {
-    port                   = number           # Required: Target port
-    protocol               = string           # Optional: TCP, TLS, UDP, TCP_UDP (default: "TCP")
-    target_type            = string           # Optional: ip, instance, alb (default: "ip")
-    deregistration_delay   = number           # Optional: Seconds (default: 300)
-    preserve_client_ip     = bool             # Optional: (default: true)
-    proxy_protocol_v2      = bool             # Optional: (default: false)
-    connection_termination = bool             # Optional: (default: false)
-    health_check = {                          # Optional
-      enabled             = bool              # Optional: (default: true)
-      protocol            = string            # Optional: TCP, HTTP, HTTPS (default: "TCP")
-      port                = string            # Optional: (default: "traffic-port")
-      path                = string            # Optional: Required for HTTP/HTTPS
-      matcher             = string            # Optional: HTTP status codes
-      healthy_threshold   = number            # Optional: (default: 3)
-      unhealthy_threshold = number            # Optional: (default: 3)
-      interval            = number            # Optional: Seconds (default: 30)
-      timeout             = number            # Optional: Seconds
-    }
-  }
-}
-```
-
-### Listeners
-
-| Name      | Description                                      | Type          | Default | Required |
-| --------- | ------------------------------------------------ | ------------- | ------- | -------- |
-| listeners | Map of listeners to create. See structure below. | `map(object)` | `{}`    | no       |
-
-**Listener Object Structure:**
-
-```hcl
-listeners = {
-  <key> = {
-    port                        = number       # Required: Listener port
-    protocol                    = string       # Required: TCP, TLS, UDP, TCP_UDP
-    target_group_key            = string       # Required: Key from target_groups map
-    certificate_arn             = string       # Required for TLS protocol
-    ssl_policy                  = string       # Optional: (default: "ELBSecurityPolicy-TLS13-1-2-2021-06")
-    alpn_policy                 = string       # Optional: HTTP1Only, HTTP2Only, etc.
-    additional_certificate_arns = list(string) # Optional: For SNI
-  }
-}
-```
 
 ### Access Logs
 
@@ -451,80 +164,50 @@ listeners = {
 
 ## Outputs
 
-| Name                      | Description                                                          |
-| ------------------------- | -------------------------------------------------------------------- |
-| nlb_id                    | The ID of the Network Load Balancer.                                 |
-| nlb_arn                   | The ARN of the Network Load Balancer.                                |
-| nlb_arn_suffix            | The ARN suffix of the NLB for use with CloudWatch Metrics.           |
-| nlb_dns_name              | The DNS name of the Network Load Balancer.                           |
-| nlb_zone_id               | The canonical hosted zone ID of the NLB (for Route53 alias records). |
-| listener_arns             | Map of listener ARNs keyed by listener name.                         |
-| listener_ids              | Map of listener IDs keyed by listener name.                          |
-| target_group_arns         | Map of target group ARNs keyed by target group name.                 |
-| target_group_arn_suffixes | Map of target group ARN suffixes keyed by target group name.         |
-| target_group_names        | Map of target group names keyed by target group key.                 |
-| access_logs_bucket_name   | The name of the S3 bucket for access logs.                           |
-| access_logs_bucket_arn    | The ARN of the S3 bucket for access logs.                            |
-
-## Accessing Outputs
-
-```hcl
-# Get a specific listener ARN
-output "https_listener_arn" {
-  value = module.nlb.listener_arns["https"]
-}
-
-# Get a specific target group ARN
-output "web_target_group_arn" {
-  value = module.nlb.target_group_arns["web"]
-}
-
-# Use in ECS service
-resource "aws_ecs_service" "app" {
-  # ...
-  load_balancer {
-    target_group_arn = module.nlb.target_group_arns["web"]
-    container_name   = "app"
-    container_port   = 8080
-  }
-}
-```
+| Name                    | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| nlb_id                  | The ID of the Network Load Balancer.                                 |
+| nlb_arn                 | The ARN of the Network Load Balancer.                                |
+| nlb_arn_suffix          | The ARN suffix of the NLB for use with CloudWatch Metrics.           |
+| nlb_dns_name            | The DNS name of the Network Load Balancer.                           |
+| nlb_zone_id             | The canonical hosted zone ID of the NLB (for Route53 alias records). |
+| access_logs_bucket_name | The name of the S3 bucket for access logs.                           |
+| access_logs_bucket_arn  | The ARN of the S3 bucket for access logs.                            |
 
 ## Architecture
 
 ```
                     ┌─────────────────────────────────────────┐
-                    │             NLB Module                   │
-                    │                                          │
-                    │  ┌─────────────┐                         │
-Internet ─────────▶ │  │     NLB     │                         │
-(TCP/UDP/TLS)       │  │  (Layer 4)  │                         │
-                    │  └─────────────┘                         │
-                    │         │                                │
-                    │         ▼                                │
-                    │  ┌─────────────────────────────────┐     │
-                    │  │     Listeners (for_each)        │     │
-                    │  │  ┌─────┐ ┌─────┐ ┌─────┐       │     │
-                    │  │  │:80  │ │:443 │ │:53  │  ...  │     │
-                    │  │  │TCP  │ │TLS  │ │UDP  │       │     │
-                    │  │  └──┬──┘ └──┬──┘ └──┬──┘       │     │
-                    │  └─────┼──────┼──────┼───────────┘     │
-                    │        │      │      │                  │
-                    │        ▼      ▼      ▼                  │
-                    │  ┌─────────────────────────────────┐    │
-                    │  │   Target Groups (for_each)      │    │
-                    │  │  ┌─────┐ ┌─────┐ ┌─────┐       │    │
-                    │  │  │ web │ │ api │ │ dns │  ...  │    │
-                    │  │  └─────┘ └─────┘ └─────┘       │    │
-                    │  └─────────────────────────────────┘    │
-                    └─────────────────────────────────────────┘
-                                    │
-                                    ▼ Outputs: listener_arns, target_group_arns
+                    │             NLB Module                  │
+                    │                                         │
+                    │  ┌─────────────┐                        │
+Internet ─────────▶ │  │     NLB     │                        │
+(TCP/UDP/TLS)       │  │  (Layer 4)  │                        │
+                    │  └─────────────┘                        │
+                    │         │                               │
+                    │         │ nlb_arn                       │
+                    └─────────┼───────────────────────────────┘
+                              │
+                              ▼
                     ┌─────────────────────────────────────────┐
-                    │         Backend Services                 │
+                    │         Service Modules                 │
+                    │  (ecs_service, etc.)                    │
+                    │                                         │
                     │  ┌─────────────────────────────────┐    │
-                    │  │     ECS / EC2 / EKS Targets     │    │
-                    │  └─────────────────────────────────┘    │
+                    │  │     Listeners (per service)     │    │
+                    │  │  ┌─────┐ ┌─────┐ ┌─────┐       │    │
+                    │  │  │:443 │ │:8080│ │:53  │  ...  │    │
+                    │  │  │TLS  │ │TCP  │ │UDP  │       │    │
+                    │  │  └──┬──┘ └──┬──┘ └──┬──┘       │    │
+                    │  └─────┼──────┼──────┼───────────┘    │
+                    │        │      │      │                 │
+                    │        ▼      ▼      ▼                 │
+                    │  ┌─────────────────────────────────┐   │
+                    │  │   Target Groups (per service)   │   │
+                    │  │  ┌─────┐ ┌─────┐ ┌─────┐       │   │
+                    │  │  │ api │ │ web │ │ dns │  ...  │   │
+                    │  │  └─────┘ └─────┘ └─────┘       │   │
+                    │  └─────────────────────────────────┘   │
                     └─────────────────────────────────────────┘
 ```
 
@@ -554,38 +237,13 @@ Internet ─────────▶ │  │     NLB     │                
 
 ## Security Considerations
 
-- **TLS 1.3**: The default SSL policy (`ELBSecurityPolicy-TLS13-1-2-2021-06`) enforces TLS 1.2 or 1.3.
 - **Security Groups**: While optional, you can attach security groups to control traffic.
 - **Client IP Preservation**: NLB preserves the client's source IP by default (for non-TLS targets).
 - **Access Logs**: Enable access logging for audit trails and troubleshooting.
 
-## Validation Errors
-
-The module validates configuration at plan time:
-
-**Missing protocol:**
-
-```
-Error: Listener protocol must be one of: TCP, TLS, UDP, TCP_UDP.
-```
-
-**TLS without certificate:**
-
-```
-Error: certificate_arn is required for TLS protocol listeners.
-```
-
-**Invalid target group reference:**
-
-```
-Error: All listener target_group_key values must reference valid keys in target_groups.
-```
-
 ## Notes
 
 - At least 1 subnet is required (2+ recommended for high availability).
-- When `protocol = "TLS"`, a valid ACM certificate ARN must be provided.
 - Cross-zone load balancing is disabled by default (AWS charges for cross-zone data transfer).
 - Static IPs via Elastic IPs are only supported for internet-facing NLBs.
-- The `preserve_client_ip` option is not supported for TLS-protocol target groups.
-- Multiple listeners can share the same target group.
+- Target groups and listeners are created by service modules that reference this NLB via `nlb_arn`.

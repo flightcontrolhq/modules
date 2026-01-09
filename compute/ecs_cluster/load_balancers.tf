@@ -112,10 +112,6 @@ module "public_nlb" {
   subnet_ids = var.public_subnet_ids
   internal   = false
 
-  # Target groups and listeners
-  target_groups = var.public_nlb_target_groups
-  listeners     = var.public_nlb_listeners
-
   # NLB settings
   enable_deletion_protection       = var.public_nlb_enable_deletion_protection
   enable_cross_zone_load_balancing = var.public_nlb_enable_cross_zone_load_balancing
@@ -154,10 +150,6 @@ module "private_nlb" {
 
   subnet_ids = var.private_subnet_ids
   internal   = true
-
-  # Target groups and listeners
-  target_groups = var.private_nlb_target_groups
-  listeners     = var.private_nlb_listeners
 
   # NLB settings
   enable_deletion_protection       = var.private_nlb_enable_deletion_protection
