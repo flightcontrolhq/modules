@@ -257,3 +257,82 @@ func SecurityGroupHasIngressRule(t *testing.T, securityGroupId string, port int3
 func stringPtr(s string) *string {
 	return &s
 }
+
+// GetListenerProtocol returns the protocol of a listener (HTTP, HTTPS, etc.).
+func GetListenerProtocol(t *testing.T, listenerArn string, region string) elbv2types.ProtocolEnum {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeListenersInput{
+		ListenerArns: []string{listenerArn},
+	}
+
+	result, err := client.DescribeListeners(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe listener %s", listenerArn)
+	require.Len(t, result.Listeners, 1, "Expected exactly one listener with ARN %s", listenerArn)
+
+	return result.Listeners[0].Protocol
+}
+
+// GetListenerPort returns the port of a listener.
+func GetListenerPort(t *testing.T, listenerArn string, region string) int32 {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeListenersInput{
+		ListenerArns: []string{listenerArn},
+	}
+
+	result, err := client.DescribeListeners(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe listener %s", listenerArn)
+	require.Len(t, result.Listeners, 1, "Expected exactly one listener with ARN %s", listenerArn)
+
+	if result.Listeners[0].Port != nil {
+		return *result.Listeners[0].Port
+	}
+	return 0
+}
+
+// ListenerHasRedirectAction checks if a listener has a redirect action as its default action.
+// Returns true if the listener has a redirect action, and the redirect status code and target port.
+func ListenerHasRedirectAction(t *testing.T, listenerArn string, region string) (bool, string, string) {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeListenersInput{
+		ListenerArns: []string{listenerArn},
+	}
+
+	result, err := client.DescribeListeners(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe listener %s", listenerArn)
+	require.Len(t, result.Listeners, 1, "Expected exactly one listener with ARN %s", listenerArn)
+
+	for _, action := range result.Listeners[0].DefaultActions {
+		if action.Type == elbv2types.ActionTypeEnumRedirect && action.RedirectConfig != nil {
+			statusCode := ""
+			port := ""
+			if action.RedirectConfig.StatusCode != "" {
+				statusCode = string(action.RedirectConfig.StatusCode)
+			}
+			if action.RedirectConfig.Port != nil {
+				port = *action.RedirectConfig.Port
+			}
+			return true, statusCode, port
+		}
+	}
+
+	return false, "", ""
+}
+
+// ListenerExists checks if a listener with the given ARN exists.
+func ListenerExists(t *testing.T, listenerArn string, region string) bool {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeListenersInput{
+		ListenerArns: []string{listenerArn},
+	}
+
+	result, err := client.DescribeListeners(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.Listeners) > 0
+}
