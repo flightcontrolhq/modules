@@ -366,3 +366,100 @@ func TestVpcFlowLogsCloudWatch(t *testing.T) {
 	flowLogDestType := helpers.GetVpcFlowLogDestinationType(t, flowLogId, awsRegion)
 	assert.Equal(t, "cloud-watch-logs", string(flowLogDestType), "VPC flow log destination type should be cloud-watch-logs")
 }
+
+// TestVpcFlowLogsS3 provisions the VPC fixture with flow_logs_destination=s3
+// and validates:
+// - S3 bucket is created with encryption and public access blocked
+// - VPC flow log is created and attached to the VPC
+// - Flow log destination is S3
+// - Flow log is in ACTIVE state
+// - S3 bucket has lifecycle rule for retention
+func TestVpcFlowLogsS3(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("vpc-flowlogs-s3")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/vpc/with_flow_logs_s3",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	vpcId := terraform.Output(t, terraformOptions, "vpc_id")
+	flowLogId := terraform.Output(t, terraformOptions, "flow_log_id")
+	flowLogS3BucketArn := terraform.Output(t, terraformOptions, "flow_log_s3_bucket_arn")
+
+	// Assert vpc_id is not empty
+	require.NotEmpty(t, vpcId, "vpc_id should not be empty")
+
+	// Assert flow_log_id is not empty
+	require.NotEmpty(t, flowLogId, "flow_log_id should not be empty")
+
+	// Assert S3 bucket ARN is not empty
+	require.NotEmpty(t, flowLogS3BucketArn, "flow_log_s3_bucket_arn should not be empty")
+
+	// Extract bucket name from ARN (arn:aws:s3:::bucket-name)
+	bucketName := extractBucketNameFromArn(flowLogS3BucketArn)
+	require.NotEmpty(t, bucketName, "bucket name should be extractable from ARN")
+
+	// Use AWS SDK to verify S3 bucket exists
+	bucketExists := helpers.S3BucketExists(t, bucketName, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket %s should exist in AWS", bucketName)
+
+	// Use AWS SDK to verify S3 bucket has encryption enabled
+	hasEncryption := helpers.S3BucketHasSSEEncryption(t, bucketName, awsRegion)
+	assert.True(t, hasEncryption, "S3 bucket should have server-side encryption enabled")
+
+	// Use AWS SDK to verify S3 bucket has public access blocked
+	hasPublicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, bucketName, awsRegion)
+	assert.True(t, hasPublicAccessBlocked, "S3 bucket should have all public access blocked")
+
+	// Use AWS SDK to verify S3 bucket has lifecycle rule with 30-day expiration
+	hasExpirationRule := helpers.S3BucketHasExpirationRule(t, bucketName, 30, awsRegion)
+	assert.True(t, hasExpirationRule, "S3 bucket should have lifecycle rule with 30-day expiration")
+
+	// Use AWS SDK to verify flow log exists
+	flowLogExists := helpers.VpcFlowLogExists(t, flowLogId, awsRegion)
+	assert.True(t, flowLogExists, "VPC flow log %s should exist in AWS", flowLogId)
+
+	// Use AWS SDK to verify flow log is in ACTIVE state
+	flowLogStatus := helpers.GetVpcFlowLogStatus(t, flowLogId, awsRegion)
+	assert.Equal(t, "ACTIVE", flowLogStatus, "VPC flow log should be in ACTIVE state")
+
+	// Use AWS SDK to verify flow log is attached to the VPC
+	flowLogAttached := helpers.VpcFlowLogIsAttachedToVpc(t, flowLogId, vpcId, awsRegion)
+	assert.True(t, flowLogAttached, "VPC flow log should be attached to VPC %s", vpcId)
+
+	// Use AWS SDK to verify flow log destination type is S3
+	flowLogDestType := helpers.GetVpcFlowLogDestinationType(t, flowLogId, awsRegion)
+	assert.Equal(t, "s3", string(flowLogDestType), "VPC flow log destination type should be s3")
+
+	// Use AWS SDK to verify flow log destination matches the S3 bucket
+	flowLogDest := helpers.GetVpcFlowLogDestination(t, flowLogId, awsRegion)
+	assert.Equal(t, flowLogS3BucketArn, flowLogDest, "VPC flow log destination should match S3 bucket ARN")
+}
+
+// extractBucketNameFromArn extracts the bucket name from an S3 bucket ARN.
+// Expected format: arn:aws:s3:::bucket-name
+func extractBucketNameFromArn(arn string) string {
+	// S3 bucket ARN format: arn:aws:s3:::bucket-name
+	prefix := "arn:aws:s3:::"
+	if len(arn) > len(prefix) && arn[:len(prefix)] == prefix {
+		return arn[len(prefix):]
+	}
+	return ""
+}
