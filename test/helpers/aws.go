@@ -606,3 +606,86 @@ func WaitForEcsServiceRunningCount(t *testing.T, clusterArn string, serviceName 
 
 	return false
 }
+
+// GetEcsServiceLoadBalancers returns the load balancer configurations attached to an ECS service.
+func GetEcsServiceLoadBalancers(t *testing.T, clusterArn string, serviceName string, region string) []ecstypes.LoadBalancer {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeServicesInput{
+		Cluster:  &clusterArn,
+		Services: []string{serviceName},
+	}
+
+	result, err := client.DescribeServices(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS service %s", serviceName)
+	require.Len(t, result.Services, 1, "Expected exactly one ECS service with name %s", serviceName)
+
+	return result.Services[0].LoadBalancers
+}
+
+// EcsServiceHasTargetGroup checks if an ECS service is registered with a specific target group.
+func EcsServiceHasTargetGroup(t *testing.T, clusterArn string, serviceName string, targetGroupArn string, region string) bool {
+	loadBalancers := GetEcsServiceLoadBalancers(t, clusterArn, serviceName, region)
+
+	for _, lb := range loadBalancers {
+		if lb.TargetGroupArn != nil && *lb.TargetGroupArn == targetGroupArn {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetTargetGroupHealthCounts returns the count of healthy and unhealthy targets in a target group.
+func GetTargetGroupHealthCounts(t *testing.T, targetGroupArn string, region string) (healthy int, unhealthy int, total int) {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeTargetHealthInput{
+		TargetGroupArn: &targetGroupArn,
+	}
+
+	result, err := client.DescribeTargetHealth(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe target health for target group %s", targetGroupArn)
+
+	for _, targetHealth := range result.TargetHealthDescriptions {
+		total++
+		if targetHealth.TargetHealth != nil {
+			switch targetHealth.TargetHealth.State {
+			case elbv2types.TargetHealthStateEnumHealthy:
+				healthy++
+			case elbv2types.TargetHealthStateEnumUnhealthy:
+				unhealthy++
+			}
+		}
+	}
+
+	return healthy, unhealthy, total
+}
+
+// WaitForTargetGroupHealthyTargets waits for a target group to have at least minHealthy healthy targets.
+// It retries up to maxRetries times with retryInterval seconds between each retry.
+// Returns true if the target group has at least minHealthy healthy targets, false otherwise.
+func WaitForTargetGroupHealthyTargets(t *testing.T, targetGroupArn string, minHealthy int, maxRetries int, retryIntervalSeconds int, region string) bool {
+	for i := 0; i < maxRetries; i++ {
+		healthy, unhealthy, total := GetTargetGroupHealthCounts(t, targetGroupArn, region)
+		t.Logf("Retry %d/%d: Target group has %d healthy, %d unhealthy, %d total targets (need at least %d healthy)",
+			i+1, maxRetries, healthy, unhealthy, total, minHealthy)
+
+		if healthy >= minHealthy {
+			return true
+		}
+
+		if i < maxRetries-1 {
+			t.Logf("Waiting %d seconds before next retry...", retryIntervalSeconds)
+			time.Sleep(time.Duration(retryIntervalSeconds) * time.Second)
+		}
+	}
+
+	return false
+}
+
+// TargetGroupHasRegisteredTargets checks if a target group has any registered targets.
+func TargetGroupHasRegisteredTargets(t *testing.T, targetGroupArn string, region string) bool {
+	_, _, total := GetTargetGroupHealthCounts(t, targetGroupArn, region)
+	return total > 0
+}
