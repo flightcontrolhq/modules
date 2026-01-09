@@ -1271,3 +1271,156 @@ func GetElastiCacheClusterNumCacheNodes(t *testing.T, clusterId string, region s
 	}
 	return 0
 }
+
+// GetElastiCacheReplicationGroupMemberClusters returns the list of member cluster IDs in a replication group.
+func GetElastiCacheReplicationGroupMemberClusters(t *testing.T, replicationGroupId string, region string) []string {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeReplicationGroupsInput{
+		ReplicationGroupId: &replicationGroupId,
+	}
+
+	result, err := client.DescribeReplicationGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ElastiCache replication group %s", replicationGroupId)
+	require.Len(t, result.ReplicationGroups, 1, "Expected exactly one replication group with ID %s", replicationGroupId)
+
+	return result.ReplicationGroups[0].MemberClusters
+}
+
+// GetElastiCacheReplicationGroupMemberClusterCount returns the number of member clusters in a replication group.
+func GetElastiCacheReplicationGroupMemberClusterCount(t *testing.T, replicationGroupId string, region string) int {
+	members := GetElastiCacheReplicationGroupMemberClusters(t, replicationGroupId, region)
+	return len(members)
+}
+
+// GetElastiCacheReplicationGroupNodeGroups returns the list of node groups in a replication group.
+// For non-cluster mode, there will be 1 node group with multiple nodes (primary + replicas).
+// For cluster mode, there will be multiple node groups (shards).
+func GetElastiCacheReplicationGroupNodeGroups(t *testing.T, replicationGroupId string, region string) []NodeGroupInfo {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeReplicationGroupsInput{
+		ReplicationGroupId: &replicationGroupId,
+	}
+
+	result, err := client.DescribeReplicationGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ElastiCache replication group %s", replicationGroupId)
+	require.Len(t, result.ReplicationGroups, 1, "Expected exactly one replication group with ID %s", replicationGroupId)
+
+	var nodeGroups []NodeGroupInfo
+	for _, ng := range result.ReplicationGroups[0].NodeGroups {
+		nodeGroup := NodeGroupInfo{
+			NodeGroupId: "",
+			Status:      "",
+			Slots:       "",
+		}
+		if ng.NodeGroupId != nil {
+			nodeGroup.NodeGroupId = *ng.NodeGroupId
+		}
+		if ng.Status != nil {
+			nodeGroup.Status = *ng.Status
+		}
+		if ng.Slots != nil {
+			nodeGroup.Slots = *ng.Slots
+		}
+
+		// Get node members
+		for _, member := range ng.NodeGroupMembers {
+			nodeMember := NodeMemberInfo{
+				CacheClusterId:            "",
+				CacheNodeId:               "",
+				CurrentRole:               "",
+				PreferredAvailabilityZone: "",
+			}
+			if member.CacheClusterId != nil {
+				nodeMember.CacheClusterId = *member.CacheClusterId
+			}
+			if member.CacheNodeId != nil {
+				nodeMember.CacheNodeId = *member.CacheNodeId
+			}
+			if member.CurrentRole != nil {
+				nodeMember.CurrentRole = *member.CurrentRole
+			}
+			if member.PreferredAvailabilityZone != nil {
+				nodeMember.PreferredAvailabilityZone = *member.PreferredAvailabilityZone
+			}
+			nodeGroup.NodeMembers = append(nodeGroup.NodeMembers, nodeMember)
+		}
+
+		nodeGroups = append(nodeGroups, nodeGroup)
+	}
+
+	return nodeGroups
+}
+
+// NodeGroupInfo represents information about a node group in a replication group.
+type NodeGroupInfo struct {
+	NodeGroupId string
+	Status      string
+	Slots       string
+	NodeMembers []NodeMemberInfo
+}
+
+// NodeMemberInfo represents information about a node member in a node group.
+type NodeMemberInfo struct {
+	CacheClusterId            string
+	CacheNodeId               string
+	CurrentRole               string
+	PreferredAvailabilityZone string
+}
+
+// GetElastiCacheReplicationGroupNodeCount returns the total number of nodes across all node groups.
+// This includes both primary and replica nodes.
+func GetElastiCacheReplicationGroupNodeCount(t *testing.T, replicationGroupId string, region string) int {
+	nodeGroups := GetElastiCacheReplicationGroupNodeGroups(t, replicationGroupId, region)
+	total := 0
+	for _, ng := range nodeGroups {
+		total += len(ng.NodeMembers)
+	}
+	return total
+}
+
+// GetElastiCacheReplicationGroupPrimaryCount returns the number of primary nodes in a replication group.
+func GetElastiCacheReplicationGroupPrimaryCount(t *testing.T, replicationGroupId string, region string) int {
+	nodeGroups := GetElastiCacheReplicationGroupNodeGroups(t, replicationGroupId, region)
+	count := 0
+	for _, ng := range nodeGroups {
+		for _, member := range ng.NodeMembers {
+			if member.CurrentRole == "primary" {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// GetElastiCacheReplicationGroupReplicaCount returns the number of replica nodes in a replication group.
+func GetElastiCacheReplicationGroupReplicaCount(t *testing.T, replicationGroupId string, region string) int {
+	nodeGroups := GetElastiCacheReplicationGroupNodeGroups(t, replicationGroupId, region)
+	count := 0
+	for _, ng := range nodeGroups {
+		for _, member := range ng.NodeMembers {
+			if member.CurrentRole == "replica" {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// AllElastiCacheReplicationGroupMembersAvailable checks if all member clusters in a replication group are available.
+func AllElastiCacheReplicationGroupMembersAvailable(t *testing.T, replicationGroupId string, region string) bool {
+	members := GetElastiCacheReplicationGroupMemberClusters(t, replicationGroupId, region)
+	if len(members) == 0 {
+		return false
+	}
+
+	for _, memberId := range members {
+		status := GetElastiCacheClusterStatus(t, memberId, region)
+		if status != "available" {
+			return false
+		}
+	}
+
+	return true
+}
