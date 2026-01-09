@@ -29,8 +29,18 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Run tofu test
-        run: tofu test
+        run: |
+          tofu test -json > tofu-test-results.json 2>&1 || true
+          tofu test
         working-directory: .
+
+      - name: Upload native test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tofu-test-results
+          path: tofu-test-results.json
+          retention-days: 30
 
   integration-tests:
     name: Integration Tests (Terratest)
@@ -64,7 +74,55 @@ jobs:
         working-directory: test
 
       - name: Run Terratest integration tests
-        run: go test -v -timeout 60m ./...
+        id: terratest
+        run: |
+          set -o pipefail
+          go test -v -timeout 60m -json ./... 2>&1 | tee terratest-results.json || echo "TESTS_FAILED=true" >> $GITHUB_ENV
+          go test -v -timeout 60m ./... 2>&1 | tee terratest-output.txt || true
         working-directory: test
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Terratest Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f terratest-results.json ]; then
+            # Count pass/fail from JSON output
+            PASSED=$(grep -c '"Action":"pass"' terratest-results.json 2>/dev/null || echo "0")
+            FAILED=$(grep -c '"Action":"fail"' terratest-results.json 2>/dev/null || echo "0")
+            SKIPPED=$(grep -c '"Action":"skip"' terratest-results.json 2>/dev/null || echo "0")
+
+            echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$FAILED" -gt 0 ]; then
+              echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep '"Action":"fail"' terratest-results.json | jq -r '.Test // .Package' | sort -u >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "⚠️ No test results file found" >> $GITHUB_STEP_SUMMARY
+          fi
+        working-directory: test
+
+      - name: Upload Terratest results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terratest-results
+          path: |
+            test/terratest-results.json
+            test/terratest-output.txt
+          retention-days: 30
+
+      - name: Fail if tests failed
+        if: env.TESTS_FAILED == 'true'
+        run: exit 1
