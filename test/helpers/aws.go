@@ -833,3 +833,26 @@ func GetSubnetIpv6CidrBlock(t *testing.T, subnetId string, region string) string
 func SubnetHasIpv6CidrBlock(t *testing.T, subnetId string, region string) bool {
 	return GetSubnetIpv6CidrBlock(t, subnetId, region) != ""
 }
+
+// GetLoadBalancerCrossZoneEnabled checks if cross-zone load balancing is enabled for a load balancer.
+// Returns true if the load_balancing.cross_zone.enabled attribute is "true".
+func GetLoadBalancerCrossZoneEnabled(t *testing.T, lbArn string, region string) bool {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeLoadBalancerAttributesInput{
+		LoadBalancerArn: &lbArn,
+	}
+
+	result, err := client.DescribeLoadBalancerAttributes(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe load balancer attributes for %s", lbArn)
+
+	for _, attr := range result.Attributes {
+		if attr.Key != nil && *attr.Key == "load_balancing.cross_zone.enabled" {
+			if attr.Value != nil {
+				return *attr.Value == "true"
+			}
+		}
+	}
+
+	return false
+}
