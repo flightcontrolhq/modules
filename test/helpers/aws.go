@@ -18,6 +18,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/wafv2"
+	wafv2types "github.com/aws/aws-sdk-go-v2/service/wafv2/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1423,4 +1425,179 @@ func AllElastiCacheReplicationGroupMembersAvailable(t *testing.T, replicationGro
 	}
 
 	return true
+}
+
+// getWAFv2Client creates a WAFv2 client for the specified region.
+func getWAFv2Client(t *testing.T, region string) *wafv2.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return wafv2.NewFromConfig(cfg)
+}
+
+// WafWebAclExists checks if a WAFv2 WebACL with the given ARN exists.
+// Uses the ARN to determine the scope (REGIONAL for ALB/API Gateway, CLOUDFRONT for CloudFront).
+func WafWebAclExists(t *testing.T, webAclArn string, region string) bool {
+	client := getWAFv2Client(t, region)
+
+	// Extract the WebACL ID and name from the ARN
+	// ARN format: arn:aws:wafv2:{region}:{account}:regional/webacl/{name}/{id}
+	name, id := parseWebAclArn(webAclArn)
+	if name == "" || id == "" {
+		return false
+	}
+
+	input := &wafv2.GetWebACLInput{
+		Name:  &name,
+		Id:    &id,
+		Scope: wafv2types.ScopeRegional, // ALB uses REGIONAL scope
+	}
+
+	_, err := client.GetWebACL(context.TODO(), input)
+	return err == nil
+}
+
+// GetWafWebAclName returns the name of a WAFv2 WebACL.
+func GetWafWebAclName(t *testing.T, webAclArn string, region string) string {
+	client := getWAFv2Client(t, region)
+
+	name, id := parseWebAclArn(webAclArn)
+	require.NotEmpty(t, name, "Failed to parse WebACL name from ARN %s", webAclArn)
+	require.NotEmpty(t, id, "Failed to parse WebACL ID from ARN %s", webAclArn)
+
+	input := &wafv2.GetWebACLInput{
+		Name:  &name,
+		Id:    &id,
+		Scope: wafv2types.ScopeRegional,
+	}
+
+	result, err := client.GetWebACL(context.TODO(), input)
+	require.NoError(t, err, "Failed to get WAFv2 WebACL %s", webAclArn)
+
+	if result.WebACL != nil && result.WebACL.Name != nil {
+		return *result.WebACL.Name
+	}
+	return ""
+}
+
+// GetWafWebAclRuleCount returns the number of rules in a WAFv2 WebACL.
+func GetWafWebAclRuleCount(t *testing.T, webAclArn string, region string) int {
+	client := getWAFv2Client(t, region)
+
+	name, id := parseWebAclArn(webAclArn)
+	require.NotEmpty(t, name, "Failed to parse WebACL name from ARN %s", webAclArn)
+	require.NotEmpty(t, id, "Failed to parse WebACL ID from ARN %s", webAclArn)
+
+	input := &wafv2.GetWebACLInput{
+		Name:  &name,
+		Id:    &id,
+		Scope: wafv2types.ScopeRegional,
+	}
+
+	result, err := client.GetWebACL(context.TODO(), input)
+	require.NoError(t, err, "Failed to get WAFv2 WebACL %s", webAclArn)
+
+	if result.WebACL != nil {
+		return len(result.WebACL.Rules)
+	}
+	return 0
+}
+
+// WafWebAclHasManagedRuleGroup checks if a WAFv2 WebACL contains a specific AWS managed rule group.
+func WafWebAclHasManagedRuleGroup(t *testing.T, webAclArn string, ruleGroupName string, region string) bool {
+	client := getWAFv2Client(t, region)
+
+	name, id := parseWebAclArn(webAclArn)
+	require.NotEmpty(t, name, "Failed to parse WebACL name from ARN %s", webAclArn)
+	require.NotEmpty(t, id, "Failed to parse WebACL ID from ARN %s", webAclArn)
+
+	input := &wafv2.GetWebACLInput{
+		Name:  &name,
+		Id:    &id,
+		Scope: wafv2types.ScopeRegional,
+	}
+
+	result, err := client.GetWebACL(context.TODO(), input)
+	require.NoError(t, err, "Failed to get WAFv2 WebACL %s", webAclArn)
+
+	if result.WebACL != nil {
+		for _, rule := range result.WebACL.Rules {
+			if rule.Statement != nil && rule.Statement.ManagedRuleGroupStatement != nil {
+				if rule.Statement.ManagedRuleGroupStatement.Name != nil {
+					if *rule.Statement.ManagedRuleGroupStatement.Name == ruleGroupName {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// WafWebAclIsAssociatedWithResource checks if a WAFv2 WebACL is associated with a specific resource (e.g., ALB).
+func WafWebAclIsAssociatedWithResource(t *testing.T, webAclArn string, resourceArn string, region string) bool {
+	client := getWAFv2Client(t, region)
+
+	input := &wafv2.GetWebACLForResourceInput{
+		ResourceArn: &resourceArn,
+	}
+
+	result, err := client.GetWebACLForResource(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	if result.WebACL != nil && result.WebACL.ARN != nil {
+		return *result.WebACL.ARN == webAclArn
+	}
+	return false
+}
+
+// GetWafWebAclForResource returns the ARN of the WebACL associated with a resource.
+// Returns an empty string if no WebACL is associated.
+func GetWafWebAclForResource(t *testing.T, resourceArn string, region string) string {
+	client := getWAFv2Client(t, region)
+
+	input := &wafv2.GetWebACLForResourceInput{
+		ResourceArn: &resourceArn,
+	}
+
+	result, err := client.GetWebACLForResource(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.WebACL != nil && result.WebACL.ARN != nil {
+		return *result.WebACL.ARN
+	}
+	return ""
+}
+
+// parseWebAclArn parses a WebACL ARN and returns the name and ID.
+// ARN format: arn:aws:wafv2:{region}:{account}:regional/webacl/{name}/{id}
+func parseWebAclArn(arn string) (name string, id string) {
+	// Split by "/" to get parts
+	parts := make([]string, 0)
+	current := ""
+	for _, c := range arn {
+		if c == '/' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+
+	// Expected format after splitting: [..., "webacl", "{name}", "{id}"]
+	// We need the last two parts
+	if len(parts) >= 2 {
+		id = parts[len(parts)-1]
+		name = parts[len(parts)-2]
+		return name, id
+	}
+	return "", ""
 }

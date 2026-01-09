@@ -143,3 +143,81 @@ func TestAlbWithHttps(t *testing.T) {
 	hasHttpsRule := helpers.SecurityGroupHasIngressRule(t, securityGroupId, 443, awsRegion)
 	assert.True(t, hasHttpsRule, "Security group should have inbound rule for HTTPS (port 443)")
 }
+
+// TestAlbWithWaf provisions the ALB fixture with WAF WebACL and validates:
+// - WAF WebACL is created and associated with ALB
+// - WebACL contains AWS managed rule groups (AWSManagedRulesCommonRuleSet)
+// - ALB is in 'active' state
+func TestAlbWithWaf(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("alb-waf")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/alb/with_waf",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	albArn := terraform.Output(t, terraformOptions, "alb_arn")
+	albDnsName := terraform.Output(t, terraformOptions, "alb_dns_name")
+	securityGroupId := terraform.Output(t, terraformOptions, "security_group_id")
+	webAclArn := terraform.Output(t, terraformOptions, "web_acl_arn")
+	webAclName := terraform.Output(t, terraformOptions, "web_acl_name")
+
+	// Assert basic outputs are not empty
+	require.NotEmpty(t, albArn, "alb_arn should not be empty")
+	require.NotEmpty(t, albDnsName, "alb_dns_name should not be empty")
+	require.NotEmpty(t, securityGroupId, "security_group_id should not be empty")
+	require.NotEmpty(t, webAclArn, "web_acl_arn should not be empty")
+	require.NotEmpty(t, webAclName, "web_acl_name should not be empty")
+
+	// Use AWS SDK to verify ALB exists and is active
+	albExists := helpers.LoadBalancerExists(t, albArn, awsRegion)
+	assert.True(t, albExists, "ALB should exist in AWS")
+
+	albState := helpers.GetLoadBalancerState(t, albArn, awsRegion)
+	assert.Equal(t, "active", string(albState), "ALB should be in 'active' state")
+
+	// Verify WAF WebACL exists
+	webAclExists := helpers.WafWebAclExists(t, webAclArn, awsRegion)
+	assert.True(t, webAclExists, "WAF WebACL should exist in AWS")
+
+	// Verify WebACL name matches
+	actualWebAclName := helpers.GetWafWebAclName(t, webAclArn, awsRegion)
+	assert.Equal(t, webAclName, actualWebAclName, "WebACL name should match Terraform output")
+
+	// Verify WebACL has rules (at least 2 managed rule groups)
+	ruleCount := helpers.GetWafWebAclRuleCount(t, webAclArn, awsRegion)
+	assert.GreaterOrEqual(t, ruleCount, 2, "WebACL should have at least 2 rules (managed rule groups)")
+
+	// Verify WebACL contains AWSManagedRulesCommonRuleSet
+	hasCommonRuleSet := helpers.WafWebAclHasManagedRuleGroup(t, webAclArn, "AWSManagedRulesCommonRuleSet", awsRegion)
+	assert.True(t, hasCommonRuleSet, "WebACL should contain AWSManagedRulesCommonRuleSet managed rule group")
+
+	// Verify WebACL contains AWSManagedRulesKnownBadInputsRuleSet
+	hasBadInputsRuleSet := helpers.WafWebAclHasManagedRuleGroup(t, webAclArn, "AWSManagedRulesKnownBadInputsRuleSet", awsRegion)
+	assert.True(t, hasBadInputsRuleSet, "WebACL should contain AWSManagedRulesKnownBadInputsRuleSet managed rule group")
+
+	// Verify WebACL is associated with the ALB
+	isAssociated := helpers.WafWebAclIsAssociatedWithResource(t, webAclArn, albArn, awsRegion)
+	assert.True(t, isAssociated, "WAF WebACL should be associated with the ALB")
+
+	// Also verify by getting the WebACL for the resource
+	associatedWebAclArn := helpers.GetWafWebAclForResource(t, albArn, awsRegion)
+	assert.Equal(t, webAclArn, associatedWebAclArn, "WebACL ARN from resource should match expected ARN")
+}
