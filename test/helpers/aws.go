@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/applicationautoscaling"
+	applicationautoscalingtypes "github.com/aws/aws-sdk-go-v2/service/applicationautoscaling/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -1079,4 +1081,121 @@ func VpcFlowLogIsAttachedToVpc(t *testing.T, flowLogId string, vpcId string, reg
 		return *result.FlowLogs[0].ResourceId == vpcId
 	}
 	return false
+}
+
+// getApplicationAutoScalingClient creates an Application Auto Scaling client for the specified region.
+func getApplicationAutoScalingClient(t *testing.T, region string) *applicationautoscaling.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return applicationautoscaling.NewFromConfig(cfg)
+}
+
+// AppAutoScalingTargetExists checks if an Application Auto Scaling target exists for the given resource.
+// resourceId should be in the format "service/{cluster-name}/{service-name}" for ECS services.
+func AppAutoScalingTargetExists(t *testing.T, resourceId string, region string) bool {
+	client := getApplicationAutoScalingClient(t, region)
+
+	input := &applicationautoscaling.DescribeScalableTargetsInput{
+		ServiceNamespace: applicationautoscalingtypes.ServiceNamespaceEcs,
+		ResourceIds:      []string{resourceId},
+	}
+
+	result, err := client.DescribeScalableTargets(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.ScalableTargets) > 0
+}
+
+// GetAppAutoScalingTargetMinCapacity returns the minimum capacity of an Application Auto Scaling target.
+// resourceId should be in the format "service/{cluster-name}/{service-name}" for ECS services.
+func GetAppAutoScalingTargetMinCapacity(t *testing.T, resourceId string, region string) int32 {
+	client := getApplicationAutoScalingClient(t, region)
+
+	input := &applicationautoscaling.DescribeScalableTargetsInput{
+		ServiceNamespace: applicationautoscalingtypes.ServiceNamespaceEcs,
+		ResourceIds:      []string{resourceId},
+	}
+
+	result, err := client.DescribeScalableTargets(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe scalable target %s", resourceId)
+	require.Len(t, result.ScalableTargets, 1, "Expected exactly one scalable target with resource ID %s", resourceId)
+
+	if result.ScalableTargets[0].MinCapacity != nil {
+		return *result.ScalableTargets[0].MinCapacity
+	}
+	return 0
+}
+
+// GetAppAutoScalingTargetMaxCapacity returns the maximum capacity of an Application Auto Scaling target.
+// resourceId should be in the format "service/{cluster-name}/{service-name}" for ECS services.
+func GetAppAutoScalingTargetMaxCapacity(t *testing.T, resourceId string, region string) int32 {
+	client := getApplicationAutoScalingClient(t, region)
+
+	input := &applicationautoscaling.DescribeScalableTargetsInput{
+		ServiceNamespace: applicationautoscalingtypes.ServiceNamespaceEcs,
+		ResourceIds:      []string{resourceId},
+	}
+
+	result, err := client.DescribeScalableTargets(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe scalable target %s", resourceId)
+	require.Len(t, result.ScalableTargets, 1, "Expected exactly one scalable target with resource ID %s", resourceId)
+
+	if result.ScalableTargets[0].MaxCapacity != nil {
+		return *result.ScalableTargets[0].MaxCapacity
+	}
+	return 0
+}
+
+// GetAppAutoScalingPolicies returns the scaling policies for an Application Auto Scaling target.
+// resourceId should be in the format "service/{cluster-name}/{service-name}" for ECS services.
+func GetAppAutoScalingPolicies(t *testing.T, resourceId string, region string) []applicationautoscalingtypes.ScalingPolicy {
+	client := getApplicationAutoScalingClient(t, region)
+
+	input := &applicationautoscaling.DescribeScalingPoliciesInput{
+		ServiceNamespace: applicationautoscalingtypes.ServiceNamespaceEcs,
+		ResourceId:       &resourceId,
+	}
+
+	result, err := client.DescribeScalingPolicies(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe scaling policies for %s", resourceId)
+
+	return result.ScalingPolicies
+}
+
+// AppAutoScalingPolicyExists checks if a scaling policy with the given name exists for a resource.
+// resourceId should be in the format "service/{cluster-name}/{service-name}" for ECS services.
+func AppAutoScalingPolicyExists(t *testing.T, resourceId string, policyName string, region string) bool {
+	policies := GetAppAutoScalingPolicies(t, resourceId, region)
+
+	for _, policy := range policies {
+		if policy.PolicyName != nil && *policy.PolicyName == policyName {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetAppAutoScalingPolicyCount returns the number of scaling policies for an Application Auto Scaling target.
+// resourceId should be in the format "service/{cluster-name}/{service-name}" for ECS services.
+func GetAppAutoScalingPolicyCount(t *testing.T, resourceId string, region string) int {
+	policies := GetAppAutoScalingPolicies(t, resourceId, region)
+	return len(policies)
+}
+
+// GetEcsServiceAutoScalingResourceId constructs the Application Auto Scaling resource ID
+// from a cluster ARN and service name.
+// Returns a resource ID in the format "service/{cluster-name}/{service-name}".
+func GetEcsServiceAutoScalingResourceId(clusterArn string, serviceName string) string {
+	// Extract cluster name from ARN (format: arn:aws:ecs:region:account:cluster/cluster-name)
+	clusterName := ""
+	for i := len(clusterArn) - 1; i >= 0; i-- {
+		if clusterArn[i] == '/' {
+			clusterName = clusterArn[i+1:]
+			break
+		}
+	}
+	return "service/" + clusterName + "/" + serviceName
 }

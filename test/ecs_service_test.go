@@ -203,3 +203,78 @@ func TestEcsServiceWithAlb(t *testing.T) {
 	// Basic verification that targets are at least registered
 	_ = hasTargets // We've already logged the status
 }
+
+// TestEcsServiceAutoScaling provisions an ECS service with auto scaling enabled.
+// It verifies:
+// - service is created and ACTIVE
+// - auto scaling target exists with correct min/max capacity
+// - auto scaling policies are created
+func TestEcsServiceAutoScaling(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("ecssvcas")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/ecs_service/with_autoscaling",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	clusterArn := terraform.Output(t, terraformOptions, "cluster_arn")
+	serviceName := terraform.Output(t, terraformOptions, "service_name")
+	serviceArn := terraform.Output(t, terraformOptions, "service_arn")
+	autoscalingTargetArn := terraform.Output(t, terraformOptions, "autoscaling_target_arn")
+
+	// Assert service outputs are not empty
+	require.NotEmpty(t, serviceName, "service_name should not be empty")
+	require.NotEmpty(t, serviceArn, "service_arn should not be empty")
+	require.NotEmpty(t, clusterArn, "cluster_arn should not be empty")
+	require.NotEmpty(t, autoscalingTargetArn, "autoscaling_target_arn should not be empty")
+
+	// Use AWS SDK to verify ECS service exists and is ACTIVE
+	serviceExists := helpers.EcsServiceExists(t, clusterArn, serviceName, awsRegion)
+	assert.True(t, serviceExists, "ECS service should exist in AWS")
+
+	serviceStatus := helpers.GetEcsServiceStatus(t, clusterArn, serviceName, awsRegion)
+	assert.Equal(t, "ACTIVE", serviceStatus, "ECS service should be in 'ACTIVE' state")
+
+	// Construct the auto scaling resource ID
+	resourceId := helpers.GetEcsServiceAutoScalingResourceId(clusterArn, serviceName)
+	t.Logf("Auto scaling resource ID: %s", resourceId)
+
+	// Use AWS SDK to verify auto scaling target exists
+	targetExists := helpers.AppAutoScalingTargetExists(t, resourceId, awsRegion)
+	assert.True(t, targetExists, "Auto scaling target should exist in AWS")
+
+	// Use AWS SDK to verify min/max capacity
+	minCapacity := helpers.GetAppAutoScalingTargetMinCapacity(t, resourceId, awsRegion)
+	assert.Equal(t, int32(1), minCapacity, "Auto scaling target min capacity should be 1")
+
+	maxCapacity := helpers.GetAppAutoScalingTargetMaxCapacity(t, resourceId, awsRegion)
+	assert.Equal(t, int32(3), maxCapacity, "Auto scaling target max capacity should be 3")
+
+	// Use AWS SDK to verify scaling policies exist
+	policyCount := helpers.GetAppAutoScalingPolicyCount(t, resourceId, awsRegion)
+	assert.GreaterOrEqual(t, policyCount, 1, "At least one auto scaling policy should exist")
+
+	// Verify the specific CPU scaling policy exists
+	cpuPolicyName := uniqueName + "-cpu-scaling"
+	cpuPolicyExists := helpers.AppAutoScalingPolicyExists(t, resourceId, cpuPolicyName, awsRegion)
+	assert.True(t, cpuPolicyExists, "CPU scaling policy should exist: %s", cpuPolicyName)
+
+	t.Logf("Auto scaling configuration verified: min=%d, max=%d, policies=%d", minCapacity, maxCapacity, policyCount)
+}
