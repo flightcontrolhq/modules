@@ -101,3 +101,60 @@ func GetVpcState(t *testing.T, vpcId string, region string) types.VpcState {
 
 	return result.Vpcs[0].State
 }
+
+// GetNatGatewayState returns the state of a NAT Gateway.
+// Returns the state as a string (pending, failed, available, deleting, deleted).
+func GetNatGatewayState(t *testing.T, natGatewayId string, region string) types.NatGatewayState {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeNatGatewaysInput{
+		NatGatewayIds: []string{natGatewayId},
+	}
+
+	result, err := client.DescribeNatGateways(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe NAT Gateway %s", natGatewayId)
+	require.Len(t, result.NatGateways, 1, "Expected exactly one NAT Gateway with ID %s", natGatewayId)
+
+	return result.NatGateways[0].State
+}
+
+// NatGatewayExists checks if a NAT Gateway with the given ID exists in the specified region.
+func NatGatewayExists(t *testing.T, natGatewayId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeNatGatewaysInput{
+		NatGatewayIds: []string{natGatewayId},
+	}
+
+	result, err := client.DescribeNatGateways(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.NatGateways) > 0
+}
+
+// RouteTableHasNatGatewayRoute checks if a route table has a route to a NAT Gateway.
+// It looks for a route with destination 0.0.0.0/0 pointing to a NAT Gateway.
+func RouteTableHasNatGatewayRoute(t *testing.T, routeTableId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeRouteTablesInput{
+		RouteTableIds: []string{routeTableId},
+	}
+
+	result, err := client.DescribeRouteTables(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe route table %s", routeTableId)
+	require.Len(t, result.RouteTables, 1, "Expected exactly one route table with ID %s", routeTableId)
+
+	for _, route := range result.RouteTables[0].Routes {
+		// Check for default route (0.0.0.0/0) pointing to a NAT Gateway
+		if route.DestinationCidrBlock != nil && *route.DestinationCidrBlock == "0.0.0.0/0" {
+			if route.NatGatewayId != nil && *route.NatGatewayId != "" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
