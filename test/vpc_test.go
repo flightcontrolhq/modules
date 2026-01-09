@@ -133,3 +133,84 @@ func TestVpcWithNatGateway(t *testing.T) {
 		assert.True(t, hasNatRoute, "Private route table %s should have a route to NAT Gateway", routeTableId)
 	}
 }
+
+// TestVpcWithHaNat provisions the full VPC fixture with HA NAT Gateways (one per AZ)
+// and validates:
+// - 3 NAT gateways are created (one per AZ)
+// - Each NAT gateway is in 'available' state
+// - Each private subnet routes to its own NAT gateway
+func TestVpcWithHaNat(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("vpc-ha-nat")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/vpc/full",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	vpcId := terraform.Output(t, terraformOptions, "vpc_id")
+	natGatewayIds := terraform.OutputList(t, terraformOptions, "nat_gateway_ids")
+	natGatewayPublicIps := terraform.OutputList(t, terraformOptions, "nat_gateway_public_ips")
+	privateRouteTableIds := terraform.OutputList(t, terraformOptions, "private_route_table_ids")
+
+	// Assert vpc_id is not empty
+	require.NotEmpty(t, vpcId, "vpc_id should not be empty")
+
+	// Assert 3 NAT gateways are created (one per AZ, since single_nat_gateway=false)
+	require.Len(t, natGatewayIds, 3, "nat_gateway_ids should have 3 elements (one per AZ)")
+	for i, natGatewayId := range natGatewayIds {
+		require.NotEmpty(t, natGatewayId, "nat_gateway_id[%d] should not be empty", i)
+	}
+
+	// Assert each NAT gateway has a public IP
+	require.Len(t, natGatewayPublicIps, 3, "nat_gateway_public_ips should have 3 elements")
+	for i, publicIp := range natGatewayPublicIps {
+		require.NotEmpty(t, publicIp, "nat_gateway_public_ip[%d] should not be empty", i)
+	}
+
+	// Use AWS SDK to verify each NAT gateway exists and is in 'available' state
+	for _, natGatewayId := range natGatewayIds {
+		natGatewayExists := helpers.NatGatewayExists(t, natGatewayId, awsRegion)
+		assert.True(t, natGatewayExists, "NAT Gateway %s should exist in AWS", natGatewayId)
+
+		natGatewayState := helpers.GetNatGatewayState(t, natGatewayId, awsRegion)
+		assert.Equal(t, "available", string(natGatewayState), "NAT Gateway %s should be in 'available' state", natGatewayId)
+	}
+
+	// Verify we have 3 private route tables (one per AZ)
+	require.Len(t, privateRouteTableIds, 3, "private_route_table_ids should have 3 elements (one per AZ)")
+
+	// Verify each private route table routes to a NAT gateway
+	// and collect the NAT gateway IDs used by route tables
+	natGatewayIdsFromRoutes := make(map[string]bool)
+	for _, routeTableId := range privateRouteTableIds {
+		hasNatRoute := helpers.RouteTableHasNatGatewayRoute(t, routeTableId, awsRegion)
+		assert.True(t, hasNatRoute, "Private route table %s should have a route to NAT Gateway", routeTableId)
+
+		// Get the NAT gateway ID from the route table
+		natGatewayId := helpers.GetRouteTableNatGatewayId(t, routeTableId, awsRegion)
+		if natGatewayId != "" {
+			natGatewayIdsFromRoutes[natGatewayId] = true
+		}
+	}
+
+	// Verify that each private subnet routes to a different NAT gateway (HA configuration)
+	// In HA mode, each route table should point to its own NAT gateway
+	assert.Len(t, natGatewayIdsFromRoutes, 3, "Each private route table should route to a different NAT Gateway in HA configuration")
+}

@@ -732,3 +732,28 @@ func GetElastiCacheReplicationGroupStatus(t *testing.T, replicationGroupId strin
 	}
 	return ""
 }
+
+// GetRouteTableNatGatewayId returns the NAT Gateway ID from a route table's default route (0.0.0.0/0).
+// Returns an empty string if no NAT Gateway route is found.
+func GetRouteTableNatGatewayId(t *testing.T, routeTableId string, region string) string {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeRouteTablesInput{
+		RouteTableIds: []string{routeTableId},
+	}
+
+	result, err := client.DescribeRouteTables(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe route table %s", routeTableId)
+	require.Len(t, result.RouteTables, 1, "Expected exactly one route table with ID %s", routeTableId)
+
+	for _, route := range result.RouteTables[0].Routes {
+		// Check for default route (0.0.0.0/0) pointing to a NAT Gateway
+		if route.DestinationCidrBlock != nil && *route.DestinationCidrBlock == "0.0.0.0/0" {
+			if route.NatGatewayId != nil && *route.NatGatewayId != "" {
+				return *route.NatGatewayId
+			}
+		}
+	}
+
+	return ""
+}
