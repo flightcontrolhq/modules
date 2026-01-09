@@ -297,3 +297,72 @@ func TestVpcWithIPv6(t *testing.T) {
 		assert.True(t, subnetHasIpv6, "Private subnet %s should have an IPv6 CIDR block", subnetId)
 	}
 }
+
+// TestVpcFlowLogsCloudWatch provisions the full VPC fixture with flow_logs_destination=cloudwatch
+// and validates:
+// - CloudWatch log group is created
+// - VPC flow log is created and attached to the VPC
+// - Flow log destination is CloudWatch Logs
+// - Flow log is in ACTIVE state
+func TestVpcFlowLogsCloudWatch(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("vpc-flowlogs")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/vpc/full",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	vpcId := terraform.Output(t, terraformOptions, "vpc_id")
+	flowLogId := terraform.Output(t, terraformOptions, "flow_log_id")
+	flowLogLogGroupName := terraform.Output(t, terraformOptions, "flow_log_cloudwatch_log_group_name")
+	flowLogLogGroupArn := terraform.Output(t, terraformOptions, "flow_log_cloudwatch_log_group_arn")
+
+	// Assert vpc_id is not empty
+	require.NotEmpty(t, vpcId, "vpc_id should not be empty")
+
+	// Assert flow_log_id is not empty
+	require.NotEmpty(t, flowLogId, "flow_log_id should not be empty")
+
+	// Assert CloudWatch log group name is not empty
+	require.NotEmpty(t, flowLogLogGroupName, "flow_log_cloudwatch_log_group_name should not be empty")
+
+	// Assert CloudWatch log group ARN is not empty
+	require.NotEmpty(t, flowLogLogGroupArn, "flow_log_cloudwatch_log_group_arn should not be empty")
+
+	// Use AWS SDK to verify CloudWatch log group exists
+	logGroupExists := helpers.CloudWatchLogGroupExists(t, flowLogLogGroupName, awsRegion)
+	assert.True(t, logGroupExists, "CloudWatch log group %s should exist in AWS", flowLogLogGroupName)
+
+	// Use AWS SDK to verify flow log exists
+	flowLogExists := helpers.VpcFlowLogExists(t, flowLogId, awsRegion)
+	assert.True(t, flowLogExists, "VPC flow log %s should exist in AWS", flowLogId)
+
+	// Use AWS SDK to verify flow log is in ACTIVE state
+	flowLogStatus := helpers.GetVpcFlowLogStatus(t, flowLogId, awsRegion)
+	assert.Equal(t, "ACTIVE", flowLogStatus, "VPC flow log should be in ACTIVE state")
+
+	// Use AWS SDK to verify flow log is attached to the VPC
+	flowLogAttached := helpers.VpcFlowLogIsAttachedToVpc(t, flowLogId, vpcId, awsRegion)
+	assert.True(t, flowLogAttached, "VPC flow log should be attached to VPC %s", vpcId)
+
+	// Use AWS SDK to verify flow log destination type is CloudWatch Logs
+	flowLogDestType := helpers.GetVpcFlowLogDestinationType(t, flowLogId, awsRegion)
+	assert.Equal(t, "cloud-watch-logs", string(flowLogDestType), "VPC flow log destination type should be cloud-watch-logs")
+}

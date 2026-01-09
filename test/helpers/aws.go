@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
@@ -931,5 +932,151 @@ func GetLoadBalancerCrossZoneEnabled(t *testing.T, lbArn string, region string) 
 		}
 	}
 
+	return false
+}
+
+// getCloudWatchLogsClient creates a CloudWatch Logs client for the specified region.
+func getCloudWatchLogsClient(t *testing.T, region string) *cloudwatchlogs.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return cloudwatchlogs.NewFromConfig(cfg)
+}
+
+// CloudWatchLogGroupExists checks if a CloudWatch log group with the given name exists.
+func CloudWatchLogGroupExists(t *testing.T, logGroupName string, region string) bool {
+	client := getCloudWatchLogsClient(t, region)
+
+	input := &cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: &logGroupName,
+	}
+
+	result, err := client.DescribeLogGroups(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	// Check for exact match since we're using prefix
+	for _, logGroup := range result.LogGroups {
+		if logGroup.LogGroupName != nil && *logGroup.LogGroupName == logGroupName {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetCloudWatchLogGroupArn returns the ARN of a CloudWatch log group.
+// Returns an empty string if the log group doesn't exist.
+func GetCloudWatchLogGroupArn(t *testing.T, logGroupName string, region string) string {
+	client := getCloudWatchLogsClient(t, region)
+
+	input := &cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: &logGroupName,
+	}
+
+	result, err := client.DescribeLogGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe CloudWatch log groups")
+
+	// Check for exact match since we're using prefix
+	for _, logGroup := range result.LogGroups {
+		if logGroup.LogGroupName != nil && *logGroup.LogGroupName == logGroupName {
+			if logGroup.Arn != nil {
+				return *logGroup.Arn
+			}
+		}
+	}
+
+	return ""
+}
+
+// VpcFlowLogExists checks if a VPC flow log with the given ID exists.
+func VpcFlowLogExists(t *testing.T, flowLogId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeFlowLogsInput{
+		FlowLogIds: []string{flowLogId},
+	}
+
+	result, err := client.DescribeFlowLogs(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.FlowLogs) > 0
+}
+
+// GetVpcFlowLogStatus returns the status of a VPC flow log (ACTIVE or inactive).
+func GetVpcFlowLogStatus(t *testing.T, flowLogId string, region string) string {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeFlowLogsInput{
+		FlowLogIds: []string{flowLogId},
+	}
+
+	result, err := client.DescribeFlowLogs(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe VPC flow log %s", flowLogId)
+	require.Len(t, result.FlowLogs, 1, "Expected exactly one flow log with ID %s", flowLogId)
+
+	if result.FlowLogs[0].FlowLogStatus != nil {
+		return *result.FlowLogs[0].FlowLogStatus
+	}
+	return ""
+}
+
+// GetVpcFlowLogDestination returns the destination of a VPC flow log.
+// For CloudWatch Logs, this returns the log group ARN.
+// For S3, this returns the S3 bucket ARN.
+func GetVpcFlowLogDestination(t *testing.T, flowLogId string, region string) string {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeFlowLogsInput{
+		FlowLogIds: []string{flowLogId},
+	}
+
+	result, err := client.DescribeFlowLogs(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe VPC flow log %s", flowLogId)
+	require.Len(t, result.FlowLogs, 1, "Expected exactly one flow log with ID %s", flowLogId)
+
+	if result.FlowLogs[0].LogDestination != nil {
+		return *result.FlowLogs[0].LogDestination
+	}
+	// For CloudWatch Logs, also check LogGroupName
+	if result.FlowLogs[0].LogGroupName != nil {
+		return *result.FlowLogs[0].LogGroupName
+	}
+	return ""
+}
+
+// GetVpcFlowLogDestinationType returns the destination type of a VPC flow log.
+// Returns "cloud-watch-logs" or "s3".
+func GetVpcFlowLogDestinationType(t *testing.T, flowLogId string, region string) types.LogDestinationType {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeFlowLogsInput{
+		FlowLogIds: []string{flowLogId},
+	}
+
+	result, err := client.DescribeFlowLogs(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe VPC flow log %s", flowLogId)
+	require.Len(t, result.FlowLogs, 1, "Expected exactly one flow log with ID %s", flowLogId)
+
+	return result.FlowLogs[0].LogDestinationType
+}
+
+// VpcFlowLogIsAttachedToVpc checks if a flow log is attached to the specified VPC.
+func VpcFlowLogIsAttachedToVpc(t *testing.T, flowLogId string, vpcId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeFlowLogsInput{
+		FlowLogIds: []string{flowLogId},
+	}
+
+	result, err := client.DescribeFlowLogs(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe VPC flow log %s", flowLogId)
+	require.Len(t, result.FlowLogs, 1, "Expected exactly one flow log with ID %s", flowLogId)
+
+	if result.FlowLogs[0].ResourceId != nil {
+		return *result.FlowLogs[0].ResourceId == vpcId
+	}
 	return false
 }
