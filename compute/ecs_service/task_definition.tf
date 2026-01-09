@@ -211,5 +211,9 @@ resource "aws_ecs_task_definition" "this" {
   tags = merge(local.tags, {
     Name = var.name
   })
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
