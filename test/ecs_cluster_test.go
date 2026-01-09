@@ -150,3 +150,69 @@ func TestEcsClusterWithAlb(t *testing.T) {
 	tgPort := helpers.GetTargetGroupPort(t, targetGroupArn, awsRegion)
 	assert.Equal(t, int32(80), tgPort, "Target group should be on port 80")
 }
+
+// TestEcsClusterFargateSpot provisions the ECS cluster fixture with both Fargate and Fargate Spot capacity providers.
+// It verifies:
+// - cluster_arn is not empty
+// - cluster_name is not empty
+// - ECS cluster is in 'ACTIVE' state using AWS SDK
+// - Both FARGATE and FARGATE_SPOT capacity providers are attached to the cluster
+func TestEcsClusterFargateSpot(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("ecsspot")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/ecs_cluster/fargate_spot",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	clusterArn := terraform.Output(t, terraformOptions, "cluster_arn")
+	clusterName := terraform.Output(t, terraformOptions, "cluster_name")
+	capacityProviders := terraform.OutputList(t, terraformOptions, "capacity_providers")
+	fargateSpotName := terraform.Output(t, terraformOptions, "fargate_spot_capacity_provider_name")
+
+	// Assert cluster_arn is not empty
+	require.NotEmpty(t, clusterArn, "cluster_arn should not be empty")
+
+	// Assert cluster_name is not empty
+	require.NotEmpty(t, clusterName, "cluster_name should not be empty")
+
+	// Assert capacity_providers list contains both FARGATE and FARGATE_SPOT
+	assert.Contains(t, capacityProviders, "FARGATE", "capacity_providers should contain FARGATE")
+	assert.Contains(t, capacityProviders, "FARGATE_SPOT", "capacity_providers should contain FARGATE_SPOT")
+
+	// Assert fargate_spot_capacity_provider_name output is correct
+	assert.Equal(t, "FARGATE_SPOT", fargateSpotName, "fargate_spot_capacity_provider_name should be FARGATE_SPOT")
+
+	// Use AWS SDK to verify ECS cluster exists
+	clusterExists := helpers.EcsClusterExists(t, clusterArn, awsRegion)
+	assert.True(t, clusterExists, "ECS cluster should exist in AWS")
+
+	// Use AWS SDK to verify ECS cluster is in 'ACTIVE' state
+	clusterStatus := helpers.GetEcsClusterStatus(t, clusterArn, awsRegion)
+	assert.Equal(t, "ACTIVE", clusterStatus, "ECS cluster should be in 'ACTIVE' state")
+
+	// Use AWS SDK to verify FARGATE capacity provider is attached
+	hasFargate := helpers.EcsClusterHasCapacityProvider(t, clusterArn, "FARGATE", awsRegion)
+	assert.True(t, hasFargate, "ECS cluster should have FARGATE capacity provider attached")
+
+	// Use AWS SDK to verify FARGATE_SPOT capacity provider is attached
+	hasFargateSpot := helpers.EcsClusterHasCapacityProvider(t, clusterArn, "FARGATE_SPOT", awsRegion)
+	assert.True(t, hasFargateSpot, "ECS cluster should have FARGATE_SPOT capacity provider attached")
+}
