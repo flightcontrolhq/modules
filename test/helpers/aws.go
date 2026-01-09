@@ -1199,3 +1199,75 @@ func GetEcsServiceAutoScalingResourceId(clusterArn string, serviceName string) s
 	}
 	return "service/" + clusterName + "/" + serviceName
 }
+
+// ElastiCacheClusterExists checks if an ElastiCache cluster (Memcached) with the given ID exists.
+func ElastiCacheClusterExists(t *testing.T, clusterId string, region string) bool {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeCacheClustersInput{
+		CacheClusterId: &clusterId,
+	}
+
+	result, err := client.DescribeCacheClusters(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.CacheClusters) > 0
+}
+
+// GetElastiCacheClusterStatus returns the status of an ElastiCache cluster (Memcached).
+// Common statuses: creating, available, modifying, deleting, create-failed, snapshotting.
+func GetElastiCacheClusterStatus(t *testing.T, clusterId string, region string) string {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeCacheClustersInput{
+		CacheClusterId: &clusterId,
+	}
+
+	result, err := client.DescribeCacheClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ElastiCache cluster %s", clusterId)
+	require.Len(t, result.CacheClusters, 1, "Expected exactly one cluster with ID %s", clusterId)
+
+	if result.CacheClusters[0].CacheClusterStatus != nil {
+		return *result.CacheClusters[0].CacheClusterStatus
+	}
+	return ""
+}
+
+// GetElastiCacheClusterEngine returns the engine type of an ElastiCache cluster.
+// Returns "memcached" for Memcached clusters.
+func GetElastiCacheClusterEngine(t *testing.T, clusterId string, region string) string {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeCacheClustersInput{
+		CacheClusterId: &clusterId,
+	}
+
+	result, err := client.DescribeCacheClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ElastiCache cluster %s", clusterId)
+	require.Len(t, result.CacheClusters, 1, "Expected exactly one cluster with ID %s", clusterId)
+
+	if result.CacheClusters[0].Engine != nil {
+		return *result.CacheClusters[0].Engine
+	}
+	return ""
+}
+
+// GetElastiCacheClusterNumCacheNodes returns the number of cache nodes in an ElastiCache cluster.
+func GetElastiCacheClusterNumCacheNodes(t *testing.T, clusterId string, region string) int32 {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeCacheClustersInput{
+		CacheClusterId: &clusterId,
+	}
+
+	result, err := client.DescribeCacheClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ElastiCache cluster %s", clusterId)
+	require.Len(t, result.CacheClusters, 1, "Expected exactly one cluster with ID %s", clusterId)
+
+	if result.CacheClusters[0].NumCacheNodes != nil {
+		return *result.CacheClusters[0].NumCacheNodes
+	}
+	return 0
+}
