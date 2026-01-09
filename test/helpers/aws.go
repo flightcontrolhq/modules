@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/stretchr/testify/require"
@@ -335,4 +337,96 @@ func ListenerExists(t *testing.T, listenerArn string, region string) bool {
 	}
 
 	return len(result.Listeners) > 0
+}
+
+// getECSClient creates an ECS client for the specified region.
+func getECSClient(t *testing.T, region string) *ecs.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return ecs.NewFromConfig(cfg)
+}
+
+// EcsClusterExists checks if an ECS cluster with the given ARN exists.
+func EcsClusterExists(t *testing.T, clusterArn string, region string) bool {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeClustersInput{
+		Clusters: []string{clusterArn},
+	}
+
+	result, err := client.DescribeClusters(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	// Check that the cluster exists and is not in INACTIVE status
+	for _, cluster := range result.Clusters {
+		if cluster.ClusterArn != nil && *cluster.ClusterArn == clusterArn {
+			return cluster.Status != nil && *cluster.Status != "INACTIVE"
+		}
+	}
+
+	return false
+}
+
+// GetEcsClusterStatus returns the status of an ECS cluster.
+// Common statuses: ACTIVE, PROVISIONING, DEPROVISIONING, FAILED, INACTIVE.
+func GetEcsClusterStatus(t *testing.T, clusterArn string, region string) string {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeClustersInput{
+		Clusters: []string{clusterArn},
+	}
+
+	result, err := client.DescribeClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS cluster %s", clusterArn)
+	require.Len(t, result.Clusters, 1, "Expected exactly one ECS cluster with ARN %s", clusterArn)
+
+	if result.Clusters[0].Status != nil {
+		return *result.Clusters[0].Status
+	}
+	return ""
+}
+
+// GetEcsClusterCapacityProviders returns the list of capacity providers attached to an ECS cluster.
+func GetEcsClusterCapacityProviders(t *testing.T, clusterArn string, region string) []string {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeClustersInput{
+		Clusters: []string{clusterArn},
+	}
+
+	result, err := client.DescribeClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS cluster %s", clusterArn)
+	require.Len(t, result.Clusters, 1, "Expected exactly one ECS cluster with ARN %s", clusterArn)
+
+	return result.Clusters[0].CapacityProviders
+}
+
+// EcsClusterHasCapacityProvider checks if an ECS cluster has a specific capacity provider attached.
+func EcsClusterHasCapacityProvider(t *testing.T, clusterArn string, capacityProviderName string, region string) bool {
+	capacityProviders := GetEcsClusterCapacityProviders(t, clusterArn, region)
+
+	for _, cp := range capacityProviders {
+		if cp == capacityProviderName {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetEcsClusterDefaultCapacityProviderStrategy returns the default capacity provider strategy for a cluster.
+func GetEcsClusterDefaultCapacityProviderStrategy(t *testing.T, clusterArn string, region string) []ecstypes.CapacityProviderStrategyItem {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeClustersInput{
+		Clusters: []string{clusterArn},
+	}
+
+	result, err := client.DescribeClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS cluster %s", clusterArn)
+	require.Len(t, result.Clusters, 1, "Expected exactly one ECS cluster with ARN %s", clusterArn)
+
+	return result.Clusters[0].DefaultCapacityProviderStrategy
 }
