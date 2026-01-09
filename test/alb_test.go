@@ -144,6 +144,86 @@ func TestAlbWithHttps(t *testing.T) {
 	assert.True(t, hasHttpsRule, "Security group should have inbound rule for HTTPS (port 443)")
 }
 
+// TestAlbWithAccessLogs provisions the ALB fixture with access logs enabled and validates:
+// - S3 bucket for logs is created
+// - S3 bucket has encryption enabled
+// - S3 bucket has public access blocked
+// - S3 bucket has lifecycle rule with correct retention days
+// - ALB attribute access_logs.s3.enabled is true
+func TestAlbWithAccessLogs(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("alb-logs")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/alb/with_access_logs",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	albArn := terraform.Output(t, terraformOptions, "alb_arn")
+	albDnsName := terraform.Output(t, terraformOptions, "alb_dns_name")
+	securityGroupId := terraform.Output(t, terraformOptions, "security_group_id")
+	accessLogsBucketName := terraform.Output(t, terraformOptions, "access_logs_bucket_name")
+	accessLogsBucketArn := terraform.Output(t, terraformOptions, "access_logs_bucket_arn")
+
+	// Assert basic outputs are not empty
+	require.NotEmpty(t, albArn, "alb_arn should not be empty")
+	require.NotEmpty(t, albDnsName, "alb_dns_name should not be empty")
+	require.NotEmpty(t, securityGroupId, "security_group_id should not be empty")
+	require.NotEmpty(t, accessLogsBucketName, "access_logs_bucket_name should not be empty")
+	require.NotEmpty(t, accessLogsBucketArn, "access_logs_bucket_arn should not be empty")
+
+	// Use AWS SDK to verify ALB exists and is active
+	albExists := helpers.LoadBalancerExists(t, albArn, awsRegion)
+	assert.True(t, albExists, "ALB should exist in AWS")
+
+	albState := helpers.GetLoadBalancerState(t, albArn, awsRegion)
+	assert.Equal(t, "active", string(albState), "ALB should be in 'active' state")
+
+	// Verify S3 bucket for logs was created
+	bucketExists := helpers.S3BucketExists(t, accessLogsBucketName, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket for access logs should exist")
+
+	// Verify S3 bucket has server-side encryption enabled
+	hasEncryption := helpers.S3BucketHasSSEEncryption(t, accessLogsBucketName, awsRegion)
+	assert.True(t, hasEncryption, "S3 bucket should have server-side encryption enabled")
+
+	// Verify S3 bucket has public access blocked
+	hasPublicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, accessLogsBucketName, awsRegion)
+	assert.True(t, hasPublicAccessBlocked, "S3 bucket should have all public access blocked")
+
+	// Verify S3 bucket has lifecycle rule with correct retention days (30 days as configured in fixture)
+	hasExpirationRule := helpers.S3BucketHasExpirationRule(t, accessLogsBucketName, 30, awsRegion)
+	assert.True(t, hasExpirationRule, "S3 bucket should have lifecycle rule with 30 day expiration")
+
+	// Verify ALB has access logs enabled
+	accessLogsEnabled := helpers.GetLoadBalancerAccessLogsEnabled(t, albArn, awsRegion)
+	assert.True(t, accessLogsEnabled, "ALB access_logs.s3.enabled attribute should be true")
+
+	// Verify ALB access logs bucket matches
+	actualBucket := helpers.GetLoadBalancerAccessLogsBucket(t, albArn, awsRegion)
+	assert.Equal(t, accessLogsBucketName, actualBucket, "ALB access logs bucket should match Terraform output")
+
+	// Verify ALB access logs prefix matches (configured as "alb-logs" in fixture)
+	actualPrefix := helpers.GetLoadBalancerAccessLogsPrefix(t, albArn, awsRegion)
+	assert.Equal(t, "alb-logs", actualPrefix, "ALB access logs prefix should be 'alb-logs'")
+}
+
 // TestAlbWithWaf provisions the ALB fixture with WAF WebACL and validates:
 // - WAF WebACL is created and associated with ALB
 // - WebACL contains AWS managed rule groups (AWSManagedRulesCommonRuleSet)

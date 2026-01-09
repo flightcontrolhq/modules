@@ -17,6 +17,8 @@ import (
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/wafv2"
 	wafv2types "github.com/aws/aws-sdk-go-v2/service/wafv2/types"
@@ -1600,4 +1602,187 @@ func parseWebAclArn(arn string) (name string, id string) {
 		return name, id
 	}
 	return "", ""
+}
+
+// getS3Client creates an S3 client for the specified region.
+func getS3Client(t *testing.T, region string) *s3.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return s3.NewFromConfig(cfg)
+}
+
+// S3BucketExists checks if an S3 bucket with the given name exists.
+func S3BucketExists(t *testing.T, bucketName string, region string) bool {
+	client := getS3Client(t, region)
+
+	input := &s3.HeadBucketInput{
+		Bucket: &bucketName,
+	}
+
+	_, err := client.HeadBucket(context.TODO(), input)
+	return err == nil
+}
+
+// GetS3BucketEncryption returns the server-side encryption configuration for an S3 bucket.
+// Returns the encryption algorithm (AES256 or aws:kms) and KMS key ID if applicable.
+func GetS3BucketEncryption(t *testing.T, bucketName string, region string) (algorithm string, kmsKeyId string) {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketEncryptionInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketEncryption(context.TODO(), input)
+	require.NoError(t, err, "Failed to get bucket encryption for %s", bucketName)
+
+	if result.ServerSideEncryptionConfiguration != nil {
+		for _, rule := range result.ServerSideEncryptionConfiguration.Rules {
+			if rule.ApplyServerSideEncryptionByDefault != nil {
+				algorithm = string(rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm)
+				if rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID != nil {
+					kmsKeyId = *rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID
+				}
+				return algorithm, kmsKeyId
+			}
+		}
+	}
+
+	return "", ""
+}
+
+// S3BucketHasSSEEncryption checks if an S3 bucket has server-side encryption enabled.
+// Returns true if AES256 or aws:kms encryption is enabled.
+func S3BucketHasSSEEncryption(t *testing.T, bucketName string, region string) bool {
+	algorithm, _ := GetS3BucketEncryption(t, bucketName, region)
+	return algorithm == string(s3types.ServerSideEncryptionAes256) || algorithm == string(s3types.ServerSideEncryptionAwsKms)
+}
+
+// GetS3BucketPublicAccessBlock returns the public access block configuration for an S3 bucket.
+func GetS3BucketPublicAccessBlock(t *testing.T, bucketName string, region string) *s3types.PublicAccessBlockConfiguration {
+	client := getS3Client(t, region)
+
+	input := &s3.GetPublicAccessBlockInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetPublicAccessBlock(context.TODO(), input)
+	require.NoError(t, err, "Failed to get public access block for %s", bucketName)
+
+	return result.PublicAccessBlockConfiguration
+}
+
+// S3BucketHasPublicAccessBlocked checks if an S3 bucket has all public access blocked.
+// Returns true if all four public access block settings are enabled.
+func S3BucketHasPublicAccessBlocked(t *testing.T, bucketName string, region string) bool {
+	config := GetS3BucketPublicAccessBlock(t, bucketName, region)
+	if config == nil {
+		return false
+	}
+
+	return config.BlockPublicAcls != nil && *config.BlockPublicAcls &&
+		config.BlockPublicPolicy != nil && *config.BlockPublicPolicy &&
+		config.IgnorePublicAcls != nil && *config.IgnorePublicAcls &&
+		config.RestrictPublicBuckets != nil && *config.RestrictPublicBuckets
+}
+
+// GetS3BucketLifecycleRules returns the lifecycle rules for an S3 bucket.
+func GetS3BucketLifecycleRules(t *testing.T, bucketName string, region string) []s3types.LifecycleRule {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketLifecycleConfiguration(context.TODO(), input)
+	require.NoError(t, err, "Failed to get bucket lifecycle configuration for %s", bucketName)
+
+	return result.Rules
+}
+
+// S3BucketHasExpirationRule checks if an S3 bucket has a lifecycle rule with expiration.
+// If expectedDays > 0, also checks that the expiration days match.
+func S3BucketHasExpirationRule(t *testing.T, bucketName string, expectedDays int32, region string) bool {
+	rules := GetS3BucketLifecycleRules(t, bucketName, region)
+
+	for _, rule := range rules {
+		if rule.Status == s3types.ExpirationStatusEnabled && rule.Expiration != nil {
+			if expectedDays <= 0 {
+				return true
+			}
+			if rule.Expiration.Days != nil && *rule.Expiration.Days == expectedDays {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// GetLoadBalancerAccessLogsEnabled checks if access logs are enabled for a load balancer.
+// Returns true if the access_logs.s3.enabled attribute is "true".
+func GetLoadBalancerAccessLogsEnabled(t *testing.T, lbArn string, region string) bool {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeLoadBalancerAttributesInput{
+		LoadBalancerArn: &lbArn,
+	}
+
+	result, err := client.DescribeLoadBalancerAttributes(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe load balancer attributes for %s", lbArn)
+
+	for _, attr := range result.Attributes {
+		if attr.Key != nil && *attr.Key == "access_logs.s3.enabled" {
+			if attr.Value != nil {
+				return *attr.Value == "true"
+			}
+		}
+	}
+
+	return false
+}
+
+// GetLoadBalancerAccessLogsBucket returns the S3 bucket name for load balancer access logs.
+// Returns an empty string if access logs are not configured.
+func GetLoadBalancerAccessLogsBucket(t *testing.T, lbArn string, region string) string {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeLoadBalancerAttributesInput{
+		LoadBalancerArn: &lbArn,
+	}
+
+	result, err := client.DescribeLoadBalancerAttributes(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe load balancer attributes for %s", lbArn)
+
+	for _, attr := range result.Attributes {
+		if attr.Key != nil && *attr.Key == "access_logs.s3.bucket" {
+			if attr.Value != nil {
+				return *attr.Value
+			}
+		}
+	}
+
+	return ""
+}
+
+// GetLoadBalancerAccessLogsPrefix returns the S3 prefix for load balancer access logs.
+// Returns an empty string if no prefix is configured.
+func GetLoadBalancerAccessLogsPrefix(t *testing.T, lbArn string, region string) string {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeLoadBalancerAttributesInput{
+		LoadBalancerArn: &lbArn,
+	}
+
+	result, err := client.DescribeLoadBalancerAttributes(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe load balancer attributes for %s", lbArn)
+
+	for _, attr := range result.Attributes {
+		if attr.Key != nil && *attr.Key == "access_logs.s3.prefix" {
+			if attr.Value != nil {
+				return *attr.Value
+			}
+		}
+	}
+
+	return ""
 }
