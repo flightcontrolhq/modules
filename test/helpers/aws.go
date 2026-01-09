@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/stretchr/testify/require"
@@ -688,4 +689,46 @@ func WaitForTargetGroupHealthyTargets(t *testing.T, targetGroupArn string, minHe
 func TargetGroupHasRegisteredTargets(t *testing.T, targetGroupArn string, region string) bool {
 	_, _, total := GetTargetGroupHealthCounts(t, targetGroupArn, region)
 	return total > 0
+}
+
+// getElastiCacheClient creates an ElastiCache client for the specified region.
+func getElastiCacheClient(t *testing.T, region string) *elasticache.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return elasticache.NewFromConfig(cfg)
+}
+
+// ElastiCacheReplicationGroupExists checks if an ElastiCache replication group with the given ID exists.
+func ElastiCacheReplicationGroupExists(t *testing.T, replicationGroupId string, region string) bool {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeReplicationGroupsInput{
+		ReplicationGroupId: &replicationGroupId,
+	}
+
+	result, err := client.DescribeReplicationGroups(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.ReplicationGroups) > 0
+}
+
+// GetElastiCacheReplicationGroupStatus returns the status of an ElastiCache replication group.
+// Common statuses: creating, available, modifying, deleting, create-failed, snapshotting.
+func GetElastiCacheReplicationGroupStatus(t *testing.T, replicationGroupId string, region string) string {
+	client := getElastiCacheClient(t, region)
+
+	input := &elasticache.DescribeReplicationGroupsInput{
+		ReplicationGroupId: &replicationGroupId,
+	}
+
+	result, err := client.DescribeReplicationGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ElastiCache replication group %s", replicationGroupId)
+	require.Len(t, result.ReplicationGroups, 1, "Expected exactly one replication group with ID %s", replicationGroupId)
+
+	if result.ReplicationGroups[0].Status != nil {
+		return *result.ReplicationGroups[0].Status
+	}
+	return ""
 }
