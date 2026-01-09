@@ -71,12 +71,12 @@ output "task_role_name" {
 
 output "security_group_id" {
   description = "The ID of the ECS service security group."
-  value       = aws_security_group.this.id
+  value       = module.security_group.security_group_id
 }
 
 output "security_group_arn" {
   description = "The ARN of the ECS service security group."
-  value       = aws_security_group.this.arn
+  value       = module.security_group.security_group_arn
 }
 
 ################################################################################

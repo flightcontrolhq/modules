@@ -32,7 +32,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
 | `networking/` | `nlb`             | AWS Network Load Balancers                                             | v1.0.0  |
 | `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | Planned |
-| `networking/` | `security-group`  | AWS Security Groups                                                    | Planned |
+| `networking/` | `security-groups` | AWS Security Groups                                                    | v1.0.0  |
 | `networking/` | `vpc`             | AWS VPC and subnets                                                    | v1.0.0  |
 | `security/`   | `iam`             | AWS IAM roles and policies                                             | Planned |
 | `security/`   | `kms`             | AWS KMS keys                                                           | Planned |

@@ -30,7 +30,7 @@ resource "aws_ecs_service" "this" {
     for_each = var.network_mode == "awsvpc" ? [1] : []
     content {
       subnets          = var.subnet_ids
-      security_groups  = concat([aws_security_group.this.id], var.security_group_ids)
+      security_groups  = concat([module.security_group.security_group_id], var.security_group_ids)
       assign_public_ip = var.assign_public_ip
     }
   }

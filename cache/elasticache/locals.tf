@@ -26,7 +26,7 @@ locals {
 
   # Security group
   create_security_group = var.create_security_group
-  security_group_id     = local.create_security_group ? aws_security_group.this[0].id : var.security_group_id
+  security_group_id     = local.create_security_group ? module.security_group[0].security_group_id : var.security_group_id
 
   # Port defaults
   default_port = local.is_memcached ? 11211 : 6379

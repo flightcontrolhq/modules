@@ -50,65 +50,41 @@ resource "aws_iam_instance_profile" "ecs_instance" {
 # Security Group for ECS EC2 Instances
 ################################################################################
 
-resource "aws_security_group" "ecs_instance" {
+module "ecs_instance_security_group" {
   count = local.enable_ec2 ? 1 : 0
 
-  name        = "${var.name}-ecs-instance"
+  source = "../../networking/security-groups"
+
+  name        = var.name
+  name_suffix = "ecs-instance"
   description = "Security group for ECS EC2 instances"
   vpc_id      = var.vpc_id
+  tags        = var.tags
 
-  tags = merge(local.tags, {
-    Name = "${var.name}-ecs-instance"
-  })
+  allow_all_egress = true
 
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Allow all outbound traffic
-resource "aws_vpc_security_group_egress_rule" "ecs_instance_all" {
-  count = local.enable_ec2 ? 1 : 0
-
-  security_group_id = aws_security_group.ecs_instance[0].id
-  description       = "Allow all outbound traffic"
-
-  ip_protocol = "-1"
-  cidr_ipv4   = "0.0.0.0/0"
-
-  tags = merge(local.tags, {
-    Name = "${var.name}-ecs-instance-egress-all"
-  })
-}
-
-# Allow inbound from public ALB if enabled
-resource "aws_vpc_security_group_ingress_rule" "ecs_instance_from_public_alb" {
-  count = local.enable_ec2 && var.enable_public_alb ? 1 : 0
-
-  security_group_id            = aws_security_group.ecs_instance[0].id
-  description                  = "Allow inbound from public ALB"
-  referenced_security_group_id = module.public_alb[0].security_group_id
-
-  ip_protocol = "-1"
-
-  tags = merge(local.tags, {
-    Name = "${var.name}-ecs-instance-ingress-public-alb"
-  })
-}
-
-# Allow inbound from private ALB if enabled
-resource "aws_vpc_security_group_ingress_rule" "ecs_instance_from_private_alb" {
-  count = local.enable_ec2 && var.enable_private_alb ? 1 : 0
-
-  security_group_id            = aws_security_group.ecs_instance[0].id
-  description                  = "Allow inbound from private ALB"
-  referenced_security_group_id = module.private_alb[0].security_group_id
-
-  ip_protocol = "-1"
-
-  tags = merge(local.tags, {
-    Name = "${var.name}-ecs-instance-ingress-private-alb"
-  })
+  ingress_rules = concat(
+    # Allow inbound from public ALB if enabled
+    var.enable_public_alb ? [
+      {
+        description                  = "Allow inbound from public ALB"
+        from_port                    = 0
+        to_port                      = 0
+        ip_protocol                  = "-1"
+        referenced_security_group_id = module.public_alb[0].security_group_id
+      }
+    ] : [],
+    # Allow inbound from private ALB if enabled
+    var.enable_private_alb ? [
+      {
+        description                  = "Allow inbound from private ALB"
+        from_port                    = 0
+        to_port                      = 0
+        ip_protocol                  = "-1"
+        referenced_security_group_id = module.private_alb[0].security_group_id
+      }
+    ] : []
+  )
 }
 
 ################################################################################
@@ -131,7 +107,7 @@ resource "aws_launch_template" "ecs" {
   }
 
   vpc_security_group_ids = concat(
-    [aws_security_group.ecs_instance[0].id],
+    [module.ecs_instance_security_group[0].security_group_id],
     var.ec2_security_group_ids
   )
 

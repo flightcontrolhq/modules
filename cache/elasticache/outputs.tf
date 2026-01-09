@@ -107,7 +107,7 @@ output "security_group_id" {
 
 output "security_group_arn" {
   description = "The ARN of the security group."
-  value       = local.create_security_group ? aws_security_group.this[0].arn : null
+  value       = local.create_security_group ? module.security_group[0].security_group_arn : null
 }
 
 ################################################################################

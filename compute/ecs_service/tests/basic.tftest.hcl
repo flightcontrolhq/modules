@@ -44,7 +44,7 @@ run "basic_service" {
   }
 
   assert {
-    condition     = aws_security_group.this.vpc_id == "vpc-12345678"
+    condition     = module.security_group.aws_security_group.this.vpc_id == "vpc-12345678"
     error_message = "Security group should be in the correct VPC"
   }
 }

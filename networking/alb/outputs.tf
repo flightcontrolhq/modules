@@ -47,12 +47,12 @@ output "https_listener_arn" {
 
 output "security_group_id" {
   description = "The ID of the ALB security group."
-  value       = aws_security_group.this.id
+  value       = module.security_group.security_group_id
 }
 
 output "security_group_arn" {
   description = "The ARN of the ALB security group."
-  value       = aws_security_group.this.arn
+  value       = module.security_group.security_group_arn
 }
 
 ################################################################################

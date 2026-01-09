@@ -77,7 +77,7 @@ output "ecs_instance_role_name" {
 
 output "ecs_instance_security_group_id" {
   description = "The ID of the security group for ECS EC2 instances (null if EC2 disabled)."
-  value       = local.enable_ec2 ? aws_security_group.ecs_instance[0].id : null
+  value       = local.enable_ec2 ? module.ecs_instance_security_group[0].security_group_id : null
 }
 
 ################################################################################

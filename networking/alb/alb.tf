@@ -6,7 +6,7 @@ resource "aws_lb" "this" {
   name               = var.name
   internal           = var.internal
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.this.id]
+  security_groups    = [module.security_group.security_group_id]
   subnets            = var.subnet_ids
 
   enable_deletion_protection = var.enable_deletion_protection

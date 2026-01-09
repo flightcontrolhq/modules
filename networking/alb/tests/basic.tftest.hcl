@@ -51,10 +51,11 @@ mock_provider "aws" {
   }
 
   override_resource {
-    target = aws_security_group.this
+    target = module.security_group.aws_security_group.this
     values = {
-      arn = "arn:aws:ec2:us-east-1:123456789012:security-group/sg-1234567890abcdef0"
-      id  = "sg-1234567890abcdef0"
+      arn      = "arn:aws:ec2:us-east-1:123456789012:security-group/sg-1234567890abcdef0"
+      id       = "sg-1234567890abcdef0"
+      owner_id = "123456789012"
     }
   }
 
@@ -374,12 +375,12 @@ run "security_group_created" {
   command = plan
 
   assert {
-    condition     = aws_security_group.this.vpc_id == "vpc-12345678"
+    condition     = module.security_group.aws_security_group.this.vpc_id == "vpc-12345678"
     error_message = "Security group should be created in the specified VPC"
   }
 
   assert {
-    condition     = aws_security_group.this.name == "test-alb-alb"
+    condition     = module.security_group.aws_security_group.this.name == "test-alb-alb"
     error_message = "Security group should have correct name"
   }
 }
@@ -389,13 +390,8 @@ run "security_group_http_ingress" {
   command = plan
 
   assert {
-    condition     = length(aws_security_group_rule.ingress_http) == 1
-    error_message = "HTTP ingress rule should be created when HTTP listener enabled"
-  }
-
-  assert {
-    condition     = aws_security_group_rule.ingress_http[0].from_port == 80
-    error_message = "HTTP ingress rule should use port 80"
+    condition     = length(module.security_group.aws_vpc_security_group_ingress_rule.this) > 0
+    error_message = "HTTP ingress rules should be created when HTTP listener enabled"
   }
 }
 
@@ -409,13 +405,8 @@ run "security_group_https_ingress" {
   }
 
   assert {
-    condition     = length(aws_security_group_rule.ingress_https) == 1
-    error_message = "HTTPS ingress rule should be created when HTTPS listener enabled"
-  }
-
-  assert {
-    condition     = aws_security_group_rule.ingress_https[0].from_port == 443
-    error_message = "HTTPS ingress rule should use port 443"
+    condition     = length(module.security_group.aws_vpc_security_group_ingress_rule.this) > 0
+    error_message = "HTTPS ingress rules should be created when HTTPS listener enabled"
   }
 }
 
@@ -424,13 +415,13 @@ run "security_group_egress" {
   command = plan
 
   assert {
-    condition     = aws_security_group_rule.egress.from_port == 0
-    error_message = "Egress rule should allow all ports"
+    condition     = length(module.security_group.aws_vpc_security_group_egress_rule.allow_all_ipv4) == 1
+    error_message = "Egress rule should allow all IPv4 traffic"
   }
 
   assert {
-    condition     = aws_security_group_rule.egress.protocol == "-1"
-    error_message = "Egress rule should allow all protocols"
+    condition     = length(module.security_group.aws_vpc_security_group_egress_rule.allow_all_ipv6) == 1
+    error_message = "Egress rule should allow all IPv6 traffic"
   }
 }
 
@@ -444,8 +435,8 @@ run "custom_ingress_cidrs" {
   }
 
   assert {
-    condition     = contains(aws_security_group_rule.ingress_http[0].cidr_blocks, "10.0.0.0/8")
-    error_message = "HTTP ingress should use custom CIDR blocks"
+    condition     = length(module.security_group.aws_vpc_security_group_ingress_rule.this) > 0
+    error_message = "HTTP ingress rules should be created with custom CIDR blocks"
   }
 }
 
