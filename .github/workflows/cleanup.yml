@@ -1,0 +1,116 @@
+name: Cleanup Orphaned Resources
+
+on:
+  schedule:
+    # Run daily at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run - only list resources without deleting'
+        required: false
+        default: 'false'
+        type: boolean
+      max_age_hours:
+        description: 'Maximum age in hours for resources to be considered orphaned'
+        required: false
+        default: '24'
+        type: string
+
+jobs:
+  cleanup:
+    name: Cleanup Orphaned Terratest Resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: test/go.sum
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Download Go dependencies
+        run: go mod download
+        working-directory: test
+
+      - name: Run cleanup
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          MAX_AGE="${{ github.event.inputs.max_age_hours || '24' }}"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Running in DRY RUN mode - resources will only be listed, not deleted"
+            go test -v -run TestCleanupOrphanedResourcesDryRun -timeout 30m ./... 2>&1 | tee cleanup-output.txt
+          else
+            echo "Running cleanup with max age: ${MAX_AGE} hours"
+            go test -v -run TestCleanupOrphanedResources -timeout 30m ./... 2>&1 | tee cleanup-output.txt
+          fi
+        working-directory: test
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          CLEANUP_MAX_AGE_HOURS: ${{ github.event.inputs.max_age_hours || '24' }}
+
+      - name: Generate cleanup summary
+        if: always()
+        run: |
+          echo "## Terratest Resource Cleanup Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Type:** ${{ github.event.inputs.dry_run == 'true' && 'Dry Run' || 'Full Cleanup' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Max Age:** ${{ github.event.inputs.max_age_hours || '24' }} hours" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ vars.AWS_REGION || 'us-east-1' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f cleanup-output.txt ]; then
+            # Count deleted resources
+            VPCS=$(grep -c "Deleting orphaned VPC" cleanup-output.txt 2>/dev/null || echo "0")
+            LBALANCERS=$(grep -c "Deleting orphaned.*LB" cleanup-output.txt 2>/dev/null || echo "0")
+            ECS_CLUSTERS=$(grep -c "Deleting orphaned ECS cluster" cleanup-output.txt 2>/dev/null || echo "0")
+            ECS_SERVICES=$(grep -c "Deleting orphaned ECS service" cleanup-output.txt 2>/dev/null || echo "0")
+            ELASTICACHE=$(grep -c "Deleting orphaned ElastiCache" cleanup-output.txt 2>/dev/null || echo "0")
+            NAT_GWS=$(grep -c "Deleting orphaned NAT Gateway" cleanup-output.txt 2>/dev/null || echo "0")
+            SGS=$(grep -c "Deleting orphaned Security Group" cleanup-output.txt 2>/dev/null || echo "0")
+            S3=$(grep -c "Deleting orphaned S3 bucket" cleanup-output.txt 2>/dev/null || echo "0")
+
+            # Count found resources (for dry run)
+            FOUND_VPCS=$(grep -c "Found orphaned VPC" cleanup-output.txt 2>/dev/null || echo "0")
+            FOUND_LBS=$(grep -c "Found orphaned.*LB" cleanup-output.txt 2>/dev/null || echo "0")
+            FOUND_ECS=$(grep -c "Found orphaned ECS" cleanup-output.txt 2>/dev/null || echo "0")
+            FOUND_CACHE=$(grep -c "Found orphaned ElastiCache" cleanup-output.txt 2>/dev/null || echo "0")
+            FOUND_NAT=$(grep -c "Found orphaned NAT" cleanup-output.txt 2>/dev/null || echo "0")
+            FOUND_SG=$(grep -c "Found orphaned Security Group" cleanup-output.txt 2>/dev/null || echo "0")
+            FOUND_S3=$(grep -c "Found orphaned S3" cleanup-output.txt 2>/dev/null || echo "0")
+
+            echo "### Resources Processed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Resource Type | Deleted | Found |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------------|---------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| VPCs | $VPCS | $FOUND_VPCS |" >> $GITHUB_STEP_SUMMARY
+            echo "| Load Balancers | $LBALANCERS | $FOUND_LBS |" >> $GITHUB_STEP_SUMMARY
+            echo "| ECS Clusters | $ECS_CLUSTERS | $FOUND_ECS |" >> $GITHUB_STEP_SUMMARY
+            echo "| ECS Services | $ECS_SERVICES | - |" >> $GITHUB_STEP_SUMMARY
+            echo "| ElastiCache | $ELASTICACHE | $FOUND_CACHE |" >> $GITHUB_STEP_SUMMARY
+            echo "| NAT Gateways | $NAT_GWS | $FOUND_NAT |" >> $GITHUB_STEP_SUMMARY
+            echo "| Security Groups | $SGS | $FOUND_SG |" >> $GITHUB_STEP_SUMMARY
+            echo "| S3 Buckets | $S3 | $FOUND_S3 |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No cleanup output file found" >> $GITHUB_STEP_SUMMARY
+          fi
+        working-directory: test
+
+      - name: Upload cleanup logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cleanup-logs
+          path: test/cleanup-output.txt
+          retention-days: 30
