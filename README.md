@@ -108,6 +108,42 @@ This repository follows [Semantic Versioning](https://semver.org/):
 - **MINOR**: New features, new modules, new optional variables
 - **PATCH**: Bug fixes, documentation updates
 
+## Testing
+
+This repository uses [Terratest](https://terratest.gruntwork.io/) for integration testing of infrastructure modules. Tests deploy real AWS resources to validate module behavior.
+
+### Prerequisites
+
+Set the following environment variables before running tests:
+
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_REGION="us-east-1"  # Optional, defaults to us-east-1
+```
+
+### Running Tests
+
+```bash
+# Navigate to the test directory
+cd test
+
+# Run all tests
+go test -v -timeout 60m ./...
+
+# Run a specific test
+go test -v -timeout 30m -run TestVpcBasic ./...
+
+# Run tests with parallel limit (recommended for cost control)
+go test -v -timeout 60m -parallel 2 ./...
+```
+
+### Cost Considerations
+
+Integration tests create real AWS resources which incur costs. Tests clean up resources automatically via `terraform destroy`, but failed tests may leave orphaned resources. Monitor your AWS account for any resources tagged with `Environment=terratest`.
+
+For detailed information about the test architecture and adding new tests, see [TERRATEST_PLAN.md](TERRATEST_PLAN.md).
+
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
