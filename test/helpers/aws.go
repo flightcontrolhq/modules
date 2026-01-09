@@ -257,6 +257,83 @@ func SecurityGroupHasIngressRule(t *testing.T, securityGroupId string, port int3
 	return false
 }
 
+// SecurityGroupHasEgressRule checks if a security group has an egress rule for the specified port.
+// It checks for TCP rules that allow traffic on the given port.
+func SecurityGroupHasEgressRule(t *testing.T, securityGroupId string, port int32, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeSecurityGroupRulesInput{
+		Filters: []types.Filter{
+			{
+				Name:   stringPtr("group-id"),
+				Values: []string{securityGroupId},
+			},
+		},
+	}
+
+	result, err := client.DescribeSecurityGroupRules(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe security group rules for %s", securityGroupId)
+
+	for _, rule := range result.SecurityGroupRules {
+		// Check for egress rules only
+		if rule.IsEgress == nil || !*rule.IsEgress {
+			continue
+		}
+
+		// Check if the rule allows traffic on the specified port
+		if rule.FromPort != nil && rule.ToPort != nil {
+			if *rule.FromPort <= port && port <= *rule.ToPort {
+				// Check for TCP protocol (-1 means all protocols, 6 is TCP)
+				if rule.IpProtocol != nil && (*rule.IpProtocol == "tcp" || *rule.IpProtocol == "-1" || *rule.IpProtocol == "6") {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// SecurityGroupHasEgressRuleWithCidr checks if a security group has an egress rule for the specified port and CIDR.
+// It checks for TCP rules that allow traffic on the given port to the specified CIDR block.
+func SecurityGroupHasEgressRuleWithCidr(t *testing.T, securityGroupId string, port int32, cidr string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeSecurityGroupRulesInput{
+		Filters: []types.Filter{
+			{
+				Name:   stringPtr("group-id"),
+				Values: []string{securityGroupId},
+			},
+		},
+	}
+
+	result, err := client.DescribeSecurityGroupRules(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe security group rules for %s", securityGroupId)
+
+	for _, rule := range result.SecurityGroupRules {
+		// Check for egress rules only
+		if rule.IsEgress == nil || !*rule.IsEgress {
+			continue
+		}
+
+		// Check if the rule allows traffic on the specified port
+		if rule.FromPort != nil && rule.ToPort != nil {
+			if *rule.FromPort <= port && port <= *rule.ToPort {
+				// Check for TCP protocol (-1 means all protocols, 6 is TCP)
+				if rule.IpProtocol != nil && (*rule.IpProtocol == "tcp" || *rule.IpProtocol == "-1" || *rule.IpProtocol == "6") {
+					// Check CIDR matches
+					if rule.CidrIpv4 != nil && *rule.CidrIpv4 == cidr {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 // stringPtr returns a pointer to the given string.
 func stringPtr(s string) *string {
 	return &s
