@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -493,4 +494,115 @@ func GetTargetGroupPort(t *testing.T, targetGroupArn string, region string) int3
 		return *result.TargetGroups[0].Port
 	}
 	return 0
+}
+
+// EcsServiceExists checks if an ECS service with the given name exists in the specified cluster.
+func EcsServiceExists(t *testing.T, clusterArn string, serviceName string, region string) bool {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeServicesInput{
+		Cluster:  &clusterArn,
+		Services: []string{serviceName},
+	}
+
+	result, err := client.DescribeServices(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	// Check that the service exists and is not in INACTIVE status
+	for _, service := range result.Services {
+		if service.ServiceName != nil && *service.ServiceName == serviceName {
+			return service.Status != nil && *service.Status != "INACTIVE"
+		}
+	}
+
+	return false
+}
+
+// GetEcsServiceStatus returns the status of an ECS service.
+// Common statuses: ACTIVE, DRAINING, INACTIVE.
+func GetEcsServiceStatus(t *testing.T, clusterArn string, serviceName string, region string) string {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeServicesInput{
+		Cluster:  &clusterArn,
+		Services: []string{serviceName},
+	}
+
+	result, err := client.DescribeServices(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS service %s", serviceName)
+	require.Len(t, result.Services, 1, "Expected exactly one ECS service with name %s", serviceName)
+
+	if result.Services[0].Status != nil {
+		return *result.Services[0].Status
+	}
+	return ""
+}
+
+// GetEcsServiceDesiredCount returns the desired count of an ECS service.
+func GetEcsServiceDesiredCount(t *testing.T, clusterArn string, serviceName string, region string) int32 {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeServicesInput{
+		Cluster:  &clusterArn,
+		Services: []string{serviceName},
+	}
+
+	result, err := client.DescribeServices(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS service %s", serviceName)
+	require.Len(t, result.Services, 1, "Expected exactly one ECS service with name %s", serviceName)
+
+	return result.Services[0].DesiredCount
+}
+
+// GetEcsServiceRunningCount returns the running count of an ECS service.
+func GetEcsServiceRunningCount(t *testing.T, clusterArn string, serviceName string, region string) int32 {
+	client := getECSClient(t, region)
+
+	input := &ecs.DescribeServicesInput{
+		Cluster:  &clusterArn,
+		Services: []string{serviceName},
+	}
+
+	result, err := client.DescribeServices(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe ECS service %s", serviceName)
+	require.Len(t, result.Services, 1, "Expected exactly one ECS service with name %s", serviceName)
+
+	return result.Services[0].RunningCount
+}
+
+// WaitForEcsServiceRunningCount waits for an ECS service to reach the expected running count.
+// It retries up to maxRetries times with retryInterval seconds between each retry.
+// Returns true if the service reached the expected running count, false otherwise.
+func WaitForEcsServiceRunningCount(t *testing.T, clusterArn string, serviceName string, expectedCount int32, maxRetries int, retryIntervalSeconds int, region string) bool {
+	client := getECSClient(t, region)
+
+	for i := 0; i < maxRetries; i++ {
+		input := &ecs.DescribeServicesInput{
+			Cluster:  &clusterArn,
+			Services: []string{serviceName},
+		}
+
+		result, err := client.DescribeServices(context.TODO(), input)
+		if err != nil {
+			t.Logf("Retry %d/%d: Failed to describe ECS service %s: %v", i+1, maxRetries, serviceName, err)
+			continue
+		}
+
+		if len(result.Services) == 1 {
+			runningCount := result.Services[0].RunningCount
+			t.Logf("Retry %d/%d: ECS service %s running count: %d (expected: %d)", i+1, maxRetries, serviceName, runningCount, expectedCount)
+			if runningCount == expectedCount {
+				return true
+			}
+		}
+
+		if i < maxRetries-1 {
+			t.Logf("Waiting %d seconds before next retry...", retryIntervalSeconds)
+			time.Sleep(time.Duration(retryIntervalSeconds) * time.Second)
+		}
+	}
+
+	return false
 }
