@@ -214,3 +214,86 @@ func TestVpcWithHaNat(t *testing.T) {
 	// In HA mode, each route table should point to its own NAT gateway
 	assert.Len(t, natGatewayIdsFromRoutes, 3, "Each private route table should route to a different NAT Gateway in HA configuration")
 }
+
+// TestVpcWithIPv6 provisions the full VPC fixture with IPv6 enabled and validates:
+// - VPC has an IPv6 CIDR block assigned
+// - Egress-only internet gateway is created
+// - All subnets have IPv6 CIDRs
+func TestVpcWithIPv6(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("vpc-ipv6")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/vpc/full",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	vpcId := terraform.Output(t, terraformOptions, "vpc_id")
+	vpcIpv6CidrBlock := terraform.Output(t, terraformOptions, "vpc_ipv6_cidr_block")
+	publicSubnetIds := terraform.OutputList(t, terraformOptions, "public_subnet_ids")
+	privateSubnetIds := terraform.OutputList(t, terraformOptions, "private_subnet_ids")
+	publicSubnetIpv6Cidrs := terraform.OutputList(t, terraformOptions, "public_subnet_ipv6_cidrs")
+	privateSubnetIpv6Cidrs := terraform.OutputList(t, terraformOptions, "private_subnet_ipv6_cidrs")
+	egressOnlyIgwId := terraform.Output(t, terraformOptions, "egress_only_internet_gateway_id")
+
+	// Assert vpc_id is not empty
+	require.NotEmpty(t, vpcId, "vpc_id should not be empty")
+
+	// Assert VPC has IPv6 CIDR block from Terraform output
+	require.NotEmpty(t, vpcIpv6CidrBlock, "vpc_ipv6_cidr_block should not be empty")
+
+	// Use AWS SDK to verify VPC has IPv6 CIDR block
+	vpcHasIpv6 := helpers.VpcHasIpv6CidrBlock(t, vpcId, awsRegion)
+	assert.True(t, vpcHasIpv6, "VPC should have an IPv6 CIDR block assigned")
+
+	// Verify the IPv6 CIDR from AWS matches the Terraform output
+	awsVpcIpv6Cidr := helpers.GetVpcIpv6CidrBlock(t, vpcId, awsRegion)
+	assert.Equal(t, vpcIpv6CidrBlock, awsVpcIpv6Cidr, "VPC IPv6 CIDR block should match Terraform output")
+
+	// Assert egress-only internet gateway is created
+	require.NotEmpty(t, egressOnlyIgwId, "egress_only_internet_gateway_id should not be empty")
+
+	// Use AWS SDK to verify egress-only internet gateway exists
+	eigwExists := helpers.EgressOnlyInternetGatewayExists(t, egressOnlyIgwId, awsRegion)
+	assert.True(t, eigwExists, "Egress-only internet gateway should exist in AWS")
+
+	// Assert public subnets have IPv6 CIDRs from Terraform output
+	require.Len(t, publicSubnetIpv6Cidrs, 3, "public_subnet_ipv6_cidrs should have 3 elements")
+	for i, cidr := range publicSubnetIpv6Cidrs {
+		require.NotEmpty(t, cidr, "public_subnet_ipv6_cidr[%d] should not be empty", i)
+	}
+
+	// Assert private subnets have IPv6 CIDRs from Terraform output
+	require.Len(t, privateSubnetIpv6Cidrs, 3, "private_subnet_ipv6_cidrs should have 3 elements")
+	for i, cidr := range privateSubnetIpv6Cidrs {
+		require.NotEmpty(t, cidr, "private_subnet_ipv6_cidr[%d] should not be empty", i)
+	}
+
+	// Use AWS SDK to verify each public subnet has IPv6 CIDR
+	for _, subnetId := range publicSubnetIds {
+		subnetHasIpv6 := helpers.SubnetHasIpv6CidrBlock(t, subnetId, awsRegion)
+		assert.True(t, subnetHasIpv6, "Public subnet %s should have an IPv6 CIDR block", subnetId)
+	}
+
+	// Use AWS SDK to verify each private subnet has IPv6 CIDR
+	for _, subnetId := range privateSubnetIds {
+		subnetHasIpv6 := helpers.SubnetHasIpv6CidrBlock(t, subnetId, awsRegion)
+		assert.True(t, subnetHasIpv6, "Private subnet %s should have an IPv6 CIDR block", subnetId)
+	}
+}

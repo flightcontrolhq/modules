@@ -757,3 +757,79 @@ func GetRouteTableNatGatewayId(t *testing.T, routeTableId string, region string)
 
 	return ""
 }
+
+// GetVpcIpv6CidrBlock returns the IPv6 CIDR block for the specified VPC.
+// Returns an empty string if the VPC has no IPv6 CIDR block.
+func GetVpcIpv6CidrBlock(t *testing.T, vpcId string, region string) string {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeVpcsInput{
+		VpcIds: []string{vpcId},
+	}
+
+	result, err := client.DescribeVpcs(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe VPC %s", vpcId)
+	require.Len(t, result.Vpcs, 1, "Expected exactly one VPC with ID %s", vpcId)
+
+	vpc := result.Vpcs[0]
+	for _, cidrBlock := range vpc.Ipv6CidrBlockAssociationSet {
+		if cidrBlock.Ipv6CidrBlock != nil && cidrBlock.Ipv6CidrBlockState != nil {
+			if cidrBlock.Ipv6CidrBlockState.State == types.VpcCidrBlockStateCodeAssociated {
+				return *cidrBlock.Ipv6CidrBlock
+			}
+		}
+	}
+
+	return ""
+}
+
+// VpcHasIpv6CidrBlock checks if a VPC has an IPv6 CIDR block assigned.
+func VpcHasIpv6CidrBlock(t *testing.T, vpcId string, region string) bool {
+	return GetVpcIpv6CidrBlock(t, vpcId, region) != ""
+}
+
+// EgressOnlyInternetGatewayExists checks if an egress-only internet gateway with the given ID exists.
+func EgressOnlyInternetGatewayExists(t *testing.T, eigwId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeEgressOnlyInternetGatewaysInput{
+		EgressOnlyInternetGatewayIds: []string{eigwId},
+	}
+
+	result, err := client.DescribeEgressOnlyInternetGateways(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.EgressOnlyInternetGateways) > 0
+}
+
+// GetSubnetIpv6CidrBlock returns the IPv6 CIDR block for the specified subnet.
+// Returns an empty string if the subnet has no IPv6 CIDR block.
+func GetSubnetIpv6CidrBlock(t *testing.T, subnetId string, region string) string {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeSubnetsInput{
+		SubnetIds: []string{subnetId},
+	}
+
+	result, err := client.DescribeSubnets(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe subnet %s", subnetId)
+	require.Len(t, result.Subnets, 1, "Expected exactly one subnet with ID %s", subnetId)
+
+	subnet := result.Subnets[0]
+	for _, cidrBlock := range subnet.Ipv6CidrBlockAssociationSet {
+		if cidrBlock.Ipv6CidrBlock != nil && cidrBlock.Ipv6CidrBlockState != nil {
+			if cidrBlock.Ipv6CidrBlockState.State == types.SubnetCidrBlockStateCodeAssociated {
+				return *cidrBlock.Ipv6CidrBlock
+			}
+		}
+	}
+
+	return ""
+}
+
+// SubnetHasIpv6CidrBlock checks if a subnet has an IPv6 CIDR block assigned.
+func SubnetHasIpv6CidrBlock(t *testing.T, subnetId string, region string) bool {
+	return GetSubnetIpv6CidrBlock(t, subnetId, region) != ""
+}
