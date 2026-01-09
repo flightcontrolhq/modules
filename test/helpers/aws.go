@@ -430,3 +430,67 @@ func GetEcsClusterDefaultCapacityProviderStrategy(t *testing.T, clusterArn strin
 
 	return result.Clusters[0].DefaultCapacityProviderStrategy
 }
+
+// TargetGroupExists checks if a target group with the given ARN exists.
+func TargetGroupExists(t *testing.T, targetGroupArn string, region string) bool {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeTargetGroupsInput{
+		TargetGroupArns: []string{targetGroupArn},
+	}
+
+	result, err := client.DescribeTargetGroups(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.TargetGroups) > 0
+}
+
+// GetTargetGroupTargetType returns the target type of a target group (instance, ip, lambda, alb).
+func GetTargetGroupTargetType(t *testing.T, targetGroupArn string, region string) elbv2types.TargetTypeEnum {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeTargetGroupsInput{
+		TargetGroupArns: []string{targetGroupArn},
+	}
+
+	result, err := client.DescribeTargetGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe target group %s", targetGroupArn)
+	require.Len(t, result.TargetGroups, 1, "Expected exactly one target group with ARN %s", targetGroupArn)
+
+	return result.TargetGroups[0].TargetType
+}
+
+// GetTargetGroupProtocol returns the protocol of a target group (HTTP, HTTPS, TCP, etc.).
+func GetTargetGroupProtocol(t *testing.T, targetGroupArn string, region string) elbv2types.ProtocolEnum {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeTargetGroupsInput{
+		TargetGroupArns: []string{targetGroupArn},
+	}
+
+	result, err := client.DescribeTargetGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe target group %s", targetGroupArn)
+	require.Len(t, result.TargetGroups, 1, "Expected exactly one target group with ARN %s", targetGroupArn)
+
+	return result.TargetGroups[0].Protocol
+}
+
+// GetTargetGroupPort returns the port of a target group.
+func GetTargetGroupPort(t *testing.T, targetGroupArn string, region string) int32 {
+	client := getELBv2Client(t, region)
+
+	input := &elbv2.DescribeTargetGroupsInput{
+		TargetGroupArns: []string{targetGroupArn},
+	}
+
+	result, err := client.DescribeTargetGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe target group %s", targetGroupArn)
+	require.Len(t, result.TargetGroups, 1, "Expected exactly one target group with ARN %s", targetGroupArn)
+
+	if result.TargetGroups[0].Port != nil {
+		return *result.TargetGroups[0].Port
+	}
+	return 0
+}
