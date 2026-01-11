@@ -80,7 +80,7 @@ resource "aws_flow_log" "cloudwatch" {
 resource "aws_s3_bucket" "flow_logs" {
   count = local.create_flow_log_s3_bucket ? 1 : 0
 
-  bucket = "${var.name}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
+  bucket = "${var.name}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.tags, {
     Name = "${var.name}-vpc-flow-logs"
