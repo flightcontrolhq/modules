@@ -313,9 +313,15 @@ variable "access_logs_versioning_enabled" {
 # WAF
 ################################################################################
 
+variable "enable_waf_association" {
+  type        = bool
+  description = "Whether to associate a WAF Web ACL with the ALB. Set to true when providing web_acl_arn."
+  default     = false
+}
+
 variable "web_acl_arn" {
   type        = string
-  description = "The ARN of a WAFv2 Web ACL to associate with the ALB."
+  description = "The ARN of a WAFv2 Web ACL to associate with the ALB. Required when enable_waf_association is true."
   default     = null
 
   validation {
