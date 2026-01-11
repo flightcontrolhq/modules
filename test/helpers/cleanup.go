@@ -19,12 +19,12 @@ import (
 
 // OrphanedResource represents a resource that was created by terratest but not cleaned up.
 type OrphanedResource struct {
-	Type       string    // Resource type (e.g., "VPC", "ALB", "ECS Cluster")
-	ID         string    // Resource ID or ARN
-	Name       string    // Resource name (if available)
-	CreatedAt  time.Time // Creation time (if available)
-	Region     string    // AWS region
-	Tags       map[string]string
+	Type      string    // Resource type (e.g., "VPC", "ALB", "ECS Cluster")
+	ID        string    // Resource ID or ARN
+	Name      string    // Resource name (if available)
+	CreatedAt time.Time // Creation time (if available)
+	Region    string    // AWS region
+	Tags      map[string]string
 }
 
 // DefaultTerratestPrefix is the default prefix used for terratest resource names.
@@ -40,13 +40,26 @@ func FindOrphanedResources(t *testing.T, prefix string, region string) []Orphane
 	return FindOrphanedResourcesWithAge(t, prefix, DefaultMaxAge, region)
 }
 
+// FindAllOrphanedResources finds all resources with the terratest prefix regardless of age.
+func FindAllOrphanedResources(t *testing.T, prefix string, region string) []OrphanedResource {
+	// Use a zero cutoff time to include all resources
+	return FindOrphanedResourcesWithAge(t, prefix, 0, region)
+}
+
 // FindOrphanedResourcesWithAge finds all resources with the given prefix that are older than maxAge.
+// If maxAge is 0, all resources with the prefix are returned regardless of age.
 func FindOrphanedResourcesWithAge(t *testing.T, prefix string, maxAge time.Duration, region string) []OrphanedResource {
 	if prefix == "" {
 		prefix = DefaultTerratestPrefix
 	}
 
-	cutoffTime := time.Now().Add(-maxAge)
+	// If maxAge is 0, set cutoffTime to future so all resources are included
+	var cutoffTime time.Time
+	if maxAge == 0 {
+		cutoffTime = time.Now().Add(100 * 365 * 24 * time.Hour) // Far future = no age limit
+	} else {
+		cutoffTime = time.Now().Add(-maxAge)
+	}
 
 	var orphans []OrphanedResource
 
@@ -88,13 +101,26 @@ func CleanupOrphanedResources(t *testing.T, prefix string, region string) {
 	CleanupOrphanedResourcesWithAge(t, prefix, DefaultMaxAge, region)
 }
 
+// CleanupAllOrphanedResources deletes all resources with the given prefix regardless of age.
+func CleanupAllOrphanedResources(t *testing.T, prefix string, region string) {
+	// Use zero duration to include all resources
+	CleanupOrphanedResourcesWithAge(t, prefix, 0, region)
+}
+
 // CleanupOrphanedResourcesWithAge deletes all orphaned resources older than maxAge.
+// If maxAge is 0, all resources with the prefix are deleted regardless of age.
 func CleanupOrphanedResourcesWithAge(t *testing.T, prefix string, maxAge time.Duration, region string) {
 	if prefix == "" {
 		prefix = DefaultTerratestPrefix
 	}
 
-	cutoffTime := time.Now().Add(-maxAge)
+	// If maxAge is 0, set cutoffTime to future so all resources are included
+	var cutoffTime time.Time
+	if maxAge == 0 {
+		cutoffTime = time.Now().Add(100 * 365 * 24 * time.Hour) // Far future = no age limit
+	} else {
+		cutoffTime = time.Now().Add(-maxAge)
+	}
 
 	// Delete resources in dependency order (most dependent first)
 
