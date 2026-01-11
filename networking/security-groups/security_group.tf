@@ -14,39 +14,15 @@ locals {
   security_group_name = "${var.name}-${var.name_suffix}"
 
   # Create a unique key for each ingress rule to use with for_each
+  # Using index-based keys to avoid unknown values at plan time (e.g., referenced_security_group_id)
   ingress_rules_map = {
-    for idx, rule in var.ingress_rules :
-    format("%s-%s-%s-%s-%s",
-      coalesce(rule.ip_protocol, "tcp"),
-      rule.from_port,
-      rule.to_port,
-      coalesce(
-        rule.cidr_ipv4,
-        rule.cidr_ipv6,
-        rule.referenced_security_group_id,
-        rule.prefix_list_id,
-        rule.self ? "self" : ""
-      ),
-      idx
-    ) => rule
+    for idx, rule in var.ingress_rules : tostring(idx) => rule
   }
 
   # Create a unique key for each egress rule to use with for_each
+  # Using index-based keys to avoid unknown values at plan time (e.g., referenced_security_group_id)
   egress_rules_map = {
-    for idx, rule in var.egress_rules :
-    format("%s-%s-%s-%s-%s",
-      coalesce(rule.ip_protocol, "tcp"),
-      rule.from_port,
-      rule.to_port,
-      coalesce(
-        rule.cidr_ipv4,
-        rule.cidr_ipv6,
-        rule.referenced_security_group_id,
-        rule.prefix_list_id,
-        rule.self ? "self" : ""
-      ),
-      idx
-    ) => rule
+    for idx, rule in var.egress_rules : tostring(idx) => rule
   }
 }
 
