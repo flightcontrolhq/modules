@@ -7,8 +7,8 @@ variable "name" {
   description = "Name prefix for all resources created by this module."
 
   validation {
-    condition     = length(var.name) > 0 && length(var.name) <= 32
-    error_message = "The name must be between 1 and 32 characters."
+    condition     = length(var.name) > 0 && length(var.name) <= 28
+    error_message = "The name must be between 1 and 28 characters. This limit ensures ALB names (name + '-pub'/'-priv' suffix) do not exceed the 32 character AWS limit."
   }
 }
 

@@ -14,7 +14,7 @@ module "public_alb" {
 
   source = "../../networking/alb"
 
-  name   = "${var.name}-public"
+  name   = "${var.name}-pub"
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -61,7 +61,7 @@ module "private_alb" {
 
   source = "../../networking/alb"
 
-  name   = "${var.name}-private"
+  name   = "${var.name}-priv"
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -105,7 +105,7 @@ module "public_nlb" {
 
   source = "../../networking/nlb"
 
-  name   = "${var.name}-public"
+  name   = "${var.name}-pub"
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -144,7 +144,7 @@ module "private_nlb" {
 
   source = "../../networking/nlb"
 
-  name   = "${var.name}-private"
+  name   = "${var.name}-priv"
   tags   = var.tags
   vpc_id = var.vpc_id
 
