@@ -5,7 +5,7 @@
 resource "aws_s3_bucket" "access_logs" {
   count = local.create_access_logs_bucket ? 1 : 0
 
-  bucket = "${var.name}-alb-access-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
+  bucket = "${var.name}-alb-access-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.tags, {
     Name = "${var.name}-alb-access-logs"
