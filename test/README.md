@@ -9,8 +9,10 @@ test/
 ├── README.md              # This file
 ├── go.mod                 # Go module definition
 ├── go.sum                 # Go dependency checksums
+├── .env.test.example      # Example environment file (copy to .env.test)
 ├── helpers/               # Shared helper functions
 │   ├── aws.go             # AWS SDK helper functions
+│   ├── env.go             # Environment variable loading (.env.test support)
 │   ├── random.go          # Random name generation helpers
 │   └── tags.go            # Tag validation helpers
 ├── fixtures/              # Terraform configurations for testing
@@ -66,6 +68,37 @@ The following environment variables must be set:
 | `AWS_ACCESS_KEY_ID` | Yes | AWS access key for authentication |
 | `AWS_SECRET_ACCESS_KEY` | Yes | AWS secret key for authentication |
 | `AWS_REGION` | No | AWS region (defaults to `us-east-1`) |
+
+### Using `.env.test` File (Recommended)
+
+Instead of setting environment variables manually, you can use a `.env.test` file that is automatically loaded when tests run:
+
+```bash
+# Copy the example file
+cp .env.test.example .env.test
+
+# Edit with your credentials
+vim .env.test
+```
+
+The `.env.test` file is git-ignored to prevent accidental credential commits.
+
+**Example `.env.test`:**
+```bash
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1
+```
+
+### Using Shell Environment Variables
+
+Alternatively, export variables directly:
+
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_REGION="us-east-1"
+```
 
 ## Running Tests
 
