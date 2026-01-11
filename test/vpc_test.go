@@ -381,7 +381,8 @@ func TestVpcFlowLogsS3(t *testing.T) {
 	awsRegion := helpers.GetAwsRegion()
 
 	// Generate a unique name for this test run
-	uniqueName := helpers.UniqueResourceName("vpc-flowlogs-s3")
+	// Using shortened prefix "vpc-fls3" to comply with VPC name <= 36 char validation
+	uniqueName := helpers.UniqueResourceName("vpc-fls3")
 
 	// Configure Terraform options
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
