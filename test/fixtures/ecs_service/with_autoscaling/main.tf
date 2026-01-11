@@ -128,9 +128,9 @@ module "ecs_service" {
 
     target_tracking = [
       {
-        policy_name       = "${var.name}-cpu-scaling"
-        target_value      = 70.0
-        predefined_metric = "ECSServiceAverageCPUUtilization"
+        policy_name        = "${var.name}-cpu-scaling"
+        target_value       = 70.0
+        predefined_metric  = "ECSServiceAverageCPUUtilization"
         scale_in_cooldown  = 60
         scale_out_cooldown = 60
         disable_scale_in   = false

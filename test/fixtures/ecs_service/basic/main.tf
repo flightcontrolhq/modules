@@ -101,9 +101,9 @@ module "ecs_service" {
   cluster_arn = module.ecs_cluster.cluster_arn
 
   # Fargate configuration
-  launch_type  = "FARGATE"
-  task_cpu     = 256
-  task_memory  = 512
+  launch_type = "FARGATE"
+  task_cpu    = 256
+  task_memory = 512
 
   # Run 1 task for testing (module defaults to 0)
   desired_count = 1

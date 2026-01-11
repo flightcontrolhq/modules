@@ -55,8 +55,8 @@ module "vpc" {
   enable_ipv6 = true
 
   # VPC Flow Logs to CloudWatch
-  enable_flow_logs       = true
-  flow_logs_destination  = "cloudwatch"
+  enable_flow_logs         = true
+  flow_logs_destination    = "cloudwatch"
   flow_logs_retention_days = 7
 
   tags = merge(
