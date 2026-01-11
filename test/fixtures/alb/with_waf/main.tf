@@ -148,7 +148,8 @@ module "alb" {
   enable_https_listener = false
 
   # Associate WAF WebACL
-  web_acl_arn = aws_wafv2_web_acl.this.arn
+  enable_waf_association = true
+  web_acl_arn            = aws_wafv2_web_acl.this.arn
 
   # Disable deletion protection for test cleanup
   enable_deletion_protection = false
