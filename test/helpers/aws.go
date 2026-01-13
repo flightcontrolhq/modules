@@ -3,6 +3,7 @@ package helpers
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -17,9 +18,10 @@ import (
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
-	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/wafv2"
 	wafv2types "github.com/aws/aws-sdk-go-v2/service/wafv2/types"
 	"github.com/stretchr/testify/require"
@@ -1785,4 +1787,352 @@ func GetLoadBalancerAccessLogsPrefix(t *testing.T, lbArn string, region string) 
 	}
 
 	return ""
+}
+
+// ################################################################################
+// # IAM Helpers
+// ################################################################################
+
+// getIAMClient creates an IAM client for the specified region.
+// Note: IAM is a global service, but a region is still required for the SDK config.
+func getIAMClient(t *testing.T, region string) *iam.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return iam.NewFromConfig(cfg)
+}
+
+// IamRoleExists checks if an IAM role with the given name exists.
+func IamRoleExists(t *testing.T, roleName string, region string) bool {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	_, err := client.GetRole(context.TODO(), input)
+	return err == nil
+}
+
+// GetIamRoleArn returns the ARN of an IAM role.
+// Returns an empty string if the role doesn't exist.
+func GetIamRoleArn(t *testing.T, roleName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.GetRole(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.Role != nil && result.Role.Arn != nil {
+		return *result.Role.Arn
+	}
+	return ""
+}
+
+// GetIamRolePath returns the path of an IAM role.
+// Returns an empty string if the role doesn't exist.
+func GetIamRolePath(t *testing.T, roleName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.GetRole(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.Role != nil && result.Role.Path != nil {
+		return *result.Role.Path
+	}
+	return ""
+}
+
+// GetIamRoleDescription returns the description of an IAM role.
+// Returns an empty string if the role doesn't exist or has no description.
+func GetIamRoleDescription(t *testing.T, roleName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.GetRole(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.Role != nil && result.Role.Description != nil {
+		return *result.Role.Description
+	}
+	return ""
+}
+
+// GetIamRoleTrustPolicy returns the trust policy (assume role policy) document for an IAM role.
+// The policy is returned as a URL-decoded JSON string.
+// Returns an empty string if the role doesn't exist.
+func GetIamRoleTrustPolicy(t *testing.T, roleName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.GetRole(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.Role != nil && result.Role.AssumeRolePolicyDocument != nil {
+		// The policy document is URL-encoded, so we need to decode it
+		decoded, err := url.QueryUnescape(*result.Role.AssumeRolePolicyDocument)
+		if err != nil {
+			return *result.Role.AssumeRolePolicyDocument
+		}
+		return decoded
+	}
+	return ""
+}
+
+// IamRoleHasPolicy checks if an IAM role has a specific managed policy attached.
+// policyArn should be the full ARN of the managed policy.
+func IamRoleHasPolicy(t *testing.T, roleName string, policyArn string, region string) bool {
+	client := getIAMClient(t, region)
+
+	input := &iam.ListAttachedRolePoliciesInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.ListAttachedRolePolicies(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	for _, policy := range result.AttachedPolicies {
+		if policy.PolicyArn != nil && *policy.PolicyArn == policyArn {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetIamRoleAttachedPolicies returns the list of managed policy ARNs attached to an IAM role.
+func GetIamRoleAttachedPolicies(t *testing.T, roleName string, region string) []string {
+	client := getIAMClient(t, region)
+
+	input := &iam.ListAttachedRolePoliciesInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.ListAttachedRolePolicies(context.TODO(), input)
+	require.NoError(t, err, "Failed to list attached policies for role %s", roleName)
+
+	var policyArns []string
+	for _, policy := range result.AttachedPolicies {
+		if policy.PolicyArn != nil {
+			policyArns = append(policyArns, *policy.PolicyArn)
+		}
+	}
+
+	return policyArns
+}
+
+// GetIamRoleInlinePolicyNames returns the list of inline policy names attached to an IAM role.
+func GetIamRoleInlinePolicyNames(t *testing.T, roleName string, region string) []string {
+	client := getIAMClient(t, region)
+
+	input := &iam.ListRolePoliciesInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.ListRolePolicies(context.TODO(), input)
+	require.NoError(t, err, "Failed to list inline policies for role %s", roleName)
+
+	return result.PolicyNames
+}
+
+// GetIamRoleInlinePolicy returns the policy document for an inline policy attached to an IAM role.
+// The policy is returned as a URL-decoded JSON string.
+// Returns an empty string if the policy doesn't exist.
+func GetIamRoleInlinePolicy(t *testing.T, roleName string, policyName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRolePolicyInput{
+		RoleName:   &roleName,
+		PolicyName: &policyName,
+	}
+
+	result, err := client.GetRolePolicy(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.PolicyDocument != nil {
+		// The policy document is URL-encoded, so we need to decode it
+		decoded, err := url.QueryUnescape(*result.PolicyDocument)
+		if err != nil {
+			return *result.PolicyDocument
+		}
+		return decoded
+	}
+	return ""
+}
+
+// IamInstanceProfileExists checks if an IAM instance profile with the given name exists.
+func IamInstanceProfileExists(t *testing.T, instanceProfileName string, region string) bool {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetInstanceProfileInput{
+		InstanceProfileName: &instanceProfileName,
+	}
+
+	_, err := client.GetInstanceProfile(context.TODO(), input)
+	return err == nil
+}
+
+// GetIamInstanceProfileArn returns the ARN of an IAM instance profile.
+// Returns an empty string if the instance profile doesn't exist.
+func GetIamInstanceProfileArn(t *testing.T, instanceProfileName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetInstanceProfileInput{
+		InstanceProfileName: &instanceProfileName,
+	}
+
+	result, err := client.GetInstanceProfile(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.InstanceProfile != nil && result.InstanceProfile.Arn != nil {
+		return *result.InstanceProfile.Arn
+	}
+	return ""
+}
+
+// GetIamInstanceProfilePath returns the path of an IAM instance profile.
+// Returns an empty string if the instance profile doesn't exist.
+func GetIamInstanceProfilePath(t *testing.T, instanceProfileName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetInstanceProfileInput{
+		InstanceProfileName: &instanceProfileName,
+	}
+
+	result, err := client.GetInstanceProfile(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.InstanceProfile != nil && result.InstanceProfile.Path != nil {
+		return *result.InstanceProfile.Path
+	}
+	return ""
+}
+
+// GetIamInstanceProfileRoleName returns the name of the role attached to an IAM instance profile.
+// Returns an empty string if the instance profile doesn't exist or has no role attached.
+func GetIamInstanceProfileRoleName(t *testing.T, instanceProfileName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetInstanceProfileInput{
+		InstanceProfileName: &instanceProfileName,
+	}
+
+	result, err := client.GetInstanceProfile(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.InstanceProfile != nil && len(result.InstanceProfile.Roles) > 0 {
+		if result.InstanceProfile.Roles[0].RoleName != nil {
+			return *result.InstanceProfile.Roles[0].RoleName
+		}
+	}
+	return ""
+}
+
+// IamInstanceProfileHasRole checks if an IAM instance profile has a specific role attached.
+func IamInstanceProfileHasRole(t *testing.T, instanceProfileName string, roleName string, region string) bool {
+	attachedRoleName := GetIamInstanceProfileRoleName(t, instanceProfileName, region)
+	return attachedRoleName == roleName
+}
+
+// GetIamRoleMaxSessionDuration returns the maximum session duration (in seconds) for an IAM role.
+// Returns 0 if the role doesn't exist.
+func GetIamRoleMaxSessionDuration(t *testing.T, roleName string, region string) int32 {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.GetRole(context.TODO(), input)
+	if err != nil {
+		return 0
+	}
+
+	if result.Role != nil && result.Role.MaxSessionDuration != nil {
+		return *result.Role.MaxSessionDuration
+	}
+	return 0
+}
+
+// GetIamRolePermissionsBoundary returns the ARN of the permissions boundary attached to an IAM role.
+// Returns an empty string if the role doesn't exist or has no permissions boundary.
+func GetIamRolePermissionsBoundary(t *testing.T, roleName string, region string) string {
+	client := getIAMClient(t, region)
+
+	input := &iam.GetRoleInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.GetRole(context.TODO(), input)
+	if err != nil {
+		return ""
+	}
+
+	if result.Role != nil && result.Role.PermissionsBoundary != nil && result.Role.PermissionsBoundary.PermissionsBoundaryArn != nil {
+		return *result.Role.PermissionsBoundary.PermissionsBoundaryArn
+	}
+	return ""
+}
+
+// GetIamRoleTags returns the tags attached to an IAM role.
+func GetIamRoleTags(t *testing.T, roleName string, region string) map[string]string {
+	client := getIAMClient(t, region)
+
+	input := &iam.ListRoleTagsInput{
+		RoleName: &roleName,
+	}
+
+	result, err := client.ListRoleTags(context.TODO(), input)
+	if err != nil {
+		return nil
+	}
+
+	tags := make(map[string]string)
+	for _, tag := range result.Tags {
+		if tag.Key != nil && tag.Value != nil {
+			tags[*tag.Key] = *tag.Value
+		}
+	}
+
+	return tags
+}
+
+// IamRoleHasTag checks if an IAM role has a specific tag with the expected value.
+func IamRoleHasTag(t *testing.T, roleName string, tagKey string, tagValue string, region string) bool {
+	tags := GetIamRoleTags(t, roleName, region)
+	if tags == nil {
+		return false
+	}
+	value, exists := tags[tagKey]
+	return exists && value == tagValue
 }
