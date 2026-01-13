@@ -6,6 +6,7 @@ import (
 
 	"github.com/flightcontrolhq/modules/test/helpers"
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -148,9 +149,13 @@ func TestVpcWithHaNat(t *testing.T) {
 	// Generate a unique name for this test run
 	uniqueName := helpers.UniqueResourceName("vpc-ha-nat")
 
+	// Copy the fixture to a temp directory to allow parallel execution
+	// This avoids .terraform directory lock conflicts when multiple tests use the same fixture
+	tempTestFolder := test_structure.CopyTerraformFolderToTemp(t, "../", "test/fixtures/vpc/full")
+
 	// Configure Terraform options
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "./fixtures/vpc/full",
+		TerraformDir: tempTestFolder,
 		Vars: map[string]interface{}{
 			"name":   uniqueName,
 			"region": awsRegion,
@@ -228,9 +233,13 @@ func TestVpcWithIPv6(t *testing.T) {
 	// Generate a unique name for this test run
 	uniqueName := helpers.UniqueResourceName("vpc-ipv6")
 
+	// Copy the fixture to a temp directory to allow parallel execution
+	// This avoids .terraform directory lock conflicts when multiple tests use the same fixture
+	tempTestFolder := test_structure.CopyTerraformFolderToTemp(t, "../", "test/fixtures/vpc/full")
+
 	// Configure Terraform options
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "./fixtures/vpc/full",
+		TerraformDir: tempTestFolder,
 		Vars: map[string]interface{}{
 			"name":   uniqueName,
 			"region": awsRegion,
@@ -313,9 +322,13 @@ func TestVpcFlowLogsCloudWatch(t *testing.T) {
 	// Generate a unique name for this test run
 	uniqueName := helpers.UniqueResourceName("vpc-flowlogs")
 
+	// Copy the fixture to a temp directory to allow parallel execution
+	// This avoids .terraform directory lock conflicts when multiple tests use the same fixture
+	tempTestFolder := test_structure.CopyTerraformFolderToTemp(t, "../", "test/fixtures/vpc/full")
+
 	// Configure Terraform options
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "./fixtures/vpc/full",
+		TerraformDir: tempTestFolder,
 		Vars: map[string]interface{}{
 			"name":   uniqueName,
 			"region": awsRegion,

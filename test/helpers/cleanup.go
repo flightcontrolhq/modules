@@ -28,7 +28,9 @@ type OrphanedResource struct {
 }
 
 // DefaultTerratestPrefix is the default prefix used for terratest resource names.
-const DefaultTerratestPrefix = "terratest-"
+// Note: Using "tt-" prefix (instead of "terratest-") to keep names short and comply with
+// AWS resource name length limits (e.g., ALB max 32 chars, S3 bucket max 63 chars).
+const DefaultTerratestPrefix = "tt-"
 
 // DefaultMaxAge is the default maximum age for resources before they're considered orphaned.
 const DefaultMaxAge = 24 * time.Hour

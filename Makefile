@@ -2,9 +2,16 @@
 
 .PHONY: help test test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests
 
-TIMEOUT ?= 60m
-PARALLEL ?= 2
+TIMEOUT ?= 180m
+PARALLEL ?= 3
 TEST_DIR := ./test
+FILTER ?=
+
+# Test runner function: $(1)=timeout, $(2)=parallel, $(3)=test args
+# Outputs formatted test results in real-time and saves JSON log to test.log
+define run_test
+	@cd $(TEST_DIR) && rm -f test.log && set -euo pipefail && go test -json -v -timeout $(1) -parallel $(2) $(3) 2>&1 | tee test.log | gotestfmt
+endef
 
 help:
 	@echo "Usage: make [target] [TIMEOUT=60m] [PARALLEL=2]"
@@ -34,6 +41,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test                        # Run all tests"
+	@echo "  make test FILTER='TestA|TestB'   # Run filtered tests"
 	@echo "  make test PARALLEL=1             # Run tests sequentially"
 	@echo "  make test-vpc TIMEOUT=30m        # Run VPC tests"
 	@echo "  make test-single TEST=TestVpcBasic"
@@ -41,58 +49,65 @@ help:
 deps:
 	@echo "Downloading Go dependencies..."
 	@cd $(TEST_DIR) && go mod download
+	@echo "Installing gotestfmt..."
+	@go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 	@echo "Dependencies downloaded"
 
 test:
+ifdef FILTER
+	@echo "Running filtered tests: $(FILTER) (timeout=$(TIMEOUT), parallel=$(PARALLEL))..."
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run '$(FILTER)' ./...)
+else
 	@echo "Running all tests (timeout=$(TIMEOUT), parallel=$(PARALLEL))..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) ./... 2>&1 | tee test.log
+	$(call run_test,$(TIMEOUT),$(PARALLEL),./...)
+endif
 
 test-single:
 ifndef TEST
 	$(error TEST is required. Usage: make test-single TEST=TestVpcBasic)
 endif
 	@echo "Running test: $(TEST)..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -run $(TEST) ./...
+	$(call run_test,$(TIMEOUT),1,-run $(TEST) ./...)
 
 test-vpc:
 	@echo "Running VPC tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestVpc ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestVpc ./...)
 
 test-alb:
 	@echo "Running ALB tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestAlb ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestAlb ./...)
 
 test-nlb:
 	@echo "Running NLB tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestNlb ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestNlb ./...)
 
 test-sg:
 	@echo "Running Security Group tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestSecurityGroup ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestSecurityGroup ./...)
 
 test-ecs:
 	@echo "Running ECS tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestEcs ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestEcs ./...)
 
 test-ecs-cluster:
 	@echo "Running ECS Cluster tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestEcsCluster ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestEcsCluster ./...)
 
 test-ecs-service:
 	@echo "Running ECS Service tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestEcsService ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestEcsService ./...)
 
 test-elasticache:
 	@echo "Running ElastiCache tests..."
-	cd $(TEST_DIR) && go test -v -timeout $(TIMEOUT) -parallel $(PARALLEL) -run TestElastiCache ./...
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestElastiCache ./...)
 
 test-cleanup:
 	@echo "Cleaning up orphaned terratest resources..."
-	cd $(TEST_DIR) && go test -v -timeout 30m -run TestCleanupOrphanedResources ./...
+	$(call run_test,30m,1,-run 'TestCleanupOrphanedResources$$' ./...)
 
 test-cleanup-dry:
 	@echo "Dry run: Finding orphaned terratest resources..."
-	cd $(TEST_DIR) && go test -v -timeout 30m -run TestCleanupOrphanedResourcesDryRun ./...
+	$(call run_test,30m,1,-run TestCleanupOrphanedResourcesDryRun ./...)
 
 fmt:
 	@echo "Formatting Terraform files..."

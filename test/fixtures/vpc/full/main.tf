@@ -11,6 +11,10 @@
 terraform {
   required_version = ">= 1.0"
 
+  # Use local backend with configurable path for test isolation
+  # Each parallel test can specify a unique state file via -backend-config="path=..."
+  backend "local" {}
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
