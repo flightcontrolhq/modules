@@ -39,7 +39,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
 | `storage/`    | `efs`             | AWS EFS file systems                                                   | Planned |
-| `storage/`    | `s3`              | AWS S3 buckets                                                         | Planned |
+| `storage/`    | `s3`              | AWS S3 buckets                                                         | v1.0.0  |
 
 ## Usage
 
