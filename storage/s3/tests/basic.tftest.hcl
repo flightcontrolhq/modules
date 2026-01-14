@@ -313,3 +313,102 @@ run "test_tags_can_be_provided" {
     error_message = "Custom tags should be accepted."
   }
 }
+
+#-------------------------------------------------------------------------------
+# S3 Bucket Resource Tests
+#-------------------------------------------------------------------------------
+
+# Test: bucket is created with correct name
+run "test_bucket_creation_with_name" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.bucket == "my-test-bucket"
+    error_message = "Bucket should be created with the specified name."
+  }
+}
+
+# Test: bucket force_destroy defaults to false
+run "test_bucket_force_destroy_default" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.force_destroy == false
+    error_message = "Bucket force_destroy should default to false."
+  }
+}
+
+# Test: bucket force_destroy can be set to true
+run "test_bucket_force_destroy_true" {
+  command = plan
+
+  variables {
+    name          = "test-bucket"
+    force_destroy = true
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.force_destroy == true
+    error_message = "Bucket force_destroy should be set to true when specified."
+  }
+}
+
+# Test: bucket has default tags merged
+run "test_bucket_default_tags" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.tags["ManagedBy"] == "terraform"
+    error_message = "Bucket should have ManagedBy default tag."
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.tags["Module"] == "storage/s3"
+    error_message = "Bucket should have Module default tag."
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.tags["Name"] == "test-bucket"
+    error_message = "Bucket should have Name tag matching bucket name."
+  }
+}
+
+# Test: bucket has custom tags merged with defaults
+run "test_bucket_custom_tags_merged" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    tags = {
+      Environment = "production"
+      Team        = "platform"
+    }
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.tags["ManagedBy"] == "terraform"
+    error_message = "Bucket should retain ManagedBy default tag."
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.tags["Environment"] == "production"
+    error_message = "Bucket should have custom Environment tag."
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.tags["Team"] == "platform"
+    error_message = "Bucket should have custom Team tag."
+  }
+}
