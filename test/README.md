@@ -36,6 +36,16 @@ test/
 │   ├── nlb/               # NLB module fixtures
 │   │   ├── basic/
 │   │   └── with_cross_zone/
+│   ├── s3/                # S3 module fixtures
+│   │   ├── basic/
+│   │   ├── with_kms/
+│   │   ├── with_versioning/
+│   │   ├── with_lifecycle/
+│   │   ├── with_alb_logs_policy/
+│   │   ├── with_vpc_flow_logs_policy/
+│   │   ├── with_nlb_logs_policy/
+│   │   ├── with_custom_policy/
+│   │   └── full/
 │   ├── security_groups/   # Security groups module fixtures
 │   │   ├── basic/
 │   │   └── with_egress/
@@ -49,6 +59,7 @@ test/
 ├── ecs_service_test.go    # ECS service integration tests
 ├── elasticache_test.go    # ElastiCache integration tests
 ├── nlb_test.go            # NLB integration tests
+├── s3_test.go             # S3 integration tests
 ├── security_groups_test.go # Security groups integration tests
 └── vpc_test.go            # VPC integration tests
 ```
@@ -130,6 +141,9 @@ go test -v -timeout 60m -run TestEcs ./...
 
 # ElastiCache tests
 go test -v -timeout 60m -run TestElastiCache ./...
+
+# S3 tests
+go test -v -timeout 60m -run TestS3 ./...
 ```
 
 ### Run Tests with Parallel Execution
@@ -268,8 +282,23 @@ AWS SDK helper functions for validating resources:
 
 **S3 helpers:**
 - `S3BucketExists(t, bucketName, region) bool`: Check if bucket exists
-- `S3BucketHasSSEEncryption(t, bucketName, region) bool`: Check encryption
-- `S3BucketHasPublicAccessBlocked(t, bucketName, region) bool`: Check public access
+- `GetS3BucketEncryption(t, bucketName, region) (algorithm, kmsKeyId)`: Get encryption config
+- `S3BucketHasSSEEncryption(t, bucketName, region) bool`: Check encryption enabled
+- `GetS3BucketPublicAccessBlock(t, bucketName, region) *PublicAccessBlockConfiguration`: Get full config
+- `S3BucketHasPublicAccessBlocked(t, bucketName, region) bool`: Check all public access blocked
+- `GetS3BucketLifecycleRules(t, bucketName, region) []LifecycleRule`: Get all lifecycle rules
+- `S3BucketHasExpirationRule(t, bucketName, days, region) bool`: Check expiration rule
+- `S3BucketHasTransitionRule(t, bucketName, ruleId, storageClass, days, region) bool`: Check transition
+- `S3BucketHasNoncurrentVersionExpiration(t, bucketName, ruleId, days, region) bool`: Check noncurrent expiration
+- `S3BucketHasAbortMultipartUploadRule(t, bucketName, ruleId, days, region) bool`: Check multipart abort
+- `GetS3BucketVersioning(t, bucketName, region) string`: Get versioning status
+- `S3BucketHasVersioningEnabled(t, bucketName, region) bool`: Check versioning enabled
+- `S3BucketHasBucketKeyEnabled(t, bucketName, region) bool`: Check bucket key enabled (KMS)
+- `GetS3BucketTags(t, bucketName, region) map[string]string`: Get all bucket tags
+- `S3BucketHasTag(t, bucketName, key, expectedValue, region) bool`: Check specific tag
+- `GetS3BucketPolicy(t, bucketName, region) string`: Get bucket policy JSON
+- `S3BucketHasPolicy(t, bucketName, region) bool`: Check if policy exists
+- `S3BucketPolicyContainsStatement(t, bucketName, statementSid, region) bool`: Check for statement
 
 **WAF helpers:**
 - `WafWebAclExists(t, webAclArn, region) bool`: Check if WebACL exists
@@ -403,3 +432,70 @@ cd test/fixtures/module/variant
 tofu state list
 tofu state show <resource>
 ```
+
+## S3 Module Tests
+
+The S3 module has comprehensive integration tests covering all documented use-cases from the README. The tests validate bucket creation, encryption, versioning, lifecycle rules, policy templates, and tag management.
+
+### S3 Test Fixtures
+
+| Fixture | Description | Key Features Tested |
+|---------|-------------|---------------------|
+| `basic/` | Basic S3 bucket with defaults | Bucket creation, SSE-S3 encryption, public access block |
+| `with_kms/` | SSE-KMS encryption with bucket key | KMS key creation, SSE-KMS encryption, bucket key enabled |
+| `with_versioning/` | Bucket versioning enabled | Versioning configuration and status |
+| `with_lifecycle/` | Multiple lifecycle rules | Expiration, transitions, noncurrent version handling, multipart abort |
+| `with_alb_logs_policy/` | ALB access logs policy template | Policy templates, ALB log delivery statements |
+| `with_vpc_flow_logs_policy/` | VPC flow logs policy template | Policy templates, VPC flow log statements |
+| `with_nlb_logs_policy/` | NLB access logs policy template | Policy templates, NLB log delivery statements |
+| `with_custom_policy/` | Custom policy with template merging | Custom bucket policy, policy merging |
+| `full/` | All features combined | Comprehensive validation of all S3 module features together |
+
+### S3 Test Functions
+
+| Test Function | Fixture | Description |
+|---------------|---------|-------------|
+| `TestS3Basic` | `basic/` | Basic bucket creation and default configuration |
+| `TestS3WithKmsEncryption` | `with_kms/` | SSE-KMS encryption with bucket key enabled |
+| `TestS3WithVersioning` | `with_versioning/` | Bucket versioning enabled |
+| `TestS3WithLifecycle` | `with_lifecycle/` | Lifecycle configuration with multiple rules |
+| `TestS3LifecycleTransitions` | `with_lifecycle/` | Storage class transitions (STANDARD_IA, GLACIER) |
+| `TestS3LifecycleNoncurrentVersions` | `with_lifecycle/` | Noncurrent version expiration rules |
+| `TestS3LifecycleMultipartAbort` | `with_lifecycle/` | Abort incomplete multipart uploads |
+| `TestS3LifecycleExpiration` | `with_lifecycle/` | Object expiration rules |
+| `TestS3WithAlbLogsPolicy` | `with_alb_logs_policy/` | ALB access logs policy statements |
+| `TestS3WithVpcFlowLogsPolicy` | `with_vpc_flow_logs_policy/` | VPC flow logs policy statements |
+| `TestS3WithNlbLogsPolicy` | `with_nlb_logs_policy/` | NLB access logs policy statements |
+| `TestS3WithDenyInsecureTransport` | `with_alb_logs_policy/` | Deny insecure transport policy |
+| `TestS3PublicAccessBlockSettings` | `basic/` | Public access block verification |
+| `TestS3BucketTags` | `basic/` | Tag verification with AWS SDK |
+| `TestS3WithCustomPolicy` | `with_custom_policy/` | Custom bucket policy statements |
+| `TestS3PolicyMerging` | `with_custom_policy/` | Policy template and custom policy merging |
+| `TestS3FullConfiguration` | `full/` | Comprehensive test of all features together |
+| `TestS3ForceDestroy` | `basic/` | Force destroy with objects in bucket |
+
+### Running S3 Tests
+
+```bash
+# Run all S3 tests
+go test -v -timeout 60m -run TestS3 ./...
+
+# Run specific S3 test
+go test -v -timeout 30m -run TestS3WithKmsEncryption ./...
+
+# Run only encryption-related tests
+go test -v -timeout 30m -run "TestS3.*Kms|TestS3.*Encryption" ./...
+
+# Run only lifecycle tests
+go test -v -timeout 30m -run "TestS3.*Lifecycle" ./...
+
+# Run only policy tests
+go test -v -timeout 30m -run "TestS3.*Policy" ./...
+```
+
+### S3 Test Notes
+
+- **KMS Key Management**: The `with_kms/` and `full/` fixtures create their own KMS keys for self-contained, repeatable tests. KMS keys use `deletion_window_in_days = 7` for cleanup.
+- **Force Destroy**: All S3 fixtures use `force_destroy = true` to ensure cleanup even when buckets contain objects.
+- **Parallel Execution**: S3 tests use unique bucket names to allow parallel execution without conflicts.
+- **Policy Templates**: Tests verify policy statement SIDs to confirm correct policy template application.
