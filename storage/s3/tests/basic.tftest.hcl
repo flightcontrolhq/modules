@@ -1240,8 +1240,8 @@ run "test_policy_template_uses_elb_service_account" {
   }
 }
 
-# Test: unknown policy template is ignored (returns empty)
-run "test_policy_template_unknown_ignored" {
+# Test: invalid policy template is rejected
+run "test_policy_template_invalid_rejected" {
   command = plan
 
   variables {
@@ -1249,8 +1249,83 @@ run "test_policy_template_unknown_ignored" {
     policy_templates = ["unknown_template"]
   }
 
-  assert {
-    condition     = length(local.policy_template_statements) == 0
-    error_message = "Unknown policy template should be ignored and return empty list."
+  expect_failures = [
+    var.policy_templates,
+  ]
+}
+
+# Test: multiple valid templates accepted
+run "test_policy_templates_all_valid" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"]
   }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 8
+    error_message = "All four templates combined should produce 8 statements (1 + 3 + 2 + 2)."
+  }
+}
+
+# Test: mix of valid and invalid templates rejected
+run "test_policy_templates_mixed_invalid" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport", "invalid_template"]
+  }
+
+  expect_failures = [
+    var.policy_templates,
+  ]
+}
+
+#-------------------------------------------------------------------------------
+# Custom Policy Tests
+#-------------------------------------------------------------------------------
+
+# Test: custom_policy defaults to null
+run "test_custom_policy_default_null" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = var.custom_policy == null
+    error_message = "custom_policy should default to null."
+  }
+}
+
+# Test: valid custom_policy JSON accepted
+run "test_custom_policy_valid_json" {
+  command = plan
+
+  variables {
+    name          = "test-bucket"
+    custom_policy = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"CustomStatement\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::test-bucket/*\"}]}"
+  }
+
+  assert {
+    condition     = var.custom_policy != null
+    error_message = "Valid JSON custom_policy should be accepted."
+  }
+}
+
+# Test: invalid custom_policy JSON rejected
+run "test_custom_policy_invalid_json" {
+  command = plan
+
+  variables {
+    name          = "test-bucket"
+    custom_policy = "not valid json {"
+  }
+
+  expect_failures = [
+    var.custom_policy,
+  ]
 }

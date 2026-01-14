@@ -206,17 +206,30 @@ variable "lifecycle_rules" {
 }
 
 #-------------------------------------------------------------------------------
-# Bucket Policy (placeholders for locals.tf - full implementation in Task 3.4)
+# Bucket Policy
 #-------------------------------------------------------------------------------
 
 variable "policy_templates" {
   type        = list(string)
   description = "List of policy template names to apply to the bucket. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs."
   default     = []
+
+  validation {
+    condition = alltrue([
+      for template in var.policy_templates :
+      contains(["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"], template)
+    ])
+    error_message = "Invalid policy template name. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs."
+  }
 }
 
 variable "custom_policy" {
   type        = string
   description = "Custom bucket policy JSON document. If provided alongside policy_templates, policies will be merged."
   default     = null
+
+  validation {
+    condition     = var.custom_policy == null || can(jsondecode(var.custom_policy))
+    error_message = "custom_policy must be valid JSON."
+  }
 }
