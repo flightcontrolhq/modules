@@ -1720,6 +1720,28 @@ func S3BucketHasExpirationRule(t *testing.T, bucketName string, expectedDays int
 	return false
 }
 
+// GetS3BucketVersioning returns the versioning status of an S3 bucket.
+// Returns "Enabled", "Suspended", or "" (empty string if versioning was never enabled).
+func GetS3BucketVersioning(t *testing.T, bucketName string, region string) string {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketVersioningInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketVersioning(context.TODO(), input)
+	require.NoError(t, err, "Failed to get bucket versioning for %s", bucketName)
+
+	return string(result.Status)
+}
+
+// S3BucketHasVersioningEnabled checks if an S3 bucket has versioning enabled.
+// Returns true if versioning status is "Enabled".
+func S3BucketHasVersioningEnabled(t *testing.T, bucketName string, region string) bool {
+	status := GetS3BucketVersioning(t, bucketName, region)
+	return status == string(s3types.BucketVersioningStatusEnabled)
+}
+
 // GetLoadBalancerAccessLogsEnabled checks if access logs are enabled for a load balancer.
 // Returns true if the access_logs.s3.enabled attribute is "true".
 func GetLoadBalancerAccessLogsEnabled(t *testing.T, lbArn string, region string) bool {
