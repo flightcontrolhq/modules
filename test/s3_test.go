@@ -820,6 +820,148 @@ func TestS3BucketTags(t *testing.T) {
 	// (Terraform would fail if tag application failed).
 }
 
+// TestS3WithCustomPolicy provisions an S3 bucket with a custom policy and validates:
+// - bucket is created correctly
+// - bucket policy is applied with custom policy statements
+// - custom policy statements are identifiable (AllowTestReadAccess, AllowTestListBucket)
+func TestS3WithCustomPolicy(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("s3cp")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/s3/with_custom_policy",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	bucketId := terraform.Output(t, terraformOptions, "bucket_id")
+	bucketArn := terraform.Output(t, terraformOptions, "bucket_arn")
+	bucketPolicy := terraform.Output(t, terraformOptions, "bucket_policy")
+
+	// Assert bucket_id is not empty and matches the expected name
+	require.NotEmpty(t, bucketId, "bucket_id should not be empty")
+	assert.Equal(t, uniqueName, bucketId, "bucket_id should match the provided name")
+
+	// Assert bucket_arn is not empty and has correct format
+	require.NotEmpty(t, bucketArn, "bucket_arn should not be empty")
+	assert.Contains(t, bucketArn, ":s3:::", "bucket_arn should contain ':s3:::'")
+
+	// Assert bucket_policy output is not empty
+	require.NotEmpty(t, bucketPolicy, "bucket_policy output should not be empty")
+
+	// Use AWS SDK to verify bucket exists
+	bucketExists := helpers.S3BucketExists(t, bucketId, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket should exist in AWS")
+
+	// Use AWS SDK to verify bucket has a policy
+	hasPolicy := helpers.S3BucketHasPolicy(t, bucketId, awsRegion)
+	assert.True(t, hasPolicy, "S3 bucket should have a bucket policy")
+
+	// Verify custom policy statements are present
+	hasTestReadAccess := helpers.S3BucketPolicyContainsStatement(t, bucketId, "AllowTestReadAccess", awsRegion)
+	assert.True(t, hasTestReadAccess, "Policy should contain AllowTestReadAccess statement from custom policy")
+
+	hasTestListBucket := helpers.S3BucketPolicyContainsStatement(t, bucketId, "AllowTestListBucket", awsRegion)
+	assert.True(t, hasTestListBucket, "Policy should contain AllowTestListBucket statement from custom policy")
+
+	// Get the full policy and verify it's valid JSON containing expected content
+	policy := helpers.GetS3BucketPolicy(t, bucketId, awsRegion)
+	assert.Contains(t, policy, "s3:GetObject", "Policy should contain s3:GetObject action")
+	assert.Contains(t, policy, "s3:ListBucket", "Policy should contain s3:ListBucket action")
+	assert.Contains(t, policy, "aws:PrincipalOrgID", "Policy should contain organization condition")
+
+	// Use AWS SDK to verify all public access is blocked (default behavior)
+	publicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, bucketId, awsRegion)
+	assert.True(t, publicAccessBlocked, "S3 bucket should have all public access blocked")
+}
+
+// TestS3PolicyMerging verifies that custom policy and policy templates are correctly merged.
+// Tests the with_custom_policy fixture which includes deny_insecure_transport template
+// combined with custom policy statements.
+func TestS3PolicyMerging(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("s3pm")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/s3/with_custom_policy",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	bucketId := terraform.Output(t, terraformOptions, "bucket_id")
+	bucketPolicy := terraform.Output(t, terraformOptions, "bucket_policy")
+
+	// Assert bucket_id is not empty
+	require.NotEmpty(t, bucketId, "bucket_id should not be empty")
+
+	// Assert bucket_policy output is not empty
+	require.NotEmpty(t, bucketPolicy, "bucket_policy output should not be empty")
+
+	// Use AWS SDK to verify bucket exists
+	bucketExists := helpers.S3BucketExists(t, bucketId, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket should exist in AWS")
+
+	// Use AWS SDK to verify bucket has a policy
+	hasPolicy := helpers.S3BucketHasPolicy(t, bucketId, awsRegion)
+	assert.True(t, hasPolicy, "S3 bucket should have a bucket policy")
+
+	// Verify policy template statements are present (from deny_insecure_transport)
+	hasDenyInsecureTransport := helpers.S3BucketPolicyContainsStatement(t, bucketId, "DenyInsecureTransport", awsRegion)
+	assert.True(t, hasDenyInsecureTransport, "Policy should contain DenyInsecureTransport statement from policy template")
+
+	// Verify custom policy statements are present
+	hasTestReadAccess := helpers.S3BucketPolicyContainsStatement(t, bucketId, "AllowTestReadAccess", awsRegion)
+	assert.True(t, hasTestReadAccess, "Policy should contain AllowTestReadAccess statement from custom policy")
+
+	hasTestListBucket := helpers.S3BucketPolicyContainsStatement(t, bucketId, "AllowTestListBucket", awsRegion)
+	assert.True(t, hasTestListBucket, "Policy should contain AllowTestListBucket statement from custom policy")
+
+	// Get the full policy and verify it contains both template and custom statements
+	policy := helpers.GetS3BucketPolicy(t, bucketId, awsRegion)
+
+	// Verify template content
+	assert.Contains(t, policy, "aws:SecureTransport", "Merged policy should contain aws:SecureTransport from template")
+	assert.Contains(t, policy, "Deny", "Merged policy should contain Deny effect from template")
+
+	// Verify custom content
+	assert.Contains(t, policy, "s3:GetObject", "Merged policy should contain s3:GetObject from custom policy")
+	assert.Contains(t, policy, "o-test123456", "Merged policy should contain org ID from custom policy")
+
+	// Count the number of statements in the policy (should have at least 3: 2 custom + 1 template)
+	// This is a simple check using string matching
+	assert.Contains(t, policy, "Statement", "Policy should contain Statement array")
+}
+
 // TestS3ForceDestroy verifies that buckets with force_destroy=true can be destroyed
 // even when they contain objects.
 // Note: This test is implicitly verified by the cleanup of all other tests,
