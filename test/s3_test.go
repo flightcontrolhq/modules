@@ -962,6 +962,205 @@ func TestS3PolicyMerging(t *testing.T) {
 	assert.Contains(t, policy, "Statement", "Policy should contain Statement array")
 }
 
+// TestS3FullConfiguration provisions an S3 bucket with ALL features enabled and validates:
+// - SSE-KMS encryption with bucket key
+// - Versioning enabled
+// - Lifecycle rules (expiration, transitions, noncurrent version handling)
+// - Policy templates (deny_insecure_transport) with custom policy merging
+// - Public access block settings
+// - Expected tags are present
+// - All outputs are populated
+func TestS3FullConfiguration(t *testing.T) {
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("s3full")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/s3/full",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	bucketId := terraform.Output(t, terraformOptions, "bucket_id")
+	bucketArn := terraform.Output(t, terraformOptions, "bucket_arn")
+	bucketDomainName := terraform.Output(t, terraformOptions, "bucket_domain_name")
+	bucketRegionalDomainName := terraform.Output(t, terraformOptions, "bucket_regional_domain_name")
+	bucketHostedZoneId := terraform.Output(t, terraformOptions, "bucket_hosted_zone_id")
+	bucketRegion := terraform.Output(t, terraformOptions, "bucket_region")
+	bucketPolicy := terraform.Output(t, terraformOptions, "bucket_policy")
+	versioningEnabled := terraform.Output(t, terraformOptions, "versioning_enabled")
+	encryptionAlgorithm := terraform.Output(t, terraformOptions, "encryption_algorithm")
+	kmsKeyIdOutput := terraform.Output(t, terraformOptions, "kms_key_id")
+	kmsKeyArn := terraform.Output(t, terraformOptions, "kms_key_arn")
+
+	// ========================================================================
+	// Verify basic bucket creation and outputs
+	// ========================================================================
+
+	// Assert bucket_id is not empty and matches the expected name
+	require.NotEmpty(t, bucketId, "bucket_id should not be empty")
+	assert.Equal(t, uniqueName, bucketId, "bucket_id should match the provided name")
+
+	// Assert bucket_arn is not empty and has correct format
+	require.NotEmpty(t, bucketArn, "bucket_arn should not be empty")
+	assert.Contains(t, bucketArn, ":s3:::", "bucket_arn should contain ':s3:::'")
+	assert.Contains(t, bucketArn, uniqueName, "bucket_arn should contain the bucket name")
+
+	// Assert all other outputs are populated
+	assert.NotEmpty(t, bucketDomainName, "bucket_domain_name should not be empty")
+	assert.NotEmpty(t, bucketRegionalDomainName, "bucket_regional_domain_name should not be empty")
+	assert.NotEmpty(t, bucketHostedZoneId, "bucket_hosted_zone_id should not be empty")
+	assert.NotEmpty(t, bucketRegion, "bucket_region should not be empty")
+	assert.NotEmpty(t, bucketPolicy, "bucket_policy should not be empty")
+
+	// Use AWS SDK to verify bucket exists
+	bucketExists := helpers.S3BucketExists(t, bucketId, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket should exist in AWS")
+
+	// ========================================================================
+	// Verify SSE-KMS encryption
+	// ========================================================================
+
+	// Assert encryption is SSE-KMS (aws:kms)
+	assert.Equal(t, "aws:kms", encryptionAlgorithm, "encryption_algorithm should be aws:kms for SSE-KMS")
+
+	// Assert KMS key ID output matches the created KMS key ARN
+	require.NotEmpty(t, kmsKeyIdOutput, "kms_key_id output should not be empty")
+	require.NotEmpty(t, kmsKeyArn, "kms_key_arn should not be empty")
+	assert.Equal(t, kmsKeyArn, kmsKeyIdOutput, "kms_key_id should match the created KMS key ARN")
+
+	// Use AWS SDK to verify encryption is SSE-KMS with correct key
+	algorithm, kmsKeyId := helpers.GetS3BucketEncryption(t, bucketId, awsRegion)
+	assert.Equal(t, "aws:kms", algorithm, "Encryption algorithm from SDK should be aws:kms")
+	assert.Equal(t, kmsKeyArn, kmsKeyId, "KMS key ID from SDK should match the created KMS key ARN")
+
+	// Use AWS SDK to verify bucket key is enabled
+	bucketKeyEnabled := helpers.S3BucketHasBucketKeyEnabled(t, bucketId, awsRegion)
+	assert.True(t, bucketKeyEnabled, "Bucket key should be enabled for SSE-KMS")
+
+	// ========================================================================
+	// Verify versioning
+	// ========================================================================
+
+	// Assert versioning is enabled via Terraform output
+	assert.Equal(t, "true", versioningEnabled, "versioning_enabled output should be true")
+
+	// Use AWS SDK to verify versioning is enabled
+	hasVersioning := helpers.S3BucketHasVersioningEnabled(t, bucketId, awsRegion)
+	assert.True(t, hasVersioning, "S3BucketHasVersioningEnabled should return true")
+
+	// ========================================================================
+	// Verify lifecycle rules
+	// ========================================================================
+
+	// Verify lifecycle rules exist via AWS SDK (should have 4 rules)
+	lifecycleRules := helpers.GetS3BucketLifecycleRules(t, bucketId, awsRegion)
+	assert.NotEmpty(t, lifecycleRules, "Lifecycle rules should be configured")
+	assert.Len(t, lifecycleRules, 4, "Should have 4 lifecycle rules configured")
+
+	// Verify the "full-expire-logs" rule has expiration at 90 days
+	hasExpiration := helpers.S3BucketHasExpirationRule(t, bucketId, 90, awsRegion)
+	assert.True(t, hasExpiration, "Should have expiration rule at 90 days for 'full-expire-logs' rule")
+
+	// Verify the "full-archive-data" rule has STANDARD_IA transition at 30 days
+	hasStandardIaTransition := helpers.S3BucketHasTransitionRule(t, bucketId, "full-archive-data", "STANDARD_IA", 30, awsRegion)
+	assert.True(t, hasStandardIaTransition, "Should have STANDARD_IA transition at 30 days for 'full-archive-data' rule")
+
+	// Verify the "full-archive-data" rule has GLACIER transition at 90 days
+	hasGlacierTransition := helpers.S3BucketHasTransitionRule(t, bucketId, "full-archive-data", "GLACIER", 90, awsRegion)
+	assert.True(t, hasGlacierTransition, "Should have GLACIER transition at 90 days for 'full-archive-data' rule")
+
+	// Verify the "full-noncurrent-cleanup" rule has noncurrent version expiration at 30 days
+	hasNoncurrentExpiration := helpers.S3BucketHasNoncurrentVersionExpiration(t, bucketId, "full-noncurrent-cleanup", 30, awsRegion)
+	assert.True(t, hasNoncurrentExpiration, "Should have noncurrent version expiration at 30 days for 'full-noncurrent-cleanup' rule")
+
+	// Verify the "full-abort-multipart" rule has multipart abort at 7 days
+	hasMultipartAbort := helpers.S3BucketHasAbortMultipartUploadRule(t, bucketId, "full-abort-multipart", 7, awsRegion)
+	assert.True(t, hasMultipartAbort, "Should have abort incomplete multipart upload at 7 days for 'full-abort-multipart' rule")
+
+	// ========================================================================
+	// Verify bucket policy (template + custom policy merging)
+	// ========================================================================
+
+	// Use AWS SDK to verify bucket has a policy
+	hasPolicy := helpers.S3BucketHasPolicy(t, bucketId, awsRegion)
+	assert.True(t, hasPolicy, "S3 bucket should have a bucket policy")
+
+	// Verify policy template statement is present (from deny_insecure_transport)
+	hasDenyInsecureTransport := helpers.S3BucketPolicyContainsStatement(t, bucketId, "DenyInsecureTransport", awsRegion)
+	assert.True(t, hasDenyInsecureTransport, "Policy should contain DenyInsecureTransport statement from policy template")
+
+	// Verify custom policy statement is present
+	hasFullTestReadAccess := helpers.S3BucketPolicyContainsStatement(t, bucketId, "AllowFullTestReadAccess", awsRegion)
+	assert.True(t, hasFullTestReadAccess, "Policy should contain AllowFullTestReadAccess statement from custom policy")
+
+	// Get the full policy and verify it contains both template and custom statements
+	policy := helpers.GetS3BucketPolicy(t, bucketId, awsRegion)
+
+	// Verify template content
+	assert.Contains(t, policy, "aws:SecureTransport", "Merged policy should contain aws:SecureTransport from template")
+	assert.Contains(t, policy, "Deny", "Merged policy should contain Deny effect from template")
+
+	// Verify custom content
+	assert.Contains(t, policy, "s3:GetObject", "Merged policy should contain s3:GetObject from custom policy")
+	assert.Contains(t, policy, "o-fulltest123", "Merged policy should contain org ID from custom policy")
+
+	// ========================================================================
+	// Verify public access block settings
+	// ========================================================================
+
+	// Use AWS SDK to verify all public access is blocked
+	publicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, bucketId, awsRegion)
+	assert.True(t, publicAccessBlocked, "S3 bucket should have all public access blocked")
+
+	// Get the detailed public access block configuration
+	config := helpers.GetS3BucketPublicAccessBlock(t, bucketId, awsRegion)
+	require.NotNil(t, config, "Public access block configuration should exist")
+
+	assert.NotNil(t, config.BlockPublicAcls, "BlockPublicAcls should not be nil")
+	assert.True(t, *config.BlockPublicAcls, "BlockPublicAcls should be true")
+
+	assert.NotNil(t, config.BlockPublicPolicy, "BlockPublicPolicy should not be nil")
+	assert.True(t, *config.BlockPublicPolicy, "BlockPublicPolicy should be true")
+
+	assert.NotNil(t, config.IgnorePublicAcls, "IgnorePublicAcls should not be nil")
+	assert.True(t, *config.IgnorePublicAcls, "IgnorePublicAcls should be true")
+
+	assert.NotNil(t, config.RestrictPublicBuckets, "RestrictPublicBuckets should not be nil")
+	assert.True(t, *config.RestrictPublicBuckets, "RestrictPublicBuckets should be true")
+
+	// ========================================================================
+	// Verify tags
+	// ========================================================================
+
+	// Use AWS SDK to get tags
+	tags := helpers.GetS3BucketTags(t, bucketId, awsRegion)
+	assert.NotEmpty(t, tags, "Bucket should have tags")
+
+	// Verify expected tags are present (from fixture's common_tags)
+	assert.Equal(t, "terratest", tags["Environment"], "Environment tag should be 'terratest'")
+	assert.Equal(t, "terratest", tags["ManagedBy"], "ManagedBy tag should be 'terratest' (fixture overrides module default)")
+	assert.Equal(t, "full-configuration", tags["TestType"], "TestType tag should be 'full-configuration'")
+	assert.Equal(t, "comprehensive-s3-testing", tags["Purpose"], "Purpose tag should be 'comprehensive-s3-testing'")
+
+	// Verify default module tags are merged (Module tag comes from module defaults)
+	assert.Equal(t, "storage/s3", tags["Module"], "Module tag should be 'storage/s3' from module defaults")
+}
+
 // TestS3ForceDestroy verifies that buckets with force_destroy=true can be destroyed
 // even when they contain objects.
 // Note: This test is implicitly verified by the cleanup of all other tests,
