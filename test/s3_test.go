@@ -780,6 +780,10 @@ func TestS3PublicAccessBlockSettings(t *testing.T) {
 }
 
 // TestS3BucketTags verifies that tags are correctly applied to the bucket.
+// It tests:
+// - Default module tags (ManagedBy, Module) are applied
+// - Custom tags are applied
+// - Tag merging works correctly (custom tags can override defaults)
 func TestS3BucketTags(t *testing.T) {
 	t.Parallel()
 
@@ -796,7 +800,9 @@ func TestS3BucketTags(t *testing.T) {
 			"name":   uniqueName,
 			"region": awsRegion,
 			"tags": map[string]interface{}{
-				"CustomTag": "CustomValue",
+				"CustomTag":  "CustomValue",
+				"Project":    "TagTest",
+				"CostCenter": "12345",
 			},
 		},
 	})
@@ -815,9 +821,58 @@ func TestS3BucketTags(t *testing.T) {
 	bucketExists := helpers.S3BucketExists(t, bucketId, awsRegion)
 	assert.True(t, bucketExists, "S3 bucket should exist in AWS")
 
-	// Note: Tag verification would require adding a GetS3BucketTags helper function.
-	// For now, we verify the bucket was created successfully with the tags applied
-	// (Terraform would fail if tag application failed).
+	// ========================================================================
+	// Use AWS SDK to verify tags via GetS3BucketTags helper
+	// ========================================================================
+
+	// Get all tags from the bucket
+	tags := helpers.GetS3BucketTags(t, bucketId, awsRegion)
+	assert.NotEmpty(t, tags, "Bucket should have tags")
+
+	// Verify default module tag (Module) is present
+	// Note: ManagedBy is overridden by fixture's common_tags to "terratest"
+	assert.Equal(t, "storage/s3", tags["Module"], "Module tag should be 'storage/s3' from module defaults")
+
+	// Verify fixture tags (Environment, ManagedBy) are present
+	// The fixture sets these in common_tags which are passed to the module
+	assert.Equal(t, "terratest", tags["Environment"], "Environment tag should be 'terratest' from fixture")
+	assert.Equal(t, "terratest", tags["ManagedBy"], "ManagedBy tag should be 'terratest' (fixture overrides module default)")
+
+	// Verify custom tags are applied
+	assert.Equal(t, "CustomValue", tags["CustomTag"], "CustomTag should be 'CustomValue'")
+	assert.Equal(t, "TagTest", tags["Project"], "Project tag should be 'TagTest'")
+	assert.Equal(t, "12345", tags["CostCenter"], "CostCenter tag should be '12345'")
+
+	// ========================================================================
+	// Use S3BucketHasTag helper for specific tag verification
+	// ========================================================================
+
+	// Verify individual tags using the S3BucketHasTag helper
+	hasModuleTag := helpers.S3BucketHasTag(t, bucketId, "Module", "storage/s3", awsRegion)
+	assert.True(t, hasModuleTag, "S3BucketHasTag should return true for Module tag")
+
+	hasEnvironmentTag := helpers.S3BucketHasTag(t, bucketId, "Environment", "terratest", awsRegion)
+	assert.True(t, hasEnvironmentTag, "S3BucketHasTag should return true for Environment tag")
+
+	hasCustomTag := helpers.S3BucketHasTag(t, bucketId, "CustomTag", "CustomValue", awsRegion)
+	assert.True(t, hasCustomTag, "S3BucketHasTag should return true for CustomTag")
+
+	hasProjectTag := helpers.S3BucketHasTag(t, bucketId, "Project", "TagTest", awsRegion)
+	assert.True(t, hasProjectTag, "S3BucketHasTag should return true for Project tag")
+
+	// Verify tag with wrong value returns false
+	hasWrongValue := helpers.S3BucketHasTag(t, bucketId, "Module", "wrong-value", awsRegion)
+	assert.False(t, hasWrongValue, "S3BucketHasTag should return false for incorrect tag value")
+
+	// Verify non-existent tag returns false
+	hasNonExistentTag := helpers.S3BucketHasTag(t, bucketId, "NonExistentTag", "any-value", awsRegion)
+	assert.False(t, hasNonExistentTag, "S3BucketHasTag should return false for non-existent tag")
+
+	// ========================================================================
+	// Verify tag count (should have at least 6 tags)
+	// Module (from module defaults) + Environment, ManagedBy (from fixture) + CustomTag, Project, CostCenter (from test)
+	// ========================================================================
+	assert.GreaterOrEqual(t, len(tags), 6, "Bucket should have at least 6 tags")
 }
 
 // TestS3WithCustomPolicy provisions an S3 bucket with a custom policy and validates:
