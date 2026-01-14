@@ -412,3 +412,153 @@ run "test_bucket_custom_tags_merged" {
     error_message = "Bucket should have custom Team tag."
   }
 }
+
+#-------------------------------------------------------------------------------
+# Public Access Block Tests
+#-------------------------------------------------------------------------------
+
+# Test: public access block defaults - all settings enabled
+run "test_public_access_block_defaults" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_acls == true
+    error_message = "block_public_acls should default to true."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_policy == true
+    error_message = "block_public_policy should default to true."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.ignore_public_acls == true
+    error_message = "ignore_public_acls should default to true."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.restrict_public_buckets == true
+    error_message = "restrict_public_buckets should default to true."
+  }
+}
+
+# Test: public access block can disable block_public_acls
+run "test_public_access_block_disable_block_public_acls" {
+  command = plan
+
+  variables {
+    name              = "test-bucket"
+    block_public_acls = false
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_acls == false
+    error_message = "block_public_acls should be false when set."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_policy == true
+    error_message = "block_public_policy should remain true."
+  }
+}
+
+# Test: public access block can disable block_public_policy
+run "test_public_access_block_disable_block_public_policy" {
+  command = plan
+
+  variables {
+    name                = "test-bucket"
+    block_public_policy = false
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_policy == false
+    error_message = "block_public_policy should be false when set."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_acls == true
+    error_message = "block_public_acls should remain true."
+  }
+}
+
+# Test: public access block can disable ignore_public_acls
+run "test_public_access_block_disable_ignore_public_acls" {
+  command = plan
+
+  variables {
+    name               = "test-bucket"
+    ignore_public_acls = false
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.ignore_public_acls == false
+    error_message = "ignore_public_acls should be false when set."
+  }
+}
+
+# Test: public access block can disable restrict_public_buckets
+run "test_public_access_block_disable_restrict_public_buckets" {
+  command = plan
+
+  variables {
+    name                    = "test-bucket"
+    restrict_public_buckets = false
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.restrict_public_buckets == false
+    error_message = "restrict_public_buckets should be false when set."
+  }
+}
+
+# Test: public access block can disable all settings
+run "test_public_access_block_all_disabled" {
+  command = plan
+
+  variables {
+    name                    = "test-bucket"
+    block_public_acls       = false
+    block_public_policy     = false
+    ignore_public_acls      = false
+    restrict_public_buckets = false
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_acls == false
+    error_message = "block_public_acls should be false."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.block_public_policy == false
+    error_message = "block_public_policy should be false."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.ignore_public_acls == false
+    error_message = "ignore_public_acls should be false."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.restrict_public_buckets == false
+    error_message = "restrict_public_buckets should be false."
+  }
+}
+
+# Test: public access block references correct bucket
+run "test_public_access_block_bucket_reference" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this.bucket == aws_s3_bucket.this.id
+    error_message = "Public access block should reference the correct bucket."
+  }
+}

@@ -67,6 +67,34 @@ variable "tags" {
 }
 
 #-------------------------------------------------------------------------------
+# Public Access Block
+#-------------------------------------------------------------------------------
+
+variable "block_public_acls" {
+  type        = bool
+  description = "Whether Amazon S3 should block public ACLs for this bucket. Setting this to true causes the following behavior: PUT Bucket acl and PUT Object acl calls will fail if the specified ACL allows public access, and PUT Object calls will fail if the request includes an object ACL."
+  default     = true
+}
+
+variable "block_public_policy" {
+  type        = bool
+  description = "Whether Amazon S3 should block public bucket policies for this bucket. Setting this to true causes Amazon S3 to reject calls to PUT Bucket policy if the specified bucket policy allows public access."
+  default     = true
+}
+
+variable "ignore_public_acls" {
+  type        = bool
+  description = "Whether Amazon S3 should ignore public ACLs for this bucket. Setting this to true causes Amazon S3 to ignore public ACLs on this bucket and any objects that it contains."
+  default     = true
+}
+
+variable "restrict_public_buckets" {
+  type        = bool
+  description = "Whether Amazon S3 should restrict public bucket policies for this bucket. Setting this to true restricts access to this bucket to only AWS service principals and authorized users within this account if the bucket has a public policy."
+  default     = true
+}
+
+#-------------------------------------------------------------------------------
 # Encryption (placeholders for locals.tf - full implementation in Task 2.4)
 #-------------------------------------------------------------------------------
 
