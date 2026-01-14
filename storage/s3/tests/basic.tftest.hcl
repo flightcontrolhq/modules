@@ -1523,3 +1523,212 @@ run "test_bucket_policy_vpc_flow_logs_region" {
     error_message = "VPC flow logs policy should use correct region."
   }
 }
+
+#-------------------------------------------------------------------------------
+# Output Tests
+#-------------------------------------------------------------------------------
+
+# Test: bucket_id output is not null
+run "test_output_bucket_id" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_id != null && output.bucket_id != ""
+    error_message = "bucket_id output should not be null or empty."
+  }
+}
+
+# Test: bucket_arn output is not null
+run "test_output_bucket_arn" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_arn != null && output.bucket_arn != ""
+    error_message = "bucket_arn output should not be null or empty."
+  }
+}
+
+# Test: bucket_domain_name output is not null
+run "test_output_bucket_domain_name" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_domain_name != null && output.bucket_domain_name != ""
+    error_message = "bucket_domain_name output should not be null or empty."
+  }
+}
+
+# Test: bucket_regional_domain_name output is not null
+run "test_output_bucket_regional_domain_name" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_regional_domain_name != null && output.bucket_regional_domain_name != ""
+    error_message = "bucket_regional_domain_name output should not be null or empty."
+  }
+}
+
+# Test: bucket_hosted_zone_id output is not null
+run "test_output_bucket_hosted_zone_id" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_hosted_zone_id != null
+    error_message = "bucket_hosted_zone_id output should not be null."
+  }
+}
+
+# Test: bucket_region output is not null
+run "test_output_bucket_region" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_region != null
+    error_message = "bucket_region output should not be null."
+  }
+}
+
+# Test: bucket_policy output is null when no policy
+run "test_output_bucket_policy_null_when_no_policy" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.bucket_policy == null
+    error_message = "bucket_policy output should be null when no policy specified."
+  }
+}
+
+# Test: bucket_policy output contains policy when templates specified
+run "test_output_bucket_policy_with_templates" {
+  command = plan
+
+  variables {
+    name             = "my-test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+  }
+
+  assert {
+    condition     = output.bucket_policy != null
+    error_message = "bucket_policy output should not be null when policy templates specified."
+  }
+
+  assert {
+    condition     = can(jsondecode(output.bucket_policy))
+    error_message = "bucket_policy output should be valid JSON."
+  }
+}
+
+# Test: versioning_enabled output reflects variable
+run "test_output_versioning_enabled_default" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.versioning_enabled == false
+    error_message = "versioning_enabled output should be false by default."
+  }
+}
+
+# Test: versioning_enabled output when enabled
+run "test_output_versioning_enabled_true" {
+  command = plan
+
+  variables {
+    name               = "my-test-bucket"
+    versioning_enabled = true
+  }
+
+  assert {
+    condition     = output.versioning_enabled == true
+    error_message = "versioning_enabled output should be true when enabled."
+  }
+}
+
+# Test: encryption_algorithm output is AES256 by default
+run "test_output_encryption_algorithm_default" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.encryption_algorithm == "AES256"
+    error_message = "encryption_algorithm output should be AES256 by default."
+  }
+}
+
+# Test: encryption_algorithm output is aws:kms when KMS key provided
+run "test_output_encryption_algorithm_kms" {
+  command = plan
+
+  variables {
+    name       = "my-test-bucket"
+    kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  }
+
+  assert {
+    condition     = output.encryption_algorithm == "aws:kms"
+    error_message = "encryption_algorithm output should be aws:kms when KMS key provided."
+  }
+}
+
+# Test: kms_key_id output is null by default
+run "test_output_kms_key_id_default" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = output.kms_key_id == null
+    error_message = "kms_key_id output should be null by default."
+  }
+}
+
+# Test: kms_key_id output returns key when provided
+run "test_output_kms_key_id_with_key" {
+  command = plan
+
+  variables {
+    name       = "my-test-bucket"
+    kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  }
+
+  assert {
+    condition     = output.kms_key_id == "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+    error_message = "kms_key_id output should return the provided key."
+  }
+}
