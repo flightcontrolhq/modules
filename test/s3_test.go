@@ -165,12 +165,67 @@ func TestS3WithKmsEncryption(t *testing.T) {
 
 // TestS3WithVersioning provisions an S3 bucket with versioning enabled and validates:
 // - bucket is created correctly
-// - versioning is enabled
-// Note: This requires a fixture that enables versioning
+// - versioning is enabled via Terraform output
+// - versioning is enabled via AWS SDK verification
 func TestS3WithVersioning(t *testing.T) {
-	// Skip this test as it requires a versioning fixture
-	// This test would be enabled when a with_versioning fixture is created
-	t.Skip("Skipping versioning test - requires versioning fixture")
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("s3ver")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/s3/with_versioning",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	bucketId := terraform.Output(t, terraformOptions, "bucket_id")
+	bucketArn := terraform.Output(t, terraformOptions, "bucket_arn")
+	versioningEnabled := terraform.Output(t, terraformOptions, "versioning_enabled")
+	encryptionAlgorithm := terraform.Output(t, terraformOptions, "encryption_algorithm")
+
+	// Assert bucket_id is not empty and matches the expected name
+	require.NotEmpty(t, bucketId, "bucket_id should not be empty")
+	assert.Equal(t, uniqueName, bucketId, "bucket_id should match the provided name")
+
+	// Assert bucket_arn is not empty and has correct format
+	require.NotEmpty(t, bucketArn, "bucket_arn should not be empty")
+	assert.Contains(t, bucketArn, ":s3:::", "bucket_arn should contain ':s3:::'")
+
+	// Assert versioning is enabled via Terraform output
+	assert.Equal(t, "true", versioningEnabled, "versioning_enabled output should be true")
+
+	// Assert encryption defaults to AES256 (SSE-S3)
+	assert.Equal(t, "AES256", encryptionAlgorithm, "encryption_algorithm should be AES256 by default")
+
+	// Use AWS SDK to verify bucket exists
+	bucketExists := helpers.S3BucketExists(t, bucketId, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket should exist in AWS")
+
+	// Use AWS SDK to verify versioning is enabled
+	versioningStatus := helpers.GetS3BucketVersioning(t, bucketId, awsRegion)
+	assert.Equal(t, "Enabled", versioningStatus, "Versioning status from SDK should be 'Enabled'")
+
+	// Use AWS SDK helper to verify versioning is enabled
+	hasVersioning := helpers.S3BucketHasVersioningEnabled(t, bucketId, awsRegion)
+	assert.True(t, hasVersioning, "S3BucketHasVersioningEnabled should return true")
+
+	// Use AWS SDK to verify all public access is blocked (default behavior)
+	publicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, bucketId, awsRegion)
+	assert.True(t, publicAccessBlocked, "S3 bucket should have all public access blocked")
 }
 
 // TestS3WithLifecycle provisions an S3 bucket with lifecycle rules and validates:
