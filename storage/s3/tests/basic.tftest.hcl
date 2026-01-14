@@ -562,3 +562,91 @@ run "test_public_access_block_bucket_reference" {
     error_message = "Public access block should reference the correct bucket."
   }
 }
+
+#-------------------------------------------------------------------------------
+# Server-Side Encryption Tests
+#-------------------------------------------------------------------------------
+
+# Test: encryption uses SSE-S3 (AES256) by default
+run "test_encryption_sse_s3_default" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].apply_server_side_encryption_by_default[0].sse_algorithm) == "AES256"
+    error_message = "Encryption should use SSE-S3 (AES256) by default."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].apply_server_side_encryption_by_default[0].kms_master_key_id) == null
+    error_message = "KMS key should be null when using SSE-S3."
+  }
+}
+
+# Test: encryption uses SSE-KMS when KMS key is provided
+run "test_encryption_sse_kms_with_key" {
+  command = plan
+
+  variables {
+    name       = "test-bucket"
+    kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].apply_server_side_encryption_by_default[0].sse_algorithm) == "aws:kms"
+    error_message = "Encryption should use SSE-KMS when KMS key is provided."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].apply_server_side_encryption_by_default[0].kms_master_key_id) == "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+    error_message = "KMS key should be set when provided."
+  }
+}
+
+# Test: bucket key is enabled by default for SSE-KMS
+run "test_encryption_bucket_key_enabled_default" {
+  command = plan
+
+  variables {
+    name       = "test-bucket"
+    kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].bucket_key_enabled) == true
+    error_message = "Bucket key should be enabled by default for SSE-KMS."
+  }
+}
+
+# Test: bucket key can be disabled for SSE-KMS
+run "test_encryption_bucket_key_disabled" {
+  command = plan
+
+  variables {
+    name               = "test-bucket"
+    kms_key_id         = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+    bucket_key_enabled = false
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].bucket_key_enabled) == false
+    error_message = "Bucket key should be disabled when set to false."
+  }
+}
+
+# Test: encryption references correct bucket
+run "test_encryption_bucket_reference" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket_server_side_encryption_configuration.this.bucket == aws_s3_bucket.this.id
+    error_message = "Encryption configuration should reference the correct bucket."
+  }
+}

@@ -95,13 +95,19 @@ variable "restrict_public_buckets" {
 }
 
 #-------------------------------------------------------------------------------
-# Encryption (placeholders for locals.tf - full implementation in Task 2.4)
+# Encryption
 #-------------------------------------------------------------------------------
 
 variable "kms_key_id" {
   type        = string
-  description = "The AWS KMS key ID to use for server-side encryption. If not specified, SSE-S3 (AES256) encryption is used."
+  description = "The AWS KMS key ID or ARN to use for server-side encryption (SSE-KMS). If not specified, SSE-S3 (AES256) encryption is used."
   default     = null
+}
+
+variable "bucket_key_enabled" {
+  type        = bool
+  description = "Whether to enable S3 Bucket Keys for SSE-KMS, which reduces KMS API costs. Only applicable when kms_key_id is provided."
+  default     = true
 }
 
 #-------------------------------------------------------------------------------
