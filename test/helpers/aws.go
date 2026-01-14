@@ -1720,6 +1720,149 @@ func S3BucketHasExpirationRule(t *testing.T, bucketName string, expectedDays int
 	return false
 }
 
+// S3BucketHasTransitionRule checks if an S3 bucket has a lifecycle rule with a specific transition.
+// ruleId: the ID of the rule to check (can be empty string to match any rule)
+// storageClass: the target storage class (e.g., "STANDARD_IA", "GLACIER", "DEEP_ARCHIVE")
+// days: the number of days after object creation for the transition (0 to match any)
+// Returns true if a matching transition rule is found.
+func S3BucketHasTransitionRule(t *testing.T, bucketName string, ruleId string, storageClass string, days int32, region string) bool {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketLifecycleConfiguration(context.TODO(), input)
+	if err != nil {
+		// No lifecycle configuration means no transition rules
+		return false
+	}
+
+	for _, rule := range result.Rules {
+		// Skip if ruleId is specified and doesn't match
+		if ruleId != "" && (rule.ID == nil || *rule.ID != ruleId) {
+			continue
+		}
+
+		// Check if the rule is enabled
+		if rule.Status != s3types.ExpirationStatusEnabled {
+			continue
+		}
+
+		// Check transitions
+		for _, transition := range rule.Transitions {
+			// Check storage class matches
+			if string(transition.StorageClass) != storageClass {
+				continue
+			}
+
+			// If days is 0, match any days value
+			if days == 0 {
+				return true
+			}
+
+			// Check days matches
+			if transition.Days != nil && *transition.Days == days {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// S3BucketHasNoncurrentVersionExpiration checks if an S3 bucket has a lifecycle rule
+// that expires noncurrent object versions.
+// ruleId: the ID of the rule to check (can be empty string to match any rule)
+// days: the number of days after an object version becomes noncurrent (0 to match any)
+// Returns true if a matching noncurrent version expiration rule is found.
+func S3BucketHasNoncurrentVersionExpiration(t *testing.T, bucketName string, ruleId string, days int32, region string) bool {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketLifecycleConfiguration(context.TODO(), input)
+	if err != nil {
+		// No lifecycle configuration means no noncurrent version expiration rules
+		return false
+	}
+
+	for _, rule := range result.Rules {
+		// Skip if ruleId is specified and doesn't match
+		if ruleId != "" && (rule.ID == nil || *rule.ID != ruleId) {
+			continue
+		}
+
+		// Check if the rule is enabled
+		if rule.Status != s3types.ExpirationStatusEnabled {
+			continue
+		}
+
+		// Check noncurrent version expiration
+		if rule.NoncurrentVersionExpiration != nil {
+			// If days is 0, match any days value
+			if days == 0 {
+				return true
+			}
+
+			// Check days matches
+			if rule.NoncurrentVersionExpiration.NoncurrentDays != nil && *rule.NoncurrentVersionExpiration.NoncurrentDays == days {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// S3BucketHasAbortMultipartUploadRule checks if an S3 bucket has a lifecycle rule
+// that aborts incomplete multipart uploads.
+// ruleId: the ID of the rule to check (can be empty string to match any rule)
+// days: the number of days after initiation to abort incomplete multipart uploads (0 to match any)
+// Returns true if a matching abort multipart upload rule is found.
+func S3BucketHasAbortMultipartUploadRule(t *testing.T, bucketName string, ruleId string, days int32, region string) bool {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketLifecycleConfiguration(context.TODO(), input)
+	if err != nil {
+		// No lifecycle configuration means no abort multipart upload rules
+		return false
+	}
+
+	for _, rule := range result.Rules {
+		// Skip if ruleId is specified and doesn't match
+		if ruleId != "" && (rule.ID == nil || *rule.ID != ruleId) {
+			continue
+		}
+
+		// Check if the rule is enabled
+		if rule.Status != s3types.ExpirationStatusEnabled {
+			continue
+		}
+
+		// Check abort incomplete multipart upload
+		if rule.AbortIncompleteMultipartUpload != nil {
+			// If days is 0, match any days value
+			if days == 0 {
+				return true
+			}
+
+			// Check days matches
+			if rule.AbortIncompleteMultipartUpload.DaysAfterInitiation != nil && *rule.AbortIncompleteMultipartUpload.DaysAfterInitiation == days {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // GetS3BucketVersioning returns the versioning status of an S3 bucket.
 // Returns "Enabled", "Suspended", or "" (empty string if versioning was never enabled).
 func GetS3BucketVersioning(t *testing.T, bucketName string, region string) string {
