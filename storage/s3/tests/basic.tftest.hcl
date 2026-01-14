@@ -711,3 +711,343 @@ run "test_versioning_enabled_variable_default" {
     error_message = "versioning_enabled variable should default to false."
   }
 }
+
+#-------------------------------------------------------------------------------
+# Lifecycle Configuration Tests
+#-------------------------------------------------------------------------------
+
+# Test: no lifecycle configuration when rules are empty
+run "test_lifecycle_rules_empty" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = length(var.lifecycle_rules) == 0
+    error_message = "lifecycle_rules should default to empty list."
+  }
+}
+
+# Test: lifecycle configuration created when rules provided
+run "test_lifecycle_rules_single_expiration" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id      = "expire-old-objects"
+        enabled = true
+        expiration = {
+          days = 90
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_lifecycle_configuration.this) == 1
+    error_message = "Lifecycle configuration should be created when rules are provided."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].id == "expire-old-objects"
+    error_message = "Lifecycle rule should have the correct id."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].status == "Enabled"
+    error_message = "Lifecycle rule should be enabled."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].expiration[0].days == 90
+    error_message = "Lifecycle rule should have correct expiration days."
+  }
+}
+
+# Test: lifecycle rule can be disabled
+run "test_lifecycle_rule_disabled" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id      = "disabled-rule"
+        enabled = false
+        expiration = {
+          days = 30
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].status == "Disabled"
+    error_message = "Lifecycle rule should be disabled when enabled is false."
+  }
+}
+
+# Test: lifecycle rule with prefix filter
+run "test_lifecycle_rule_with_prefix" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id     = "logs-expiration"
+        prefix = "logs/"
+        expiration = {
+          days = 30
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].filter[0].prefix == "logs/"
+    error_message = "Lifecycle rule should have correct prefix filter."
+  }
+}
+
+# Test: lifecycle rule with transitions
+run "test_lifecycle_rule_with_transitions" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id = "archive-old-objects"
+        transitions = [
+          {
+            days          = 30
+            storage_class = "STANDARD_IA"
+          },
+          {
+            days          = 90
+            storage_class = "GLACIER"
+          }
+        ]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_lifecycle_configuration.this[0].rule[0].transition) == 2
+    error_message = "Lifecycle rule should have two transitions."
+  }
+
+  assert {
+    condition     = anytrue([for t in aws_s3_bucket_lifecycle_configuration.this[0].rule[0].transition : t.storage_class == "STANDARD_IA"])
+    error_message = "Should have a transition to STANDARD_IA."
+  }
+
+  assert {
+    condition     = anytrue([for t in aws_s3_bucket_lifecycle_configuration.this[0].rule[0].transition : t.storage_class == "GLACIER"])
+    error_message = "Should have a transition to GLACIER."
+  }
+}
+
+# Test: lifecycle rule with abort incomplete multipart upload
+run "test_lifecycle_rule_abort_incomplete_multipart" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id                                     = "cleanup-incomplete-uploads"
+        abort_incomplete_multipart_upload_days = 7
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].abort_incomplete_multipart_upload[0].days_after_initiation == 7
+    error_message = "Abort incomplete multipart upload should be set to 7 days."
+  }
+}
+
+# Test: lifecycle rule with noncurrent version expiration
+run "test_lifecycle_rule_noncurrent_version_expiration" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id = "expire-old-versions"
+        noncurrent_version_expiration = {
+          noncurrent_days = 90
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].noncurrent_version_expiration[0].noncurrent_days == 90
+    error_message = "Noncurrent version expiration should be set to 90 days."
+  }
+}
+
+# Test: lifecycle rule with noncurrent version transitions
+run "test_lifecycle_rule_noncurrent_version_transitions" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id = "archive-old-versions"
+        noncurrent_version_transitions = [
+          {
+            noncurrent_days = 30
+            storage_class   = "GLACIER"
+          }
+        ]
+      }
+    ]
+  }
+
+  assert {
+    condition     = anytrue([for t in aws_s3_bucket_lifecycle_configuration.this[0].rule[0].noncurrent_version_transition : t.storage_class == "GLACIER"])
+    error_message = "Noncurrent version transition should be to GLACIER."
+  }
+}
+
+# Test: multiple lifecycle rules
+run "test_multiple_lifecycle_rules" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id     = "logs-expiration"
+        prefix = "logs/"
+        expiration = {
+          days = 30
+        }
+      },
+      {
+        id     = "archives-transition"
+        prefix = "archives/"
+        transitions = [
+          {
+            days          = 60
+            storage_class = "GLACIER"
+          }
+        ]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_lifecycle_configuration.this[0].rule) == 2
+    error_message = "Should have two lifecycle rules."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].id == "logs-expiration"
+    error_message = "First rule should be logs-expiration."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[1].id == "archives-transition"
+    error_message = "Second rule should be archives-transition."
+  }
+}
+
+# Test: lifecycle rule enabled defaults to true
+run "test_lifecycle_rule_enabled_default" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id = "default-enabled-rule"
+        expiration = {
+          days = 30
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].rule[0].status == "Enabled"
+    error_message = "Lifecycle rule should be enabled by default."
+  }
+}
+
+# Test: lifecycle configuration references correct bucket
+run "test_lifecycle_bucket_reference" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+    lifecycle_rules = [
+      {
+        id = "test-rule"
+        expiration = {
+          days = 30
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.this[0].bucket == aws_s3_bucket.this.id
+    error_message = "Lifecycle configuration should reference the correct bucket."
+  }
+}
+
+# Test: invalid storage class in transitions rejected
+run "test_lifecycle_invalid_storage_class" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id = "invalid-rule"
+        transitions = [
+          {
+            days          = 30
+            storage_class = "INVALID_CLASS"
+          }
+        ]
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.lifecycle_rules,
+  ]
+}
+
+# Test: empty rule id rejected
+run "test_lifecycle_empty_rule_id" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    lifecycle_rules = [
+      {
+        id = ""
+        expiration = {
+          days = 30
+        }
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.lifecycle_rules,
+  ]
+}

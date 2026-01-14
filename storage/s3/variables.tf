@@ -121,13 +121,88 @@ variable "versioning_enabled" {
 }
 
 #-------------------------------------------------------------------------------
-# Lifecycle (placeholders for locals.tf - full implementation in Task 3.1)
+# Lifecycle Rules
 #-------------------------------------------------------------------------------
 
 variable "lifecycle_rules" {
-  type        = any
-  description = "List of lifecycle rule configurations for the bucket. Each rule can include expiration, transitions, and abort incomplete multipart upload settings."
+  type = list(object({
+    id      = string
+    enabled = optional(bool, true)
+
+    # Filter settings (at least one filter is required by AWS)
+    prefix = optional(string)
+    tags   = optional(map(string))
+
+    # Expiration settings
+    expiration = optional(object({
+      days                         = optional(number)
+      date                         = optional(string)
+      expired_object_delete_marker = optional(bool)
+    }))
+
+    # Noncurrent version expiration (for versioned buckets)
+    noncurrent_version_expiration = optional(object({
+      noncurrent_days           = optional(number)
+      newer_noncurrent_versions = optional(number)
+    }))
+
+    # Transitions to different storage classes
+    transitions = optional(list(object({
+      days          = optional(number)
+      date          = optional(string)
+      storage_class = string
+    })), [])
+
+    # Noncurrent version transitions
+    noncurrent_version_transitions = optional(list(object({
+      noncurrent_days           = optional(number)
+      newer_noncurrent_versions = optional(number)
+      storage_class             = string
+    })), [])
+
+    # Abort incomplete multipart uploads
+    abort_incomplete_multipart_upload_days = optional(number)
+  }))
+  description = <<-EOT
+    List of lifecycle rule configurations for the bucket. Each rule can include:
+    - id: Unique identifier for the rule (required)
+    - enabled: Whether the rule is enabled (default: true)
+    - prefix: Object key prefix to filter objects (optional)
+    - tags: Tags to filter objects (optional)
+    - expiration: Settings for expiring current objects
+    - noncurrent_version_expiration: Settings for expiring noncurrent versions
+    - transitions: List of transitions to different storage classes
+    - noncurrent_version_transitions: Transitions for noncurrent versions
+    - abort_incomplete_multipart_upload_days: Days after which incomplete multipart uploads are aborted
+  EOT
   default     = []
+
+  validation {
+    condition     = alltrue([for rule in var.lifecycle_rules : rule.id != null && rule.id != ""])
+    error_message = "Each lifecycle rule must have a non-empty 'id'."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.lifecycle_rules :
+      alltrue([
+        for transition in coalesce(rule.transitions, []) :
+        contains(["GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE", "GLACIER_IR"], transition.storage_class)
+      ])
+    ])
+    error_message = "Transition storage_class must be one of: GLACIER, STANDARD_IA, ONEZONE_IA, INTELLIGENT_TIERING, DEEP_ARCHIVE, GLACIER_IR."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.lifecycle_rules :
+      alltrue([
+        for transition in coalesce(rule.noncurrent_version_transitions, []) :
+        contains(["GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE", "GLACIER_IR"], transition.storage_class)
+      ])
+    ])
+    error_message = "Noncurrent version transition storage_class must be one of: GLACIER, STANDARD_IA, ONEZONE_IA, INTELLIGENT_TIERING, DEEP_ARCHIVE, GLACIER_IR."
+  }
 }
 
 #-------------------------------------------------------------------------------
