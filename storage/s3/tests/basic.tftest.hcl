@@ -1329,3 +1329,197 @@ run "test_custom_policy_invalid_json" {
     var.custom_policy,
   ]
 }
+
+#-------------------------------------------------------------------------------
+# Bucket Policy Resource Tests
+#-------------------------------------------------------------------------------
+
+# Test: no bucket policy created when no templates or custom policy
+run "test_bucket_policy_not_created_by_default" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_policy.this) == 0
+    error_message = "Bucket policy should not be created when no templates or custom policy specified."
+  }
+}
+
+# Test: bucket policy created when policy_templates specified
+run "test_bucket_policy_created_with_templates" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_policy.this) == 1
+    error_message = "Bucket policy should be created when policy_templates specified."
+  }
+}
+
+# Test: bucket policy created when custom_policy specified
+run "test_bucket_policy_created_with_custom_policy" {
+  command = plan
+
+  variables {
+    name          = "test-bucket"
+    custom_policy = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"CustomStatement\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::test-bucket/*\"}]}"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_policy.this) == 1
+    error_message = "Bucket policy should be created when custom_policy specified."
+  }
+}
+
+# Test: bucket policy references correct bucket
+run "test_bucket_policy_bucket_reference" {
+  command = plan
+
+  variables {
+    name             = "my-test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_policy.this[0].bucket == aws_s3_bucket.this.id
+    error_message = "Bucket policy should reference the correct bucket."
+  }
+}
+
+# Test: bucket policy has correct policy version
+run "test_bucket_policy_version" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+  }
+
+  assert {
+    condition     = jsondecode(aws_s3_bucket_policy.this[0].policy).Version == "2012-10-17"
+    error_message = "Bucket policy should have Version 2012-10-17."
+  }
+}
+
+# Test: bucket policy contains template statements
+run "test_bucket_policy_contains_template_statements" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 1
+    error_message = "Bucket policy should contain 1 statement from template."
+  }
+
+  assert {
+    condition     = jsondecode(aws_s3_bucket_policy.this[0].policy).Statement[0].Sid == "DenyInsecureTransport"
+    error_message = "Bucket policy should contain DenyInsecureTransport statement."
+  }
+}
+
+# Test: bucket policy contains custom policy statements
+run "test_bucket_policy_contains_custom_statements" {
+  command = plan
+
+  variables {
+    name          = "test-bucket"
+    custom_policy = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"CustomReadAccess\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::test-bucket/*\"}]}"
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 1
+    error_message = "Bucket policy should contain 1 statement from custom policy."
+  }
+
+  assert {
+    condition     = jsondecode(aws_s3_bucket_policy.this[0].policy).Statement[0].Sid == "CustomReadAccess"
+    error_message = "Bucket policy should contain CustomReadAccess statement."
+  }
+}
+
+# Test: bucket policy merges template and custom statements
+run "test_bucket_policy_merges_template_and_custom" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+    custom_policy    = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"CustomReadAccess\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::test-bucket/*\"}]}"
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 2
+    error_message = "Bucket policy should contain 2 statements (1 template + 1 custom)."
+  }
+}
+
+# Test: bucket policy with multiple templates
+run "test_bucket_policy_multiple_templates" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport", "alb_access_logs"]
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 4
+    error_message = "Bucket policy should contain 4 statements (1 + 3 from templates)."
+  }
+}
+
+# Test: bucket policy with all templates
+run "test_bucket_policy_all_templates" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"]
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 8
+    error_message = "Bucket policy should contain 8 statements from all templates."
+  }
+}
+
+# Test: bucket policy ALB access logs has correct resource ARN
+run "test_bucket_policy_alb_logs_resource_arn" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["alb_access_logs"]
+  }
+
+  assert {
+    condition     = can(regex("AWSLogs/123456789012/", jsondecode(aws_s3_bucket_policy.this[0].policy).Statement[0].Resource))
+    error_message = "ALB logs policy should reference correct account ID in resource ARN."
+  }
+}
+
+# Test: bucket policy VPC flow logs uses correct region
+run "test_bucket_policy_vpc_flow_logs_region" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["vpc_flow_logs"]
+  }
+
+  assert {
+    condition     = can(regex("us-east-1", jsondecode(aws_s3_bucket_policy.this[0].policy).Statement[0].Condition.ArnLike["aws:SourceArn"]))
+    error_message = "VPC flow logs policy should use correct region."
+  }
+}
