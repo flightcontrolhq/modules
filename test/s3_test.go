@@ -97,12 +97,70 @@ func TestS3Basic(t *testing.T) {
 // TestS3WithKmsEncryption provisions an S3 bucket with SSE-KMS encryption and validates:
 // - bucket is created correctly
 // - bucket uses SSE-KMS encryption with the provided key
-// Note: This test requires a KMS key to exist, so we skip it if no key is available.
-// For full integration testing, a fixture with KMS key creation should be used.
+// - bucket key is enabled for cost optimization
 func TestS3WithKmsEncryption(t *testing.T) {
-	// Skip this test as it requires a KMS key fixture
-	// This test would be enabled when a with_kms fixture is created
-	t.Skip("Skipping KMS encryption test - requires KMS key fixture")
+	t.Parallel()
+
+	// Get AWS region from environment or use default
+	awsRegion := helpers.GetAwsRegion()
+
+	// Generate a unique name for this test run
+	uniqueName := helpers.UniqueResourceName("s3kms")
+
+	// Configure Terraform options
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: "./fixtures/s3/with_kms",
+		Vars: map[string]interface{}{
+			"name":   uniqueName,
+			"region": awsRegion,
+		},
+	})
+
+	// Ensure cleanup happens even if the test fails
+	defer terraform.Destroy(t, terraformOptions)
+
+	// Initialize and apply the Terraform configuration
+	terraform.InitAndApply(t, terraformOptions)
+
+	// Get outputs
+	bucketId := terraform.Output(t, terraformOptions, "bucket_id")
+	bucketArn := terraform.Output(t, terraformOptions, "bucket_arn")
+	encryptionAlgorithm := terraform.Output(t, terraformOptions, "encryption_algorithm")
+	kmsKeyIdOutput := terraform.Output(t, terraformOptions, "kms_key_id")
+	kmsKeyArn := terraform.Output(t, terraformOptions, "kms_key_arn")
+
+	// Assert bucket_id is not empty and matches the expected name
+	require.NotEmpty(t, bucketId, "bucket_id should not be empty")
+	assert.Equal(t, uniqueName, bucketId, "bucket_id should match the provided name")
+
+	// Assert bucket_arn is not empty and has correct format
+	require.NotEmpty(t, bucketArn, "bucket_arn should not be empty")
+	assert.Contains(t, bucketArn, ":s3:::", "bucket_arn should contain ':s3:::'")
+
+	// Assert encryption is SSE-KMS (aws:kms)
+	assert.Equal(t, "aws:kms", encryptionAlgorithm, "encryption_algorithm should be aws:kms for SSE-KMS")
+
+	// Assert KMS key ID output matches the created KMS key ARN
+	require.NotEmpty(t, kmsKeyIdOutput, "kms_key_id output should not be empty")
+	require.NotEmpty(t, kmsKeyArn, "kms_key_arn should not be empty")
+	assert.Equal(t, kmsKeyArn, kmsKeyIdOutput, "kms_key_id should match the created KMS key ARN")
+
+	// Use AWS SDK to verify bucket exists
+	bucketExists := helpers.S3BucketExists(t, bucketId, awsRegion)
+	assert.True(t, bucketExists, "S3 bucket should exist in AWS")
+
+	// Use AWS SDK to verify encryption is SSE-KMS with correct key
+	algorithm, kmsKeyId := helpers.GetS3BucketEncryption(t, bucketId, awsRegion)
+	assert.Equal(t, "aws:kms", algorithm, "Encryption algorithm should be aws:kms")
+	assert.Equal(t, kmsKeyArn, kmsKeyId, "KMS key ID from SDK should match the created KMS key ARN")
+
+	// Use AWS SDK to verify bucket key is enabled
+	bucketKeyEnabled := helpers.S3BucketHasBucketKeyEnabled(t, bucketId, awsRegion)
+	assert.True(t, bucketKeyEnabled, "Bucket key should be enabled for SSE-KMS")
+
+	// Use AWS SDK to verify all public access is blocked (default behavior)
+	publicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, bucketId, awsRegion)
+	assert.True(t, publicAccessBlocked, "S3 bucket should have all public access blocked")
 }
 
 // TestS3WithVersioning provisions an S3 bucket with versioning enabled and validates:
