@@ -1051,3 +1051,206 @@ run "test_lifecycle_empty_rule_id" {
     var.lifecycle_rules,
   ]
 }
+
+#-------------------------------------------------------------------------------
+# Policy Template Tests
+#-------------------------------------------------------------------------------
+
+# Test: policy_templates defaults to empty list
+run "test_policy_templates_default_empty" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = length(var.policy_templates) == 0
+    error_message = "policy_templates should default to empty list."
+  }
+}
+
+# Test: deny_insecure_transport template produces valid statements
+run "test_policy_template_deny_insecure_transport" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 1
+    error_message = "deny_insecure_transport template should produce 1 statement."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Sid == "DenyInsecureTransport"
+    error_message = "deny_insecure_transport statement should have correct Sid."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Effect == "Deny"
+    error_message = "deny_insecure_transport statement should have Deny effect."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Action == "s3:*"
+    error_message = "deny_insecure_transport statement should deny all S3 actions."
+  }
+}
+
+# Test: alb_access_logs template produces valid statements
+run "test_policy_template_alb_access_logs" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["alb_access_logs"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 3
+    error_message = "alb_access_logs template should produce 3 statements."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Sid == "AllowELBRootAccount"
+    error_message = "First statement should be AllowELBRootAccount."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[1].Sid == "AllowELBLogDelivery"
+    error_message = "Second statement should be AllowELBLogDelivery."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[2].Sid == "AllowELBLogDeliveryAclCheck"
+    error_message = "Third statement should be AllowELBLogDeliveryAclCheck."
+  }
+}
+
+# Test: nlb_access_logs template produces valid statements
+run "test_policy_template_nlb_access_logs" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["nlb_access_logs"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 2
+    error_message = "nlb_access_logs template should produce 2 statements."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Sid == "AllowNLBLogDelivery"
+    error_message = "First statement should be AllowNLBLogDelivery."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[1].Sid == "AllowNLBLogDeliveryAclCheck"
+    error_message = "Second statement should be AllowNLBLogDeliveryAclCheck."
+  }
+}
+
+# Test: vpc_flow_logs template produces valid statements
+run "test_policy_template_vpc_flow_logs" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["vpc_flow_logs"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 2
+    error_message = "vpc_flow_logs template should produce 2 statements."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Sid == "AWSLogDeliveryAclCheck"
+    error_message = "First statement should be AWSLogDeliveryAclCheck."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[1].Sid == "AWSLogDeliveryWrite"
+    error_message = "Second statement should be AWSLogDeliveryWrite."
+  }
+}
+
+# Test: multiple policy templates can be combined
+run "test_policy_templates_combined" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["deny_insecure_transport", "alb_access_logs"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 4
+    error_message = "Combined templates should produce 4 statements (1 + 3)."
+  }
+}
+
+# Test: policy template uses correct account_id from data source
+run "test_policy_template_uses_account_id" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["alb_access_logs"]
+  }
+
+  assert {
+    condition     = local.account_id == "123456789012"
+    error_message = "Policy template should use account_id from data source."
+  }
+}
+
+# Test: policy template uses correct region from data source
+run "test_policy_template_uses_region" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["vpc_flow_logs"]
+  }
+
+  assert {
+    condition     = local.region == "us-east-1"
+    error_message = "Policy template should use region id from data source."
+  }
+}
+
+# Test: policy template uses correct ELB service account ARN
+run "test_policy_template_uses_elb_service_account" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["alb_access_logs"]
+  }
+
+  assert {
+    condition     = local.elb_service_arn == "arn:aws:iam::127311923021:root"
+    error_message = "Policy template should use ELB service account ARN from data source."
+  }
+}
+
+# Test: unknown policy template is ignored (returns empty)
+run "test_policy_template_unknown_ignored" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["unknown_template"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 0
+    error_message = "Unknown policy template should be ignored and return empty list."
+  }
+}
