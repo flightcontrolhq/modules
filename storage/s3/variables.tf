@@ -6,7 +6,55 @@
 # Required Variables
 #-------------------------------------------------------------------------------
 
-# Note: The 'name' variable and its comprehensive validation will be added in Task 2.1
+variable "name" {
+  type        = string
+  description = "The name of the S3 bucket. Must be globally unique and follow AWS S3 bucket naming rules."
+
+  validation {
+    condition     = length(var.name) >= 3
+    error_message = "Bucket name must be at least 3 characters long."
+  }
+
+  validation {
+    condition     = length(var.name) <= 63
+    error_message = "Bucket name must not exceed 63 characters."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9]", var.name))
+    error_message = "Bucket name must start with a lowercase letter or number."
+  }
+
+  validation {
+    condition     = can(regex("[a-z0-9]$", var.name))
+    error_message = "Bucket name must end with a lowercase letter or number."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+$", var.name))
+    error_message = "Bucket name can only contain lowercase letters, numbers, hyphens, and periods."
+  }
+
+  validation {
+    condition     = !can(regex("\\.\\.", var.name))
+    error_message = "Bucket name must not contain consecutive periods."
+  }
+
+  validation {
+    condition     = !can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$", var.name))
+    error_message = "Bucket name must not be formatted as an IP address."
+  }
+}
+
+#-------------------------------------------------------------------------------
+# Bucket Configuration
+#-------------------------------------------------------------------------------
+
+variable "force_destroy" {
+  type        = bool
+  description = "Whether to force destroy the bucket even if it contains objects. Use with caution."
+  default     = false
+}
 
 #-------------------------------------------------------------------------------
 # Tags
