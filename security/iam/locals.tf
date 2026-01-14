@@ -15,7 +15,6 @@ locals {
   # Feature detection flags
   has_trusted_services         = length(var.trusted_services) > 0
   has_aws_principals           = length(var.trusted_aws_principals) > 0
-  has_oidc_providers           = length(var.trusted_oidc_providers) > 0
   has_saml_providers           = length(var.trusted_saml_providers) > 0
   use_custom_policy            = var.custom_assume_role_policy != null
   has_inline_policy_statements = length(var.inline_policy_statements) > 0
