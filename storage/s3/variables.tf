@@ -111,6 +111,16 @@ variable "bucket_key_enabled" {
 }
 
 #-------------------------------------------------------------------------------
+# Versioning
+#-------------------------------------------------------------------------------
+
+variable "versioning_enabled" {
+  type        = bool
+  description = "Whether to enable versioning for the S3 bucket. When enabled, S3 keeps multiple versions of an object in the same bucket."
+  default     = false
+}
+
+#-------------------------------------------------------------------------------
 # Lifecycle (placeholders for locals.tf - full implementation in Task 3.1)
 #-------------------------------------------------------------------------------
 

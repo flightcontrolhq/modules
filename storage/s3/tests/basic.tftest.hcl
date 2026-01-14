@@ -650,3 +650,64 @@ run "test_encryption_bucket_reference" {
     error_message = "Encryption configuration should reference the correct bucket."
   }
 }
+
+#-------------------------------------------------------------------------------
+# Versioning Tests
+#-------------------------------------------------------------------------------
+
+# Test: versioning is disabled by default
+run "test_versioning_disabled_default" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket_versioning.this.versioning_configuration[0].status == "Disabled"
+    error_message = "Versioning should be disabled by default."
+  }
+}
+
+# Test: versioning can be enabled
+run "test_versioning_enabled" {
+  command = plan
+
+  variables {
+    name               = "test-bucket"
+    versioning_enabled = true
+  }
+
+  assert {
+    condition     = aws_s3_bucket_versioning.this.versioning_configuration[0].status == "Enabled"
+    error_message = "Versioning should be enabled when versioning_enabled is true."
+  }
+}
+
+# Test: versioning references correct bucket
+run "test_versioning_bucket_reference" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+  }
+
+  assert {
+    condition     = aws_s3_bucket_versioning.this.bucket == aws_s3_bucket.this.id
+    error_message = "Versioning configuration should reference the correct bucket."
+  }
+}
+
+# Test: versioning_enabled variable defaults to false
+run "test_versioning_enabled_variable_default" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = var.versioning_enabled == false
+    error_message = "versioning_enabled variable should default to false."
+  }
+}
