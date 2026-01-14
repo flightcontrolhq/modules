@@ -1742,6 +1742,33 @@ func S3BucketHasVersioningEnabled(t *testing.T, bucketName string, region string
 	return status == string(s3types.BucketVersioningStatusEnabled)
 }
 
+// S3BucketHasBucketKeyEnabled checks if an S3 bucket has bucket key enabled for SSE-KMS.
+// Bucket keys reduce AWS KMS request costs by decreasing the request traffic from S3 to KMS.
+// Returns true if bucket key is enabled, false otherwise (including for SSE-S3 buckets).
+func S3BucketHasBucketKeyEnabled(t *testing.T, bucketName string, region string) bool {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketEncryptionInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketEncryption(context.TODO(), input)
+	if err != nil {
+		// If there's an error getting encryption config, bucket key is not enabled
+		return false
+	}
+
+	if result.ServerSideEncryptionConfiguration != nil {
+		for _, rule := range result.ServerSideEncryptionConfiguration.Rules {
+			if rule.BucketKeyEnabled != nil && *rule.BucketKeyEnabled {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // GetS3BucketTags returns the tags for an S3 bucket as a map.
 // Returns an empty map if the bucket has no tags or if fetching tags fails.
 func GetS3BucketTags(t *testing.T, bucketName string, region string) map[string]string {
