@@ -1776,6 +1776,74 @@ func S3BucketHasTag(t *testing.T, bucketName string, key string, expectedValue s
 	return exists && value == expectedValue
 }
 
+// GetS3BucketPolicy returns the bucket policy for an S3 bucket as a JSON string.
+// Returns an empty string if the bucket has no policy.
+func GetS3BucketPolicy(t *testing.T, bucketName string, region string) string {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketPolicyInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketPolicy(context.TODO(), input)
+	if err != nil {
+		// NoSuchBucketPolicy error means the bucket has no policy, which is not an error
+		// Return empty string in this case
+		return ""
+	}
+
+	if result.Policy != nil {
+		return *result.Policy
+	}
+
+	return ""
+}
+
+// S3BucketHasPolicy checks if an S3 bucket has a bucket policy attached.
+// Returns true if the bucket has a policy, false otherwise.
+func S3BucketHasPolicy(t *testing.T, bucketName string, region string) bool {
+	policy := GetS3BucketPolicy(t, bucketName, region)
+	return policy != ""
+}
+
+// S3BucketPolicyContainsStatement checks if an S3 bucket policy contains a statement with the specified Sid.
+// Returns true if a statement with the given Sid exists in the policy, false otherwise.
+// Note: This performs a simple string search for the Sid pattern in the policy JSON.
+// For more complex policy analysis, consider parsing the JSON.
+func S3BucketPolicyContainsStatement(t *testing.T, bucketName string, statementSid string, region string) bool {
+	policy := GetS3BucketPolicy(t, bucketName, region)
+	if policy == "" {
+		return false
+	}
+
+	// Simple string search for the Sid pattern
+	// This looks for patterns like: "Sid": "StatementName" or "Sid":"StatementName"
+	// We check for both quoted formats that could appear in JSON
+	patterns := []string{
+		`"Sid": "` + statementSid + `"`,
+		`"Sid":"` + statementSid + `"`,
+	}
+
+	for _, pattern := range patterns {
+		if containsString(policy, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// containsString checks if a string contains a substring.
+// This is a simple helper to avoid importing strings package just for Contains.
+func containsString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 // GetLoadBalancerAccessLogsEnabled checks if access logs are enabled for a load balancer.
 // Returns true if the access_logs.s3.enabled attribute is "true".
 func GetLoadBalancerAccessLogsEnabled(t *testing.T, lbArn string, region string) bool {
