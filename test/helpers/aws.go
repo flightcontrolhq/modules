@@ -1742,6 +1742,40 @@ func S3BucketHasVersioningEnabled(t *testing.T, bucketName string, region string
 	return status == string(s3types.BucketVersioningStatusEnabled)
 }
 
+// GetS3BucketTags returns the tags for an S3 bucket as a map.
+// Returns an empty map if the bucket has no tags or if fetching tags fails.
+func GetS3BucketTags(t *testing.T, bucketName string, region string) map[string]string {
+	client := getS3Client(t, region)
+
+	input := &s3.GetBucketTaggingInput{
+		Bucket: &bucketName,
+	}
+
+	result, err := client.GetBucketTagging(context.TODO(), input)
+	if err != nil {
+		// NoSuchTagSet error means the bucket has no tags, which is not an error
+		// Return empty map in this case
+		return make(map[string]string)
+	}
+
+	tags := make(map[string]string)
+	for _, tag := range result.TagSet {
+		if tag.Key != nil && tag.Value != nil {
+			tags[*tag.Key] = *tag.Value
+		}
+	}
+
+	return tags
+}
+
+// S3BucketHasTag checks if an S3 bucket has a specific tag with the expected value.
+// Returns true if the tag exists and its value matches expectedValue.
+func S3BucketHasTag(t *testing.T, bucketName string, key string, expectedValue string, region string) bool {
+	tags := GetS3BucketTags(t, bucketName, region)
+	value, exists := tags[key]
+	return exists && value == expectedValue
+}
+
 // GetLoadBalancerAccessLogsEnabled checks if access logs are enabled for a load balancer.
 // Returns true if the access_logs.s3.enabled attribute is "true".
 func GetLoadBalancerAccessLogsEnabled(t *testing.T, lbArn string, region string) bool {
