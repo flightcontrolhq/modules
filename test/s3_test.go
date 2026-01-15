@@ -89,9 +89,10 @@ func TestS3Basic(t *testing.T) {
 	publicAccessBlocked := helpers.S3BucketHasPublicAccessBlocked(t, bucketId, awsRegion)
 	assert.True(t, publicAccessBlocked, "S3 bucket should have all public access blocked")
 
-	// Use AWS SDK to verify versioning is disabled
+	// Use AWS SDK to verify versioning is not enabled
+	// AWS returns "" (empty) for buckets that never had versioning, or "Suspended" if it was disabled
 	versioningStatus := helpers.GetS3BucketVersioning(t, bucketId, awsRegion)
-	assert.Equal(t, "Disabled", versioningStatus, "Versioning should be disabled")
+	assert.NotEqual(t, "Enabled", versioningStatus, "Versioning should not be enabled")
 }
 
 // TestS3WithKmsEncryption provisions an S3 bucket with SSE-KMS encryption and validates:

@@ -1,6 +1,6 @@
 # Makefile for Ravion Modules
 
-.PHONY: help test test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests
+.PHONY: help test test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests
 
 TIMEOUT ?= 180m
 PARALLEL ?= 3
@@ -27,6 +27,7 @@ help:
 	@echo "  test-ecs-cluster     Run ECS Cluster tests"
 	@echo "  test-ecs-service     Run ECS Service tests"
 	@echo "  test-elasticache     Run ElastiCache tests"
+	@echo "  test-s3              Run S3 module tests"
 	@echo ""
 	@echo "Cleanup Targets:"
 	@echo "  test-cleanup         Clean up orphaned test resources"
@@ -100,6 +101,10 @@ test-ecs-service:
 test-elasticache:
 	@echo "Running ElastiCache tests..."
 	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestElastiCache ./...)
+
+test-s3:
+	@echo "Running S3 tests..."
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestS3 ./...)
 
 test-cleanup:
 	@echo "Cleaning up orphaned terratest resources..."

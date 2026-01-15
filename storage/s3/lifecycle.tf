@@ -15,18 +15,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       status = rule.value.enabled ? "Enabled" : "Disabled"
 
       # Filter block - required by AWS
-      filter {
-        # Use prefix if specified
-        prefix = rule.value.prefix
+      # When tags are present, use 'and' block; otherwise use simple prefix filter
+      dynamic "filter" {
+        for_each = rule.value.tags == null || length(try(rule.value.tags, {})) == 0 ? [1] : []
 
-        # Use and block for tags or prefix+tags combination
-        dynamic "and" {
-          for_each = rule.value.tags != null && length(rule.value.tags) > 0 ? [1] : []
+        content {
+          prefix = rule.value.prefix != null ? rule.value.prefix : ""
+        }
+      }
 
-          content {
-            prefix = rule.value.prefix
+      dynamic "filter" {
+        for_each = rule.value.tags != null && length(rule.value.tags) > 0 ? [1] : []
 
-            tags = rule.value.tags
+        content {
+          and {
+            prefix = rule.value.prefix != null ? rule.value.prefix : ""
+            tags   = rule.value.tags
           }
         }
       }
