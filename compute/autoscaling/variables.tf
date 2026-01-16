@@ -728,3 +728,54 @@ variable "instance_refresh" {
     error_message = "All checkpoint_percentages must be between 0 and 100."
   }
 }
+
+################################################################################
+# Warm Pool
+################################################################################
+
+variable "warm_pool" {
+  type = object({
+    # Pool state determines the state of instances in the warm pool
+    # "Stopped" - Instances are stopped (default, cost-effective)
+    # "Running" - Instances are running (fastest launch, higher cost)
+    # "Hibernated" - Instances are hibernated (preserves memory state)
+    pool_state = optional(string, "Stopped")
+
+    # Minimum number of instances to maintain in the warm pool
+    min_size = optional(number, 0)
+
+    # Maximum number of instances that can be in the warm pool or in a pending state
+    # If not specified, the warm pool has no max capacity limit
+    max_group_prepared_capacity = optional(number)
+
+    # Instance reuse policy configuration
+    instance_reuse_policy = optional(object({
+      # Whether to return instances to the warm pool on scale in
+      reuse_on_scale_in = optional(bool, false)
+    }))
+  })
+  description = "Configuration for warm pool to maintain pre-initialized instances for faster scaling."
+  default     = null
+
+  validation {
+    condition = var.warm_pool == null || (
+      contains(["Stopped", "Running", "Hibernated"], coalesce(var.warm_pool.pool_state, "Stopped"))
+    )
+    error_message = "The pool_state must be 'Stopped', 'Running', or 'Hibernated'."
+  }
+
+  validation {
+    condition = var.warm_pool == null || (
+      coalesce(var.warm_pool.min_size, 0) >= 0
+    )
+    error_message = "The warm_pool min_size must be 0 or greater."
+  }
+
+  validation {
+    condition = var.warm_pool == null || (
+      var.warm_pool.max_group_prepared_capacity == null ||
+      var.warm_pool.max_group_prepared_capacity >= 0
+    )
+    error_message = "The max_group_prepared_capacity must be null or 0 or greater."
+  }
+}
