@@ -1159,3 +1159,201 @@ variable "scaling_policies" {
     error_message = "Each max_capacity_buffer must be between 0 and 100."
   }
 }
+
+################################################################################
+# Notifications
+################################################################################
+
+variable "notifications" {
+  type = object({
+    # ARN of the SNS topic to send notifications to (required)
+    topic_arn = string
+
+    # List of notification types to send (optional, defaults to all)
+    # Valid values:
+    # - "autoscaling:EC2_INSTANCE_LAUNCH" - Instance launched
+    # - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR" - Instance launch failed
+    # - "autoscaling:EC2_INSTANCE_TERMINATE" - Instance terminated
+    # - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR" - Instance termination failed
+    # - "autoscaling:TEST_NOTIFICATION" - Test notification
+    notifications = optional(list(string), [
+      "autoscaling:EC2_INSTANCE_LAUNCH",
+      "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+      "autoscaling:EC2_INSTANCE_TERMINATE",
+      "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+    ])
+  })
+  description = "Configuration for SNS notifications when Auto Scaling events occur."
+  default     = null
+
+  validation {
+    condition = var.notifications == null || (
+      can(regex("^arn:aws:sns:", var.notifications.topic_arn))
+    )
+    error_message = "The topic_arn must be a valid SNS topic ARN starting with 'arn:aws:sns:'."
+  }
+
+  validation {
+    condition = var.notifications == null || (
+      alltrue([
+        for notification in coalesce(var.notifications.notifications, []) :
+        contains([
+          "autoscaling:EC2_INSTANCE_LAUNCH",
+          "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+          "autoscaling:EC2_INSTANCE_TERMINATE",
+          "autoscaling:EC2_INSTANCE_TERMINATE_ERROR",
+          "autoscaling:TEST_NOTIFICATION"
+        ], notification)
+      ])
+    )
+    error_message = "Each notification must be one of: 'autoscaling:EC2_INSTANCE_LAUNCH', 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR', 'autoscaling:EC2_INSTANCE_TERMINATE', 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR', 'autoscaling:TEST_NOTIFICATION'."
+  }
+}
+
+################################################################################
+# Traffic Sources
+################################################################################
+
+variable "traffic_sources" {
+  type = list(object({
+    # Identifier for the traffic source (required)
+    # For elbv2: Target group ARN
+    # For vpc-lattice: VPC Lattice target group ARN
+    identifier = string
+
+    # Type of traffic source (required)
+    # "elbv2" - Elastic Load Balancing v2 target group
+    # "vpc-lattice" - VPC Lattice target group
+    type = string
+  }))
+  description = "List of traffic source attachments for the Auto Scaling Group. Supports ELBv2 and VPC Lattice target groups."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for ts in var.traffic_sources :
+      contains(["elbv2", "vpc-lattice"], ts.type)
+    ])
+    error_message = "Each traffic source type must be 'elbv2' or 'vpc-lattice'."
+  }
+
+  validation {
+    condition = alltrue([
+      for ts in var.traffic_sources :
+      ts.type != "elbv2" || can(regex("^arn:aws:elasticloadbalancing:", ts.identifier))
+    ])
+    error_message = "Traffic sources with type 'elbv2' must have an identifier that is a valid ELBv2 ARN starting with 'arn:aws:elasticloadbalancing:'."
+  }
+
+  validation {
+    condition = alltrue([
+      for ts in var.traffic_sources :
+      ts.type != "vpc-lattice" || can(regex("^arn:aws:vpc-lattice:", ts.identifier))
+    ])
+    error_message = "Traffic sources with type 'vpc-lattice' must have an identifier that is a valid VPC Lattice ARN starting with 'arn:aws:vpc-lattice:'."
+  }
+}
+
+################################################################################
+# Scheduled Actions
+################################################################################
+
+variable "schedules" {
+  type = list(object({
+    # Name of the scheduled action (required)
+    name = string
+
+    # Minimum size for the scheduled action (optional)
+    min_size = optional(number)
+
+    # Maximum size for the scheduled action (optional)
+    max_size = optional(number)
+
+    # Desired capacity for the scheduled action (optional)
+    desired_capacity = optional(number)
+
+    # Start time for the scheduled action in ISO 8601 format (optional)
+    # Example: "2024-01-15T10:00:00Z"
+    start_time = optional(string)
+
+    # End time for the scheduled action in ISO 8601 format (optional)
+    # Example: "2024-12-31T23:59:59Z"
+    end_time = optional(string)
+
+    # Recurrence schedule in cron format (optional)
+    # Example: "0 9 * * MON-FRI" (9 AM on weekdays)
+    recurrence = optional(string)
+
+    # Time zone for the cron expression (optional)
+    # Example: "America/New_York", "UTC"
+    time_zone = optional(string)
+  }))
+  description = "List of scheduled scaling actions. Schedules can be recurring (cron) or one-time."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for schedule in var.schedules :
+      length(schedule.name) > 0
+    ])
+    error_message = "Each schedule must have a non-empty name."
+  }
+
+  validation {
+    condition = alltrue([
+      for schedule in var.schedules :
+      schedule.min_size == null || schedule.min_size >= 0
+    ])
+    error_message = "Each schedule min_size must be null or 0 or greater."
+  }
+
+  validation {
+    condition = alltrue([
+      for schedule in var.schedules :
+      schedule.max_size == null || schedule.max_size >= 1
+    ])
+    error_message = "Each schedule max_size must be null or at least 1."
+  }
+
+  validation {
+    condition = alltrue([
+      for schedule in var.schedules :
+      schedule.desired_capacity == null || schedule.desired_capacity >= 0
+    ])
+    error_message = "Each schedule desired_capacity must be null or 0 or greater."
+  }
+}
+
+################################################################################
+# Instance Maintenance Policy
+################################################################################
+
+variable "instance_maintenance_policy" {
+  type = object({
+    # Minimum percentage of healthy instances during replacement (0-100)
+    # Lower values allow faster replacements but reduce capacity
+    min_healthy_percentage = optional(number, 90)
+
+    # Maximum percentage of instances allowed during replacement (100-200)
+    # Values above 100 allow temporarily increasing capacity during replacement
+    max_healthy_percentage = optional(number, 120)
+  })
+  description = "Configuration for instance maintenance policy controlling the minimum and maximum capacity during instance replacement operations."
+  default     = null
+
+  validation {
+    condition = var.instance_maintenance_policy == null || (
+      coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) >= 0 &&
+      coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) <= 100
+    )
+    error_message = "The min_healthy_percentage must be between 0 and 100."
+  }
+
+  validation {
+    condition = var.instance_maintenance_policy == null || (
+      coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) >= 100 &&
+      coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) <= 200
+    )
+    error_message = "The max_healthy_percentage must be between 100 and 200."
+  }
+}
