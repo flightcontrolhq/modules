@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/applicationautoscaling"
 	applicationautoscalingtypes "github.com/aws/aws-sdk-go-v2/service/applicationautoscaling/types"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	autoscalingtypes "github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -2429,4 +2431,378 @@ func IamRoleHasTag(t *testing.T, roleName string, tagKey string, tagValue string
 	}
 	value, exists := tags[tagKey]
 	return exists && value == tagValue
+}
+
+// ============================================================================
+// EC2 Auto Scaling Group Helpers
+// ============================================================================
+
+// getAutoScalingClient creates an Auto Scaling client for the specified region.
+func getAutoScalingClient(t *testing.T, region string) *autoscaling.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return autoscaling.NewFromConfig(cfg)
+}
+
+// AutoScalingGroupExists checks if an Auto Scaling group with the given name exists in the specified region.
+func AutoScalingGroupExists(t *testing.T, asgName string, region string) bool {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.AutoScalingGroups) > 0
+}
+
+// GetAutoScalingGroupByArn retrieves an Auto Scaling group by ARN.
+func GetAutoScalingGroupByArn(t *testing.T, asgArn string, region string) *autoscaling.DescribeAutoScalingGroupsOutput {
+	client := getAutoScalingClient(t, region)
+
+	// AWS API requires name, not ARN, so we need to list and filter
+	input := &autoscaling.DescribeAutoScalingGroupsInput{}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling groups")
+
+	for _, asg := range result.AutoScalingGroups {
+		if asg.AutoScalingGroupARN != nil && *asg.AutoScalingGroupARN == asgArn {
+			return &autoscaling.DescribeAutoScalingGroupsOutput{
+				AutoScalingGroups: []autoscalingtypes.AutoScalingGroup{asg},
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetAutoScalingGroupMinSize returns the minimum size of an Auto Scaling group.
+func GetAutoScalingGroupMinSize(t *testing.T, asgName string, region string) int32 {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	return *result.AutoScalingGroups[0].MinSize
+}
+
+// GetAutoScalingGroupMaxSize returns the maximum size of an Auto Scaling group.
+func GetAutoScalingGroupMaxSize(t *testing.T, asgName string, region string) int32 {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	return *result.AutoScalingGroups[0].MaxSize
+}
+
+// GetAutoScalingGroupDesiredCapacity returns the desired capacity of an Auto Scaling group.
+func GetAutoScalingGroupDesiredCapacity(t *testing.T, asgName string, region string) int32 {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	return *result.AutoScalingGroups[0].DesiredCapacity
+}
+
+// GetAutoScalingGroupHealthCheckType returns the health check type of an Auto Scaling group.
+func GetAutoScalingGroupHealthCheckType(t *testing.T, asgName string, region string) string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	return *result.AutoScalingGroups[0].HealthCheckType
+}
+
+// GetAutoScalingGroupAvailabilityZones returns the availability zones of an Auto Scaling group.
+func GetAutoScalingGroupAvailabilityZones(t *testing.T, asgName string, region string) []string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	return result.AutoScalingGroups[0].AvailabilityZones
+}
+
+// AutoScalingGroupHasLaunchTemplate checks if an Auto Scaling group has a launch template configured.
+func AutoScalingGroupHasLaunchTemplate(t *testing.T, asgName string, region string) bool {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	asg := result.AutoScalingGroups[0]
+
+	// Check direct launch template
+	if asg.LaunchTemplate != nil && asg.LaunchTemplate.LaunchTemplateId != nil {
+		return true
+	}
+
+	// Check mixed instances policy
+	if asg.MixedInstancesPolicy != nil &&
+		asg.MixedInstancesPolicy.LaunchTemplate != nil &&
+		asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification != nil &&
+		asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.LaunchTemplateId != nil {
+		return true
+	}
+
+	return false
+}
+
+// AutoScalingGroupHasMixedInstancesPolicy checks if an Auto Scaling group has a mixed instances policy.
+func AutoScalingGroupHasMixedInstancesPolicy(t *testing.T, asgName string, region string) bool {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	return result.AutoScalingGroups[0].MixedInstancesPolicy != nil
+}
+
+// GetAutoScalingGroupLaunchTemplateId returns the launch template ID used by an Auto Scaling group.
+func GetAutoScalingGroupLaunchTemplateId(t *testing.T, asgName string, region string) string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{asgName},
+	}
+
+	result, err := client.DescribeAutoScalingGroups(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Auto Scaling group %s", asgName)
+	require.Len(t, result.AutoScalingGroups, 1, "Expected exactly one Auto Scaling group with name %s", asgName)
+
+	asg := result.AutoScalingGroups[0]
+
+	// Check direct launch template
+	if asg.LaunchTemplate != nil && asg.LaunchTemplate.LaunchTemplateId != nil {
+		return *asg.LaunchTemplate.LaunchTemplateId
+	}
+
+	// Check mixed instances policy
+	if asg.MixedInstancesPolicy != nil &&
+		asg.MixedInstancesPolicy.LaunchTemplate != nil &&
+		asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification != nil &&
+		asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.LaunchTemplateId != nil {
+		return *asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.LaunchTemplateId
+	}
+
+	return ""
+}
+
+// LaunchTemplateExists checks if a launch template with the given ID exists.
+func LaunchTemplateExists(t *testing.T, launchTemplateId string, region string) bool {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeLaunchTemplatesInput{
+		LaunchTemplateIds: []string{launchTemplateId},
+	}
+
+	result, err := client.DescribeLaunchTemplates(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.LaunchTemplates) > 0
+}
+
+// GetLaunchTemplateLatestVersion returns the latest version number of a launch template.
+func GetLaunchTemplateLatestVersion(t *testing.T, launchTemplateId string, region string) int64 {
+	client := getEC2Client(t, region)
+
+	input := &ec2.DescribeLaunchTemplatesInput{
+		LaunchTemplateIds: []string{launchTemplateId},
+	}
+
+	result, err := client.DescribeLaunchTemplates(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe launch template %s", launchTemplateId)
+	require.Len(t, result.LaunchTemplates, 1, "Expected exactly one launch template with ID %s", launchTemplateId)
+
+	return *result.LaunchTemplates[0].LatestVersionNumber
+}
+
+// AutoScalingGroupHasWarmPool checks if an Auto Scaling group has a warm pool configured.
+func AutoScalingGroupHasWarmPool(t *testing.T, asgName string, region string) bool {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeWarmPoolInput{
+		AutoScalingGroupName: &asgName,
+	}
+
+	result, err := client.DescribeWarmPool(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return result.WarmPoolConfiguration != nil
+}
+
+// GetAutoScalingGroupWarmPoolState returns the state of the warm pool for an Auto Scaling group.
+func GetAutoScalingGroupWarmPoolState(t *testing.T, asgName string, region string) string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeWarmPoolInput{
+		AutoScalingGroupName: &asgName,
+	}
+
+	result, err := client.DescribeWarmPool(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe warm pool for %s", asgName)
+	require.NotNil(t, result.WarmPoolConfiguration, "Warm pool configuration should exist for %s", asgName)
+
+	return string(result.WarmPoolConfiguration.PoolState)
+}
+
+// GetAutoScalingPolicies returns the scaling policies for an Auto Scaling group.
+func GetAutoScalingPolicies(t *testing.T, asgName string, region string) []string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribePoliciesInput{
+		AutoScalingGroupName: &asgName,
+	}
+
+	result, err := client.DescribePolicies(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe policies for %s", asgName)
+
+	var policyNames []string
+	for _, policy := range result.ScalingPolicies {
+		if policy.PolicyName != nil {
+			policyNames = append(policyNames, *policy.PolicyName)
+		}
+	}
+
+	return policyNames
+}
+
+// GetAutoScalingPolicyCount returns the number of scaling policies for an Auto Scaling group.
+func GetAutoScalingPolicyCount(t *testing.T, asgName string, region string) int {
+	policies := GetAutoScalingPolicies(t, asgName, region)
+	return len(policies)
+}
+
+// AutoScalingPolicyExists checks if a scaling policy with the given name exists for an Auto Scaling group.
+func AutoScalingPolicyExists(t *testing.T, asgName string, policyName string, region string) bool {
+	policies := GetAutoScalingPolicies(t, asgName, region)
+	for _, name := range policies {
+		if name == policyName {
+			return true
+		}
+	}
+	return false
+}
+
+// GetAutoScalingLifecycleHooks returns the lifecycle hooks for an Auto Scaling group.
+func GetAutoScalingLifecycleHooks(t *testing.T, asgName string, region string) []string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeLifecycleHooksInput{
+		AutoScalingGroupName: &asgName,
+	}
+
+	result, err := client.DescribeLifecycleHooks(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe lifecycle hooks for %s", asgName)
+
+	var hookNames []string
+	for _, hook := range result.LifecycleHooks {
+		if hook.LifecycleHookName != nil {
+			hookNames = append(hookNames, *hook.LifecycleHookName)
+		}
+	}
+
+	return hookNames
+}
+
+// GetAutoScalingLifecycleHookCount returns the number of lifecycle hooks for an Auto Scaling group.
+func GetAutoScalingLifecycleHookCount(t *testing.T, asgName string, region string) int {
+	hooks := GetAutoScalingLifecycleHooks(t, asgName, region)
+	return len(hooks)
+}
+
+// AutoScalingLifecycleHookExists checks if a lifecycle hook with the given name exists for an Auto Scaling group.
+func AutoScalingLifecycleHookExists(t *testing.T, asgName string, hookName string, region string) bool {
+	hooks := GetAutoScalingLifecycleHooks(t, asgName, region)
+	for _, name := range hooks {
+		if name == hookName {
+			return true
+		}
+	}
+	return false
+}
+
+// GetAutoScalingScheduledActions returns the scheduled actions for an Auto Scaling group.
+func GetAutoScalingScheduledActions(t *testing.T, asgName string, region string) []string {
+	client := getAutoScalingClient(t, region)
+
+	input := &autoscaling.DescribeScheduledActionsInput{
+		AutoScalingGroupName: &asgName,
+	}
+
+	result, err := client.DescribeScheduledActions(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe scheduled actions for %s", asgName)
+
+	var actionNames []string
+	for _, action := range result.ScheduledUpdateGroupActions {
+		if action.ScheduledActionName != nil {
+			actionNames = append(actionNames, *action.ScheduledActionName)
+		}
+	}
+
+	return actionNames
+}
+
+// GetAutoScalingScheduledActionCount returns the number of scheduled actions for an Auto Scaling group.
+func GetAutoScalingScheduledActionCount(t *testing.T, asgName string, region string) int {
+	actions := GetAutoScalingScheduledActions(t, asgName, region)
+	return len(actions)
+}
+
+// AutoScalingScheduledActionExists checks if a scheduled action with the given name exists for an Auto Scaling group.
+func AutoScalingScheduledActionExists(t *testing.T, asgName string, actionName string, region string) bool {
+	actions := GetAutoScalingScheduledActions(t, asgName, region)
+	for _, name := range actions {
+		if name == actionName {
+			return true
+		}
+	}
+	return false
 }
