@@ -633,3 +633,98 @@ variable "mixed_instances_policy" {
     error_message = "The on_demand_base_capacity must be 0 or greater."
   }
 }
+
+################################################################################
+# Instance Refresh
+################################################################################
+
+variable "instance_refresh" {
+  type = object({
+    # Strategy for instance refresh - currently only "Rolling" is supported
+    strategy = optional(string, "Rolling")
+
+    # Triggers that will cause an instance refresh
+    triggers = optional(list(string), [])
+
+    # Preferences for the instance refresh
+    preferences = optional(object({
+      # Checkpoint configuration for staged rollouts
+      checkpoint_delay       = optional(number)
+      checkpoint_percentages = optional(list(number))
+
+      # Instance warmup time in seconds
+      instance_warmup = optional(number)
+
+      # Minimum percentage of healthy instances during refresh (0-100)
+      min_healthy_percentage = optional(number, 90)
+
+      # Maximum percentage of instances that can be healthy (100-200)
+      # Values above 100 allow temporarily increasing capacity during refresh
+      max_healthy_percentage = optional(number, 100)
+
+      # Whether to skip replacing instances that already match the desired configuration
+      skip_matching = optional(bool, false)
+
+      # Whether to automatically rollback if the instance refresh fails
+      auto_rollback = optional(bool, false)
+
+      # How to handle scale-in protected instances: "Refresh", "Ignore", or "Wait"
+      scale_in_protected_instances = optional(string, "Ignore")
+
+      # How to handle instances in standby: "Terminate", "Ignore", or "Wait"
+      standby_instances = optional(string, "Ignore")
+
+      # Alarm specification for CloudWatch alarm-based rollback
+      alarm_specification = optional(object({
+        alarms = list(string)
+      }))
+    }))
+  })
+  description = "Configuration for instance refresh to perform rolling updates when the launch template or configuration changes."
+  default     = null
+
+  validation {
+    condition = var.instance_refresh == null || (
+      contains(["Rolling"], coalesce(var.instance_refresh.strategy, "Rolling"))
+    )
+    error_message = "The instance_refresh strategy must be 'Rolling'."
+  }
+
+  validation {
+    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+      coalesce(var.instance_refresh.preferences.min_healthy_percentage, 90) >= 0 &&
+      coalesce(var.instance_refresh.preferences.min_healthy_percentage, 90) <= 100
+    )
+    error_message = "The min_healthy_percentage must be between 0 and 100."
+  }
+
+  validation {
+    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+      coalesce(var.instance_refresh.preferences.max_healthy_percentage, 100) >= 100 &&
+      coalesce(var.instance_refresh.preferences.max_healthy_percentage, 100) <= 200
+    )
+    error_message = "The max_healthy_percentage must be between 100 and 200."
+  }
+
+  validation {
+    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+      contains(["Refresh", "Ignore", "Wait"], coalesce(var.instance_refresh.preferences.scale_in_protected_instances, "Ignore"))
+    )
+    error_message = "The scale_in_protected_instances must be 'Refresh', 'Ignore', or 'Wait'."
+  }
+
+  validation {
+    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+      contains(["Terminate", "Ignore", "Wait"], coalesce(var.instance_refresh.preferences.standby_instances, "Ignore"))
+    )
+    error_message = "The standby_instances must be 'Terminate', 'Ignore', or 'Wait'."
+  }
+
+  validation {
+    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+      var.instance_refresh.preferences.checkpoint_percentages == null ||
+      alltrue([for p in var.instance_refresh.preferences.checkpoint_percentages : p >= 0 && p <= 100])
+    )
+    error_message = "All checkpoint_percentages must be between 0 and 100."
+  }
+}
