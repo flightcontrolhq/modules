@@ -855,3 +855,307 @@ variable "lifecycle_hooks" {
     error_message = "Each role_arn must be null or a valid IAM role ARN."
   }
 }
+
+################################################################################
+# Scaling Policies
+################################################################################
+
+variable "scaling_policies" {
+  type = list(object({
+    # Name of the scaling policy (required)
+    name = string
+
+    # Type of scaling policy (required)
+    # "SimpleScaling" - Scale based on a single adjustment
+    # "StepScaling" - Scale based on step adjustments
+    # "TargetTrackingScaling" - Scale to maintain a target metric value
+    # "PredictiveScaling" - Use ML to predict and scale proactively
+    policy_type = string
+
+    # Estimated time in seconds for new instances to warm up (all policy types except SimpleScaling)
+    estimated_instance_warmup = optional(number)
+
+    # Whether the scaling policy is enabled (default true)
+    enabled = optional(bool, true)
+
+    ############################################################################
+    # SimpleScaling and StepScaling Configuration
+    ############################################################################
+
+    # Adjustment type - how scaling_adjustment is interpreted
+    # "ChangeInCapacity" - Add/remove exact number of instances
+    # "ExactCapacity" - Set capacity to exact number
+    # "PercentChangeInCapacity" - Add/remove percentage of current capacity
+    adjustment_type = optional(string)
+
+    # Minimum adjustment for PercentChangeInCapacity type
+    min_adjustment_magnitude = optional(number)
+
+    # Cooldown in seconds (SimpleScaling only)
+    cooldown = optional(number)
+
+    # Number of instances to adjust (SimpleScaling only)
+    scaling_adjustment = optional(number)
+
+    # Aggregation type for metrics (StepScaling only): "Minimum", "Maximum", or "Average"
+    metric_aggregation_type = optional(string)
+
+    # Step adjustments for StepScaling policy
+    step_adjustments = optional(list(object({
+      # Lower bound of the metric range (null = negative infinity)
+      metric_interval_lower_bound = optional(number)
+      # Upper bound of the metric range (null = positive infinity)
+      metric_interval_upper_bound = optional(number)
+      # Number of instances to adjust
+      scaling_adjustment = number
+    })))
+
+    ############################################################################
+    # TargetTrackingScaling Configuration
+    ############################################################################
+
+    target_tracking_configuration = optional(object({
+      # Target value for the metric
+      target_value = number
+
+      # Whether to disable scale-in (only scale out)
+      disable_scale_in = optional(bool, false)
+
+      # Predefined metric specification - use one of AWS's built-in metrics
+      predefined_metric_specification = optional(object({
+        # Predefined metric type:
+        # "ASGAverageCPUUtilization" - Average CPU utilization
+        # "ASGAverageNetworkIn" - Average bytes received
+        # "ASGAverageNetworkOut" - Average bytes sent
+        # "ALBRequestCountPerTarget" - Request count per target
+        predefined_metric_type = string
+        # Resource label (required for ALBRequestCountPerTarget)
+        resource_label = optional(string)
+      }))
+
+      # Customized metric specification - define your own metric
+      customized_metric_specification = optional(object({
+        # Single metric (simple case)
+        metric_name = optional(string)
+        namespace   = optional(string)
+        statistic   = optional(string)
+        unit        = optional(string)
+        dimensions = optional(list(object({
+          name  = string
+          value = string
+        })))
+
+        # Multiple metrics with math expression (advanced case)
+        metrics = optional(list(object({
+          # Unique identifier for this metric
+          id = string
+          # Whether this metric is returned (one metric must have return_data = true)
+          return_data = optional(bool)
+          # Label for the metric
+          label = optional(string)
+          # Math expression using other metric IDs
+          expression = optional(string)
+
+          # Metric stat for CloudWatch metrics
+          metric_stat = optional(object({
+            metric = object({
+              metric_name = string
+              namespace   = string
+              dimensions = optional(list(object({
+                name  = string
+                value = string
+              })))
+            })
+            stat = string
+            unit = optional(string)
+          }))
+        })))
+      }))
+    }))
+
+    ############################################################################
+    # PredictiveScaling Configuration
+    ############################################################################
+
+    predictive_scaling_configuration = optional(object({
+      # Sizing mode: "ForecastAndScale" or "ForecastOnly"
+      mode = optional(string, "ForecastOnly")
+
+      # Buffer time in seconds (how far ahead to scale, 0-3600)
+      scheduling_buffer_time = optional(number)
+
+      # Max capacity breach behavior: "IncreaseMaxCapacity" or "HonorMaxCapacity"
+      max_capacity_breach_behavior = optional(string, "HonorMaxCapacity")
+
+      # Maximum capacity buffer (percentage above forecast, 0-100)
+      max_capacity_buffer = optional(number)
+
+      # Metric specifications (at least one required)
+      metric_specifications = list(object({
+        # Target value for scaling
+        target_value = number
+
+        # Predefined load metric (e.g., ASGTotalCPUUtilization)
+        predefined_load_metric_specification = optional(object({
+          predefined_metric_type = string
+          resource_label         = optional(string)
+        }))
+
+        # Predefined scaling metric
+        predefined_scaling_metric_specification = optional(object({
+          predefined_metric_type = string
+          resource_label         = optional(string)
+        }))
+
+        # Predefined metric pair (load + scaling together)
+        predefined_metric_pair_specification = optional(object({
+          predefined_metric_type = string
+          resource_label         = optional(string)
+        }))
+
+        # Customized load metric
+        customized_load_metric_specification = optional(object({
+          metric_data_queries = list(object({
+            id         = string
+            expression = optional(string)
+            label      = optional(string)
+            return_data = optional(bool)
+            metric_stat = optional(object({
+              metric = object({
+                metric_name = string
+                namespace   = string
+                dimensions = optional(list(object({
+                  name  = string
+                  value = string
+                })))
+              })
+              stat = string
+              unit = optional(string)
+            }))
+          }))
+        }))
+
+        # Customized scaling metric
+        customized_scaling_metric_specification = optional(object({
+          metric_data_queries = list(object({
+            id         = string
+            expression = optional(string)
+            label      = optional(string)
+            return_data = optional(bool)
+            metric_stat = optional(object({
+              metric = object({
+                metric_name = string
+                namespace   = string
+                dimensions = optional(list(object({
+                  name  = string
+                  value = string
+                })))
+              })
+              stat = string
+              unit = optional(string)
+            }))
+          }))
+        }))
+
+        # Customized capacity metric
+        customized_capacity_metric_specification = optional(object({
+          metric_data_queries = list(object({
+            id         = string
+            expression = optional(string)
+            label      = optional(string)
+            return_data = optional(bool)
+            metric_stat = optional(object({
+              metric = object({
+                metric_name = string
+                namespace   = string
+                dimensions = optional(list(object({
+                  name  = string
+                  value = string
+                })))
+              })
+              stat = string
+              unit = optional(string)
+            }))
+          }))
+        }))
+      }))
+    }))
+  }))
+  description = "List of scaling policy configurations. Supports SimpleScaling, StepScaling, TargetTrackingScaling, and PredictiveScaling policy types."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      contains(["SimpleScaling", "StepScaling", "TargetTrackingScaling", "PredictiveScaling"], policy.policy_type)
+    ])
+    error_message = "Each policy_type must be 'SimpleScaling', 'StepScaling', 'TargetTrackingScaling', or 'PredictiveScaling'."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.adjustment_type == null || contains(["ChangeInCapacity", "ExactCapacity", "PercentChangeInCapacity"], policy.adjustment_type)
+    ])
+    error_message = "Each adjustment_type must be 'ChangeInCapacity', 'ExactCapacity', or 'PercentChangeInCapacity'."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.metric_aggregation_type == null || contains(["Minimum", "Maximum", "Average"], policy.metric_aggregation_type)
+    ])
+    error_message = "Each metric_aggregation_type must be 'Minimum', 'Maximum', or 'Average'."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.target_tracking_configuration == null ||
+      policy.target_tracking_configuration.predefined_metric_specification == null ||
+      contains(
+        ["ASGAverageCPUUtilization", "ASGAverageNetworkIn", "ASGAverageNetworkOut", "ALBRequestCountPerTarget"],
+        policy.target_tracking_configuration.predefined_metric_specification.predefined_metric_type
+      )
+    ])
+    error_message = "Each predefined_metric_type for target tracking must be 'ASGAverageCPUUtilization', 'ASGAverageNetworkIn', 'ASGAverageNetworkOut', or 'ALBRequestCountPerTarget'."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.predictive_scaling_configuration == null ||
+      contains(["ForecastAndScale", "ForecastOnly"], coalesce(policy.predictive_scaling_configuration.mode, "ForecastOnly"))
+    ])
+    error_message = "Each predictive scaling mode must be 'ForecastAndScale' or 'ForecastOnly'."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.predictive_scaling_configuration == null ||
+      contains(["IncreaseMaxCapacity", "HonorMaxCapacity"], coalesce(policy.predictive_scaling_configuration.max_capacity_breach_behavior, "HonorMaxCapacity"))
+    ])
+    error_message = "Each max_capacity_breach_behavior must be 'IncreaseMaxCapacity' or 'HonorMaxCapacity'."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.predictive_scaling_configuration == null ||
+      policy.predictive_scaling_configuration.scheduling_buffer_time == null ||
+      (policy.predictive_scaling_configuration.scheduling_buffer_time >= 0 && policy.predictive_scaling_configuration.scheduling_buffer_time <= 3600)
+    ])
+    error_message = "Each scheduling_buffer_time must be between 0 and 3600 seconds."
+  }
+
+  validation {
+    condition = alltrue([
+      for policy in var.scaling_policies :
+      policy.predictive_scaling_configuration == null ||
+      policy.predictive_scaling_configuration.max_capacity_buffer == null ||
+      (policy.predictive_scaling_configuration.max_capacity_buffer >= 0 && policy.predictive_scaling_configuration.max_capacity_buffer <= 100)
+    ])
+    error_message = "Each max_capacity_buffer must be between 0 and 100."
+  }
+}
