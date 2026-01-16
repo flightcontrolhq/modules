@@ -779,3 +779,79 @@ variable "warm_pool" {
     error_message = "The max_group_prepared_capacity must be null or 0 or greater."
   }
 }
+
+################################################################################
+# Lifecycle Hooks
+################################################################################
+
+variable "lifecycle_hooks" {
+  type = list(object({
+    # Name of the lifecycle hook (required)
+    name = string
+
+    # Lifecycle transition - when the hook is triggered (required)
+    # "autoscaling:EC2_INSTANCE_LAUNCHING" - During instance launch
+    # "autoscaling:EC2_INSTANCE_TERMINATING" - During instance termination
+    lifecycle_transition = string
+
+    # Default result when the heartbeat times out
+    # "CONTINUE" - Proceed with the launch or termination
+    # "ABANDON" - Stop the launch or termination (default)
+    default_result = optional(string, "ABANDON")
+
+    # Heartbeat timeout in seconds (default 3600, max 7200)
+    # How long to wait for a heartbeat before timing out
+    heartbeat_timeout = optional(number, 3600)
+
+    # Additional metadata to send with the notification
+    notification_metadata = optional(string)
+
+    # ARN of the SNS topic or SQS queue to send notifications to
+    notification_target_arn = optional(string)
+
+    # IAM role ARN that allows the Auto Scaling Group to publish to the notification target
+    role_arn = optional(string)
+  }))
+  description = "List of lifecycle hook configurations. Lifecycle hooks let you perform custom actions during instance launch or termination."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for hook in var.lifecycle_hooks :
+      contains(["autoscaling:EC2_INSTANCE_LAUNCHING", "autoscaling:EC2_INSTANCE_TERMINATING"], hook.lifecycle_transition)
+    ])
+    error_message = "Each lifecycle_transition must be 'autoscaling:EC2_INSTANCE_LAUNCHING' or 'autoscaling:EC2_INSTANCE_TERMINATING'."
+  }
+
+  validation {
+    condition = alltrue([
+      for hook in var.lifecycle_hooks :
+      contains(["CONTINUE", "ABANDON"], coalesce(hook.default_result, "ABANDON"))
+    ])
+    error_message = "Each default_result must be 'CONTINUE' or 'ABANDON'."
+  }
+
+  validation {
+    condition = alltrue([
+      for hook in var.lifecycle_hooks :
+      coalesce(hook.heartbeat_timeout, 3600) >= 30 && coalesce(hook.heartbeat_timeout, 3600) <= 7200
+    ])
+    error_message = "Each heartbeat_timeout must be between 30 and 7200 seconds."
+  }
+
+  validation {
+    condition = alltrue([
+      for hook in var.lifecycle_hooks :
+      hook.notification_target_arn == null || can(regex("^arn:aws:(sns|sqs):", hook.notification_target_arn))
+    ])
+    error_message = "Each notification_target_arn must be null or a valid SNS topic or SQS queue ARN."
+  }
+
+  validation {
+    condition = alltrue([
+      for hook in var.lifecycle_hooks :
+      hook.role_arn == null || can(regex("^arn:aws:iam::", hook.role_arn))
+    ])
+    error_message = "Each role_arn must be null or a valid IAM role ARN."
+  }
+}
