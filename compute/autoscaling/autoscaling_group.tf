@@ -245,6 +245,32 @@ resource "aws_autoscaling_group" "this" {
   }
 
   ################################################################################
+  # Warm Pool
+  ################################################################################
+
+  dynamic "warm_pool" {
+    for_each = local.enable_warm_pool ? [var.warm_pool] : []
+    content {
+      # Pool state determines the state of instances in the warm pool
+      pool_state = warm_pool.value.pool_state
+
+      # Minimum number of instances to maintain in the warm pool
+      min_size = warm_pool.value.min_size
+
+      # Maximum number of instances that can be in the warm pool or in a pending state
+      max_group_prepared_capacity = warm_pool.value.max_group_prepared_capacity
+
+      # Instance reuse policy configuration
+      dynamic "instance_reuse_policy" {
+        for_each = warm_pool.value.instance_reuse_policy != null ? [warm_pool.value.instance_reuse_policy] : []
+        content {
+          reuse_on_scale_in = instance_reuse_policy.value.reuse_on_scale_in
+        }
+      }
+    }
+  }
+
+  ################################################################################
   # Tags
   ################################################################################
 
