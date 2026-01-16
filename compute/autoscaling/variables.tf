@@ -529,3 +529,107 @@ variable "launch_template" {
   description = "Configuration for the launch template. Only used when create_launch_template is true."
   default     = null
 }
+
+################################################################################
+# Mixed Instances Policy
+################################################################################
+
+variable "mixed_instances_policy" {
+  type = object({
+    # Instances Distribution - Controls On-Demand vs Spot mix
+    instances_distribution = optional(object({
+      on_demand_allocation_strategy            = optional(string, "prioritized")
+      on_demand_base_capacity                  = optional(number, 0)
+      on_demand_percentage_above_base_capacity = optional(number, 100)
+      spot_allocation_strategy                 = optional(string, "capacity-optimized")
+      spot_instance_pools                      = optional(number)
+      spot_max_price                           = optional(string)
+    }))
+
+    # Launch Template Overrides - Instance type variations
+    launch_template_overrides = optional(list(object({
+      instance_type     = optional(string)
+      weighted_capacity = optional(number)
+
+      # Launch Template Specification for this override
+      launch_template_specification = optional(object({
+        launch_template_id   = optional(string)
+        launch_template_name = optional(string)
+        version              = optional(string)
+      }))
+
+      # Instance Requirements for attribute-based instance type selection
+      instance_requirements = optional(object({
+        vcpu_count = object({
+          min = number
+          max = optional(number)
+        })
+        memory_mib = object({
+          min = number
+          max = optional(number)
+        })
+        accelerator_count = optional(object({
+          min = optional(number)
+          max = optional(number)
+        }))
+        accelerator_manufacturers    = optional(list(string))
+        accelerator_names            = optional(list(string))
+        accelerator_total_memory_mib = optional(object({ min = optional(number), max = optional(number) }))
+        accelerator_types            = optional(list(string))
+        allowed_instance_types       = optional(list(string))
+        bare_metal                   = optional(string)
+        baseline_ebs_bandwidth_mbps  = optional(object({ min = optional(number), max = optional(number) }))
+        burstable_performance        = optional(string)
+        cpu_manufacturers            = optional(list(string))
+        excluded_instance_types      = optional(list(string))
+        instance_generations         = optional(list(string))
+        local_storage                = optional(string)
+        local_storage_types          = optional(list(string))
+        max_spot_price_as_percentage_of_optimal_on_demand_price = optional(number)
+        memory_gib_per_vcpu                                     = optional(object({ min = optional(number), max = optional(number) }))
+        network_bandwidth_gbps                                  = optional(object({ min = optional(number), max = optional(number) }))
+        network_interface_count                                 = optional(object({ min = optional(number), max = optional(number) }))
+        on_demand_max_price_percentage_over_lowest_price        = optional(number)
+        require_hibernate_support                               = optional(bool)
+        spot_max_price_percentage_over_lowest_price             = optional(number)
+        total_local_storage_gb                                  = optional(object({ min = optional(number), max = optional(number) }))
+      }))
+    })), [])
+  })
+  description = "Configuration for mixed instances policy to use a combination of On-Demand and Spot instances with multiple instance types."
+  default     = null
+
+  validation {
+    condition = var.mixed_instances_policy == null || (
+      var.mixed_instances_policy.instances_distribution == null ||
+      contains(["prioritized", "lowest-price"], coalesce(var.mixed_instances_policy.instances_distribution.on_demand_allocation_strategy, "prioritized"))
+    )
+    error_message = "The on_demand_allocation_strategy must be 'prioritized' or 'lowest-price'."
+  }
+
+  validation {
+    condition = var.mixed_instances_policy == null || (
+      var.mixed_instances_policy.instances_distribution == null ||
+      contains(["capacity-optimized", "capacity-optimized-prioritized", "lowest-price", "price-capacity-optimized"], coalesce(var.mixed_instances_policy.instances_distribution.spot_allocation_strategy, "capacity-optimized"))
+    )
+    error_message = "The spot_allocation_strategy must be 'capacity-optimized', 'capacity-optimized-prioritized', 'lowest-price', or 'price-capacity-optimized'."
+  }
+
+  validation {
+    condition = var.mixed_instances_policy == null || (
+      var.mixed_instances_policy.instances_distribution == null || (
+        coalesce(var.mixed_instances_policy.instances_distribution.on_demand_percentage_above_base_capacity, 100) >= 0 &&
+        coalesce(var.mixed_instances_policy.instances_distribution.on_demand_percentage_above_base_capacity, 100) <= 100
+      )
+    )
+    error_message = "The on_demand_percentage_above_base_capacity must be between 0 and 100."
+  }
+
+  validation {
+    condition = var.mixed_instances_policy == null || (
+      var.mixed_instances_policy.instances_distribution == null ||
+      coalesce(var.mixed_instances_policy.instances_distribution.on_demand_base_capacity, 0) >= 0
+    )
+    error_message = "The on_demand_base_capacity must be 0 or greater."
+  }
+}
