@@ -286,3 +286,246 @@ variable "propagate_tags_at_launch" {
   description = "Whether to propagate tags from the Auto Scaling Group to launched instances."
   default     = true
 }
+
+################################################################################
+# Launch Template - Configuration
+################################################################################
+
+variable "create_launch_template" {
+  type        = bool
+  description = "Whether to create a launch template. Set to false when using an external launch template."
+  default     = true
+}
+
+variable "launch_template_id" {
+  type        = string
+  description = "The ID of an existing launch template to use. Required if create_launch_template is false and launch_template_name is not provided."
+  default     = null
+
+  validation {
+    condition     = var.launch_template_id == null || can(regex("^lt-", var.launch_template_id))
+    error_message = "The launch_template_id must be null or a valid launch template ID starting with 'lt-'."
+  }
+}
+
+variable "launch_template_name" {
+  type        = string
+  description = "The name of an existing launch template to use. Required if create_launch_template is false and launch_template_id is not provided."
+  default     = null
+}
+
+variable "launch_template_version" {
+  type        = string
+  description = "The version of the launch template to use. Can be version number, '$Latest', or '$Default'."
+  default     = "$Latest"
+}
+
+variable "launch_template" {
+  type = object({
+    description   = optional(string)
+    image_id      = optional(string)
+    instance_type = optional(string)
+    key_name      = optional(string)
+    user_data     = optional(string)
+    ebs_optimized = optional(bool)
+    kernel_id     = optional(string)
+    ram_disk_id   = optional(string)
+
+    # IAM Instance Profile - Only one of arn or name should be provided
+    iam_instance_profile_arn  = optional(string)
+    iam_instance_profile_name = optional(string)
+
+    # Security Groups
+    security_group_ids = optional(list(string), [])
+
+    # Network Interfaces - When specified, security_group_ids should be empty as SGs are set per-interface
+    network_interfaces = optional(list(object({
+      device_index                = number
+      description                 = optional(string)
+      associate_public_ip_address = optional(bool)
+      delete_on_termination       = optional(bool, true)
+      security_groups             = optional(list(string), [])
+      subnet_id                   = optional(string)
+      private_ip_address          = optional(string)
+      ipv4_address_count          = optional(number)
+      ipv4_prefixes               = optional(list(string))
+      ipv4_prefix_count           = optional(number)
+      ipv6_addresses              = optional(list(string))
+      ipv6_address_count          = optional(number)
+      ipv6_prefixes               = optional(list(string))
+      ipv6_prefix_count           = optional(number)
+      network_interface_id        = optional(string)
+      network_card_index          = optional(number)
+      interface_type              = optional(string)
+    })), [])
+
+    # Block Device Mappings
+    block_device_mappings = optional(list(object({
+      device_name  = string
+      no_device    = optional(string)
+      virtual_name = optional(string)
+      ebs = optional(object({
+        volume_size           = optional(number)
+        volume_type           = optional(string, "gp3")
+        iops                  = optional(number)
+        throughput            = optional(number)
+        encrypted             = optional(bool, true)
+        kms_key_id            = optional(string)
+        delete_on_termination = optional(bool, true)
+        snapshot_id           = optional(string)
+      }))
+    })), [])
+
+    # Metadata Options (IMDSv2)
+    metadata_options = optional(object({
+      http_endpoint               = optional(string, "enabled")
+      http_tokens                 = optional(string, "required")
+      http_put_response_hop_limit = optional(number, 1)
+      http_protocol_ipv6          = optional(string)
+      instance_metadata_tags      = optional(string)
+      }), {
+      http_endpoint               = "enabled"
+      http_tokens                 = "required"
+      http_put_response_hop_limit = 1
+    })
+
+    # Monitoring
+    monitoring_enabled = optional(bool, true)
+
+    # Placement
+    placement = optional(object({
+      availability_zone       = optional(string)
+      affinity                = optional(string)
+      group_name              = optional(string)
+      host_id                 = optional(string)
+      host_resource_group_arn = optional(string)
+      spread_domain           = optional(string)
+      tenancy                 = optional(string)
+      partition_number        = optional(number)
+    }))
+
+    # Instance Market Options (Spot)
+    instance_market_options = optional(object({
+      market_type = optional(string, "spot")
+      spot_options = optional(object({
+        block_duration_minutes         = optional(number)
+        instance_interruption_behavior = optional(string, "terminate")
+        max_price                      = optional(string)
+        spot_instance_type             = optional(string, "one-time")
+        valid_until                    = optional(string)
+      }))
+    }))
+
+    # CPU Options
+    cpu_options = optional(object({
+      amd_sev_snp      = optional(string)
+      core_count       = optional(number)
+      threads_per_core = optional(number)
+    }))
+
+    # Credit Specification (T2/T3 instances)
+    credit_specification = optional(object({
+      cpu_credits = optional(string, "standard")
+    }))
+
+    # Capacity Reservation Specification
+    capacity_reservation_specification = optional(object({
+      capacity_reservation_preference = optional(string, "open")
+      capacity_reservation_target = optional(object({
+        capacity_reservation_id                 = optional(string)
+        capacity_reservation_resource_group_arn = optional(string)
+      }))
+    }))
+
+    # Enclave Options (AWS Nitro Enclaves)
+    enclave_options = optional(object({
+      enabled = optional(bool, false)
+    }))
+
+    # Hibernation Options
+    hibernation_options = optional(object({
+      configured = optional(bool, false)
+    }))
+
+    # License Specifications
+    license_specifications = optional(list(object({
+      license_configuration_arn = string
+    })), [])
+
+    # Maintenance Options
+    maintenance_options = optional(object({
+      auto_recovery = optional(string, "default")
+    }))
+
+    # Private DNS Name Options
+    private_dns_name_options = optional(object({
+      enable_resource_name_dns_aaaa_record = optional(bool)
+      enable_resource_name_dns_a_record    = optional(bool)
+      hostname_type                        = optional(string, "ip-name")
+    }))
+
+    # Instance Requirements (Attribute-based instance type selection) - Used with mixed instances policy
+    instance_requirements = optional(object({
+      vcpu_count = object({
+        min = number
+        max = optional(number)
+      })
+      memory_mib = object({
+        min = number
+        max = optional(number)
+      })
+      accelerator_count = optional(object({
+        min = optional(number)
+        max = optional(number)
+      }))
+      accelerator_manufacturers                               = optional(list(string))
+      accelerator_names                                       = optional(list(string))
+      accelerator_total_memory_mib                            = optional(object({ min = optional(number), max = optional(number) }))
+      accelerator_types                                       = optional(list(string))
+      allowed_instance_types                                  = optional(list(string))
+      bare_metal                                              = optional(string)
+      baseline_ebs_bandwidth_mbps                             = optional(object({ min = optional(number), max = optional(number) }))
+      burstable_performance                                   = optional(string)
+      cpu_manufacturers                                       = optional(list(string))
+      excluded_instance_types                                 = optional(list(string))
+      instance_generations                                    = optional(list(string))
+      local_storage                                           = optional(string)
+      local_storage_types                                     = optional(list(string))
+      max_spot_price_as_percentage_of_optimal_on_demand_price = optional(number)
+      memory_gib_per_vcpu                                     = optional(object({ min = optional(number), max = optional(number) }))
+      network_bandwidth_gbps                                  = optional(object({ min = optional(number), max = optional(number) }))
+      network_interface_count                                 = optional(object({ min = optional(number), max = optional(number) }))
+      on_demand_max_price_percentage_over_lowest_price        = optional(number)
+      require_hibernate_support                               = optional(bool)
+      spot_max_price_percentage_over_lowest_price             = optional(number)
+      total_local_storage_gb                                  = optional(object({ min = optional(number), max = optional(number) }))
+    }))
+
+    # Disable API Termination
+    disable_api_termination = optional(bool)
+
+    # Disable API Stop
+    disable_api_stop = optional(bool)
+
+    # Elastic GPU Specifications
+    elastic_gpu_specifications = optional(list(object({
+      type = string
+    })), [])
+
+    # Elastic Inference Accelerator
+    elastic_inference_accelerator = optional(object({
+      type = string
+    }))
+
+    # Tag Specifications for resources created by the launch template
+    tag_specifications = optional(list(object({
+      resource_type = string
+      tags          = map(string)
+    })), [])
+
+    # Update Default Version
+    update_default_version = optional(bool, true)
+  })
+  description = "Configuration for the launch template. Only used when create_launch_template is true."
+  default     = null
+}
