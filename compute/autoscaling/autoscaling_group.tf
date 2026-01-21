@@ -178,9 +178,9 @@ resource "aws_autoscaling_group" "this" {
                   }
                 }
 
-                on_demand_max_price_percentage_over_lowest_price   = instance_requirements.value.on_demand_max_price_percentage_over_lowest_price
-                require_hibernate_support                          = instance_requirements.value.require_hibernate_support
-                spot_max_price_percentage_over_lowest_price        = instance_requirements.value.spot_max_price_percentage_over_lowest_price
+                on_demand_max_price_percentage_over_lowest_price = instance_requirements.value.on_demand_max_price_percentage_over_lowest_price
+                require_hibernate_support                        = instance_requirements.value.require_hibernate_support
+                spot_max_price_percentage_over_lowest_price      = instance_requirements.value.spot_max_price_percentage_over_lowest_price
 
                 dynamic "total_local_storage_gb" {
                   for_each = instance_requirements.value.total_local_storage_gb != null ? [instance_requirements.value.total_local_storage_gb] : []
@@ -287,14 +287,13 @@ resource "aws_autoscaling_group" "this" {
   # Lifecycle
   ################################################################################
 
-  # Note: To ignore desired_capacity changes, set ignore_desired_capacity_changes = true
-  # This creates an ASG that ignores external changes to desired_capacity.
-  # The ignore_changes list must be static in Terraform, so we always ignore
-  # desired_capacity when this resource is used with external scaling mechanisms
-  # (like ECS capacity providers). Users who need Terraform to manage desired_capacity
-  # should set ignore_desired_capacity_changes = false and this resource will still
-  # work correctly - Terraform will manage the value as specified.
+  # Note: desired_capacity is always ignored to support external scaling mechanisms
+  # (ECS capacity providers, scaling policies, scheduled actions). The initial
+  # desired_capacity is set on creation, but subsequent changes made outside
+  # Terraform won't cause drift. To change desired_capacity via Terraform,
+  # use a scaling policy or update min_size.
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [desired_capacity]
   }
 }

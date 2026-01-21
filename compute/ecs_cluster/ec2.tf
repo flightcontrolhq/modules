@@ -159,81 +159,54 @@ resource "aws_launch_template" "ecs" {
 # Auto Scaling Group
 ################################################################################
 
-resource "aws_autoscaling_group" "ecs" {
-  count = local.enable_ec2 ? 1 : 0
+module "ecs_autoscaling" {
+  count  = local.enable_ec2 ? 1 : 0
+  source = "../autoscaling"
 
-  name = "${var.name}-ecs"
+  name                = "${var.name}-ecs"
+  vpc_zone_identifier = var.private_subnet_ids
 
+  # Capacity
   min_size         = var.ec2_min_size
   max_size         = var.ec2_max_size
   desired_capacity = var.ec2_desired_capacity
 
-  vpc_zone_identifier = var.private_subnet_ids
+  # Use existing launch template (don't create new one)
+  create_launch_template  = false
+  launch_template_id      = aws_launch_template.ecs[0].id
+  launch_template_version = "$Latest"
 
-  # Protect instances from scale-in when managed by ECS capacity provider
-  protect_from_scale_in = var.ec2_managed_termination_protection == "ENABLED"
+  # ECS integration
+  ecs_managed                     = true
+  protect_from_scale_in           = var.ec2_managed_termination_protection == "ENABLED"
+  ignore_desired_capacity_changes = true
 
-  health_check_type         = "EC2"
-  health_check_grace_period = 300
-
-  # Use mixed instances policy for Spot support
-  dynamic "mixed_instances_policy" {
-    for_each = var.ec2_enable_spot ? [1] : []
-    content {
-      instances_distribution {
-        on_demand_base_capacity                  = var.ec2_on_demand_base_capacity
-        on_demand_percentage_above_base_capacity = var.ec2_on_demand_percentage_above_base
-        spot_allocation_strategy                 = "capacity-optimized"
-      }
-
-      launch_template {
-        launch_template_specification {
-          launch_template_id = aws_launch_template.ecs[0].id
-          version            = "$Latest"
-        }
-
-        dynamic "override" {
-          for_each = local.ec2_instance_types
-          content {
-            instance_type = override.value
-          }
-        }
-      }
-    }
-  }
-
-  # Use launch template directly when not using Spot
-  dynamic "launch_template" {
-    for_each = var.ec2_enable_spot ? [] : [1]
-    content {
-      id      = aws_launch_template.ecs[0].id
-      version = "$Latest"
-    }
-  }
-
-  instance_refresh {
+  # Instance refresh
+  instance_refresh = {
     strategy = "Rolling"
-    preferences {
+    preferences = {
       min_healthy_percentage = 50
     }
   }
 
-  dynamic "tag" {
-    for_each = merge(local.tags, {
-      Name             = "${var.name}-ecs"
-      AmazonECSManaged = "true"
-    })
-    content {
-      key                 = tag.key
-      value               = tag.value
-      propagate_at_launch = true
+  # Mixed instances policy for Spot support
+  mixed_instances_policy = var.ec2_enable_spot ? {
+    instances_distribution = {
+      on_demand_base_capacity                  = var.ec2_on_demand_base_capacity
+      on_demand_percentage_above_base_capacity = var.ec2_on_demand_percentage_above_base
+      spot_allocation_strategy                 = "capacity-optimized"
     }
-  }
+    launch_template_overrides = [
+      for instance_type in local.ec2_instance_types : {
+        instance_type = instance_type
+      }
+    ]
+  } : null
 
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [desired_capacity]
-  }
+  tags = merge(local.tags, {
+    Name             = "${var.name}-ecs"
+    AmazonECSManaged = "true"
+  })
 }
 
 

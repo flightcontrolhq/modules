@@ -8,7 +8,7 @@ resource "aws_ecs_capacity_provider" "ec2" {
   name = local.ec2_capacity_provider_name
 
   auto_scaling_group_provider {
-    auto_scaling_group_arn         = aws_autoscaling_group.ecs[0].arn
+    auto_scaling_group_arn         = module.ecs_autoscaling[0].autoscaling_group_arn
     managed_termination_protection = var.ec2_managed_termination_protection
 
     managed_scaling {

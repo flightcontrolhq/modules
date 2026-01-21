@@ -57,12 +57,12 @@ output "launch_template_arn" {
 
 output "autoscaling_group_arn" {
   description = "The ARN of the Auto Scaling Group (null if EC2 disabled)."
-  value       = local.enable_ec2 ? aws_autoscaling_group.ecs[0].arn : null
+  value       = local.enable_ec2 ? module.ecs_autoscaling[0].autoscaling_group_arn : null
 }
 
 output "autoscaling_group_name" {
   description = "The name of the Auto Scaling Group (null if EC2 disabled)."
-  value       = local.enable_ec2 ? aws_autoscaling_group.ecs[0].name : null
+  value       = local.enable_ec2 ? module.ecs_autoscaling[0].autoscaling_group_name : null
 }
 
 output "ecs_instance_role_arn" {

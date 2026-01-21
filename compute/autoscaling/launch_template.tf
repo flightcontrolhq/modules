@@ -292,9 +292,9 @@ resource "aws_launch_template" "this" {
         }
       }
 
-      accelerator_types       = instance_requirements.value.accelerator_types
-      allowed_instance_types  = instance_requirements.value.allowed_instance_types
-      bare_metal              = instance_requirements.value.bare_metal
+      accelerator_types      = instance_requirements.value.accelerator_types
+      allowed_instance_types = instance_requirements.value.allowed_instance_types
+      bare_metal             = instance_requirements.value.bare_metal
 
       dynamic "baseline_ebs_bandwidth_mbps" {
         for_each = instance_requirements.value.baseline_ebs_bandwidth_mbps != null ? [instance_requirements.value.baseline_ebs_bandwidth_mbps] : []

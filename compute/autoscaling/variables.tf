@@ -46,7 +46,7 @@ variable "max_size" {
 
 variable "desired_capacity" {
   type        = number
-  description = "The desired number of instances in the Auto Scaling Group. If null, defaults to min_size."
+  description = "The initial desired number of instances in the Auto Scaling Group. If null, defaults to min_size. Note: Changes to this value are ignored after creation to support external scaling mechanisms (ECS capacity providers, scaling policies, scheduled actions). To adjust capacity, use scaling policies or update min_size."
   default     = null
 
   validation {
@@ -126,12 +126,6 @@ variable "max_instance_lifetime" {
 variable "force_delete" {
   type        = bool
   description = "Whether to force delete the Auto Scaling Group without waiting for instances to terminate."
-  default     = false
-}
-
-variable "ignore_desired_capacity_changes" {
-  type        = bool
-  description = "Whether to ignore changes to the desired_capacity attribute. Useful when using external scaling mechanisms."
   default     = false
 }
 
@@ -572,19 +566,19 @@ variable "mixed_instances_policy" {
           min = optional(number)
           max = optional(number)
         }))
-        accelerator_manufacturers    = optional(list(string))
-        accelerator_names            = optional(list(string))
-        accelerator_total_memory_mib = optional(object({ min = optional(number), max = optional(number) }))
-        accelerator_types            = optional(list(string))
-        allowed_instance_types       = optional(list(string))
-        bare_metal                   = optional(string)
-        baseline_ebs_bandwidth_mbps  = optional(object({ min = optional(number), max = optional(number) }))
-        burstable_performance        = optional(string)
-        cpu_manufacturers            = optional(list(string))
-        excluded_instance_types      = optional(list(string))
-        instance_generations         = optional(list(string))
-        local_storage                = optional(string)
-        local_storage_types          = optional(list(string))
+        accelerator_manufacturers                               = optional(list(string))
+        accelerator_names                                       = optional(list(string))
+        accelerator_total_memory_mib                            = optional(object({ min = optional(number), max = optional(number) }))
+        accelerator_types                                       = optional(list(string))
+        allowed_instance_types                                  = optional(list(string))
+        bare_metal                                              = optional(string)
+        baseline_ebs_bandwidth_mbps                             = optional(object({ min = optional(number), max = optional(number) }))
+        burstable_performance                                   = optional(string)
+        cpu_manufacturers                                       = optional(list(string))
+        excluded_instance_types                                 = optional(list(string))
+        instance_generations                                    = optional(list(string))
+        local_storage                                           = optional(string)
+        local_storage_types                                     = optional(list(string))
         max_spot_price_as_percentage_of_optimal_on_demand_price = optional(number)
         memory_gib_per_vcpu                                     = optional(object({ min = optional(number), max = optional(number) }))
         network_bandwidth_gbps                                  = optional(object({ min = optional(number), max = optional(number) }))
@@ -1016,9 +1010,9 @@ variable "scaling_policies" {
         # Customized load metric
         customized_load_metric_specification = optional(object({
           metric_data_queries = list(object({
-            id         = string
-            expression = optional(string)
-            label      = optional(string)
+            id          = string
+            expression  = optional(string)
+            label       = optional(string)
             return_data = optional(bool)
             metric_stat = optional(object({
               metric = object({
@@ -1038,9 +1032,9 @@ variable "scaling_policies" {
         # Customized scaling metric
         customized_scaling_metric_specification = optional(object({
           metric_data_queries = list(object({
-            id         = string
-            expression = optional(string)
-            label      = optional(string)
+            id          = string
+            expression  = optional(string)
+            label       = optional(string)
             return_data = optional(bool)
             metric_stat = optional(object({
               metric = object({
@@ -1060,9 +1054,9 @@ variable "scaling_policies" {
         # Customized capacity metric
         customized_capacity_metric_specification = optional(object({
           metric_data_queries = list(object({
-            id         = string
-            expression = optional(string)
-            label      = optional(string)
+            id          = string
+            expression  = optional(string)
+            label       = optional(string)
             return_data = optional(bool)
             metric_stat = optional(object({
               metric = object({
