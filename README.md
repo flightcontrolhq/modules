@@ -24,7 +24,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | Planned |
 | `database/`   | `aurora`          | AWS Aurora clusters                                                    | Planned |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | Planned |
-| `database/`   | `rds`             | AWS RDS instances                                                      | Planned |
+| `database/`   | `rds`             | AWS RDS instances                                                      | v1.0.0  |
 | `kubernetes/` | -                 | Kubernetes resources                                                   | Planned |
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
