@@ -17,7 +17,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
 | `cdn/`        | `cloudfront`      | AWS CloudFront distributions                                           | Planned |
-| `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | Planned |
+| `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
 | `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, load balancing, and auto scaling | v1.0.0  |
