@@ -1,6 +1,6 @@
-# AWS Security Groups
+# AWS Security Groups Module
 
-Creates an AWS Security Group with configurable ingress and egress rules using the modern `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources.
+This module creates an AWS Security Group with configurable ingress and egress rules using the modern `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` resources.
 
 This module can be used both standalone (called directly by users) and internally by other modules in this library.
 
@@ -11,6 +11,7 @@ This module can be used both standalone (called directly by users) and internall
 - **Modern Resources**: Uses `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` for better state management
 - **Lifecycle Management**: `create_before_destroy` for zero-downtime updates
 - **Consistent Tagging**: Automatic ManagedBy and Module tags
+- **Input Validation**: Comprehensive validation for ports, protocols, CIDR blocks, and source types
 
 ## Usage
 
@@ -267,19 +268,36 @@ module "ecs_service_sg" {
 
 ## Inputs
 
+### General
+
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| name | Name prefix for the security group. | `string` | n/a | yes |
-| vpc_id | The ID of the VPC where the security group will be created. | `string` | n/a | yes |
-| name_suffix | Suffix to append to the security group name. | `string` | `"sg"` | no |
-| description | Description of the security group. | `string` | `"Managed by Terraform"` | no |
-| tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
-| ingress_rules | List of ingress rules. Each rule specifies port range, protocol, and source. | `list(object)` | `[]` | no |
-| egress_rules | List of egress rules. Each rule specifies port range, protocol, and destination. | `list(object)` | `[]` | no |
-| allow_all_egress | Create default egress rules allowing all outbound traffic. | `bool` | `false` | no |
-| allow_all_egress_ipv4_only | Only create IPv4 egress rule when allow_all_egress is true. | `bool` | `false` | no |
+| name | Name prefix for the security group | `string` | n/a | yes |
+| name_suffix | Suffix to append to the security group name | `string` | `"sg"` | no |
+| description | Description of the security group | `string` | `"Managed by Terraform"` | no |
+| tags | A map of tags to assign to all resources | `map(string)` | `{}` | no |
 
-### Ingress/Egress Rule Object
+### Network
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| vpc_id | The ID of the VPC where the security group will be created | `string` | n/a | yes |
+
+### Ingress Rules
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| ingress_rules | List of ingress rules with port range, protocol, and source | `list(object)` | `[]` | no |
+
+### Egress Rules
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| egress_rules | List of egress rules with port range, protocol, and destination | `list(object)` | `[]` | no |
+| allow_all_egress | Create default egress rules allowing all outbound traffic | `bool` | `false` | no |
+| allow_all_egress_ipv4_only | Only create IPv4 egress rule when allow_all_egress is true | `bool` | `false` | no |
+
+### Rule Object Attributes
 
 | Attribute | Description | Type | Required |
 |-----------|-------------|------|----------|
@@ -295,17 +313,389 @@ module "ecs_service_sg" {
 
 ## Outputs
 
+### Security Group
+
 | Name | Description |
 |------|-------------|
-| security_group_id | The ID of the security group. |
-| security_group_arn | The ARN of the security group. |
-| security_group_name | The name of the security group. |
-| security_group_vpc_id | The VPC ID of the security group. |
-| security_group_owner_id | The owner ID (AWS account ID) of the security group. |
-| ingress_rule_ids | Map of ingress rule keys to their IDs. |
-| ingress_rule_arns | Map of ingress rule keys to their ARNs. |
-| egress_rule_ids | Map of egress rule keys to their IDs. |
-| egress_rule_arns | Map of egress rule keys to their ARNs. |
+| security_group_id | The ID of the security group |
+| security_group_arn | The ARN of the security group |
+| security_group_name | The name of the security group |
+| security_group_vpc_id | The VPC ID of the security group |
+| security_group_owner_id | The owner ID (AWS account ID) of the security group |
+
+### Ingress Rules
+
+| Name | Description |
+|------|-------------|
+| ingress_rule_ids | Map of ingress rule keys to their IDs |
+| ingress_rule_arns | Map of ingress rule keys to their ARNs |
+
+### Egress Rules
+
+| Name | Description |
+|------|-------------|
+| egress_rule_ids | Map of egress rule keys to their IDs |
+| egress_rule_arns | Map of egress rule keys to their ARNs |
+
+## Architecture
+
+### Overview
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              Security Group                                   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                    aws_security_group.this                             │  │
+│  │  • Name: {name}-{name_suffix}                                          │  │
+│  │  • VPC association                                                     │  │
+│  │  • create_before_destroy lifecycle                                     │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                     │                                         │
+│         ┌───────────────────────────┼───────────────────────────┐            │
+│         ▼                                                       ▼            │
+│  ┌──────────────────────────────┐          ┌──────────────────────────────┐  │
+│  │       Ingress Rules          │          │        Egress Rules          │  │
+│  ├──────────────────────────────┤          ├──────────────────────────────┤  │
+│  │ • CIDR IPv4 sources          │          │ • CIDR IPv4 destinations     │  │
+│  │ • CIDR IPv6 sources          │          │ • CIDR IPv6 destinations     │  │
+│  │ • Security group references  │          │ • Security group references  │  │
+│  │ • Prefix list references     │          │ • Prefix list references     │  │
+│  │ • Self-referencing           │          │ • Self-referencing           │  │
+│  └──────────────────────────────┘          │ • Allow-all defaults         │  │
+│                                            └──────────────────────────────┘  │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Detailed Module Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    NETWORKING/SECURITY-GROUPS TERRAFORM MODULE                                       │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                 INPUT VARIABLES                                                        ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       GENERAL               │   │         NETWORK                 │   │       DEFAULT EGRESS                    │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • allow_all_egress                      │  ║
+║  │ • name_suffix               │   │                                 │   │ • allow_all_egress_ipv4_only            │  ║
+║  │ • description               │   │                                 │   │                                         │  ║
+║  │ • tags                      │   │                                 │   │                                         │  ║
+║  └──────────────┬──────────────┘   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
+║                 │                                                                                                      ║
+║                 ▼                                                                                                      ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                               LOCALS                                                              │  ║
+║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
+║  │  │ • default_tags = { ManagedBy = "terraform", Module = "networking/security-groups" }                      │   │  ║
+║  │  │ • tags = merge(default_tags, var.tags)                                                                    │   │  ║
+║  │  │ • security_group_name = "${var.name}-${var.name_suffix}"                                                  │   │  ║
+║  │  │                                                                                                            │   │  ║
+║  │  │ RULE TRANSFORMATIONS:                                                                                      │   │  ║
+║  │  │ • ingress_rules_map = { for idx, rule in var.ingress_rules : tostring(idx) => rule }                      │   │  ║
+║  │  │ • egress_rules_map = { for idx, rule in var.egress_rules : tostring(idx) => rule }                        │   │  ║
+║  │  └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                         INGRESS RULES                                                            │  ║
+║  ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  ║
+║  │ • ingress_rules[]:                                                                                               │  ║
+║  │   - description                       - from_port, to_port, ip_protocol                                          │  ║
+║  │   - cidr_ipv4                         - cidr_ipv6                                                                │  ║
+║  │   - referenced_security_group_id      - prefix_list_id                                                           │  ║
+║  │   - self (bool)                                                                                                  │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                          EGRESS RULES                                                            │  ║
+║  ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  ║
+║  │ • egress_rules[]:                                                                                                │  ║
+║  │   - description                       - from_port, to_port, ip_protocol                                          │  ║
+║  │   - cidr_ipv4                         - cidr_ipv6                                                                │  ║
+║  │   - referenced_security_group_id      - prefix_list_id                                                           │  ║
+║  │   - self (bool)                                                                                                  │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              TERRAFORM RESOURCES                                                       ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                    aws_security_group.this                                                   │    ║
+║    │                                        (CORE RESOURCE)                                                       │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │                                                                                                              │    ║
+║    │  • name = local.security_group_name                                                                          │    ║
+║    │  • description = var.description                                                                             │    ║
+║    │  • vpc_id = var.vpc_id                                                                                       │    ║
+║    │  • tags = merge(local.tags, { Name = local.security_group_name })                                            │    ║
+║    │                                                                                                              │    ║
+║    │  lifecycle { create_before_destroy = true }                                                                  │    ║
+║    └──────────────────────────────────────────────────────────┬──────────────────────────────────────────────────┘    ║
+║                                                               │                                                        ║
+║                   ┌───────────────────────────────────────────┴───────────────────────────────────────┐                ║
+║                   │                                                                                   │                ║
+║                   ▼                                                                                   ▼                ║
+║    ┌──────────────────────────────────────────────┐    ┌──────────────────────────────────────────────┐              ║
+║    │ aws_vpc_security_group_ingress_rule.this     │    │  aws_vpc_security_group_egress_rule.this     │              ║
+║    │              (for_each)                      │    │               (for_each)                     │              ║
+║    ├──────────────────────────────────────────────┤    ├──────────────────────────────────────────────┤              ║
+║    │ • security_group_id                          │    │ • security_group_id                          │              ║
+║    │ • from_port, to_port, ip_protocol            │    │ • from_port, to_port, ip_protocol            │              ║
+║    │ • cidr_ipv4 / cidr_ipv6                      │    │ • cidr_ipv4 / cidr_ipv6                      │              ║
+║    │ • referenced_security_group_id               │    │ • referenced_security_group_id               │              ║
+║    │ • prefix_list_id                             │    │ • prefix_list_id                             │              ║
+║    │ • self -> uses own security_group_id         │    │ • self -> uses own security_group_id         │              ║
+║    └──────────────────────────────────────────────┘    └──────────────────────────────────────────────┘              ║
+║                                                                                                                        ║
+║                   ┌───────────────────────────────────────────────────────────────────┐                                ║
+║                   │                    DEFAULT EGRESS RULES                           │                                ║
+║                   │              (conditional: allow_all_egress = true)               │                                ║
+║                   └───────────────────────────────────────────────────────────────────┘                                ║
+║                                                               │                                                        ║
+║                   ┌───────────────────────────────────────────┴───────────────────────────────────────┐                ║
+║                   │                                                                                   │                ║
+║                   ▼                                                                                   ▼                ║
+║    ┌──────────────────────────────────────────────┐    ┌──────────────────────────────────────────────┐              ║
+║    │ aws_vpc_security_group_egress_rule           │    │ aws_vpc_security_group_egress_rule           │              ║
+║    │         .allow_all_ipv4[0]                   │    │         .allow_all_ipv6[0]                   │              ║
+║    │        (count: 0 or 1)                       │    │  (count: 0 or 1, based on ipv4_only)         │              ║
+║    ├──────────────────────────────────────────────┤    ├──────────────────────────────────────────────┤              ║
+║    │ • ip_protocol = "-1"                         │    │ • ip_protocol = "-1"                         │              ║
+║    │ • cidr_ipv4 = "0.0.0.0/0"                    │    │ • cidr_ipv6 = "::/0"                         │              ║
+║    │ • All outbound IPv4 traffic                  │    │ • All outbound IPv6 traffic                  │              ║
+║    └──────────────────────────────────────────────┘    └──────────────────────────────────────────────┘              ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                   OUTPUTS                                                              ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │         SECURITY GROUP                  │   │           INGRESS RULES                 │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • security_group_id                     │   │ • ingress_rule_ids (map)                │                            ║
+║  │ • security_group_arn                    │   │ • ingress_rule_arns (map)               │                            ║
+║  │ • security_group_name                   │   └─────────────────────────────────────────┘                            ║
+║  │ • security_group_vpc_id                 │                                                                          ║
+║  │ • security_group_owner_id               │   ┌─────────────────────────────────────────┐                            ║
+║  └─────────────────────────────────────────┘   │           EGRESS RULES                  │                            ║
+║                                                ├─────────────────────────────────────────┤                            ║
+║                                                │ • egress_rule_ids (map)                 │                            ║
+║                                                │ • egress_rule_arns (map)                │                            ║
+║                                                └─────────────────────────────────────────┘                            ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Data Flow Diagram
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              DATA FLOW DIAGRAM                                                         ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │       var.name          │                                                     ║
+║                                        │    var.name_suffix      │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║                                                     ▼                                                                  ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │ local.security_group    │                                                     ║
+║                                        │         _name           │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║  var.description ───────────────────────────────────┼──────────────────────────────────────┐                           ║
+║  var.vpc_id ────────────────────────────────────────┼──────────────────────────────────────┤                           ║
+║  local.tags ────────────────────────────────────────┼──────────────────────────────────────┤                           ║
+║                                                     │                                      │                           ║
+║                                                     ▼                                      ▼                           ║
+║                              ┌───────────────────────────────────────────────────────────────┐                         ║
+║                              │                                                               │                         ║
+║                              │              aws_security_group.this                          │                         ║
+║                              │                                                               │                         ║
+║                              └────────────────────────────┬──────────────────────────────────┘                         ║
+║                                                           │                                                            ║
+║           ┌───────────────────────────────────────────────┼───────────────────────────────────────────────┐            ║
+║           │                                               │                                               │            ║
+║           ▼                                               │                                               ▼            ║
+║  var.ingress_rules                                        │                                      var.egress_rules      ║
+║           │                                               │                                               │            ║
+║           ▼                                               │                                               ▼            ║
+║  local.ingress_rules_map                                  │                                      local.egress_rules    ║
+║           │                                               │                                      _map    │            ║
+║           ▼                                               │                                               ▼            ║
+║  aws_vpc_security_group                                   │                                      aws_vpc_security      ║
+║  _ingress_rule.this                                       │                                      _group_egress_rule    ║
+║  (for_each)                                               │                                      .this (for_each)      ║
+║           │                                               │                                               │            ║
+║           │                                               │                                               │            ║
+║           │                              var.allow_all_egress                                             │            ║
+║           │                              var.allow_all_egress_ipv4_only                                   │            ║
+║           │                                               │                                               │            ║
+║           │                                               ▼                                               │            ║
+║           │                              ┌────────────────────────────────┐                               │            ║
+║           │                              │ aws_vpc_security_group_egress  │                               │            ║
+║           │                              │ _rule.allow_all_ipv4[0]        │                               │            ║
+║           │                              │ _rule.allow_all_ipv6[0]        │                               │            ║
+║           │                              └────────────────────────────────┘                               │            ║
+║           │                                               │                                               │            ║
+║           └───────────────────────────────────────────────┴───────────────────────────────────────────────┘            ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║                                                    MODULE OUTPUTS                                                      ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Resource Summary
+
+| Resource | Count Logic | Purpose |
+|----------|-------------|---------|
+| `aws_security_group` | 1 | Core security group resource |
+| `aws_vpc_security_group_ingress_rule` | for_each | Individual ingress rules |
+| `aws_vpc_security_group_egress_rule` | for_each | Individual egress rules |
+| `aws_vpc_security_group_egress_rule.allow_all_ipv4` | 0 or 1 | Default allow-all IPv4 egress |
+| `aws_vpc_security_group_egress_rule.allow_all_ipv6` | 0 or 1 | Default allow-all IPv6 egress |
+
+## FAQ
+
+### What is the difference between ingress and egress rules?
+
+**Ingress rules** control **inbound** traffic - traffic coming INTO your resources from external sources.
+
+**Egress rules** control **outbound** traffic - traffic going OUT from your resources to external destinations.
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         Your EC2 Instance           │
+                    │         (Security Group)            │
+                    └─────────────────────────────────────┘
+                              ▲                │
+                              │                │
+                    INGRESS   │                │   EGRESS
+                    (Inbound) │                │  (Outbound)
+                              │                ▼
+                    ┌─────────────────────────────────────┐
+                    │           External World            │
+                    │    (Internet, Other VPCs, etc.)     │
+                    └─────────────────────────────────────┘
+```
+
+**Example Use Cases:**
+
+| Direction | Example Rule | Purpose |
+|-----------|-------------|---------|
+| Ingress | Allow TCP 443 from 0.0.0.0/0 | Accept HTTPS traffic from internet |
+| Ingress | Allow TCP 5432 from sg-app123 | Accept PostgreSQL from app servers |
+| Egress | Allow all to 0.0.0.0/0 | Allow all outbound internet access |
+| Egress | Allow TCP 443 to 10.0.0.0/16 | Restrict outbound to VPC only on HTTPS |
+
+### When should I use CIDR blocks vs security group references?
+
+| Method | Use When | Example |
+|--------|----------|---------|
+| **CIDR Blocks** | Source/destination is outside AWS or you need IP-based rules | Allow from corporate VPN: `cidr_ipv4 = "203.0.113.0/24"` |
+| **Security Group References** | Source/destination is another AWS resource with a security group | Allow from ALB: `referenced_security_group_id = "sg-alb123"` |
+| **Self Reference** | Resources in the same security group need to communicate | Cluster nodes: `self = true` |
+| **Prefix Lists** | Using AWS-managed or custom prefix lists | AWS S3 endpoints: `prefix_list_id = "pl-12345"` |
+
+**Best Practice:** Prefer security group references over CIDR blocks when possible:
+- More dynamic (handles IP changes automatically)
+- Self-documenting (easier to audit)
+- Works with auto-scaling resources
+
+### How do I allow all traffic between cluster members?
+
+Use a **self-referencing rule** with protocol `-1`:
+
+```hcl
+ingress_rules = [
+  {
+    description = "Allow all traffic from cluster members"
+    from_port   = 0
+    to_port     = 0
+    ip_protocol = "-1"
+    self        = true
+  }
+]
+```
+
+This allows any instance with this security group to communicate with any other instance that also has this security group.
+
+### What is the difference between `allow_all_egress` and explicit egress rules?
+
+| Approach | Use Case |
+|----------|----------|
+| `allow_all_egress = true` | General-purpose workloads that need internet access (web servers, app servers) |
+| Explicit `egress_rules` | Locked-down resources (databases, internal services) that should only reach specific destinations |
+
+**Example: Locked-down database:**
+
+```hcl
+# Database should only talk to the VPC, not the internet
+allow_all_egress = false
+
+egress_rules = [
+  {
+    description = "Allow outbound to VPC only"
+    from_port   = 0
+    to_port     = 0
+    ip_protocol = "-1"
+    cidr_ipv4   = "10.0.0.0/16"
+  }
+]
+```
+
+### Why does this module use individual rule resources instead of inline rules?
+
+This module uses `aws_vpc_security_group_ingress_rule` and `aws_vpc_security_group_egress_rule` instead of inline `ingress` and `egress` blocks within `aws_security_group` for several reasons:
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Better State Management** | Each rule is a separate resource, so adding/removing rules does not affect other rules |
+| **Quota Clarity** | AWS has a default limit of 60 rules per security group; separate resources make this easier to track |
+| **Targeted Updates** | Changing one rule does not trigger recreation of the entire security group |
+| **Modern Best Practice** | AWS recommends using separate rule resources for new implementations |
+
+### How do I reference another security group that is created in the same Terraform apply?
+
+Use the module output directly:
+
+```hcl
+module "alb_sg" {
+  source = "..."
+  name   = "my-alb"
+  # ... ALB security group config
+}
+
+module "ecs_sg" {
+  source = "..."
+  name   = "my-ecs"
+
+  ingress_rules = [
+    {
+      description                  = "Allow traffic from ALB"
+      from_port                    = 8080
+      to_port                      = 8080
+      ip_protocol                  = "tcp"
+      referenced_security_group_id = module.alb_sg.security_group_id
+    }
+  ]
+}
+```
+
+Terraform will automatically determine the correct dependency order.
 
 ## Notes
 
@@ -313,3 +703,9 @@ module "ecs_service_sg" {
 - Each rule must specify exactly one source (ingress) or destination (egress) type.
 - When using `ip_protocol = "-1"` (all protocols), set `from_port = 0` and `to_port = 0`.
 - The `self` attribute creates a self-referencing rule that allows traffic from/to members of the same security group.
+- Rule keys in outputs are index-based strings ("0", "1", "2", etc.) to avoid issues with unknown values at plan time.
+- Valid values for `ip_protocol` are: `tcp`, `udp`, `icmp`, `icmpv6`, `-1` (all), or `all`.
+- Port values must be between -1 and 65535.
+- CIDR blocks are validated to ensure proper format.
+- Security group IDs must start with `sg-` and prefix list IDs must start with `pl-`.
+- When `allow_all_egress = true` and `allow_all_egress_ipv4_only = false`, both IPv4 and IPv6 egress rules are created.

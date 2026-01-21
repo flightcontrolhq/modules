@@ -1,16 +1,18 @@
 # AWS VPC Module
 
-Creates a production-ready AWS VPC with public and private subnets, optional NAT Gateway, IPv6 support, and VPC Flow Logs.
+This module creates a production-ready AWS VPC with public and private subnets, optional NAT Gateway, IPv6 support, and VPC Flow Logs.
 
 ## Features
 
-- Configurable VPC CIDR block
+- Configurable VPC CIDR block with DNS support and hostnames enabled by default
 - Public and private subnets across multiple availability zones
-- Automatic or custom subnet CIDR allocation
+- Automatic or custom subnet CIDR allocation using cidrsubnet function
 - Optional NAT Gateway (single or per-AZ for high availability)
-- Optional IPv6 support with Amazon-provided CIDR
-- Optional VPC Flow Logs to CloudWatch or S3
-- DNS support and hostnames enabled by default
+- Optional IPv6 support with Amazon-provided CIDR and Egress-Only Internet Gateway
+- Optional VPC Flow Logs to CloudWatch or S3 with configurable retention
+- Internet Gateway for public subnet internet access
+- Route tables with automatic association and IPv6 routing support
+- Comprehensive tagging with ManagedBy and Module defaults
 
 ## Usage
 
@@ -158,105 +160,647 @@ module "vpc" {
 
 ## Requirements
 
-| Name               | Version   |
-| ------------------ | --------- |
+| Name | Version |
+|------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws                | >= 5.0    |
+| aws | >= 5.0 |
 
 ## Inputs
 
-| Name                         | Description                                                                                                        | Type           | Default         | Required |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------- | --------------- | :------: |
-| name                         | Name prefix for all resources created by this module.                                                              | `string`       | n/a             |   yes    |
-| vpc_cidr                     | The IPv4 CIDR block for the VPC.                                                                                   | `string`       | `"10.0.0.0/16"` |    no    |
-| subnet_count                 | The number of public and private subnet pairs to create.                                                           | `number`       | `3`             |    no    |
-| availability_zones           | A list of availability zones to use for subnets. If empty, AZs will be automatically selected.                     | `list(string)` | `[]`            |    no    |
-| public_subnet_cidrs          | A list of CIDR blocks for public subnets. If null, CIDRs will be automatically calculated.                         | `list(string)` | `null`          |    no    |
-| private_subnet_cidrs         | A list of CIDR blocks for private subnets. If null, CIDRs will be automatically calculated.                        | `list(string)` | `null`          |    no    |
-| enable_dns_support           | Enable DNS support in the VPC.                                                                                     | `bool`         | `true`          |    no    |
-| enable_dns_hostnames         | Enable DNS hostnames in the VPC.                                                                                   | `bool`         | `true`          |    no    |
-| enable_nat_gateway           | Enable NAT Gateway(s) to allow private subnets to access the internet.                                             | `bool`         | `false`         |    no    |
-| single_nat_gateway           | Use a single NAT Gateway for all private subnets (cost-effective). Set to false for high availability.             | `bool`         | `true`          |    no    |
-| enable_ipv6                  | Enable IPv6 support for the VPC. An Amazon-provided IPv6 CIDR block will be assigned.                              | `bool`         | `false`         |    no    |
-| enable_flow_logs             | Enable VPC Flow Logs for network traffic monitoring.                                                               | `bool`         | `false`         |    no    |
-| flow_logs_destination        | The destination for VPC Flow Logs. Valid values: 'cloudwatch' or 's3'.                                             | `string`       | `"cloudwatch"`  |    no    |
-| flow_logs_s3_bucket_arn      | The ARN of an existing S3 bucket for VPC Flow Logs. If null and destination is 's3', a new bucket will be created. | `string`       | `null`          |    no    |
-| flow_logs_retention_days     | The number of days to retain VPC Flow Logs in CloudWatch. Set to 0 for indefinite retention.                       | `number`       | `30`            |    no    |
-| flow_logs_traffic_type       | The type of traffic to capture in VPC Flow Logs. Valid values: 'ACCEPT', 'REJECT', or 'ALL'.                       | `string`       | `"ALL"`         |    no    |
-| flow_logs_kms_key_id         | KMS key ID for S3 bucket encryption. If null, uses AES256.                                                         | `string`       | `null`          |    no    |
-| flow_logs_versioning_enabled | Enable versioning for the flow logs S3 bucket.                                                                     | `bool`         | `false`         |    no    |
-| tags                         | A map of tags to assign to all resources.                                                                          | `map(string)`  | `{}`            |    no    |
+### General
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| name | Name prefix for all resources created by this module (1-36 characters) | `string` | n/a | yes |
+| tags | A map of tags to assign to all resources | `map(string)` | `{}` | no |
+
+### VPC Configuration
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| vpc_cidr | The IPv4 CIDR block for the VPC | `string` | `"10.0.0.0/16"` | no |
+| enable_dns_support | Enable DNS support in the VPC | `bool` | `true` | no |
+| enable_dns_hostnames | Enable DNS hostnames in the VPC | `bool` | `true` | no |
+
+### Subnets
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| subnet_count | The number of public and private subnet pairs to create (1-6) | `number` | `3` | no |
+| availability_zones | A list of availability zones to use for subnets. If empty, AZs will be automatically selected | `list(string)` | `[]` | no |
+| public_subnet_cidrs | A list of CIDR blocks for public subnets. If null, CIDRs will be automatically calculated | `list(string)` | `null` | no |
+| private_subnet_cidrs | A list of CIDR blocks for private subnets. If null, CIDRs will be automatically calculated | `list(string)` | `null` | no |
+
+### NAT Gateway
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_nat_gateway | Enable NAT Gateway(s) to allow private subnets to access the internet | `bool` | `false` | no |
+| single_nat_gateway | Use a single NAT Gateway for all private subnets (cost-effective). Set to false for high availability (one NAT per AZ) | `bool` | `true` | no |
+
+### IPv6
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_ipv6 | Enable IPv6 support for the VPC. An Amazon-provided IPv6 CIDR block will be assigned | `bool` | `false` | no |
+
+### VPC Flow Logs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_flow_logs | Enable VPC Flow Logs for network traffic monitoring | `bool` | `false` | no |
+| flow_logs_destination | The destination for VPC Flow Logs. Valid values: 'cloudwatch' or 's3' | `string` | `"cloudwatch"` | no |
+| flow_logs_s3_bucket_arn | The ARN of an existing S3 bucket for VPC Flow Logs. If null and destination is 's3', a new bucket will be created | `string` | `null` | no |
+| flow_logs_retention_days | The number of days to retain VPC Flow Logs in CloudWatch. Set to 0 for indefinite retention | `number` | `30` | no |
+| flow_logs_traffic_type | The type of traffic to capture in VPC Flow Logs. Valid values: 'ACCEPT', 'REJECT', or 'ALL' | `string` | `"ALL"` | no |
+| flow_logs_kms_key_id | KMS key ID for S3 bucket encryption. If null, uses AES256 (SSE-S3) | `string` | `null` | no |
+| flow_logs_versioning_enabled | Enable versioning for the flow logs S3 bucket | `bool` | `false` | no |
 
 ## Outputs
 
-| Name                               | Description                                                                             |
-| ---------------------------------- | --------------------------------------------------------------------------------------- |
-| vpc_id                             | The ID of the VPC.                                                                      |
-| vpc_arn                            | The ARN of the VPC.                                                                     |
-| vpc_cidr_block                     | The IPv4 CIDR block of the VPC.                                                         |
-| vpc_ipv6_cidr_block                | The IPv6 CIDR block of the VPC (if IPv6 is enabled).                                    |
-| public_subnet_ids                  | List of IDs of public subnets.                                                          |
-| private_subnet_ids                 | List of IDs of private subnets.                                                         |
-| public_subnet_cidrs                | List of IPv4 CIDR blocks of public subnets.                                             |
-| private_subnet_cidrs               | List of IPv4 CIDR blocks of private subnets.                                            |
-| public_subnet_ipv6_cidrs           | List of IPv6 CIDR blocks of public subnets (if IPv6 is enabled).                        |
-| private_subnet_ipv6_cidrs          | List of IPv6 CIDR blocks of private subnets (if IPv6 is enabled).                       |
-| public_subnet_arns                 | List of ARNs of public subnets.                                                         |
-| private_subnet_arns                | List of ARNs of private subnets.                                                        |
-| availability_zones                 | List of availability zones used for subnets.                                            |
-| internet_gateway_id                | The ID of the Internet Gateway.                                                         |
-| internet_gateway_arn               | The ARN of the Internet Gateway.                                                        |
-| nat_gateway_ids                    | List of NAT Gateway IDs (if NAT Gateway is enabled).                                    |
-| nat_gateway_public_ips             | List of public IP addresses of NAT Gateways (if NAT Gateway is enabled).                |
-| nat_gateway_allocation_ids         | List of Elastic IP allocation IDs for NAT Gateways (if NAT Gateway is enabled).         |
-| public_route_table_id              | The ID of the public route table.                                                       |
-| private_route_table_ids            | List of IDs of private route tables.                                                    |
-| egress_only_internet_gateway_id    | The ID of the Egress-Only Internet Gateway (if IPv6 is enabled).                        |
-| flow_log_id                        | The ID of the VPC Flow Log (if flow logs are enabled).                                  |
-| flow_log_cloudwatch_log_group_name | The name of the CloudWatch Log Group for VPC Flow Logs (if destination is cloudwatch).  |
-| flow_log_cloudwatch_log_group_arn  | The ARN of the CloudWatch Log Group for VPC Flow Logs (if destination is cloudwatch).   |
-| flow_log_cloudwatch_iam_role_arn   | The ARN of the IAM Role for VPC Flow Logs to CloudWatch (if destination is cloudwatch). |
-| flow_log_s3_bucket_arn             | The ARN of the S3 bucket for VPC Flow Logs (if destination is s3).                      |
+### VPC
+
+| Name | Description |
+|------|-------------|
+| vpc_id | The ID of the VPC |
+| vpc_arn | The ARN of the VPC |
+| vpc_cidr_block | The IPv4 CIDR block of the VPC |
+| vpc_ipv6_cidr_block | The IPv6 CIDR block of the VPC (if IPv6 is enabled) |
+
+### Subnets
+
+| Name | Description |
+|------|-------------|
+| public_subnet_ids | List of IDs of public subnets |
+| private_subnet_ids | List of IDs of private subnets |
+| public_subnet_cidrs | List of IPv4 CIDR blocks of public subnets |
+| private_subnet_cidrs | List of IPv4 CIDR blocks of private subnets |
+| public_subnet_ipv6_cidrs | List of IPv6 CIDR blocks of public subnets (if IPv6 is enabled) |
+| private_subnet_ipv6_cidrs | List of IPv6 CIDR blocks of private subnets (if IPv6 is enabled) |
+| public_subnet_arns | List of ARNs of public subnets |
+| private_subnet_arns | List of ARNs of private subnets |
+| availability_zones | List of availability zones used for subnets |
+
+### Internet Gateway
+
+| Name | Description |
+|------|-------------|
+| internet_gateway_id | The ID of the Internet Gateway |
+| internet_gateway_arn | The ARN of the Internet Gateway |
+
+### NAT Gateway
+
+| Name | Description |
+|------|-------------|
+| nat_gateway_ids | List of NAT Gateway IDs (if NAT Gateway is enabled) |
+| nat_gateway_public_ips | List of public IP addresses of NAT Gateways (if NAT Gateway is enabled) |
+| nat_gateway_allocation_ids | List of Elastic IP allocation IDs for NAT Gateways (if NAT Gateway is enabled) |
+
+### Route Tables
+
+| Name | Description |
+|------|-------------|
+| public_route_table_id | The ID of the public route table |
+| private_route_table_ids | List of IDs of private route tables |
+
+### Egress-Only Internet Gateway (IPv6)
+
+| Name | Description |
+|------|-------------|
+| egress_only_internet_gateway_id | The ID of the Egress-Only Internet Gateway (if IPv6 is enabled) |
+
+### VPC Flow Logs
+
+| Name | Description |
+|------|-------------|
+| flow_log_id | The ID of the VPC Flow Log (if flow logs are enabled) |
+| flow_log_cloudwatch_log_group_name | The name of the CloudWatch Log Group for VPC Flow Logs (if destination is cloudwatch) |
+| flow_log_cloudwatch_log_group_arn | The ARN of the CloudWatch Log Group for VPC Flow Logs (if destination is cloudwatch) |
+| flow_log_cloudwatch_iam_role_arn | The ARN of the IAM Role for VPC Flow Logs to CloudWatch (if destination is cloudwatch) |
+| flow_log_s3_bucket_arn | The ARN of the S3 bucket for VPC Flow Logs (if destination is s3) |
 
 ## Architecture
 
+### Overview
+
 ```
-VPC (vpc_cidr)
-├── Internet Gateway
-├── Public Subnets (subnet_count)
-│   ├── Route Table → Internet Gateway (0.0.0.0/0)
-│   └── IPv6 Route → Internet Gateway (::/0) [if enable_ipv6]
-├── Private Subnets (subnet_count)
-│   ├── Route Table(s) → NAT Gateway [if enable_nat_gateway]
-│   │   └── 1 table if single_nat_gateway, else 1 per AZ
-│   └── IPv6 Route → Egress-Only IGW (::/0) [if enable_ipv6]
-├── NAT Gateway(s) [if enable_nat_gateway]
-│   └── 1 if single_nat_gateway, else 1 per AZ
-├── Egress-Only Internet Gateway [if enable_ipv6]
-└── Flow Logs [if enable_flow_logs]
-    ├── CloudWatch Log Group + IAM Role [if destination = cloudwatch]
-    └── S3 Bucket (existing or new) [if destination = s3]
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                    VPC                                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                         Internet Gateway                                │  │
+│  │  • Routes 0.0.0.0/0 for public subnets                                 │  │
+│  │  • Routes ::/0 for IPv6 (if enabled)                                   │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                     │                                         │
+│                                     ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                       Public Subnets (1-6 AZs)                          │  │
+│  │  • Auto-assign public IPs                    • Direct internet access  │  │
+│  │  • Shared route table (public)               • IPv6 enabled (optional) │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                     │                                         │
+│                                     ▼                                         │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌────────────────────┐  │
+│  │     NAT Gateway(s)   │  │  Egress-Only IGW     │  │   Elastic IPs      │  │
+│  │  (if enabled)        │  │  (if IPv6 enabled)   │  │   (for NAT GWs)    │  │
+│  │  • Single or per-AZ  │  │  • IPv6 egress only  │  │                    │  │
+│  └──────────────────────┘  └──────────────────────┘  └────────────────────┘  │
+│                                     │                                         │
+│                                     ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                       Private Subnets (1-6 AZs)                         │  │
+│  │  • No public IPs                             • NAT for outbound IPv4   │  │
+│  │  • 1 or N route tables                       • EIGW for outbound IPv6  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                          VPC Flow Logs                                  │  │
+│  │  • CloudWatch Logs (Log Group + IAM Role) or S3 Bucket                 │  │
+│  │  • Configurable retention and traffic type                             │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Subnet CIDR Allocation
+### Detailed Module Diagram
 
-When `public_subnet_cidrs` or `private_subnet_cidrs` are not provided, CIDRs are automatically calculated:
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        NETWORKING/VPC TERRAFORM MODULE                                               │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-| VPC CIDR    | Public Subnets                        | Private Subnets                          |
-| ----------- | ------------------------------------- | ---------------------------------------- |
-| 10.0.0.0/16 | 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24 | 10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24 |
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                 INPUT VARIABLES                                                        ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       GENERAL               │   │       VPC CONFIGURATION         │   │            SUBNETS                      │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • name (required, 1-36 ch)  │   │ • vpc_cidr (10.0.0.0/16)        │   │ • subnet_count (1-6, default: 3)        │  ║
+║  │ • tags                      │   │ • enable_dns_support (true)     │   │ • availability_zones                    │  ║
+║  └──────────────┬──────────────┘   │ • enable_dns_hostnames (true)   │   │ • public_subnet_cidrs                   │  ║
+║                 │                  └─────────────────────────────────┘   │ • private_subnet_cidrs                  │  ║
+║                 │                                                         └─────────────────────────────────────────┘  ║
+║                 ▼                                                                                                      ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                               LOCALS                                                              │  ║
+║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
+║  │  │ • default_tags = { ManagedBy = "terraform", Module = "networking/vpc" }                                   │   │  ║
+║  │  │ • tags = merge(default_tags, var.tags)                                                                    │   │  ║
+║  │  │ • azs = var.availability_zones or slice(data.aws_availability_zones.available.names, 0, subnet_count)     │   │  ║
+║  │  │                                                                                                            │   │  ║
+║  │  │ SUBNET CIDR CALCULATION:                                                                                   │   │  ║
+║  │  │ • public_subnet_cidrs  = cidrsubnet(vpc_cidr, 8, i + 1)   # 10.0.1.0/24, 10.0.2.0/24, ...                 │   │  ║
+║  │  │ • private_subnet_cidrs = cidrsubnet(vpc_cidr, 8, i + 11)  # 10.0.11.0/24, 10.0.12.0/24, ...               │   │  ║
+║  │  │                                                                                                            │   │  ║
+║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
+║  │  │ • nat_gateway_count = enable_nat_gateway ? (single_nat_gateway ? 1 : subnet_count) : 0                    │   │  ║
+║  │  │ • create_flow_log_cloudwatch = enable_flow_logs && flow_logs_destination == "cloudwatch"                  │   │  ║
+║  │  │ • create_flow_log_s3 = enable_flow_logs && flow_logs_destination == "s3"                                  │   │  ║
+║  │  │ • create_flow_log_s3_bucket = create_flow_log_s3 && flow_logs_s3_bucket_arn == null                       │   │  ║
+║  │  └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       NAT GATEWAY           │   │           IPv6                  │   │           VPC FLOW LOGS                 │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • enable_nat_gateway        │   │ • enable_ipv6                   │   │ • enable_flow_logs                      │  ║
+║  │ • single_nat_gateway        │   │                                 │   │ • flow_logs_destination                 │  ║
+║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • flow_logs_s3_bucket_arn               │  ║
+║                                                                          │ • flow_logs_retention_days              │  ║
+║                                                                          │ • flow_logs_traffic_type                │  ║
+║                                                                          │ • flow_logs_kms_key_id                  │  ║
+║                                                                          │ • flow_logs_versioning_enabled          │  ║
+║                                                                          └─────────────────────────────────────────┘  ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              TERRAFORM RESOURCES                                                       ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                         aws_vpc.this                                                         │    ║
+║    │                                        (CORE RESOURCE)                                                       │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │ • cidr_block = var.vpc_cidr                           • enable_dns_support = var.enable_dns_support         │    ║
+║    │ • enable_dns_hostnames = var.enable_dns_hostnames     • assign_generated_ipv6_cidr_block = var.enable_ipv6  │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║           ┌───────────────────────────────────────────────┼───────────────────────────────────────────┐                ║
+║           │                                               │                                           │                ║
+║           ▼                                               ▼                                           ▼                ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────────┐          ║
+║    │  aws_internet_gateway.this   │    │  aws_subnet.public (count)   │    │  aws_subnet.private (count)  │          ║
+║    ├──────────────────────────────┤    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
+║    │ • Attached to VPC            │    │ • Per AZ (subnet_count)      │    │ • Per AZ (subnet_count)      │          ║
+║    │ • Enables public internet    │    │ • Auto-calculated or custom  │    │ • Auto-calculated or custom  │          ║
+║    │   access                     │    │   CIDR blocks                │    │   CIDR blocks                │          ║
+║    │                              │    │ • map_public_ip_on_launch    │    │ • No public IP               │          ║
+║    │                              │    │ • IPv6 CIDR (if enabled)     │    │ • IPv6 CIDR (if enabled)     │          ║
+║    └──────────────┬───────────────┘    └──────────────┬───────────────┘    └──────────────┬───────────────┘          ║
+║                   │                                   │                                   │                            ║
+║                   ▼                                   ▼                                   ▼                            ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────────┐          ║
+║    │  aws_route_table.public      │    │  aws_route_table_association │    │  aws_route_table.private     │          ║
+║    ├──────────────────────────────┤    │        .public (count)       │    │         (1 or count)         │          ║
+║    │ • 0.0.0.0/0 → IGW            │    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
+║    │ • ::/0 → IGW (if IPv6)       │    │ • Associates public subnets  │    │ • 1 table if single_nat_gw   │          ║
+║    └──────────────────────────────┘    │   to public route table      │    │ • N tables if multi-NAT      │          ║
+║                                        └──────────────────────────────┘    └──────────────┬───────────────┘          ║
+║                                                                                           │                            ║
+║           ┌───────────────────────────────────────────────────────────────────────────────┤                            ║
+║           │                                                                               │                            ║
+║           ▼                                                                               ▼                            ║
+║    ┌──────────────────────────────┐                                        ┌──────────────────────────────┐          ║
+║    │  aws_eip.nat (0, 1, or N)    │                                        │  aws_route_table_association │          ║
+║    ├──────────────────────────────┤                                        │        .private (count)      │          ║
+║    │ • Elastic IPs for NAT GWs    │                                        ├──────────────────────────────┤          ║
+║    │ • domain = "vpc"             │                                        │ • Associates private subnets │          ║
+║    └──────────────┬───────────────┘                                        │   to private route table(s)  │          ║
+║                   │                                                        └──────────────────────────────┘          ║
+║                   ▼                                                                                                    ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────────┐          ║
+║    │ aws_nat_gateway.this         │    │  aws_route.private_nat       │    │ aws_egress_only_internet     │          ║
+║    │      (0, 1, or N)            │    │       (0, 1, or N)           │    │    _gateway.this (0 or 1)    │          ║
+║    ├──────────────────────────────┤    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
+║    │ • 1 if single_nat_gateway    │    │ • 0.0.0.0/0 → NAT Gateway    │    │ • Only if enable_ipv6        │          ║
+║    │ • N if multi-NAT (per AZ)    │    │ • Associates private route   │    │ • Allows IPv6 egress only    │          ║
+║    │ • Placed in public subnets   │    │   tables with NAT GWs        │    │   from private subnets       │          ║
+║    └──────────────────────────────┘    └──────────────────────────────┘    └──────────────────────────────┘          ║
+║                                                                                                                        ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐                                               ║
+║    │ aws_route.private_ipv6       │    │ aws_route.public_internet    │                                               ║
+║    │     _egress (0, 1, or N)     │    │        _ipv6 (0 or 1)        │                                               ║
+║    ├──────────────────────────────┤    ├──────────────────────────────┤                                               ║
+║    │ • ::/0 → Egress-Only IGW     │    │ • ::/0 → Internet Gateway    │                                               ║
+║    │ • Only if enable_ipv6        │    │ • Only if enable_ipv6        │                                               ║
+║    └──────────────────────────────┘    └──────────────────────────────┘                                               ║
+║                                                                                                                        ║
+║  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐   ║
+║  │                                         VPC FLOW LOGS RESOURCES                                                 │   ║
+║  ├────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤   ║
+║  │                                                                                                                 │   ║
+║  │  CLOUDWATCH DESTINATION (if flow_logs_destination = "cloudwatch"):                                              │   ║
+║  │  ┌──────────────────────────────┐  ┌──────────────────────────────┐  ┌──────────────────────────────┐          │   ║
+║  │  │ aws_cloudwatch_log_group     │  │ aws_iam_role.flow_logs       │  │ aws_flow_log.cloudwatch      │          │   ║
+║  │  │       .flow_logs[0]          │  │           [0]                │  │           [0]                │          │   ║
+║  │  ├──────────────────────────────┤  ├──────────────────────────────┤  ├──────────────────────────────┤          │   ║
+║  │  │ • /aws/vpc-flow-logs/{name}  │  │ • Assume role policy for     │  │ • Sends logs to CloudWatch   │          │   ║
+║  │  │ • Configurable retention     │  │   vpc-flow-logs.amazonaws.com│  │ • Uses IAM role for auth     │          │   ║
+║  │  └──────────────────────────────┘  └──────────────────────────────┘  └──────────────────────────────┘          │   ║
+║  │                                                                                                                 │   ║
+║  │  S3 DESTINATION (if flow_logs_destination = "s3"):                                                              │   ║
+║  │  ┌──────────────────────────────┐  ┌──────────────────────────────┐  ┌──────────────────────────────┐          │   ║
+║  │  │ aws_s3_bucket.flow_logs[0]   │  │ aws_s3_bucket_policy         │  │ aws_flow_log.s3[0]           │          │   ║
+║  │  │   (if no existing bucket)    │  │       .flow_logs[0]          │  │                              │          │   ║
+║  │  ├──────────────────────────────┤  ├──────────────────────────────┤  ├──────────────────────────────┤          │   ║
+║  │  │ • Public access blocked      │  │ • Allows log delivery svc    │  │ • Sends logs to S3 bucket    │          │   ║
+║  │  │ • SSE-S3 or KMS encryption   │  │ • GetBucketAcl + PutObject   │  │ • max_aggregation_interval   │          │   ║
+║  │  │ • Optional versioning        │  │                              │  │   = 60 seconds               │          │   ║
+║  │  │ • Lifecycle rules            │  │                              │  │                              │          │   ║
+║  │  └──────────────────────────────┘  └──────────────────────────────┘  └──────────────────────────────┘          │   ║
+║  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                   OUTPUTS                                                              ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │                VPC                       │   │              SUBNETS                    │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • vpc_id                                │   │ • public_subnet_ids                     │                            ║
+║  │ • vpc_arn                               │   │ • private_subnet_ids                    │                            ║
+║  │ • vpc_cidr_block                        │   │ • public_subnet_cidrs                   │                            ║
+║  │ • vpc_ipv6_cidr_block                   │   │ • private_subnet_cidrs                  │                            ║
+║  └─────────────────────────────────────────┘   │ • public_subnet_ipv6_cidrs              │                            ║
+║                                                │ • private_subnet_ipv6_cidrs             │                            ║
+║  ┌─────────────────────────────────────────┐   │ • public_subnet_arns                    │                            ║
+║  │          INTERNET GATEWAY               │   │ • private_subnet_arns                   │                            ║
+║  ├─────────────────────────────────────────┤   │ • availability_zones                    │                            ║
+║  │ • internet_gateway_id                   │   └─────────────────────────────────────────┘                            ║
+║  │ • internet_gateway_arn                  │                                                                          ║
+║  └─────────────────────────────────────────┘   ┌─────────────────────────────────────────┐                            ║
+║                                                │           ROUTE TABLES                  │                            ║
+║  ┌─────────────────────────────────────────┐   ├─────────────────────────────────────────┤                            ║
+║  │            NAT GATEWAY                  │   │ • public_route_table_id                 │                            ║
+║  ├─────────────────────────────────────────┤   │ • private_route_table_ids               │                            ║
+║  │ • nat_gateway_ids                       │   └─────────────────────────────────────────┘                            ║
+║  │ • nat_gateway_public_ips                │                                                                          ║
+║  │ • nat_gateway_allocation_ids            │   ┌─────────────────────────────────────────┐                            ║
+║  └─────────────────────────────────────────┘   │    EGRESS-ONLY IGW (IPv6)               │                            ║
+║                                                ├─────────────────────────────────────────┤                            ║
+║  ┌─────────────────────────────────────────┐   │ • egress_only_internet_gateway_id       │                            ║
+║  │          VPC FLOW LOGS                  │   └─────────────────────────────────────────┘                            ║
+║  ├─────────────────────────────────────────┤                                                                          ║
+║  │ • flow_log_id                           │                                                                          ║
+║  │ • flow_log_cloudwatch_log_group_name    │                                                                          ║
+║  │ • flow_log_cloudwatch_log_group_arn     │                                                                          ║
+║  │ • flow_log_cloudwatch_iam_role_arn      │                                                                          ║
+║  │ • flow_log_s3_bucket_arn                │                                                                          ║
+║  └─────────────────────────────────────────┘                                                                          ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
 
-The formula used:
+### Data Flow Diagram
 
-- Public subnets: `cidrsubnet(vpc_cidr, 8, i + 1)` where i = 0, 1, 2...
-- Private subnets: `cidrsubnet(vpc_cidr, 8, i + 11)` where i = 0, 1, 2...
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              DATA FLOW DIAGRAM                                                         ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │       var.name          │                                                     ║
+║                                        │       var.tags          │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║                                                     ▼                                                                  ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │    local.default_tags   │                                                     ║
+║                                        │      local.tags         │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║  var.vpc_cidr ────────────────────────────────────────────────────────────────► aws_vpc.this                          ║
+║  var.enable_dns_support ──────────────────────────────────────────────────────►      │                                ║
+║  var.enable_dns_hostnames ────────────────────────────────────────────────────►      │                                ║
+║  var.enable_ipv6 ─────────────────────────────────────────────────────────────►      │                                ║
+║                                                                                      │                                 ║
+║                              ┌────────────────────────┬─────────────────────────────┤                                 ║
+║                              │                        │                             │                                 ║
+║                              ▼                        ▼                             ▼                                 ║
+║              aws_internet_gateway.this     aws_subnet.public[]          aws_subnet.private[]                          ║
+║                              │                        │                             │                                 ║
+║  var.subnet_count ───────────┼────────────────────────┴─────────────────────────────┤                                 ║
+║  var.availability_zones ─────┼────► local.azs ──────────────────────────────────────┤                                 ║
+║  var.public_subnet_cidrs ────┼────► local.public_subnet_cidrs ──────────────────────┘                                 ║
+║  var.private_subnet_cidrs ───┼────► local.private_subnet_cidrs ─────────────────────                                  ║
+║                              │                                                                                        ║
+║                              │                        ┌─────────────────────────────────────────────────┐              ║
+║                              │                        │                                                 │              ║
+║                              ▼                        ▼                                                 ▼              ║
+║              aws_route_table.public        aws_route_table.private[]        aws_route_table_association.*             ║
+║                              │                        │                                                               ║
+║                              │                        │                                                               ║
+║  var.enable_nat_gateway ─────┼────────────────────────┼─────────────────────────────────────────────────┐              ║
+║  var.single_nat_gateway ─────┼────► local.nat_gateway_count ────────────────────────────────────────────┤              ║
+║                              │                        │                                                 │              ║
+║                              │                        ▼                                                 │              ║
+║                              │      aws_eip.nat[] ──► aws_nat_gateway.this[] ──► aws_route.private_nat[]│              ║
+║                              │                                                                          │              ║
+║  var.enable_ipv6 ────────────┴──────────────────────────────────────────────────────────────────────────┤              ║
+║                              │                                                                          │              ║
+║                              ▼                                                                          ▼              ║
+║              aws_egress_only_internet_gateway.this[0] ──────────────────► aws_route.private_ipv6_egress[]             ║
+║              aws_route.public_internet_ipv6[0]                                                                        ║
+║                                                                                                                        ║
+║  var.enable_flow_logs ─────────────────────────────────────────────────────────────────────────────────┐              ║
+║  var.flow_logs_destination ────────────────────────────────────────────────────────────────────────────┤              ║
+║                              │                                                                          │              ║
+║                              │  if "cloudwatch":                                                        │              ║
+║                              ├──────────────────► aws_cloudwatch_log_group.flow_logs[0]                 │              ║
+║                              │                    aws_iam_role.flow_logs[0]                             │              ║
+║                              │                    aws_flow_log.cloudwatch[0]                            │              ║
+║                              │                                                                          │              ║
+║  var.flow_logs_s3_bucket_arn │  if "s3":                                                                │              ║
+║  var.flow_logs_retention_days├──────────────────► aws_s3_bucket.flow_logs[0] (if no existing bucket)   │              ║
+║  var.flow_logs_traffic_type ─┤                    aws_s3_bucket_policy.flow_logs[0]                     │              ║
+║  var.flow_logs_kms_key_id ───┤                    aws_flow_log.s3[0]                                    │              ║
+║  var.flow_logs_versioning ───┘                                                                          │              ║
+║                                                                                                         │              ║
+║                                                                                                         ▼              ║
+║                                                                                               MODULE OUTPUTS           ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
 
-## NAT Gateway Strategies
+### Resource Summary
 
-| Strategy                     | Description                                   | Cost   | Availability            |
-| ---------------------------- | --------------------------------------------- | ------ | ----------------------- |
-| `single_nat_gateway = true`  | One NAT Gateway shared by all private subnets | Lower  | Single point of failure |
-| `single_nat_gateway = false` | One NAT Gateway per AZ                        | Higher | High availability       |
+| Resource | Count Logic | Purpose |
+|----------|-------------|---------|
+| `aws_vpc` | 1 | Core VPC resource with CIDR, DNS, and optional IPv6 |
+| `aws_internet_gateway` | 1 | Enables internet access for public subnets |
+| `aws_subnet` (public) | subnet_count | Public subnets across AZs with auto-assign public IP |
+| `aws_subnet` (private) | subnet_count | Private subnets across AZs without public IP |
+| `aws_route_table` (public) | 1 | Shared route table for all public subnets |
+| `aws_route_table` (private) | 1 or subnet_count | 1 if single_nat_gateway, N if multi-NAT |
+| `aws_route_table_association` | subnet_count * 2 | Associates subnets with route tables |
+| `aws_eip` | 0, 1, or subnet_count | Elastic IPs for NAT Gateways |
+| `aws_nat_gateway` | 0, 1, or subnet_count | NAT for private subnet outbound IPv4 |
+| `aws_egress_only_internet_gateway` | 0 or 1 | IPv6 egress for private subnets |
+| `aws_route` (various) | varies | Routes for IGW, NAT, and EIGW |
+| `aws_cloudwatch_log_group` | 0 or 1 | CloudWatch destination for flow logs |
+| `aws_iam_role` | 0 or 1 | IAM role for CloudWatch flow logs |
+| `aws_s3_bucket` | 0 or 1 | S3 destination for flow logs (if created) |
+| `aws_flow_log` | 0 or 1 | VPC Flow Log resource |
+
+## FAQ
+
+### What is the difference between public and private subnets?
+
+| Aspect | Public Subnet | Private Subnet |
+|--------|---------------|----------------|
+| Public IP | Auto-assigned | Not assigned |
+| Internet Access | Direct via Internet Gateway | Via NAT Gateway (IPv4) or EIGW (IPv6) |
+| Inbound from Internet | Allowed (with security group rules) | Not directly accessible |
+| Use Cases | Load balancers, bastion hosts, NAT Gateways | Application servers, databases, internal services |
+| Route Table | Routes 0.0.0.0/0 to IGW | Routes 0.0.0.0/0 to NAT Gateway |
+
+**Example Architecture:**
+
+```
+Internet
+    │
+    ▼
+┌───────────────────────────────────────────────────┐
+│  Public Subnet                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌───────────┐  │
+│  │     ALB     │  │   Bastion   │  │ NAT Gateway│  │
+│  └──────┬──────┘  └─────────────┘  └─────┬─────┘  │
+└─────────┼────────────────────────────────┼────────┘
+          │                                │
+          ▼                                │
+┌─────────────────────────────────────────────────────┐
+│  Private Subnet                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
+│  │   App EC2   │  │   App EC2   │  │   RDS       │  │
+│  │   (targets) │  │   (targets) │  │  Database   │  │
+│  └─────────────┘  └─────────────┘  └─────────────┘  │
+│                                                      │
+│  Outbound to internet: via NAT Gateway ─────────────┘
+└─────────────────────────────────────────────────────┘
+```
+
+### Which NAT Gateway strategy should I use?
+
+| Strategy | `single_nat_gateway` | Cost | Availability | Use Case |
+|----------|---------------------|------|--------------|----------|
+| Single NAT | `true` (default) | ~$32/month + data | Single AZ dependency | Dev/staging, cost-sensitive |
+| Multi-NAT | `false` | ~$32/month per AZ + data | High availability | Production workloads |
+
+**Single NAT Gateway:**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Public Subnets                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
+│  │   AZ-1a     │  │   AZ-1b     │  │   AZ-1c     │                 │
+│  │ NAT Gateway │  │             │  │             │                 │
+│  └──────┬──────┘  └─────────────┘  └─────────────┘                 │
+│         │                                                           │
+│         └─────────────────────────────────────────────┐             │
+│                                                       │             │
+└───────────────────────────────────────────────────────┼─────────────┘
+                                                        │
+┌───────────────────────────────────────────────────────┼─────────────┐
+│  Private Subnets (all use single NAT)                 │             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │             │
+│  │   AZ-1a     │──│   AZ-1b     │──│   AZ-1c     │───┘             │
+│  └─────────────┘  └─────────────┘  └─────────────┘                 │
+│                                                                     │
+│  Risk: If AZ-1a fails, all private subnets lose internet access    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Multi-NAT Gateway (High Availability):**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Public Subnets                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
+│  │   AZ-1a     │  │   AZ-1b     │  │   AZ-1c     │                 │
+│  │ NAT Gateway │  │ NAT Gateway │  │ NAT Gateway │                 │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                 │
+│         │                │                │                         │
+└─────────┼────────────────┼────────────────┼─────────────────────────┘
+          │                │                │
+┌─────────┼────────────────┼────────────────┼─────────────────────────┐
+│  Private Subnets (each AZ uses its own NAT)                         │
+│  ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐                 │
+│  │   AZ-1a     │  │   AZ-1b     │  │   AZ-1c     │                 │
+│  └─────────────┘  └─────────────┘  └─────────────┘                 │
+│                                                                     │
+│  Benefit: Each AZ is independent, no single point of failure       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### How does automatic CIDR allocation work?
+
+When you don't specify `public_subnet_cidrs` or `private_subnet_cidrs`, the module automatically calculates them using `cidrsubnet()`:
+
+```
+VPC CIDR: 10.0.0.0/16 (65,536 IPs)
+                │
+                ├── Public Subnets (/24 = 256 IPs each)
+                │   ├── cidrsubnet(vpc_cidr, 8, 1)  → 10.0.1.0/24   (AZ-1)
+                │   ├── cidrsubnet(vpc_cidr, 8, 2)  → 10.0.2.0/24   (AZ-2)
+                │   └── cidrsubnet(vpc_cidr, 8, 3)  → 10.0.3.0/24   (AZ-3)
+                │
+                └── Private Subnets (/24 = 256 IPs each)
+                    ├── cidrsubnet(vpc_cidr, 8, 11) → 10.0.11.0/24  (AZ-1)
+                    ├── cidrsubnet(vpc_cidr, 8, 12) → 10.0.12.0/24  (AZ-2)
+                    └── cidrsubnet(vpc_cidr, 8, 13) → 10.0.13.0/24  (AZ-3)
+```
+
+**Custom CIDR Example:**
+
+For larger subnets or different allocation:
+
+```hcl
+module "vpc" {
+  source = "..."
+
+  name         = "custom-vpc"
+  vpc_cidr     = "10.0.0.0/16"
+  subnet_count = 3
+
+  # Larger /20 subnets (4,096 IPs each)
+  public_subnet_cidrs  = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+  private_subnet_cidrs = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+}
+```
+
+### When should I enable IPv6?
+
+| Scenario | Enable IPv6? | Notes |
+|----------|--------------|-------|
+| Modern applications with IPv6 requirements | Yes | Full dual-stack support |
+| IoT devices or mobile apps | Often | Many carriers use IPv6 |
+| Internal-only workloads | Optional | IPv4 sufficient |
+| Legacy applications | No | May not support IPv6 |
+| Cost optimization | Consider | IPv6 has no NAT Gateway costs |
+
+**IPv6 Architecture:**
+```
+                          Internet
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+               IPv4 Route          IPv6 Route
+            (0.0.0.0/0 → IGW)    (::/0 → IGW)
+                    │                   │
+                    ▼                   ▼
+            ┌───────────────────────────────┐
+            │        Public Subnets          │
+            │   IPv4 + IPv6 (dual-stack)     │
+            └───────────────────────────────┘
+                    │
+            ┌───────┴───────┐
+            │               │
+       IPv4 Route      IPv6 Route
+    (0.0.0.0/0 → NAT)  (::/0 → EIGW)
+            │               │
+            ▼               ▼
+            ┌───────────────────────────────┐
+            │       Private Subnets          │
+            │   IPv4 (NAT) + IPv6 (EIGW)     │
+            │   Egress-only for IPv6         │
+            └───────────────────────────────┘
+```
+
+### How do I choose VPC Flow Logs destination?
+
+| Destination | Cost | Query Capability | Retention | Use Case |
+|-------------|------|------------------|-----------|----------|
+| CloudWatch Logs | Higher for large volumes | CloudWatch Insights | Configurable (1-3653 days) | Real-time analysis, smaller VPCs |
+| S3 | Lower for large volumes | Athena queries | Lifecycle policies | Long-term storage, compliance |
+
+**CloudWatch Flow Logs:**
+```hcl
+module "vpc" {
+  # ...
+  enable_flow_logs         = true
+  flow_logs_destination    = "cloudwatch"
+  flow_logs_retention_days = 30
+  flow_logs_traffic_type   = "REJECT"  # Only rejected traffic for security analysis
+}
+```
+
+**S3 Flow Logs with KMS encryption:**
+```hcl
+module "vpc" {
+  # ...
+  enable_flow_logs             = true
+  flow_logs_destination        = "s3"
+  flow_logs_kms_key_id         = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  flow_logs_versioning_enabled = true
+  flow_logs_retention_days     = 90
+}
+```
+
+## Notes
+
+- The `name` variable must be between 1 and 36 characters to ensure S3 bucket names for VPC flow logs stay within the 63 character limit
+- DNS support and hostnames are enabled by default, which is required for services like RDS, ECS, and EFS
+- When using automatic subnet CIDR allocation, public subnets use offsets 1-6 and private subnets use offsets 11-16
+- NAT Gateway requires an Internet Gateway to exist first (handled automatically via `depends_on`)
+- Elastic IPs for NAT Gateways are allocated with `domain = "vpc"` for VPC usage
+- The Egress-Only Internet Gateway only routes IPv6 traffic and only allows outbound connections
+- VPC Flow Logs have a 60-second aggregation interval for near real-time monitoring
+- When using S3 for flow logs with an existing bucket, ensure the bucket policy allows the VPC Flow Logs service principal
+- Private route tables: 1 table when `single_nat_gateway = true`, or 1 per AZ when `false`
+- All resources are tagged with `ManagedBy = "terraform"` and `Module = "networking/vpc"` by default
+- Subnet preconditions validate that `subnet_count` doesn't exceed available AZs in the region
 
 ## License
 

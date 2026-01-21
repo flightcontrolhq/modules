@@ -6,7 +6,7 @@ This module creates an Amazon ECS cluster with configurable capacity providers (
 
 - ECS cluster with optional CloudWatch Container Insights
 - Fargate capacity provider (enabled by default)
-- Fargate Spot capacity provider
+- Fargate Spot capacity provider for cost savings
 - EC2 capacity provider with Auto Scaling Group and managed scaling
 - Optional public (internet-facing) Application Load Balancer
 - Optional private (internal) Application Load Balancer
@@ -15,6 +15,7 @@ This module creates an Amazon ECS cluster with configurable capacity providers (
 - Full launch template support for EC2 instances
 - IMDSv2 enforcement for enhanced security
 - Mixed instances policy with Spot support
+- Automatic ALB-to-EC2 security group integration
 
 ## Usage
 
@@ -371,8 +372,6 @@ module "api_service" {
 | public_nlb_dns_name | Public NLB DNS name |
 | public_nlb_zone_id | Public NLB hosted zone ID |
 | public_nlb_arn_suffix | Public NLB ARN suffix |
-| public_nlb_target_group_arns | Map of target group ARNs |
-| public_nlb_listener_arns | Map of listener ARNs |
 
 ### Private NLB
 
@@ -383,10 +382,10 @@ module "api_service" {
 | private_nlb_dns_name | Private NLB DNS name |
 | private_nlb_zone_id | Private NLB hosted zone ID |
 | private_nlb_arn_suffix | Private NLB ARN suffix |
-| private_nlb_target_group_arns | Map of target group ARNs |
-| private_nlb_listener_arns | Map of listener ARNs |
 
 ## Architecture
+
+### Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -428,6 +427,536 @@ module "api_service" {
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Detailed Module Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    COMPUTE/ECS_CLUSTER TERRAFORM MODULE                                              │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                 INPUT VARIABLES                                                        ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       GENERAL               │   │        NETWORK                  │   │      ECS CLUSTER                        │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • enable_container_insights             │  ║
+║  │ • tags                      │   │ • private_subnet_ids (required) │   └─────────────────────────────────────────┘  ║
+║  └─────────────────────────────┘   │ • public_subnet_ids             │                                                 ║
+║                                    └─────────────────────────────────┘                                                 ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │   FARGATE CAPACITY          │   │   FARGATE SPOT CAPACITY         │   │      EC2 CAPACITY PROVIDER              │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • enable_fargate            │   │ • enable_fargate_spot           │   │ • ec2_instance_type                     │  ║
+║  │ • fargate_weight            │   │ • fargate_spot_weight           │   │ • ec2_ami_id                            │  ║
+║  │ • fargate_base              │   │ • fargate_spot_base             │   │ • ec2_key_name                          │  ║
+║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • ec2_min_size, ec2_max_size            │  ║
+║                                                                          │ • ec2_desired_capacity                  │  ║
+║                                                                          │ • ec2_enable_spot                       │  ║
+║                                                                          │ • ec2_spot_instance_types               │  ║
+║                                                                          │ • ec2_on_demand_base_capacity           │  ║
+║                                                                          │ • ec2_on_demand_percentage_above_base   │  ║
+║                                                                          │ • ec2_root_volume_size/type             │  ║
+║                                                                          │ • ec2_user_data, ec2_enable_imdsv2      │  ║
+║                                                                          │ • ec2_weight, ec2_base                  │  ║
+║                                                                          │ • ec2_managed_termination_protection    │  ║
+║                                                                          │ • ec2_managed_scaling_status            │  ║
+║                                                                          │ • ec2_managed_scaling_target_capacity   │  ║
+║                                                                          │ • ec2_security_group_ids                │  ║
+║                                                                          └─────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                              LOAD BALANCER CONFIG                                                 │  ║
+║  ├────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────┤  ║
+║  │           PUBLIC ALB                       │                    PRIVATE ALB                                      │  ║
+║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
+║  │ • enable_public_alb                        │ • enable_private_alb                                                │  ║
+║  │ • public_alb_enable_https                  │ • private_alb_enable_https                                          │  ║
+║  │ • public_alb_certificate_arn               │ • private_alb_certificate_arn                                       │  ║
+║  │ • public_alb_ssl_policy                    │ • private_alb_ssl_policy                                            │  ║
+║  │ • public_alb_idle_timeout                  │ • private_alb_idle_timeout                                          │  ║
+║  │ • public_alb_enable_deletion_protection    │ • private_alb_enable_deletion_protection                            │  ║
+║  │ • public_alb_ingress_cidr_blocks           │ • private_alb_ingress_cidr_blocks                                   │  ║
+║  │ • public_alb_enable_access_logs            │ • private_alb_enable_access_logs                                    │  ║
+║  │ • public_alb_access_logs_bucket_arn        │ • private_alb_access_logs_bucket_arn                                │  ║
+║  │ • public_alb_web_acl_arn                   │                                                                     │  ║
+║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
+║  │           PUBLIC NLB                       │                    PRIVATE NLB                                      │  ║
+║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
+║  │ • enable_public_nlb                        │ • enable_private_nlb                                                │  ║
+║  │ • public_nlb_enable_deletion_protection    │ • private_nlb_enable_deletion_protection                            │  ║
+║  │ • public_nlb_enable_cross_zone_load_bal... │ • private_nlb_enable_cross_zone_load_balancing                      │  ║
+║  │ • public_nlb_security_group_ids            │ • private_nlb_security_group_ids                                    │  ║
+║  │ • public_nlb_enable_access_logs            │ • private_nlb_enable_access_logs                                    │  ║
+║  │ • public_nlb_access_logs_bucket_arn        │ • private_nlb_access_logs_bucket_arn                                │  ║
+║  │ • public_nlb_enable_elastic_ips            │ • private_nlb_enable_elastic_ips                                    │  ║
+║  │ • public_nlb_elastic_ip_allocation_ids     │ • private_nlb_elastic_ip_allocation_ids                             │  ║
+║  └────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                     LOCALS                                                             ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │ • default_tags = { ManagedBy = "terraform", Module = "compute/ecs_cluster" }                                     │  ║
+║  │ • tags = merge(default_tags, var.tags)                                                                           │  ║
+║  │ • cluster_name = var.name                                                                                        │  ║
+║  │                                                                                                                   │  ║
+║  │ FEATURE FLAGS:                                                                                                    │  ║
+║  │ • enable_ec2 = var.ec2_instance_type != null                                                                     │  ║
+║  │ • ec2_capacity_provider_name = enable_ec2 ? "${var.name}-ec2" : null                                             │  ║
+║  │                                                                                                                   │  ║
+║  │ CAPACITY PROVIDER STRATEGY:                                                                                       │  ║
+║  │ • capacity_provider_strategy = concat(fargate_strategy, fargate_spot_strategy, ec2_strategy)                     │  ║
+║  │                                                                                                                   │  ║
+║  │ EC2 CONFIGURATION:                                                                                                │  ║
+║  │ • ecs_user_data = base64encode(ECS_CLUSTER config + custom user_data)                                            │  ║
+║  │ • ec2_instance_types = concat([var.ec2_instance_type], var.ec2_spot_instance_types)                              │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              TERRAFORM RESOURCES                                                       ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                         aws_ecs_cluster.this                                                 │    ║
+║    │                                           (CORE RESOURCE)                                                    │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │ Creates ECS cluster with Container Insights setting                                                          │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                               aws_ecs_cluster_capacity_providers.this                                        │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │ Associates capacity providers (FARGATE, FARGATE_SPOT, EC2) with default strategy                             │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║         ┌─────────────────────────────────────────────────┼─────────────────────────────────────────────────┐          ║
+║         │                                                 │                                                 │          ║
+║         ▼                                                 ▼                                                 ▼          ║
+║    ┌────────────────────────┐    ┌─────────────────────────────────────────────────────────────────────────────────┐  ║
+║    │  DATA SOURCES          │    │                      EC2 INFRASTRUCTURE (conditional: enable_ec2)               │  ║
+║    ├────────────────────────┤    ├─────────────────────────────────────────────────────────────────────────────────┤  ║
+║    │ • aws_ssm_parameter    │    │                                                                                 │  ║
+║    │   .ecs_optimized_ami   │    │  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  │  ║
+║    │   (conditional)        │    │  │ aws_iam_role         │  │ aws_iam_instance     │  │ aws_iam_role_policy  │  │  ║
+║    │                        │    │  │ .ecs_instance[0]     │  │ _profile             │  │ _attachment (x2)     │  │  ║
+║    │ • aws_region.current   │    │  │                      │──│ .ecs_instance[0]     │  │ • ECS for EC2 Role   │  │  ║
+║    │ • aws_caller_identity  │    │  │ EC2 assume role      │  │                      │  │ • SSM Managed Core   │  │  ║
+║    │   .current             │    │  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘  │  ║
+║    └────────────────────────┘    │                                        │                                        │  ║
+║                                  │                                        ▼                                        │  ║
+║                                  │  ┌─────────────────────────────────────────────────────────────────────────┐   │  ║
+║                                  │  │                    module.ecs_instance_security_group[0]                 │   │  ║
+║                                  │  │                        (networking/security-groups)                      │   │  ║
+║                                  │  ├─────────────────────────────────────────────────────────────────────────┤   │  ║
+║                                  │  │ • Allow all egress                                                       │   │  ║
+║                                  │  │ • Allow inbound from public ALB (if enabled)                             │   │  ║
+║                                  │  │ • Allow inbound from private ALB (if enabled)                            │   │  ║
+║                                  │  └─────────────────────────────────────────────────────────────────────────┘   │  ║
+║                                  │                                        │                                        │  ║
+║                                  │                                        ▼                                        │  ║
+║                                  │  ┌─────────────────────────────────────────────────────────────────────────┐   │  ║
+║                                  │  │                       aws_launch_template.ecs[0]                         │   │  ║
+║                                  │  ├─────────────────────────────────────────────────────────────────────────┤   │  ║
+║                                  │  │ • AMI (ECS-optimized or custom)     • IAM instance profile               │   │  ║
+║                                  │  │ • Instance type                     • Security groups                    │   │  ║
+║                                  │  │ • User data (ECS config)            • Block devices (encrypted)          │   │  ║
+║                                  │  │ • Metadata options (IMDSv2)         • Monitoring enabled                 │   │  ║
+║                                  │  └─────────────────────────────────────────────────────────────────────────┘   │  ║
+║                                  │                                        │                                        │  ║
+║                                  │                                        ▼                                        │  ║
+║                                  │  ┌─────────────────────────────────────────────────────────────────────────┐   │  ║
+║                                  │  │                      module.ecs_autoscaling[0]                           │   │  ║
+║                                  │  │                        (compute/autoscaling)                             │   │  ║
+║                                  │  ├─────────────────────────────────────────────────────────────────────────┤   │  ║
+║                                  │  │ • Uses launch template             • ECS managed tags                    │   │  ║
+║                                  │  │ • min/max/desired capacity         • Protect from scale-in               │   │  ║
+║                                  │  │ • Mixed instances policy (Spot)    • Instance refresh (Rolling)          │   │  ║
+║                                  │  └─────────────────────────────────────────────────────────────────────────┘   │  ║
+║                                  │                                        │                                        │  ║
+║                                  │                                        ▼                                        │  ║
+║                                  │  ┌─────────────────────────────────────────────────────────────────────────┐   │  ║
+║                                  │  │                    aws_ecs_capacity_provider.ec2[0]                      │   │  ║
+║                                  │  ├─────────────────────────────────────────────────────────────────────────┤   │  ║
+║                                  │  │ • Links ASG to ECS cluster         • Managed scaling configuration       │   │  ║
+║                                  │  │ • Managed termination protection   • Step size 1-10                      │   │  ║
+║                                  │  └─────────────────────────────────────────────────────────────────────────┘   │  ║
+║                                  └─────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐   ║
+║    │                                         LOAD BALANCERS (all conditional)                                      │   ║
+║    ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤   ║
+║    │                                                                                                               │   ║
+║    │  ┌────────────────────────────────┐  ┌────────────────────────────────┐                                      │   ║
+║    │  │  module.public_alb[0]          │  │  module.private_alb[0]         │                                      │   ║
+║    │  │  (networking/alb)              │  │  (networking/alb)              │                                      │   ║
+║    │  ├────────────────────────────────┤  ├────────────────────────────────┤                                      │   ║
+║    │  │ • Internet-facing              │  │ • Internal                     │                                      │   ║
+║    │  │ • Public subnets               │  │ • Private subnets              │                                      │   ║
+║    │  │ • HTTP + HTTPS listeners       │  │ • HTTP + HTTPS listeners       │                                      │   ║
+║    │  │ • HTTP→HTTPS redirect          │  │ • HTTP→HTTPS redirect          │                                      │   ║
+║    │  │ • WAF integration              │  │                                │                                      │   ║
+║    │  └────────────────────────────────┘  └────────────────────────────────┘                                      │   ║
+║    │                                                                                                               │   ║
+║    │  ┌────────────────────────────────┐  ┌────────────────────────────────┐                                      │   ║
+║    │  │  module.public_nlb[0]          │  │  module.private_nlb[0]         │                                      │   ║
+║    │  │  (networking/nlb)              │  │  (networking/nlb)              │                                      │   ║
+║    │  ├────────────────────────────────┤  ├────────────────────────────────┤                                      │   ║
+║    │  │ • Internet-facing              │  │ • Internal                     │                                      │   ║
+║    │  │ • Public subnets               │  │ • Private subnets              │                                      │   ║
+║    │  │ • Elastic IPs (optional)       │  │ • Elastic IPs (optional)       │                                      │   ║
+║    │  │ • Cross-zone LB (optional)     │  │ • Cross-zone LB (optional)     │                                      │   ║
+║    │  └────────────────────────────────┘  └────────────────────────────────┘                                      │   ║
+║    │                                                                                                               │   ║
+║    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                   OUTPUTS                                                              ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │           ECS CLUSTER                   │   │        CAPACITY PROVIDERS               │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • cluster_id                            │   │ • fargate_capacity_provider_name        │                            ║
+║  │ • cluster_arn                           │   │ • fargate_spot_capacity_provider_name   │                            ║
+║  │ • cluster_name                          │   │ • ec2_capacity_provider_name            │                            ║
+║  └─────────────────────────────────────────┘   │ • ec2_capacity_provider_arn             │                            ║
+║                                                └─────────────────────────────────────────┘                            ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │       EC2 INFRASTRUCTURE                │   │           PUBLIC ALB                    │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • launch_template_id                    │   │ • public_alb_arn                        │                            ║
+║  │ • launch_template_arn                   │   │ • public_alb_id                         │                            ║
+║  │ • autoscaling_group_arn                 │   │ • public_alb_dns_name                   │                            ║
+║  │ • autoscaling_group_name                │   │ • public_alb_zone_id                    │                            ║
+║  │ • ecs_instance_role_arn                 │   │ • public_alb_arn_suffix                 │                            ║
+║  │ • ecs_instance_role_name                │   │ • public_alb_security_group_id          │                            ║
+║  │ • ecs_instance_security_group_id        │   │ • public_alb_http_listener_arn          │                            ║
+║  └─────────────────────────────────────────┘   │ • public_alb_https_listener_arn         │                            ║
+║                                                └─────────────────────────────────────────┘                            ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │          PRIVATE ALB                    │   │           PUBLIC NLB                    │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • private_alb_arn                       │   │ • public_nlb_arn                        │                            ║
+║  │ • private_alb_id                        │   │ • public_nlb_id                         │                            ║
+║  │ • private_alb_dns_name                  │   │ • public_nlb_dns_name                   │                            ║
+║  │ • private_alb_zone_id                   │   │ • public_nlb_zone_id                    │                            ║
+║  │ • private_alb_arn_suffix                │   │ • public_nlb_arn_suffix                 │                            ║
+║  │ • private_alb_security_group_id         │   └─────────────────────────────────────────┘                            ║
+║  │ • private_alb_http_listener_arn         │                                                                          ║
+║  │ • private_alb_https_listener_arn        │   ┌─────────────────────────────────────────┐                            ║
+║  └─────────────────────────────────────────┘   │          PRIVATE NLB                    │                            ║
+║                                                ├─────────────────────────────────────────┤                            ║
+║                                                │ • private_nlb_arn                       │                            ║
+║                                                │ • private_nlb_id                        │                            ║
+║                                                │ • private_nlb_dns_name                  │                            ║
+║                                                │ • private_nlb_zone_id                   │                            ║
+║                                                │ • private_nlb_arn_suffix                │                            ║
+║                                                └─────────────────────────────────────────┘                            ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Data Flow Diagram
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              DATA FLOW DIAGRAM                                                         ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │       var.name          │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║              ┌──────────────────────────────────────┼──────────────────────────────────────┐                           ║
+║              │                                      │                                      │                           ║
+║              ▼                                      ▼                                      ▼                           ║
+║  var.vpc_id ───────────────────────►  local.cluster_name ─────────────────►  local.ec2_capacity_provider_name         ║
+║              │                              │                                      │                                   ║
+║              │                              ▼                                      │                                   ║
+║              │                   ┌──────────────────────────┐                      │                                   ║
+║              │                   │  aws_ecs_cluster.this    │                      │                                   ║
+║              │                   └────────────┬─────────────┘                      │                                   ║
+║              │                                │                                    │                                   ║
+║              │                                ▼                                    ▼                                   ║
+║              │    var.enable_fargate ────►┌──────────────────────────────────────────────┐                             ║
+║              │    var.enable_fargate_spot►│   aws_ecs_cluster_capacity_providers.this   │                             ║
+║              │    local.enable_ec2 ──────►│   (FARGATE + FARGATE_SPOT + EC2 strategy)   │                             ║
+║              │                            └──────────────────────────────────────────────┘                             ║
+║              │                                                                                                         ║
+║              │                        ┌────────────────────────────────────────────────────┐                           ║
+║              │                        │               EC2 INFRASTRUCTURE                   │                           ║
+║              │                        └────────────────────────────────────────────────────┘                           ║
+║              │                                           │                                                             ║
+║              │                     ┌─────────────────────┼─────────────────────┐                                       ║
+║              │                     ▼                     ▼                     ▼                                       ║
+║              │         var.ec2_instance_type    var.ec2_ami_id    var.ec2_user_data                                    ║
+║              │                     │                     │                     │                                       ║
+║              │                     └─────────────────────┼─────────────────────┘                                       ║
+║              │                                           ▼                                                             ║
+║              │                              ┌──────────────────────────┐                                               ║
+║              │    data.aws_ssm_parameter ──►│ aws_launch_template.ecs  │                                               ║
+║              │    .ecs_optimized_ami        └────────────┬─────────────┘                                               ║
+║              │                                           │                                                             ║
+║              │                                           ▼                                                             ║
+║              │    var.ec2_min/max_size ────►┌──────────────────────────┐                                               ║
+║              │    var.ec2_desired_capacity ►│ module.ecs_autoscaling   │                                               ║
+║              │    var.ec2_enable_spot ─────►│ (compute/autoscaling)    │                                               ║
+║              │    var.private_subnet_ids ──►└────────────┬─────────────┘                                               ║
+║              │                                           │                                                             ║
+║              │                                           ▼                                                             ║
+║              │    var.ec2_managed_scaling_*►┌──────────────────────────────────┐                                       ║
+║              │    var.ec2_managed_termin...►│ aws_ecs_capacity_provider.ec2    │                                       ║
+║              │                              └──────────────────────────────────┘                                       ║
+║              │                                                                                                         ║
+║              │                        ┌────────────────────────────────────────────────────┐                           ║
+║              │                        │                 LOAD BALANCERS                     │                           ║
+║              │                        └────────────────────────────────────────────────────┘                           ║
+║              │                                                                                                         ║
+║              │    var.enable_public_alb ────►┌──────────────────────────┐                                              ║
+║              │    var.public_alb_* ─────────►│ module.public_alb        │                                              ║
+║              │    var.public_subnet_ids ────►└──────────────────────────┘                                              ║
+║              │                                                                                                         ║
+║              │    var.enable_private_alb ───►┌──────────────────────────┐                                              ║
+║              │    var.private_alb_* ────────►│ module.private_alb       │                                              ║
+║              └──────────────────────────────►└──────────────────────────┘                                              ║
+║              │                                                                                                         ║
+║              │    var.enable_public_nlb ────►┌──────────────────────────┐                                              ║
+║              │    var.public_nlb_* ─────────►│ module.public_nlb        │                                              ║
+║              │    var.public_subnet_ids ────►└──────────────────────────┘                                              ║
+║              │                                                                                                         ║
+║              │    var.enable_private_nlb ───►┌──────────────────────────┐                                              ║
+║              │    var.private_nlb_* ────────►│ module.private_nlb       │                                              ║
+║              └──────────────────────────────►└──────────────────────────┘                                              ║
+║                                                                                                                        ║
+║                                                         │                                                              ║
+║                                                         ▼                                                              ║
+║                                                  MODULE OUTPUTS                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Resource Summary
+
+| Resource | Count Logic | Purpose |
+|----------|-------------|---------|
+| `aws_ecs_cluster` | 1 | Core ECS cluster resource |
+| `aws_ecs_cluster_capacity_providers` | 1 | Associates capacity providers with cluster |
+| `aws_ecs_capacity_provider` (EC2) | 0 or 1 | EC2 capacity provider with managed scaling |
+| `aws_launch_template` | 0 or 1 | EC2 instance configuration |
+| `aws_iam_role` (ECS instance) | 0 or 1 | IAM role for EC2 instances |
+| `aws_iam_instance_profile` | 0 or 1 | Instance profile for EC2 instances |
+| `aws_iam_role_policy_attachment` | 0 or 2 | ECS and SSM policy attachments |
+| `module.ecs_autoscaling` | 0 or 1 | Auto Scaling Group for EC2 instances |
+| `module.ecs_instance_security_group` | 0 or 1 | Security group for EC2 instances |
+| `module.public_alb` | 0 or 1 | Public Application Load Balancer |
+| `module.private_alb` | 0 or 1 | Private Application Load Balancer |
+| `module.public_nlb` | 0 or 1 | Public Network Load Balancer |
+| `module.private_nlb` | 0 or 1 | Private Network Load Balancer |
+
+## FAQ
+
+### When should I use Fargate vs EC2 capacity providers?
+
+ECS supports three types of capacity providers, each with distinct trade-offs:
+
+| Provider | Best For | Pros | Cons |
+|----------|----------|------|------|
+| **Fargate** | Most workloads | No infrastructure management, fast scaling, pay-per-task | Higher cost per vCPU/memory |
+| **Fargate Spot** | Fault-tolerant workloads | Up to 70% cost savings | Can be interrupted with 2-minute warning |
+| **EC2** | Specialized needs | Full instance control, GPUs, lower cost at scale | Infrastructure management overhead |
+
+**Choose Fargate when:**
+- You want to focus on applications, not infrastructure
+- Workloads are variable or unpredictable
+- You need fast scaling without warm-up time
+
+**Choose EC2 when:**
+- You need GPU instances
+- You have predictable, high-volume workloads (cost optimization)
+- You need specific instance types or kernel configurations
+- You require persistent local storage
+
+**Example: Cost-optimized mixed strategy**
+
+```hcl
+# Use EC2 for baseline, Fargate Spot for burst capacity
+module "ecs" {
+  source = "..."
+
+  enable_fargate      = false    # Disable standard Fargate
+  enable_fargate_spot = true     # Use Fargate Spot for overflow
+  fargate_spot_weight = 1
+
+  ec2_instance_type = "m5.large"
+  ec2_base          = 5          # Always run 5 tasks on EC2
+  ec2_weight        = 1
+}
+```
+
+### How do capacity provider weights and base work?
+
+The **base** and **weight** parameters control how ECS distributes tasks across capacity providers:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Task Distribution Algorithm                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. First, satisfy BASE requirements (guaranteed tasks per provider)         │
+│                                                                              │
+│     Example: fargate_base=2, ec2_base=3                                      │
+│     → First 5 tasks: 2 on Fargate, 3 on EC2                                  │
+│                                                                              │
+│  2. Then, distribute remaining tasks by WEIGHT ratio                         │
+│                                                                              │
+│     Example: fargate_weight=1, fargate_spot_weight=3                         │
+│     → Additional tasks: 25% Fargate, 75% Fargate Spot                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Example scenarios:**
+
+| Scenario | Configuration | Result |
+|----------|---------------|--------|
+| Fargate only | `enable_fargate=true` | All tasks on Fargate |
+| Cost savings | `fargate_weight=1, fargate_spot_weight=3` | 25% Fargate, 75% Fargate Spot |
+| EC2 baseline | `ec2_base=5, ec2_weight=0, fargate_weight=1` | First 5 on EC2, rest on Fargate |
+
+### How does EC2 managed scaling work?
+
+When EC2 capacity provider is enabled, ECS uses **Capacity Provider Managed Scaling** to automatically adjust the Auto Scaling Group:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Managed Scaling Flow                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. ECS tracks CapacityProviderReservation metric                            │
+│     (Running Tasks / Available Capacity × 100)                               │
+│                                                                              │
+│  2. When reservation exceeds target_capacity (default: 100%):                │
+│     → ECS scales OUT the ASG                                                 │
+│                                                                              │
+│  3. When reservation falls below target_capacity:                            │
+│     → ECS scales IN the ASG (respecting termination protection)              │
+│                                                                              │
+│  Configuration:                                                              │
+│  • ec2_managed_scaling_status = "ENABLED"                                    │
+│  • ec2_managed_scaling_target_capacity = 100 (%)                             │
+│  • ec2_managed_termination_protection = "ENABLED"                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Target capacity recommendations:**
+
+| Target | Use Case |
+|--------|----------|
+| 100% | Maximum density, cost-optimized |
+| 80% | Buffer for burst capacity |
+| 50% | High availability, rapid scaling |
+
+### Can I use both ALB and NLB?
+
+Yes! You can enable multiple load balancers for different use cases:
+
+```hcl
+module "ecs" {
+  source = "..."
+
+  # ALB for HTTP/HTTPS traffic with path-based routing
+  enable_public_alb          = true
+  public_alb_enable_https    = true
+  public_alb_certificate_arn = "arn:aws:acm:..."
+
+  # NLB for TCP/UDP traffic or static IPs
+  enable_public_nlb           = true
+  public_nlb_enable_elastic_ips = true
+  public_nlb_elastic_ip_allocation_ids = ["eipalloc-abc123", "eipalloc-def456"]
+}
+```
+
+| Feature | ALB | NLB |
+|---------|-----|-----|
+| Protocols | HTTP, HTTPS, WebSocket | TCP, UDP, TLS |
+| Path-based routing | Yes | No |
+| Static IPs | No | Yes (with Elastic IPs) |
+| Latency | Higher | Ultra-low |
+| SSL termination | Yes | Yes (TLS) |
+| Health checks | HTTP/HTTPS | TCP/HTTP |
+
+### How do I enable Spot instances for EC2?
+
+Enable Spot instances with the mixed instances policy:
+
+```hcl
+module "ecs" {
+  source = "..."
+
+  ec2_instance_type    = "m5.large"       # Primary instance type
+  ec2_enable_spot      = true
+
+  # Additional Spot instance types for diversity
+  ec2_spot_instance_types = [
+    "m5.xlarge",
+    "m5a.large",
+    "m5a.xlarge",
+    "m4.large"
+  ]
+
+  # Capacity allocation
+  ec2_on_demand_base_capacity         = 2    # Always keep 2 On-Demand
+  ec2_on_demand_percentage_above_base = 25   # 25% On-Demand above base
+}
+```
+
+This creates a mixed instances policy with:
+- 2 On-Demand instances guaranteed
+- 25% On-Demand, 75% Spot for additional capacity
+- Capacity-optimized allocation strategy for best Spot availability
+
+### How are security groups configured for EC2 instances?
+
+The module automatically creates a security group for EC2 instances that:
+
+1. **Allows all egress** (required for ECS agent communication)
+2. **Allows inbound from ALBs** (if enabled) - automatically configured
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Security Group Configuration                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ECS Instance Security Group:                                                │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  Egress: 0.0.0.0/0 (all traffic)                                    │    │
+│  │                                                                      │    │
+│  │  Ingress (dynamic):                                                  │    │
+│  │    ├─ From Public ALB SG (if enable_public_alb = true)              │    │
+│  │    └─ From Private ALB SG (if enable_private_alb = true)            │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  Additional security groups can be attached via:                             │
+│  ec2_security_group_ids = ["sg-xxx", "sg-yyy"]                              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Notes
 
 - The EC2 capacity provider is only created when `ec2_instance_type` is specified
@@ -437,4 +966,7 @@ module "api_service" {
 - The EC2 security group automatically allows traffic from enabled ALBs
 - NLBs require explicit target group and listener configuration (passthrough to the NLB module)
 - NLB target groups support TCP, TLS, UDP, and TCP_UDP protocols
-
+- ALBs require at least 2 subnets in different availability zones
+- The `name` variable is limited to 28 characters to ensure ALB names don't exceed AWS limits
+- EBS volumes on EC2 instances are encrypted by default
+- Managed termination protection prevents ECS from terminating instances with running tasks

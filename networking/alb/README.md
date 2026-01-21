@@ -1,8 +1,18 @@
-# AWS Application Load Balancer
+# Application Load Balancer Module
 
-Creates an Application Load Balancer (ALB) with HTTP and HTTPS listeners, security group, optional access logging, and WAF integration.
+This module creates an AWS Application Load Balancer (ALB) with HTTP and HTTPS listeners, security group, optional access logging, and WAF integration.
 
-This module creates the ALB infrastructure only. Target groups and listener rules are created by service modules (e.g., ECS) that register targets with the ALB.
+## Features
+
+- Application Load Balancer with configurable settings (internal/external, HTTP/2, idle timeout)
+- HTTP and HTTPS listeners with configurable ports and default actions
+- Automatic HTTP to HTTPS redirect when both listeners are enabled
+- Security group with IPv4 and IPv6 ingress rules
+- Optional S3 bucket for access logs with lifecycle policies and encryption
+- WAFv2 Web ACL association support
+- SNI support with additional SSL certificates
+- TLS 1.3 support with modern SSL policies
+- Security hardening (invalid header dropping, desync mitigation)
 
 ## Usage
 
@@ -77,7 +87,8 @@ module "alb" {
   access_logs_retention_days = 365
 
   # WAF
-  web_acl_arn = aws_wafv2_web_acl.main.arn
+  enable_waf_association = true
+  web_acl_arn            = aws_wafv2_web_acl.main.arn
 
   # Custom default response
   default_action_status_code = 404
@@ -221,87 +232,564 @@ spec:
 
 ## Inputs
 
-| Name                           | Description                                                                                                          | Type           | Default                                 | Required |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- | -------------- | --------------------------------------- | -------- |
-| name                           | Name prefix for all resources created by this module.                                                                | `string`       | n/a                                     | yes      |
-| vpc_id                         | The ID of the VPC where the ALB will be created.                                                                     | `string`       | n/a                                     | yes      |
-| subnet_ids                     | A list of subnet IDs for the ALB. Use public subnets for internet-facing ALBs.                                       | `list(string)` | n/a                                     | yes      |
-| tags                           | A map of tags to assign to all resources.                                                                            | `map(string)`  | `{}`                                    | no       |
-| internal                       | If true, the ALB will be internal (not internet-facing).                                                             | `bool`         | `false`                                 | no       |
-| enable_deletion_protection     | Enable deletion protection on the ALB.                                                                               | `bool`         | `false`                                 | no       |
-| idle_timeout                   | The time in seconds that the connection is allowed to be idle.                                                       | `number`       | `60`                                    | no       |
-| enable_http2                   | Enable HTTP/2 on the ALB.                                                                                            | `bool`         | `true`                                  | no       |
-| drop_invalid_header_fields     | Drop HTTP headers with invalid header fields. Recommended for security.                                              | `bool`         | `true`                                  | no       |
-| desync_mitigation_mode         | Determines how the ALB handles requests that might pose a security risk due to HTTP desync.                          | `string`       | `"defensive"`                           | no       |
-| preserve_host_header           | Preserve the Host header in the HTTP request.                                                                        | `bool`         | `false`                                 | no       |
-| xff_header_processing_mode     | Determines how the ALB modifies the X-Forwarded-For header.                                                          | `string`       | `"append"`                              | no       |
-| enable_waf_fail_open           | Enable WAF fail open. If true, traffic is allowed when WAF is unavailable.                                           | `bool`         | `false`                                 | no       |
-| enable_http_listener           | Create an HTTP listener on port 80.                                                                                  | `bool`         | `true`                                  | no       |
-| enable_https_listener          | Create an HTTPS listener on port 443. Requires certificate_arn to be provided.                                       | `bool`         | `false`                                 | no       |
-| http_listener_port             | The port for the HTTP listener.                                                                                      | `number`       | `80`                                    | no       |
-| https_listener_port            | The port for the HTTPS listener.                                                                                     | `number`       | `443`                                   | no       |
-| http_to_https_redirect         | Redirect HTTP traffic to HTTPS. Only applies when both listeners are enabled.                                        | `bool`         | `true`                                  | no       |
-| certificate_arn                | The ARN of the ACM certificate for the HTTPS listener. Required if enable_https_listener is true.                    | `string`       | `null`                                  | no       |
-| ssl_policy                     | The SSL policy for the HTTPS listener.                                                                               | `string`       | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no       |
-| additional_certificate_arns    | A list of additional ACM certificate ARNs for SNI.                                                                   | `list(string)` | `[]`                                    | no       |
-| default_action_status_code     | The HTTP status code to return when no listener rule matches.                                                        | `number`       | `503`                                   | no       |
-| default_action_content_type    | The content type for the fixed response.                                                                             | `string`       | `"text/plain"`                          | no       |
-| default_action_message         | The message body for the fixed response.                                                                             | `string`       | `"Service Unavailable"`                 | no       |
-| ingress_cidr_blocks            | A list of IPv4 CIDR blocks allowed to access the ALB.                                                                | `list(string)` | `["0.0.0.0/0"]`                         | no       |
-| ingress_ipv6_cidr_blocks       | A list of IPv6 CIDR blocks allowed to access the ALB.                                                                | `list(string)` | `["::/0"]`                              | no       |
-| enable_access_logs             | Enable access logging for the ALB.                                                                                   | `bool`         | `false`                                 | no       |
-| access_logs_bucket_arn         | The ARN of an existing S3 bucket for access logs. If null and access logs are enabled, a new bucket will be created. | `string`       | `null`                                  | no       |
-| access_logs_prefix             | The S3 prefix for access logs.                                                                                       | `string`       | `""`                                    | no       |
-| access_logs_retention_days     | The number of days to retain access logs in S3.                                                                      | `number`       | `90`                                    | no       |
-| access_logs_kms_key_id         | KMS key ID for S3 bucket encryption. If null, uses AES256.                                                           | `string`       | `null`                                  | no       |
-| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket.                                                                     | `bool`         | `false`                                 | no       |
-| web_acl_arn                    | The ARN of a WAFv2 Web ACL to associate with the ALB.                                                                | `string`       | `null`                                  | no       |
+### General
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| name | Name prefix for all resources created by this module | `string` | n/a | yes |
+| tags | A map of tags to assign to all resources | `map(string)` | `{}` | no |
+
+### Network
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| vpc_id | The ID of the VPC where the ALB will be created | `string` | n/a | yes |
+| subnet_ids | A list of subnet IDs for the ALB (minimum 2 for HA) | `list(string)` | n/a | yes |
+
+### ALB Settings
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| internal | If true, the ALB will be internal (not internet-facing) | `bool` | `false` | no |
+| enable_deletion_protection | Enable deletion protection on the ALB | `bool` | `false` | no |
+| idle_timeout | The time in seconds that the connection is allowed to be idle (1-4000) | `number` | `60` | no |
+| enable_http2 | Enable HTTP/2 on the ALB | `bool` | `true` | no |
+| drop_invalid_header_fields | Drop HTTP headers with invalid header fields | `bool` | `true` | no |
+| desync_mitigation_mode | How the ALB handles HTTP desync requests (monitor/defensive/strictest) | `string` | `"defensive"` | no |
+| preserve_host_header | Preserve the Host header in the HTTP request | `bool` | `false` | no |
+| xff_header_processing_mode | How the ALB modifies the X-Forwarded-For header (append/preserve/remove) | `string` | `"append"` | no |
+| enable_waf_fail_open | Allow traffic when WAF is unavailable | `bool` | `false` | no |
+
+### Listeners
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_http_listener | Create an HTTP listener on port 80 | `bool` | `true` | no |
+| enable_https_listener | Create an HTTPS listener on port 443 (requires certificate_arn) | `bool` | `false` | no |
+| http_listener_port | The port for the HTTP listener | `number` | `80` | no |
+| https_listener_port | The port for the HTTPS listener | `number` | `443` | no |
+| http_to_https_redirect | Redirect HTTP traffic to HTTPS (when both listeners enabled) | `bool` | `true` | no |
+
+### SSL/TLS
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| certificate_arn | The ARN of the ACM certificate for HTTPS listener | `string` | `null` | no |
+| ssl_policy | The SSL policy for the HTTPS listener | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
+| additional_certificate_arns | Additional ACM certificate ARNs for SNI | `list(string)` | `[]` | no |
+
+### Default Action
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| default_action_status_code | HTTP status code when no listener rule matches (200-599) | `number` | `503` | no |
+| default_action_content_type | Content type for the fixed response | `string` | `"text/plain"` | no |
+| default_action_message | Message body for the fixed response (max 1024 chars) | `string` | `"Service Unavailable"` | no |
+
+### Security Group
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| ingress_cidr_blocks | IPv4 CIDR blocks allowed to access the ALB | `list(string)` | `["0.0.0.0/0"]` | no |
+| ingress_ipv6_cidr_blocks | IPv6 CIDR blocks allowed to access the ALB | `list(string)` | `["::/0"]` | no |
+
+### Access Logs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_access_logs | Enable access logging for the ALB | `bool` | `false` | no |
+| access_logs_bucket_arn | Existing S3 bucket ARN for access logs (creates new if null) | `string` | `null` | no |
+| access_logs_prefix | S3 prefix for access logs | `string` | `""` | no |
+| access_logs_retention_days | Days to retain access logs in S3 | `number` | `90` | no |
+| access_logs_kms_key_id | KMS key ID for S3 bucket encryption (uses AES256 if null) | `string` | `null` | no |
+| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket | `bool` | `false` | no |
+
+### WAF
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_waf_association | Whether to associate a WAF Web ACL with the ALB | `bool` | `false` | no |
+| web_acl_arn | The ARN of a WAFv2 Web ACL to associate with the ALB | `string` | `null` | no |
 
 ## Outputs
 
-| Name                    | Description                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------------- |
-| alb_id                  | The ID of the Application Load Balancer.                                                           |
-| alb_arn                 | The ARN of the Application Load Balancer.                                                          |
-| alb_arn_suffix          | The ARN suffix of the ALB for use with CloudWatch Metrics.                                         |
-| alb_dns_name            | The DNS name of the Application Load Balancer.                                                     |
-| alb_zone_id             | The canonical hosted zone ID of the ALB (for Route53 alias records).                               |
-| http_listener_arn       | The ARN of the HTTP listener (null if disabled).                                                   |
-| https_listener_arn      | The ARN of the HTTPS listener (null if disabled).                                                  |
-| security_group_id       | The ID of the ALB security group.                                                                  |
-| security_group_arn      | The ARN of the ALB security group.                                                                 |
-| access_logs_bucket_name | The name of the S3 bucket for access logs (null if access logs disabled or using existing bucket). |
-| access_logs_bucket_arn  | The ARN of the S3 bucket for access logs (null if access logs disabled or using existing bucket).  |
+### Application Load Balancer
+
+| Name | Description |
+|------|-------------|
+| alb_id | The ID of the Application Load Balancer |
+| alb_arn | The ARN of the Application Load Balancer |
+| alb_arn_suffix | The ARN suffix of the ALB for use with CloudWatch Metrics |
+| alb_dns_name | The DNS name of the Application Load Balancer |
+| alb_zone_id | The canonical hosted zone ID of the ALB (for Route53 alias records) |
+
+### Listeners
+
+| Name | Description |
+|------|-------------|
+| http_listener_arn | The ARN of the HTTP listener (null if disabled) |
+| https_listener_arn | The ARN of the HTTPS listener (null if disabled) |
+
+### Security Group
+
+| Name | Description |
+|------|-------------|
+| security_group_id | The ID of the ALB security group |
+| security_group_arn | The ARN of the ALB security group |
+
+### Access Logs
+
+| Name | Description |
+|------|-------------|
+| access_logs_bucket_name | The name of the S3 bucket for access logs (null if disabled or using existing) |
+| access_logs_bucket_arn | The ARN of the S3 bucket for access logs (null if disabled or using existing) |
 
 ## Architecture
 
+### Overview
+
 ```
-                    ┌─────────────────────────────────────────┐
-                    │            ALB Module                    │
-                    │  ┌─────────────┐  ┌─────────────────┐   │
-Internet ─────────▶ │  │     ALB     │  │    Listeners    │   │
-                    │  │             │  │  (HTTP/HTTPS)   │   │
-                    │  └─────────────┘  └─────────────────┘   │
-                    │  ┌─────────────┐                        │
-                    │  │  Security   │  Default action:       │
-                    │  │   Group     │  Fixed response        │
-                    │  └─────────────┘                        │
-                    └─────────────────────────────────────────┘
-                                    │
-                                    │ Outputs: listener_arn, security_group_id
-                                    ▼
-                    ┌─────────────────────────────────────────┐
-                    │         ECS Service Module               │
-                    │  ┌─────────────────┐  ┌──────────────┐  │
-                    │  │  Target Group   │  │ Listener     │  │
-                    │  │  (for this svc) │  │ Rule         │  │
-                    │  └─────────────────┘  └──────────────┘  │
-                    │  ┌─────────────────┐                    │
-                    │  │  ECS Service    │                    │
-                    │  │  (registers     │                    │
-                    │  │   targets)      │                    │
-                    │  └─────────────────┘                    │
-                    └─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        Application Load Balancer                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                              ALB Core                                   │  │
+│  │  • Internet-facing or Internal     • HTTP/2 support                    │  │
+│  │  • Idle timeout configuration      • Desync mitigation                 │  │
+│  │  • Header field validation         • X-Forwarded-For handling          │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                     │                                         │
+│                                     ▼                                         │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌────────────────────┐  │
+│  │   HTTP Listener      │  │   HTTPS Listener     │  │   Security Group   │  │
+│  │  • Port 80           │  │  • Port 443          │  │  • IPv4/IPv6       │  │
+│  │  • Redirect to HTTPS │  │  • TLS 1.2/1.3       │  │  • HTTP/HTTPS      │  │
+│  │  • Fixed response    │  │  • SNI certificates  │  │  • All egress      │  │
+│  └──────────────────────┘  └──────────────────────┘  └────────────────────┘  │
+│                                                                               │
+│  ┌──────────────────────┐  ┌──────────────────────────────────────────────┐  │
+│  │   Access Logs        │  │                WAF Integration               │  │
+│  │  • S3 bucket         │  │  • WAFv2 Web ACL association                 │  │
+│  │  • Lifecycle rules   │  │  • Fail-open configuration                   │  │
+│  │  • Encryption        │  │                                              │  │
+│  └──────────────────────┘  └──────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Detailed Module Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                       NETWORKING/ALB TERRAFORM MODULE                                                │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                 INPUT VARIABLES                                                        ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       GENERAL               │   │         NETWORK                 │   │          ALB SETTINGS                   │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
+║  │ • tags                      │   │ • subnet_ids (required, min 2)  │   │ • enable_deletion_protection            │  ║
+║  └──────────────┬──────────────┘   └─────────────────────────────────┘   │ • idle_timeout                          │  ║
+║                 │                                                         │ • enable_http2                          │  ║
+║                 │                                                         │ • drop_invalid_header_fields            │  ║
+║                 │                                                         │ • desync_mitigation_mode                │  ║
+║                 │                                                         │ • preserve_host_header                  │  ║
+║                 │                                                         │ • xff_header_processing_mode            │  ║
+║                 │                                                         │ • enable_waf_fail_open                  │  ║
+║                 │                                                         └─────────────────────────────────────────┘  ║
+║                 ▼                                                                                                      ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                               LOCALS                                                              │  ║
+║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
+║  │  │ • default_tags = { ManagedBy = "terraform", Module = "networking/alb" }                                   │   │  ║
+║  │  │ • tags = merge(default_tags, var.tags)                                                                    │   │  ║
+║  │  │                                                                                                            │   │  ║
+║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
+║  │  │ • create_access_logs_bucket = var.enable_access_logs && var.access_logs_bucket_arn == null                │   │  ║
+║  │  │ • access_logs_bucket_name = create_access_logs_bucket ? aws_s3_bucket.access_logs[0].id : extracted_name  │   │  ║
+║  │  │ • create_http_listener = var.enable_http_listener                                                         │   │  ║
+║  │  │ • create_https_listener = var.enable_https_listener                                                       │   │  ║
+║  │  └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │      LISTENERS              │   │         SSL/TLS                 │   │       DEFAULT ACTION                    │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • enable_http_listener      │   │ • certificate_arn               │   │ • default_action_status_code            │  ║
+║  │ • enable_https_listener     │   │ • ssl_policy                    │   │ • default_action_content_type           │  ║
+║  │ • http_listener_port        │   │ • additional_certificate_arns   │   │ • default_action_message                │  ║
+║  │ • https_listener_port       │   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
+║  │ • http_to_https_redirect    │                                                                                       ║
+║  └─────────────────────────────┘                                                                                       ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │    SECURITY GROUP           │   │        ACCESS LOGS              │   │            WAF                          │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • ingress_cidr_blocks       │   │ • enable_access_logs            │   │ • enable_waf_association                │  ║
+║  │ • ingress_ipv6_cidr_blocks  │   │ • access_logs_bucket_arn        │   │ • web_acl_arn                           │  ║
+║  └─────────────────────────────┘   │ • access_logs_prefix            │   └─────────────────────────────────────────┘  ║
+║                                    │ • access_logs_retention_days    │                                                 ║
+║                                    │ • access_logs_kms_key_id        │                                                 ║
+║                                    │ • access_logs_versioning_enabled│                                                 ║
+║                                    └─────────────────────────────────┘                                                 ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              TERRAFORM RESOURCES                                                       ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                        DATA SOURCES                                                               │  ║
+║  │  • data.aws_caller_identity.current    - Account ID for bucket naming and policies                               │  ║
+║  │  • data.aws_region.current             - Current region                                                           │  ║
+║  │  • data.aws_elb_service_account.current - ELB service account for bucket policy                                  │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                      module.security_group                                                   │    ║
+║    │                              (uses ../security-groups module)                                                │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │ Configures: VPC security group with HTTP/HTTPS ingress rules (IPv4 + IPv6), all egress allowed              │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                         aws_lb.this                                                          │    ║
+║    │                                        (CORE RESOURCE)                                                       │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │                                                                                                              │    ║
+║    │  Attributes:                                                                                                 │    ║
+║    │  • name, internal, load_balancer_type = "application"                                                        │    ║
+║    │  • security_groups = [module.security_group.security_group_id]                                               │    ║
+║    │  • subnets, idle_timeout, enable_http2, drop_invalid_header_fields                                           │    ║
+║    │  • desync_mitigation_mode, preserve_host_header, xff_header_processing_mode                                  │    ║
+║    │  • enable_waf_fail_open, enable_deletion_protection                                                          │    ║
+║    │                                                                                                              │    ║
+║    │  ┌─────────────────────────────┐                                                                             │    ║
+║    │  │ dynamic "access_logs" {...} │  (enabled when var.enable_access_logs = true)                               │    ║
+║    │  └─────────────────────────────┘                                                                             │    ║
+║    │                                                                                                              │    ║
+║    │  lifecycle { precondition: certificate_arn required when HTTPS enabled }                                     │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║           ┌───────────────────────────────────────────────┼───────────────────────────────────────┐                    ║
+║           │                                               │                                       │                    ║
+║           ▼                                               ▼                                       ▼                    ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────────┐          ║
+║    │  aws_lb_listener.http[0]    │    │  aws_lb_listener.https[0]   │    │  aws_lb_listener_certificate │          ║
+║    │      (count: 0 or 1)        │    │      (count: 0 or 1)        │    │    .additional (for_each)    │          ║
+║    ├──────────────────────────────┤    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
+║    │ • Port 80, Protocol HTTP    │    │ • Port 443, Protocol HTTPS  │    │ • SNI additional certs       │          ║
+║    │ • Redirect to HTTPS (if     │    │ • SSL policy, certificate   │    │ • Multi-domain support       │          ║
+║    │   both listeners enabled)   │    │ • Fixed response default    │    │                              │          ║
+║    │ • Fixed response (otherwise)│    │   action                    │    │                              │          ║
+║    └──────────────────────────────┘    └──────────────────────────────┘    └──────────────────────────────┘          ║
+║                                                                                                                        ║
+║    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                    ACCESS LOGS S3 RESOURCES                                                  │    ║
+║    │                           (all conditional: count = create_access_logs_bucket ? 1 : 0)                       │    ║
+║    ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │                                                                                                              │    ║
+║    │  ┌──────────────────────────┐  ┌───────────────────────────┐  ┌────────────────────────────────────────────┐ │    ║
+║    │  │ aws_s3_bucket.access_logs│  │aws_s3_bucket_public_access│  │aws_s3_bucket_server_side_encryption       │ │    ║
+║    │  │                          │  │    _block.access_logs     │  │          _configuration.access_logs       │ │    ║
+║    │  │ • Auto-generated name    │  │                           │  │                                            │ │    ║
+║    │  │ • force_destroy = true   │  │ • block_public_acls       │  │ • AES256 or KMS encryption                │ │    ║
+║    │  │                          │  │ • block_public_policy     │  │                                            │ │    ║
+║    │  └──────────────────────────┘  │ • ignore_public_acls      │  └────────────────────────────────────────────┘ │    ║
+║    │                                │ • restrict_public_buckets │                                                 │    ║
+║    │                                └───────────────────────────┘                                                 │    ║
+║    │                                                                                                              │    ║
+║    │  ┌──────────────────────────────────────┐  ┌────────────────────────────────────────────────────────────────┐│    ║
+║    │  │ aws_s3_bucket_versioning.access_logs │  │            aws_s3_bucket_lifecycle_configuration               ││    ║
+║    │  │                                      │  │                        .access_logs                            ││    ║
+║    │  │ • Optional versioning                │  │                                                                ││    ║
+║    │  └──────────────────────────────────────┘  │ • Expiration based on access_logs_retention_days               ││    ║
+║    │                                            └────────────────────────────────────────────────────────────────┘│    ║
+║    │                                                                                                              │    ║
+║    │  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐│    ║
+║    │  │                              aws_s3_bucket_policy.access_logs                                            ││    ║
+║    │  │  • AllowELBRootAccount - ELB service account s3:PutObject                                                ││    ║
+║    │  │  • AllowELBLogDelivery - delivery.logs.amazonaws.com s3:PutObject                                        ││    ║
+║    │  │  • AllowELBLogDeliveryAclCheck - delivery.logs.amazonaws.com s3:GetBucketAcl                             ││    ║
+║    │  │  • DenyInsecureTransport - Deny s3:* when SecureTransport = false                                        ││    ║
+║    │  └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘│    ║
+║    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘    ║
+║                                                                                                                        ║
+║    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                               aws_wafv2_web_acl_association.this[0]                                          │    ║
+║    │                              (count: enable_waf_association ? 1 : 0)                                         │    ║
+║    ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │ • Associates WAFv2 Web ACL with ALB                                                                          │    ║
+║    │ • lifecycle precondition: web_acl_arn must be provided when enabled                                          │    ║
+║    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘    ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                   OUTPUTS                                                              ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │    APPLICATION LOAD BALANCER            │   │              LISTENERS                  │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • alb_id                                │   │ • http_listener_arn                     │                            ║
+║  │ • alb_arn                               │   │ • https_listener_arn                    │                            ║
+║  │ • alb_arn_suffix                        │   └─────────────────────────────────────────┘                            ║
+║  │ • alb_dns_name                          │                                                                          ║
+║  │ • alb_zone_id                           │   ┌─────────────────────────────────────────┐                            ║
+║  └─────────────────────────────────────────┘   │           SECURITY GROUP                │                            ║
+║                                                ├─────────────────────────────────────────┤                            ║
+║  ┌─────────────────────────────────────────┐   │ • security_group_id                     │                            ║
+║  │           ACCESS LOGS                   │   │ • security_group_arn                    │                            ║
+║  ├─────────────────────────────────────────┤   └─────────────────────────────────────────┘                            ║
+║  │ • access_logs_bucket_name               │                                                                          ║
+║  │ • access_logs_bucket_arn                │                                                                          ║
+║  └─────────────────────────────────────────┘                                                                          ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Data Flow Diagram
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              DATA FLOW DIAGRAM                                                         ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │   var.vpc_id            │                                                     ║
+║                                        │   var.subnet_ids        │                                                     ║
+║                                        │   var.ingress_*         │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║                                                     ▼                                                                  ║
+║  var.name ─────────────────────────────► module.security_group                                                        ║
+║  var.tags ─────────────────────────────►         │                                                                    ║
+║                                                  │                                                                    ║
+║                                                  ▼                                                                    ║
+║                              ┌───────────────────────────────────────────────────────────┐                             ║
+║  var.internal ──────────────►│                                                           │                             ║
+║  var.subnet_ids ────────────►│                                                           │                             ║
+║  var.idle_timeout ──────────►│                                                           │                             ║
+║  var.enable_http2 ──────────►│                                                           │                             ║
+║  var.drop_invalid_* ────────►│                    aws_lb.this                            │                             ║
+║  var.desync_* ──────────────►│                                                           │                             ║
+║  var.preserve_host_* ───────►│                                                           │                             ║
+║  var.xff_header_* ──────────►│                                                           │                             ║
+║  var.enable_waf_fail_open ──►│                                                           │                             ║
+║  var.enable_access_logs ────►│                                                           │                             ║
+║  local.tags ────────────────►│                                                           │                             ║
+║                              └────────────────────────────┬──────────────────────────────┘                             ║
+║                                                           │                                                            ║
+║           ┌───────────────────────────────────────────────┼───────────────────────────────┐                            ║
+║           │                                               │                               │                            ║
+║           ▼                                               ▼                               ▼                            ║
+║  var.enable_http_listener                    var.enable_https_listener       var.enable_access_logs                   ║
+║  var.http_listener_port                      var.https_listener_port         var.access_logs_bucket_arn               ║
+║  var.http_to_https_redirect                  var.certificate_arn             var.access_logs_retention_days           ║
+║  var.default_action_*                        var.ssl_policy                  var.access_logs_kms_key_id               ║
+║           │                                  var.additional_certificate_arns           │                              ║
+║           │                                               │                               │                            ║
+║           ▼                                               ▼                               ▼                            ║
+║  aws_lb_listener.http[0]                    aws_lb_listener.https[0]         aws_s3_bucket.access_logs[0]            ║
+║                                             aws_lb_listener_certificate      aws_s3_bucket_policy                     ║
+║                                             .additional                      aws_s3_bucket_*_configuration            ║
+║                                                                                          │                            ║
+║           │                                               │                               │                            ║
+║           └───────────────────────────────────────────────┼───────────────────────────────┘                            ║
+║                                                           │                                                            ║
+║                                                           │                                                            ║
+║  var.enable_waf_association ─────────────────────────────►│                                                            ║
+║  var.web_acl_arn ────────────────────────────────────────►│                                                            ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║                                        aws_wafv2_web_acl_association.this[0]                                          ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║                                                    MODULE OUTPUTS                                                      ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Resource Summary
+
+| Resource | Count Logic | Purpose |
+|----------|-------------|---------|
+| `aws_lb` | 1 | Application Load Balancer |
+| `aws_lb_listener` (HTTP) | 0 or 1 | HTTP listener on port 80 |
+| `aws_lb_listener` (HTTPS) | 0 or 1 | HTTPS listener on port 443 |
+| `aws_lb_listener_certificate` | for_each | Additional SNI certificates |
+| `module.security_group` | 1 | Security group for ALB |
+| `aws_s3_bucket` | 0 or 1 | Access logs bucket (if created) |
+| `aws_s3_bucket_public_access_block` | 0 or 1 | Block public access to logs bucket |
+| `aws_s3_bucket_server_side_encryption_configuration` | 0 or 1 | Encryption for logs bucket |
+| `aws_s3_bucket_versioning` | 0 or 1 | Versioning for logs bucket |
+| `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Retention policy for logs |
+| `aws_s3_bucket_policy` | 0 or 1 | Bucket policy for ELB log delivery |
+| `aws_wafv2_web_acl_association` | 0 or 1 | WAF Web ACL association |
+
+## FAQ
+
+### When should I use HTTP vs HTTPS listeners?
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Production workloads | **HTTPS only** - Enable `enable_https_listener = true`, disable HTTP or use redirect |
+| Development/testing | HTTP may be acceptable, but HTTPS is still recommended |
+| Internal services | HTTPS recommended even for internal traffic for defense in depth |
+| HTTP to HTTPS migration | Enable both listeners with `http_to_https_redirect = true` |
+
+**HTTP to HTTPS redirect behavior:**
+- When both listeners are enabled and `http_to_https_redirect = true`, HTTP requests are automatically redirected to HTTPS with a 301 status code
+- When only HTTP is enabled, requests get the default fixed response
+
+```hcl
+# Recommended production configuration
+enable_http_listener  = true   # Keep for redirect
+enable_https_listener = true
+http_to_https_redirect = true  # Redirect HTTP to HTTPS
+certificate_arn       = aws_acm_certificate.main.arn
+```
+
+### How do I integrate WAF with the ALB?
+
+WAF integration requires two steps:
+
+1. **Create a WAFv2 Web ACL** (outside this module):
+```hcl
+resource "aws_wafv2_web_acl" "main" {
+  name  = "my-web-acl"
+  scope = "REGIONAL"  # Must be REGIONAL for ALB
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+    override_action { none {} }
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesCommonRuleSetMetric"
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    sampled_requests_enabled   = true
+    metric_name                = "myWebAcl"
+  }
+}
+```
+
+2. **Associate with the ALB**:
+```hcl
+module "alb" {
+  source = "..."
+
+  enable_waf_association = true
+  web_acl_arn            = aws_wafv2_web_acl.main.arn
+
+  # Optional: Allow traffic when WAF is unavailable
+  enable_waf_fail_open = false  # Set to true for high availability
+}
+```
+
+### How do access logs work?
+
+Access logs provide detailed information about requests sent to your ALB. There are two options:
+
+**Option 1: Let the module create the S3 bucket (recommended)**
+```hcl
+module "alb" {
+  source = "..."
+
+  enable_access_logs         = true
+  access_logs_retention_days = 90
+  access_logs_kms_key_id     = aws_kms_key.logs.arn  # Optional
+}
+```
+
+**Option 2: Use an existing S3 bucket**
+```hcl
+module "alb" {
+  source = "..."
+
+  enable_access_logs     = true
+  access_logs_bucket_arn = aws_s3_bucket.existing.arn
+  access_logs_prefix     = "alb-logs"
+}
+```
+
+**Important notes:**
+- The bucket must have the correct policy to allow ELB log delivery
+- Logs are delivered every 5 minutes
+- Log files are in gzip format
+
+### How do I add multiple SSL certificates for different domains?
+
+Use SNI (Server Name Indication) with additional certificates:
+
+```hcl
+module "alb" {
+  source = "..."
+
+  enable_https_listener = true
+  certificate_arn       = aws_acm_certificate.primary.arn  # Default cert
+
+  # Additional certs for other domains
+  additional_certificate_arns = [
+    aws_acm_certificate.domain2.arn,
+    aws_acm_certificate.domain3.arn,
+  ]
+}
+```
+
+The ALB will select the appropriate certificate based on the SNI hostname in the TLS handshake.
+
+### What SSL policy should I use?
+
+The default `ELBSecurityPolicy-TLS13-1-2-2021-06` is recommended for most use cases:
+
+| Policy | TLS Versions | Use Case |
+|--------|--------------|----------|
+| `ELBSecurityPolicy-TLS13-1-2-2021-06` (default) | TLS 1.2, 1.3 | Recommended for most workloads |
+| `ELBSecurityPolicy-TLS13-1-3-2021-06` | TLS 1.3 only | Maximum security, modern clients only |
+| `ELBSecurityPolicy-TLS-1-2-2017-01` | TLS 1.2 | Legacy compatibility |
+
+### Why does the module create a security group instead of accepting one?
+
+The module creates its own security group to ensure:
+- Ingress rules match the enabled listeners (HTTP and/or HTTPS)
+- All egress is allowed for target health checks
+- Consistent security configuration
+
+To allow traffic from the ALB to your targets, reference the security group output:
+
+```hcl
+# Allow traffic from ALB to ECS tasks
+resource "aws_security_group_rule" "ecs_from_alb" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = module.alb.security_group_id
+  security_group_id        = aws_security_group.ecs_tasks.id
+}
 ```
 
 ## Security Considerations
@@ -310,9 +798,15 @@ Internet ─────────▶ │  │     ALB     │  │    Listene
 - **Invalid Headers**: `drop_invalid_header_fields` is enabled by default to prevent HTTP header injection attacks.
 - **Desync Protection**: `desync_mitigation_mode` is set to `defensive` by default to protect against HTTP desync attacks.
 - **WAF Integration**: Optionally attach a WAFv2 Web ACL for additional protection.
+- **Access Logs Encryption**: When creating access logs bucket, encryption is enabled (AES256 by default, KMS optional).
+- **Secure Transport**: Access logs bucket policy denies non-HTTPS requests.
 
 ## Notes
 
 - At least 2 subnets in different availability zones are required for high availability.
 - When HTTPS is enabled, a valid ACM certificate ARN must be provided.
 - The security group allows all egress traffic to enable health checks and communication with targets.
+- This module creates the ALB infrastructure only. Target groups and listener rules are created by service modules (e.g., ECS) that register targets with the ALB.
+- The access logs S3 bucket is created with `force_destroy = true` for easier cleanup in development environments. For production, consider using an existing bucket.
+- When using `enable_waf_association`, you must also provide `web_acl_arn`.
+- The module uses the `networking/security-groups` submodule for security group management.

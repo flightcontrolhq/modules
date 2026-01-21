@@ -1,10 +1,20 @@
-# AWS Network Load Balancer
+# Network Load Balancer Module
 
-Creates a Network Load Balancer (NLB) infrastructure with access logging and static IP support.
+This module creates an AWS Network Load Balancer (NLB) with optional access logging, static IP (Elastic IP) support, cross-zone load balancing, and security group attachments.
 
-Network Load Balancers operate at Layer 4 (Transport Layer) and are designed for high-performance TCP/UDP traffic. They support millions of requests per second with ultra-low latencies.
+## Features
 
-> **Note:** This module creates only the NLB infrastructure. Target groups and listeners are created by service modules (e.g., `ecs_service`) that use the NLB.
+- Network Load Balancer operating at Layer 4 (Transport Layer)
+- Support for TCP, UDP, TLS, and TCP_UDP protocols
+- Ultra-low latency with millions of requests per second
+- Static IP addresses via Elastic IPs for firewall whitelisting
+- Cross-zone load balancing for even traffic distribution
+- Optional security group attachment for NLBs
+- S3 access logging with automatic bucket creation
+- Configurable log retention and KMS encryption
+- DNS client routing policy configuration
+- PrivateLink traffic security enforcement
+- Deletion protection for production safety
 
 ## Usage
 
@@ -12,7 +22,7 @@ Network Load Balancers operate at Layer 4 (Transport Layer) and are designed for
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "main"
   vpc_id     = module.vpc.vpc_id
@@ -25,7 +35,7 @@ module "nlb" {
 
 # Service modules create their own listeners and target groups
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   # ... service configuration ...
 
@@ -48,7 +58,7 @@ module "api_service" {
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "internal"
   vpc_id     = module.vpc.vpc_id
@@ -72,7 +82,7 @@ resource "aws_eip" "nlb" {
 }
 
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "static-ip"
   vpc_id     = module.vpc.vpc_id
@@ -87,7 +97,7 @@ module "nlb" {
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "logged"
   vpc_id     = module.vpc.vpc_id
@@ -99,13 +109,29 @@ module "nlb" {
 }
 ```
 
+### NLB with Existing S3 Bucket for Logs
+
+```hcl
+module "nlb" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+
+  name       = "logged"
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.public_subnet_ids
+
+  enable_access_logs     = true
+  access_logs_bucket_arn = "arn:aws:s3:::my-existing-logs-bucket"
+  access_logs_prefix     = "nlb-logs"
+}
+```
+
 ### Cross-Zone Load Balancing
 
 Enable cross-zone load balancing to distribute traffic evenly across all targets:
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "cross-zone"
   vpc_id     = module.vpc.vpc_id
@@ -115,101 +141,462 @@ module "nlb" {
 }
 ```
 
+### NLB with Security Groups
+
+```hcl
+resource "aws_security_group" "nlb" {
+  name        = "nlb-sg"
+  description = "Security group for NLB"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+module "nlb" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+
+  name               = "secured"
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.public_subnet_ids
+  security_group_ids = [aws_security_group.nlb.id]
+}
+```
+
 ## Requirements
 
-| Name               | Version   |
-| ------------------ | --------- |
+| Name | Version |
+|------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws                | >= 5.0    |
+| aws | >= 5.0 |
 
 ## Inputs
 
 ### General
 
-| Name       | Description                                           | Type           | Default | Required |
-| ---------- | ----------------------------------------------------- | -------------- | ------- | -------- |
-| name       | Name prefix for all resources created by this module. | `string`       | n/a     | yes      |
-| vpc_id     | The ID of the VPC where the NLB will be created.      | `string`       | n/a     | yes      |
-| subnet_ids | A list of subnet IDs for the NLB.                     | `list(string)` | n/a     | yes      |
-| tags       | A map of tags to assign to all resources.             | `map(string)`  | `{}`    | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| name | Name prefix for all resources created by this module | `string` | n/a | yes |
+| vpc_id | The ID of the VPC where the NLB will be created | `string` | n/a | yes |
+| subnet_ids | A list of subnet IDs for the NLB (use public subnets for internet-facing) | `list(string)` | n/a | yes |
+| tags | A map of tags to assign to all resources | `map(string)` | `{}` | no |
 
-### NLB Settings
+### NLB Configuration
 
-| Name                                                       | Description                                                   | Type           | Default | Required |
-| ---------------------------------------------------------- | ------------------------------------------------------------- | -------------- | ------- | -------- |
-| internal                                                   | If true, the NLB will be internal (not internet-facing).      | `bool`         | `false` | no       |
-| security_group_ids                                         | A list of security group IDs to attach to the NLB.            | `list(string)` | `[]`    | no       |
-| enable_deletion_protection                                 | Enable deletion protection on the NLB.                        | `bool`         | `false` | no       |
-| enable_cross_zone_load_balancing                           | Enable cross-zone load balancing.                             | `bool`         | `false` | no       |
-| dns_record_client_routing_policy                           | How traffic is distributed among NLB AZs.                     | `string`       | `null`  | no       |
-| enforce_security_group_inbound_rules_on_private_link_traffic | Whether inbound SG rules are enforced for PrivateLink traffic. | `string`       | `null`  | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| internal | If true, the NLB will be internal (not internet-facing) | `bool` | `false` | no |
+| enable_deletion_protection | Enable deletion protection on the NLB | `bool` | `false` | no |
+| enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
+| dns_record_client_routing_policy | How traffic is distributed among NLB AZs (any_availability_zone, availability_zone_affinity, partial_availability_zone_affinity) | `string` | `null` | no |
 
-### Elastic IPs
+### Security
 
-| Name                      | Description                                          | Type           | Default | Required |
-| ------------------------- | ---------------------------------------------------- | -------------- | ------- | -------- |
-| enable_elastic_ips        | Enable static IP addresses using Elastic IPs.        | `bool`         | `false` | no       |
-| elastic_ip_allocation_ids | A list of Elastic IP allocation IDs, one per subnet. | `list(string)` | `[]`    | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| security_group_ids | A list of security group IDs to attach to the NLB | `list(string)` | `[]` | no |
+| enforce_security_group_inbound_rules_on_private_link_traffic | Whether inbound SG rules are enforced for PrivateLink traffic (on/off) | `string` | `null` | no |
+
+### Elastic IPs (Static IPs)
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_elastic_ips | Enable static IP addresses using Elastic IPs | `bool` | `false` | no |
+| elastic_ip_allocation_ids | A list of Elastic IP allocation IDs, one per subnet | `list(string)` | `[]` | no |
 
 ### Access Logs
 
-| Name                           | Description                                                | Type     | Default | Required |
-| ------------------------------ | ---------------------------------------------------------- | -------- | ------- | -------- |
-| enable_access_logs             | Enable access logging for the NLB.                         | `bool`   | `false` | no       |
-| access_logs_bucket_arn         | ARN of an existing S3 bucket for access logs.              | `string` | `null`  | no       |
-| access_logs_prefix             | The S3 prefix for access logs.                             | `string` | `""`    | no       |
-| access_logs_retention_days     | Days to retain access logs in S3.                          | `number` | `90`    | no       |
-| access_logs_kms_key_id         | KMS key ID for S3 bucket encryption. If null, uses AES256. | `string` | `null`  | no       |
-| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket.           | `bool`   | `false` | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| enable_access_logs | Enable access logging for the NLB | `bool` | `false` | no |
+| access_logs_bucket_arn | ARN of an existing S3 bucket for access logs (creates new if null) | `string` | `null` | no |
+| access_logs_prefix | The S3 prefix for access logs | `string` | `""` | no |
+| access_logs_retention_days | Days to retain access logs in S3 | `number` | `90` | no |
+| access_logs_kms_key_id | KMS key ID for S3 bucket encryption (uses AES256 if null) | `string` | `null` | no |
+| access_logs_versioning_enabled | Enable versioning for the access logs S3 bucket | `bool` | `false` | no |
 
 ## Outputs
 
-| Name                    | Description                                                          |
-| ----------------------- | -------------------------------------------------------------------- |
-| nlb_id                  | The ID of the Network Load Balancer.                                 |
-| nlb_arn                 | The ARN of the Network Load Balancer.                                |
-| nlb_arn_suffix          | The ARN suffix of the NLB for use with CloudWatch Metrics.           |
-| nlb_dns_name            | The DNS name of the Network Load Balancer.                           |
-| nlb_zone_id             | The canonical hosted zone ID of the NLB (for Route53 alias records). |
-| access_logs_bucket_name | The name of the S3 bucket for access logs.                           |
-| access_logs_bucket_arn  | The ARN of the S3 bucket for access logs.                            |
+### Network Load Balancer
+
+| Name | Description |
+|------|-------------|
+| nlb_id | The ID of the Network Load Balancer |
+| nlb_arn | The ARN of the Network Load Balancer |
+| nlb_arn_suffix | The ARN suffix of the NLB for use with CloudWatch Metrics |
+| nlb_dns_name | The DNS name of the Network Load Balancer |
+| nlb_zone_id | The canonical hosted zone ID of the NLB (for Route53 alias records) |
+
+### Access Logs
+
+| Name | Description |
+|------|-------------|
+| access_logs_bucket_name | The name of the S3 bucket for access logs (null if disabled or using existing bucket) |
+| access_logs_bucket_arn | The ARN of the S3 bucket for access logs (null if disabled or using existing bucket) |
 
 ## Architecture
 
+### Overview
+
 ```
-                    ┌─────────────────────────────────────────┐
-                    │             NLB Module                  │
-                    │                                         │
-                    │  ┌─────────────┐                        │
-Internet ─────────▶ │  │     NLB     │                        │
-(TCP/UDP/TLS)       │  │  (Layer 4)  │                        │
-                    │  └─────────────┘                        │
-                    │         │                               │
-                    │         │ nlb_arn                       │
-                    └─────────┼───────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────────────────────────────┐
-                    │         Service Modules                 │
-                    │  (ecs_service, etc.)                    │
-                    │                                         │
-                    │  ┌─────────────────────────────────┐    │
-                    │  │     Listeners (per service)     │    │
-                    │  │  ┌─────┐ ┌─────┐ ┌─────┐       │    │
-                    │  │  │:443 │ │:8080│ │:53  │  ...  │    │
-                    │  │  │TLS  │ │TCP  │ │UDP  │       │    │
-                    │  │  └──┬──┘ └──┬──┘ └──┬──┘       │    │
-                    │  └─────┼──────┼──────┼───────────┘    │
-                    │        │      │      │                 │
-                    │        ▼      ▼      ▼                 │
-                    │  ┌─────────────────────────────────┐   │
-                    │  │   Target Groups (per service)   │   │
-                    │  │  ┌─────┐ ┌─────┐ ┌─────┐       │   │
-                    │  │  │ api │ │ web │ │ dns │  ...  │   │
-                    │  │  └─────┘ └─────┘ └─────┘       │   │
-                    │  └─────────────────────────────────┘   │
-                    └─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         Network Load Balancer                                 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                        NLB (Layer 4)                                    │  │
+│  │  • TCP/UDP/TLS/TCP_UDP protocols                                       │  │
+│  │  • Ultra-low latency (microseconds)                                    │  │
+│  │  • Millions of requests per second                                     │  │
+│  │  • Preserves client source IP                                          │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                     │                                         │
+│         ┌───────────────────────────┼───────────────────────────┐            │
+│         ▼                           ▼                           ▼            │
+│  ┌──────────────┐          ┌──────────────┐          ┌──────────────┐       │
+│  │ Elastic IPs  │          │   Security   │          │  Access Logs │       │
+│  │ (optional)   │          │   Groups     │          │  S3 Bucket   │       │
+│  │              │          │  (optional)  │          │  (optional)  │       │
+│  └──────────────┘          └──────────────┘          └──────────────┘       │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                       Cross-Zone Load Balancing                         │  │
+│  │  • Distributes traffic evenly across all AZs                           │  │
+│  │  • Optional (disabled by default due to cross-AZ data transfer costs)  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Detailed Module Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         NETWORKING/NLB TERRAFORM MODULE                                              │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                 INPUT VARIABLES                                                        ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       GENERAL               │   │      NETWORK                    │   │      NLB SETTINGS                       │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
+║  │ • tags                      │   │ • subnet_ids (required)         │   │ • enable_deletion_protection            │  ║
+║  └──────────────┬──────────────┘   │ • security_group_ids            │   │ • enable_cross_zone_load_balancing      │  ║
+║                 │                  └─────────────────────────────────┘   │ • dns_record_client_routing_policy      │  ║
+║                 │                                                        │ • enforce_security_group_inbound_rules  │  ║
+║                 │                                                        │   _on_private_link_traffic              │  ║
+║                 │                                                        └─────────────────────────────────────────┘  ║
+║                 ▼                                                                                                      ║
+║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
+║  │                                               LOCALS                                                              │  ║
+║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
+║  │  │ • default_tags = { ManagedBy = "terraform", Module = "networking/nlb" }                                  │   │  ║
+║  │  │ • tags = merge(default_tags, var.tags)                                                                   │   │  ║
+║  │  │                                                                                                           │   │  ║
+║  │  │ ACCESS LOGS FLAGS:                                                                                        │   │  ║
+║  │  │ • create_access_logs_bucket = var.enable_access_logs && var.access_logs_bucket_arn == null               │   │  ║
+║  │  │ • access_logs_bucket_name = create_access_logs_bucket ? aws_s3_bucket.access_logs[0].id :                │   │  ║
+║  │  │                             (var.access_logs_bucket_arn != null ? regex(...) : null)                     │   │  ║
+║  │  └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │  ║
+║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │    ELASTIC IPs              │   │      ACCESS LOGS                │   │      ACCESS LOGS S3 CONFIG              │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • enable_elastic_ips        │   │ • enable_access_logs            │   │ • access_logs_retention_days            │  ║
+║  │ • elastic_ip_allocation_ids │   │ • access_logs_bucket_arn        │   │ • access_logs_kms_key_id                │  ║
+║  └─────────────────────────────┘   │ • access_logs_prefix            │   │ • access_logs_versioning_enabled        │  ║
+║                                    └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              TERRAFORM RESOURCES                                                       ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                   DATA SOURCES                                                               │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │ • data.aws_caller_identity.current   - Gets AWS account ID for S3 bucket naming                             │    ║
+║    │ • data.aws_region.current            - Gets current region for S3 bucket naming                             │    ║
+║    └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                         aws_lb.this                                                          │    ║
+║    │                                        (CORE RESOURCE)                                                       │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │                                                                                                              │    ║
+║    │  load_balancer_type = "network"                                                                             │    ║
+║    │                                                                                                              │    ║
+║    │  ┌─────────────────┐   ┌─────────────────────┐   ┌───────────────────────┐                                  │    ║
+║    │  │ subnet_mapping  │   │    access_logs      │   │   lifecycle           │                                  │    ║
+║    │  │   (dynamic)     │   │     (dynamic)       │   │   precondition        │                                  │    ║
+║    │  │                 │   │                     │   │   (EIP validation)    │                                  │    ║
+║    │  │ Maps subnet_ids │   │ Configures S3       │   │                       │                                  │    ║
+║    │  │ to EIP alloc    │   │ bucket and prefix   │   │ Validates EIP count   │                                  │    ║
+║    │  │ IDs when EIPs   │   │ when enabled        │   │ matches subnet count  │                                  │    ║
+║    │  │ are enabled     │   │                     │   │                       │                                  │    ║
+║    │  └─────────────────┘   └─────────────────────┘   └───────────────────────┘                                  │    ║
+║    │                                                                                                              │    ║
+║    │  depends_on = [aws_s3_bucket_policy.access_logs]                                                            │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║                   ┌───────────────────────────────────────┴───────────────────────────────────────┐                    ║
+║                   │                                                                               │                    ║
+║                   ▼                                                                               ▼                    ║
+║    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐   ║
+║    │                                     ACCESS LOGS S3 RESOURCES                                                  │   ║
+║    │                              (conditional: create_access_logs_bucket = true)                                  │   ║
+║    ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤   ║
+║    │                                                                                                               │   ║
+║    │  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌────────────────────────────────┐  │   ║
+║    │  │ aws_s3_bucket.access_logs   │   │ aws_s3_bucket_public_access     │   │ aws_s3_bucket_server_side      │  │   ║
+║    │  │                             │   │ _block.access_logs              │   │ _encryption_configuration      │  │   ║
+║    │  ├─────────────────────────────┤   ├─────────────────────────────────┤   │ .access_logs                   │  │   ║
+║    │  │ • Bucket for NLB logs       │   │ • block_public_acls = true      │   ├────────────────────────────────┤  │   ║
+║    │  │ • Unique naming with        │   │ • block_public_policy = true    │   │ • AES256 or aws:kms            │  │   ║
+║    │  │   account ID and region     │   │ • ignore_public_acls = true     │   │ • Optional KMS key             │  │   ║
+║    │  │ • force_destroy = true      │   │ • restrict_public_buckets = true│   │                                │  │   ║
+║    │  └─────────────────────────────┘   └─────────────────────────────────┘   └────────────────────────────────┘  │   ║
+║    │                                                                                                               │   ║
+║    │  ┌─────────────────────────────┐   ┌─────────────────────────────────┐                                       │   ║
+║    │  │ aws_s3_bucket_versioning    │   │ aws_s3_bucket_lifecycle         │                                       │   ║
+║    │  │ .access_logs                │   │ _configuration.access_logs      │                                       │   ║
+║    │  ├─────────────────────────────┤   ├─────────────────────────────────┤                                       │   ║
+║    │  │ • Enabled/Disabled based    │   │ • Automatic log expiration      │                                       │   ║
+║    │  │   on variable               │   │ • Retention days configurable   │                                       │   ║
+║    │  └─────────────────────────────┘   └─────────────────────────────────┘                                       │   ║
+║    │                                                                                                               │   ║
+║    │  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │   ║
+║    │  │ aws_s3_bucket_policy.access_logs                                                                        │ │   ║
+║    │  ├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │   ║
+║    │  │ • AllowNLBLogDelivery: Allows delivery.logs.amazonaws.com to PutObject                                 │ │   ║
+║    │  │ • AllowNLBLogDeliveryAclCheck: Allows delivery.logs.amazonaws.com to GetBucketAcl                      │ │   ║
+║    │  └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │   ║
+║    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                   OUTPUTS                                                              ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │       NETWORK LOAD BALANCER             │   │           ACCESS LOGS                   │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • nlb_id                                │   │ • access_logs_bucket_name               │                            ║
+║  │ • nlb_arn                               │   │ • access_logs_bucket_arn                │                            ║
+║  │ • nlb_arn_suffix                        │   └─────────────────────────────────────────┘                            ║
+║  │ • nlb_dns_name                          │                                                                          ║
+║  │ • nlb_zone_id                           │                                                                          ║
+║  └─────────────────────────────────────────┘                                                                          ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Data Flow Diagram
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              DATA FLOW DIAGRAM                                                         ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │      var.name           │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║                                                     ▼                                                                  ║
+║  var.vpc_id ─────────────────────────────► aws_lb.this (NLB)                                                          ║
+║  var.subnet_ids ─────────────────────────►      │                                                                     ║
+║  var.internal ───────────────────────────►      │                                                                     ║
+║  var.security_group_ids ─────────────────►      │                                                                     ║
+║  var.enable_deletion_protection ─────────►      │                                                                     ║
+║  var.enable_cross_zone_load_balancing ───►      │                                                                     ║
+║  var.dns_record_client_routing_policy ───►      │                                                                     ║
+║  local.tags ─────────────────────────────►      │                                                                     ║
+║                                                  │                                                                     ║
+║  var.enable_elastic_ips ─────────────────►      │ (dynamic subnet_mapping)                                            ║
+║  var.elastic_ip_allocation_ids ──────────►      │                                                                     ║
+║                                                  │                                                                     ║
+║  var.enable_access_logs ─────────────────►      │ (dynamic access_logs)                                               ║
+║  local.access_logs_bucket_name ──────────►      │                                                                     ║
+║  var.access_logs_prefix ─────────────────►      │                                                                     ║
+║                                                  │                                                                     ║
+║                                                  ▼                                                                     ║
+║           ┌──────────────────────────────────────┴────────────────────────────────────────┐                            ║
+║           │                                                                               │                            ║
+║           ▼                                                                               ▼                            ║
+║  ┌────────────────────────────────────────────┐                      ┌────────────────────────────────────────────┐   ║
+║  │          NLB OUTPUTS                       │                      │     ACCESS LOGS S3 RESOURCES               │   ║
+║  ├────────────────────────────────────────────┤                      │  (when create_access_logs_bucket = true)   │   ║
+║  │ • nlb_id = aws_lb.this.id                  │                      ├────────────────────────────────────────────┤   ║
+║  │ • nlb_arn = aws_lb.this.arn                │                      │                                            │   ║
+║  │ • nlb_arn_suffix = aws_lb.this.arn_suffix  │                      │  var.access_logs_retention_days ─────────► │   ║
+║  │ • nlb_dns_name = aws_lb.this.dns_name      │                      │  var.access_logs_kms_key_id ─────────────► │   ║
+║  │ • nlb_zone_id = aws_lb.this.zone_id        │                      │  var.access_logs_versioning_enabled ─────► │   ║
+║  └────────────────────────────────────────────┘                      │                                            │   ║
+║                                                                      │  ┌────────────────────────────────────┐    │   ║
+║                                                                      │  │ aws_s3_bucket.access_logs          │    │   ║
+║                                                                      │  │ aws_s3_bucket_public_access_block  │    │   ║
+║                                                                      │  │ aws_s3_bucket_server_side_enc...   │    │   ║
+║                                                                      │  │ aws_s3_bucket_versioning           │    │   ║
+║                                                                      │  │ aws_s3_bucket_lifecycle_config...  │    │   ║
+║                                                                      │  │ aws_s3_bucket_policy               │    │   ║
+║                                                                      │  └──────────────┬─────────────────────┘    │   ║
+║                                                                      └─────────────────┼──────────────────────────┘   ║
+║                                                                                        │                              ║
+║                                                                                        ▼                              ║
+║                                                                      ┌────────────────────────────────────────────┐   ║
+║                                                                      │     ACCESS LOGS OUTPUTS                    │   ║
+║                                                                      ├────────────────────────────────────────────┤   ║
+║                                                                      │ • access_logs_bucket_name                  │   ║
+║                                                                      │ • access_logs_bucket_arn                   │   ║
+║                                                                      └────────────────────────────────────────────┘   ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Resource Summary
+
+| Resource | Count Logic | Purpose |
+|----------|-------------|---------|
+| `aws_lb` | 1 | Core Network Load Balancer resource |
+| `aws_s3_bucket` | 0 or 1 | Access logs storage bucket |
+| `aws_s3_bucket_public_access_block` | 0 or 1 | Block public access to logs bucket |
+| `aws_s3_bucket_server_side_encryption_configuration` | 0 or 1 | Encrypt logs bucket (AES256 or KMS) |
+| `aws_s3_bucket_versioning` | 0 or 1 | Optional versioning for logs |
+| `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Automatic log retention/expiration |
+| `aws_s3_bucket_policy` | 0 or 1 | Allow NLB to write access logs |
+
+## FAQ
+
+### When should I use NLB vs ALB?
+
+| Use Case | Recommended | Reason |
+|----------|-------------|--------|
+| HTTP/HTTPS web applications | ALB | Layer 7 routing, path/host-based routing, WAF support |
+| TCP/UDP services (databases, gaming, IoT) | NLB | Layer 4, ultra-low latency, preserves client IP |
+| gRPC services | Both | ALB for HTTP/2 features, NLB for raw TCP performance |
+| Static IP requirements | NLB | Supports Elastic IPs for firewall whitelisting |
+| Millions of requests/second | NLB | Designed for extreme throughput with microsecond latencies |
+| WebSocket connections | Both | ALB native support, NLB via TCP |
+| TLS passthrough | NLB | Pass-through TLS to backend for end-to-end encryption |
+
+### Why is cross-zone load balancing disabled by default?
+
+Cross-zone load balancing distributes traffic evenly across all targets in all enabled Availability Zones, regardless of which AZ receives the request. While this provides more even distribution:
+
+1. **Cost**: AWS charges for cross-zone data transfer
+2. **Latency**: Cross-AZ traffic adds ~1-2ms latency
+3. **When to enable**:
+   - Uneven target distribution across AZs
+   - Consistent capacity requirements per-AZ
+   - When even distribution is more important than cost/latency
+
+```hcl
+# Enable when you have uneven target distribution
+enable_cross_zone_load_balancing = true
+```
+
+### How do Elastic IPs work with NLB?
+
+Elastic IPs provide static IP addresses for your NLB, useful when clients need to whitelist specific IPs:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    NLB with Elastic IPs                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  AZ-a                    AZ-b                    AZ-c           │
+│  ┌──────────────┐       ┌──────────────┐       ┌──────────────┐ │
+│  │ EIP: 1.2.3.4 │       │ EIP: 5.6.7.8 │       │ EIP: 9.10.   │ │
+│  │              │       │              │       │ 11.12        │ │
+│  │ subnet-aaa   │       │ subnet-bbb   │       │ subnet-ccc   │ │
+│  └──────────────┘       └──────────────┘       └──────────────┘ │
+│                                                                  │
+│  Clients whitelist: 1.2.3.4, 5.6.7.8, 9.10.11.12               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Requirements:**
+- One EIP per subnet (same count)
+- Only supported for internet-facing NLBs
+- EIPs must be created before the NLB
+
+### How does NLB preserve client IP addresses?
+
+NLB preserves the original client IP address by default:
+
+| Target Type | Client IP Preserved? | Notes |
+|-------------|---------------------|-------|
+| Instance | Yes | Client IP in packet source |
+| IP | Yes | Client IP in packet source |
+| ALB | No | ALB IP is the source (use X-Forwarded-For) |
+
+For TLS listeners with proxy protocol disabled, enable proxy protocol v2 on the target group to preserve client IP.
+
+### Why does this module only create the NLB (not listeners/target groups)?
+
+This module follows the principle of separation of concerns:
+
+```
+┌─────────────────────────────────────────┐
+│             NLB Module                  │
+│  (networking/nlb)                       │
+│  • Creates NLB infrastructure           │
+│  • Manages access logs                  │
+│  • Configures Elastic IPs               │
+│  • Outputs: nlb_arn, nlb_dns_name       │
+└─────────────────────────────────────────┘
+              │
+              │ nlb_arn
+              ▼
+┌─────────────────────────────────────────┐
+│         Service Module                  │
+│  (compute/ecs_service, etc.)            │
+│  • Creates listeners                    │
+│  • Creates target groups                │
+│  • Registers targets                    │
+│  • Manages health checks                │
+└─────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Services manage their own listener/target group lifecycle
+- Multiple services can share one NLB
+- Service-specific configuration stays with the service
+- Independent service deployments
+
+### What DNS routing policies are available?
+
+| Policy | Behavior | Use Case |
+|--------|----------|----------|
+| `any_availability_zone` | Route to any healthy AZ | Default behavior, maximizes availability |
+| `availability_zone_affinity` | Prefer client's AZ | Reduce latency, minimize cross-AZ traffic |
+| `partial_availability_zone_affinity` | Partial AZ preference | Balance between availability and affinity |
+
+## Security Considerations
+
+- **Security Groups**: While optional for NLBs, you can attach security groups to control inbound traffic.
+- **Client IP Preservation**: NLB preserves the client's source IP by default (for non-TLS targets).
+- **Access Logs**: Enable access logging for audit trails, troubleshooting, and compliance.
+- **PrivateLink**: Use `enforce_security_group_inbound_rules_on_private_link_traffic` to control traffic from PrivateLink endpoints.
+- **Encryption**: When creating an access logs bucket, encryption is enabled by default (AES256 or KMS).
 
 ## ALB vs NLB Comparison
 
@@ -217,7 +604,7 @@ Internet ─────────▶ │  │     NLB     │                
 | ------------------ | -------------------- | --------------------------------- |
 | OSI Layer          | Layer 7 (HTTP/HTTPS) | Layer 4 (TCP/UDP/TLS)             |
 | Protocols          | HTTP, HTTPS          | TCP, UDP, TLS, TCP_UDP            |
-| Latency            | Low (~ms)            | Ultra-low (~µs)                   |
+| Latency            | Low (~ms)            | Ultra-low (~us)                   |
 | Static IPs         | No                   | Yes (via Elastic IPs)             |
 | Security Groups    | Yes (required)       | Optional                          |
 | Path-based routing | Yes                  | No                                |
@@ -226,24 +613,14 @@ Internet ─────────▶ │  │     NLB     │                
 | WAF Integration    | Yes                  | No                                |
 | Use Case           | Web applications     | High-performance TCP/UDP services |
 
-## When to Use NLB
-
-- **High-performance requirements**: Millions of requests per second with microsecond latencies
-- **TCP/UDP protocols**: Non-HTTP services (databases, gaming, IoT, gRPC, etc.)
-- **Static IPs required**: Clients need to whitelist specific IP addresses
-- **Pass-through TLS**: When TLS termination should happen at the backend
-- **Preserve client IP**: When client IP address must be preserved without X-Forwarded-For
-- **UDP traffic**: DNS, gaming, streaming, VoIP, etc.
-
-## Security Considerations
-
-- **Security Groups**: While optional, you can attach security groups to control traffic.
-- **Client IP Preservation**: NLB preserves the client's source IP by default (for non-TLS targets).
-- **Access Logs**: Enable access logging for audit trails and troubleshooting.
-
 ## Notes
 
 - At least 1 subnet is required (2+ recommended for high availability).
 - Cross-zone load balancing is disabled by default (AWS charges for cross-zone data transfer).
 - Static IPs via Elastic IPs are only supported for internet-facing NLBs.
 - Target groups and listeners are created by service modules that reference this NLB via `nlb_arn`.
+- When using an existing S3 bucket for access logs, ensure it has the proper bucket policy for NLB log delivery.
+- The access logs S3 bucket name includes the AWS account ID and region to ensure uniqueness.
+- Access logs bucket has `force_destroy = true` - be aware this will delete all logs when the module is destroyed.
+- Deletion protection is disabled by default; enable it for production NLBs.
+- Security groups on NLBs are a newer feature and may not be supported in all regions.
