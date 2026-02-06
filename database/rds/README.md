@@ -438,3 +438,286 @@ Valid log export types depend on the database engine:
 - **Option Groups**: Primarily used for Oracle and SQL Server specific features.
 - **Blue/Green Deployments**: Supported for MySQL and MariaDB. Creates a staging environment for testing updates.
 - **Point-in-Time Recovery**: Requires backup_retention_period > 0.
+
+## Architecture
+
+### Overview
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              AWS RDS Instance                                 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                              RDS Core                                   │  │
+│  │  • MySQL, PostgreSQL, MariaDB, Oracle, SQL Server                      │  │
+│  │  • Instance class and storage configuration                            │  │
+│  │  • Multi-AZ for high availability                                      │  │
+│  │  • Encryption at rest (KMS)                                            │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                     │                                         │
+│                                     ▼                                         │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌────────────────────┐  │
+│  │   DB Subnet Group    │  │   Parameter Group    │  │   Option Group     │  │
+│  │  • Private subnets   │  │  • Engine settings   │  │  • Oracle/SQL Srv  │  │
+│  │  • Multi-AZ support  │  │  • Custom params     │  │  • Engine options  │  │
+│  └──────────────────────┘  └──────────────────────┘  └────────────────────┘  │
+│                                                                               │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌────────────────────┐  │
+│  │   Security Group     │  │   Read Replicas      │  │   Secrets Manager  │  │
+│  │  • Ingress rules     │  │  • Horizontal scale  │  │  • Master password │  │
+│  │  • CIDR/SG sources   │  │  • Cross-AZ          │  │  • Auto rotation   │  │
+│  └──────────────────────┘  └──────────────────────┘  └────────────────────┘  │
+│                                                                               │
+│  ┌──────────────────────┐  ┌──────────────────────────────────────────────┐  │
+│  │   Enhanced Monitor   │  │              CloudWatch Alarms               │  │
+│  │  • OS-level metrics  │  │  • CPU utilization    • Free storage         │  │
+│  │  • IAM role          │  │  • Database connections                      │  │
+│  └──────────────────────┘  └──────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Detailed Module Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         DATABASE/RDS TERRAFORM MODULE                                                │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                 INPUT VARIABLES                                                        ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │       GENERAL               │   │         ENGINE                  │   │          INSTANCE & STORAGE             │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • name (required)           │   │ • engine (required)             │   │ • instance_class (required)             │  ║
+║  │ • tags                      │   │ • engine_version                │   │ • allocated_storage (required)          │  ║
+║  └─────────────────────────────┘   │ • license_model                 │   │ • max_allocated_storage                 │  ║
+║                                    └─────────────────────────────────┘   │ • storage_type                          │  ║
+║                                                                          │ • iops, storage_throughput              │  ║
+║                                                                          │ • storage_encrypted, kms_key_id         │  ║
+║                                                                          └─────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │      NETWORK                │   │      SECURITY GROUP             │   │       HIGH AVAILABILITY                 │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • vpc_id (required)         │   │ • create_security_group         │   │ • multi_az                              │  ║
+║  │ • subnet_ids (required)     │   │ • security_group_id             │   │ • create_read_replica                   │  ║
+║  │ • port                      │   │ • allowed_security_group_ids    │   │ • read_replica_count                    │  ║
+║  │ • publicly_accessible       │   │ • allowed_cidr_blocks           │   │ • read_replica_instance_class           │  ║
+║  │ • availability_zone         │   └─────────────────────────────────┘   │ • read_replica_availability_zones       │  ║
+║  │ • ca_cert_identifier        │                                         └─────────────────────────────────────────┘  ║
+║  └─────────────────────────────┘                                                                                       ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │      AUTHENTICATION         │   │         DATABASE                │   │            BACKUP                       │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • username (required)       │   │ • db_name                       │   │ • backup_retention_period               │  ║
+║  │ • password                  │   │ • character_set_name            │   │ • backup_window                         │  ║
+║  │ • manage_master_user_pwd    │   │ • timezone                      │   │ • copy_tags_to_snapshot                 │  ║
+║  │ • master_user_secret_kms_id │   │ • domain                        │   │ • delete_automated_backups              │  ║
+║  │ • iam_database_auth_enabled │   │ • domain_iam_role_name          │   │ • snapshot_identifier                   │  ║
+║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • final_snapshot_identifier             │  ║
+║                                                                          │ • skip_final_snapshot                   │  ║
+║                                                                          │ • restore_to_point_in_time              │  ║
+║                                                                          └─────────────────────────────────────────┘  ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │      MAINTENANCE            │   │         MONITORING              │   │       CLOUDWATCH ALARMS                 │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • maintenance_window        │   │ • monitoring_interval           │   │ • create_cloudwatch_alarms              │  ║
+║  │ • auto_minor_version_upgrade│   │ • monitoring_role_arn           │   │ • cloudwatch_alarm_cpu_threshold        │  ║
+║  │ • allow_major_version_upgrade│  │ • create_monitoring_role        │   │ • cloudwatch_alarm_storage_threshold    │  ║
+║  │ • apply_immediately         │   │ • performance_insights_enabled  │   │ • cloudwatch_alarm_connections_threshold│  ║
+║  │ • deletion_protection       │   │ • perf_insights_retention_period│   │ • cloudwatch_alarm_actions              │  ║
+║  └─────────────────────────────┘   │ • perf_insights_kms_key_id      │   │ • cloudwatch_ok_actions                 │  ║
+║                                    │ • enabled_cw_logs_exports       │   └─────────────────────────────────────────┘  ║
+║                                    └─────────────────────────────────┘                                                 ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
+║  │    PARAMETER GROUP          │   │        OPTION GROUP             │   │         BLUE/GREEN                      │  ║
+║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
+║  │ • create_parameter_group    │   │ • create_option_group           │   │ • blue_green_update                     │  ║
+║  │ • parameter_group_name      │   │ • option_group_name             │   │   └─ enabled                            │  ║
+║  │ • parameter_group_family    │   │ • option_group_engine_version   │   └─────────────────────────────────────────┘  ║
+║  │ • parameters                │   │ • options                       │                                                 ║
+║  └─────────────────────────────┘   └─────────────────────────────────┘                                                 ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              TERRAFORM RESOURCES                                                       ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                      aws_db_subnet_group.this                                                │    ║
+║    │  • Creates subnet group from var.subnet_ids for Multi-AZ placement                                          │    ║
+║    └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║           ┌───────────────────────────────────────────────┼───────────────────────────────────────────────┐            ║
+║           │                                               │                                               │            ║
+║           ▼                                               ▼                                               ▼            ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────────┐          ║
+║    │ aws_db_parameter_group.this │    │   aws_db_option_group.this   │    │   aws_security_group.this    │          ║
+║    │      (count: 0 or 1)        │    │      (count: 0 or 1)         │    │      (count: 0 or 1)         │          ║
+║    ├──────────────────────────────┤    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
+║    │ • Engine-specific family    │    │ • Oracle/SQL Server options  │    │ • Ingress from allowed SGs   │          ║
+║    │ • Custom parameters         │    │ • S3 integration, STATSPACK  │    │ • Ingress from CIDR blocks   │          ║
+║    │ • apply_method per param    │    │ • Engine-specific features   │    │ • Egress all                 │          ║
+║    └──────────────────────────────┘    └──────────────────────────────┘    └──────────────────────────────┘          ║
+║                                                           │                                                            ║
+║                                                           ▼                                                            ║
+║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
+║    │                                         aws_db_instance.this                                                 │    ║
+║    │                                            (CORE RESOURCE)                                                   │    ║
+║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
+║    │                                                                                                              │    ║
+║    │  Attributes:                                                                                                 │    ║
+║    │  • identifier, engine, engine_version, instance_class                                                        │    ║
+║    │  • allocated_storage, max_allocated_storage, storage_type, iops, storage_throughput                          │    ║
+║    │  • db_subnet_group_name, vpc_security_group_ids, publicly_accessible, port                                   │    ║
+║    │  • multi_az, availability_zone                                                                               │    ║
+║    │  • username, manage_master_user_password, master_user_secret_kms_key_id                                      │    ║
+║    │  • db_name, parameter_group_name, option_group_name                                                          │    ║
+║    │  • storage_encrypted, kms_key_id, iam_database_authentication_enabled                                        │    ║
+║    │  • backup_retention_period, backup_window, maintenance_window                                                │    ║
+║    │  • monitoring_interval, monitoring_role_arn, performance_insights_enabled                                    │    ║
+║    │  • enabled_cloudwatch_logs_exports, deletion_protection, skip_final_snapshot                                 │    ║
+║    │                                                                                                              │    ║
+║    │  ┌─────────────────────────────┐                                                                             │    ║
+║    │  │ dynamic "blue_green_update" │  (enabled for MySQL/MariaDB zero-downtime updates)                          │    ║
+║    │  └─────────────────────────────┘                                                                             │    ║
+║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
+║                                                           │                                                            ║
+║           ┌───────────────────────────────────────────────┼───────────────────────────────────────────────┐            ║
+║           │                                               │                                               │            ║
+║           ▼                                               ▼                                               ▼            ║
+║    ┌──────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────────┐          ║
+║    │ aws_db_instance.read_replica│    │   aws_iam_role.monitoring    │    │  aws_cloudwatch_metric_alarm │          ║
+║    │      (count: 0 to N)        │    │      (count: 0 or 1)         │    │       (count: 0 or 3)        │          ║
+║    ├──────────────────────────────┤    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
+║    │ • Async replicas            │    │ • Enhanced Monitoring role   │    │ • CPU utilization alarm      │          ║
+║    │ • Cross-AZ placement        │    │ • rds-monitoring-role policy │    │ • Free storage alarm         │          ║
+║    │ • Horizontal read scaling   │    │ • AmazonRDSEnhanced...Access │    │ • Database connections alarm │          ║
+║    └──────────────────────────────┘    └──────────────────────────────┘    └──────────────────────────────┘          ║
+║                                                                                                                        ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                         │
+                                                         ▼
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                   OUTPUTS                                                              ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │         RDS INSTANCE                    │   │            CONNECTION                   │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • db_instance_id                        │   │ • endpoint (address:port)               │                            ║
+║  │ • db_instance_arn                       │   │ • address                               │                            ║
+║  │ • db_instance_identifier                │   │ • port                                  │                            ║
+║  │ • db_instance_resource_id               │   │ • hosted_zone_id                        │                            ║
+║  │ • db_instance_status                    │   └─────────────────────────────────────────┘                            ║
+║  │ • db_instance_availability_zone         │                                                                          ║
+║  └─────────────────────────────────────────┘   ┌─────────────────────────────────────────┐                            ║
+║                                                │         ENGINE & DATABASE               │                            ║
+║  ┌─────────────────────────────────────────┐   ├─────────────────────────────────────────┤                            ║
+║  │         READ REPLICAS                   │   │ • engine                                │                            ║
+║  ├─────────────────────────────────────────┤   │ • engine_version_actual                 │                            ║
+║  │ • read_replica_identifiers              │   │ • db_name                               │                            ║
+║  │ • read_replica_endpoints                │   │ • username                              │                            ║
+║  │ • read_replica_arns                     │   │ • master_user_secret_arn                │                            ║
+║  └─────────────────────────────────────────┘   └─────────────────────────────────────────┘                            ║
+║                                                                                                                        ║
+║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
+║  │         SECURITY GROUP                  │   │      SUBNET & PARAMETER GROUPS          │                            ║
+║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
+║  │ • security_group_id                     │   │ • db_subnet_group_name                  │                            ║
+║  │ • security_group_arn                    │   │ • db_subnet_group_arn                   │                            ║
+║  └─────────────────────────────────────────┘   │ • db_parameter_group_name               │                            ║
+║                                                │ • db_parameter_group_arn                │                            ║
+║  ┌─────────────────────────────────────────┐   │ • db_option_group_name                  │                            ║
+║  │         MONITORING                      │   │ • db_option_group_arn                   │                            ║
+║  ├─────────────────────────────────────────┤   └─────────────────────────────────────────┘                            ║
+║  │ • enhanced_monitoring_iam_role_arn      │                                                                          ║
+║  │ • cloudwatch_alarm_arns                 │                                                                          ║
+║  └─────────────────────────────────────────┘                                                                          ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Data Flow Diagram
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                              DATA FLOW DIAGRAM                                                         ║
+╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                                                        ║
+║                                        ┌─────────────────────────┐                                                     ║
+║                                        │   var.vpc_id            │                                                     ║
+║                                        │   var.subnet_ids        │                                                     ║
+║                                        └────────────┬────────────┘                                                     ║
+║                                                     │                                                                  ║
+║                                                     ▼                                                                  ║
+║  var.name ─────────────────────────────► aws_db_subnet_group.this                                                     ║
+║  var.tags ─────────────────────────────►         │                                                                    ║
+║                                                  │                                                                    ║
+║  var.create_security_group ────────────► aws_security_group.this[0]                                                   ║
+║  var.allowed_security_group_ids ───────►         │                                                                    ║
+║  var.allowed_cidr_blocks ──────────────►         │                                                                    ║
+║                                                  │                                                                    ║
+║  var.create_parameter_group ───────────► aws_db_parameter_group.this[0]                                               ║
+║  var.parameter_group_family ───────────►         │                                                                    ║
+║  var.parameters ───────────────────────►         │                                                                    ║
+║                                                  │                                                                    ║
+║  var.create_option_group ──────────────► aws_db_option_group.this[0]                                                  ║
+║  var.options ──────────────────────────►         │                                                                    ║
+║                                                  │                                                                    ║
+║                                                  ▼                                                                    ║
+║              ┌───────────────────────────────────────────────────────────────────────────────────┐                     ║
+║  var.engine ────────────────────────────►│                                                       │                     ║
+║  var.engine_version ────────────────────►│                                                       │                     ║
+║  var.instance_class ────────────────────►│                                                       │                     ║
+║  var.allocated_storage ─────────────────►│                                                       │                     ║
+║  var.storage_type ──────────────────────►│                                                       │                     ║
+║  var.iops ──────────────────────────────►│                                                       │                     ║
+║  var.storage_encrypted ─────────────────►│                    aws_db_instance.this               │                     ║
+║  var.kms_key_id ────────────────────────►│                                                       │                     ║
+║  var.multi_az ──────────────────────────►│                                                       │                     ║
+║  var.username ──────────────────────────►│                                                       │                     ║
+║  var.manage_master_user_password ───────►│                                                       │                     ║
+║  var.backup_retention_period ───────────►│                                                       │                     ║
+║  var.deletion_protection ───────────────►│                                                       │                     ║
+║  var.performance_insights_enabled ──────►│                                                       │                     ║
+║  var.blue_green_update ─────────────────►│                                                       │                     ║
+║              └───────────────────────────────────────────────────┬───────────────────────────────┘                     ║
+║                                                                  │                                                     ║
+║           ┌──────────────────────────────────────────────────────┼──────────────────────────────────────┐              ║
+║           │                                                      │                                      │              ║
+║           ▼                                                      ▼                                      ▼              ║
+║  var.create_read_replica                          var.create_monitoring_role           var.create_cloudwatch_alarms   ║
+║  var.read_replica_count                           var.monitoring_interval              var.cloudwatch_alarm_*         ║
+║  var.read_replica_instance_class                           │                                      │                   ║
+║           │                                                │                                      │                   ║
+║           ▼                                                ▼                                      ▼                   ║
+║  aws_db_instance.read_replica[*]               aws_iam_role.monitoring[0]        aws_cloudwatch_metric_alarm.*[0]     ║
+║                                                                                                                        ║
+║           │                                                │                                      │                   ║
+║           └──────────────────────────────────────────────────────┼──────────────────────────────────────┘              ║
+║                                                                  │                                                     ║
+║                                                                  ▼                                                     ║
+║                                                           MODULE OUTPUTS                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Resource Summary
+
+| Resource | Count Logic | Purpose |
+|----------|-------------|---------|
+| `aws_db_subnet_group` | 1 | Subnet group for Multi-AZ placement |
+| `aws_db_instance` | 1 | Primary RDS database instance |
+| `aws_db_instance` (replica) | 0 to N | Read replicas for horizontal scaling |
+| `aws_security_group` | 0 or 1 | Security group (if `create_security_group = true`) |
+| `aws_db_parameter_group` | 0 or 1 | Custom parameters (if `create_parameter_group = true`) |
+| `aws_db_option_group` | 0 or 1 | Engine options (if `create_option_group = true`) |
+| `aws_iam_role` | 0 or 1 | Enhanced Monitoring role (if `create_monitoring_role = true`) |
+| `aws_iam_role_policy_attachment` | 0 or 1 | Monitoring role policy attachment |
+| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, storage, connections alarms (if `create_cloudwatch_alarms = true`) |
