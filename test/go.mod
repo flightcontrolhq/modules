@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.51.8
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.54.5
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.2
+	github.com/aws/aws-sdk-go-v2/service/rds v1.93.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.77.1
 	github.com/aws/aws-sdk-go-v2/service/wafv2 v1.58.0
 	github.com/gruntwork-io/terratest v0.47.0

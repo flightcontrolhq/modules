@@ -22,6 +22,7 @@ import (
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/wafv2"
@@ -2806,3 +2807,340 @@ func AutoScalingScheduledActionExists(t *testing.T, asgName string, actionName s
 	}
 	return false
 }
+
+// ============================================================================
+// Aurora / RDS Cluster Helpers
+// ============================================================================
+
+// getRDSClient creates an RDS client for the specified region.
+func getRDSClient(t *testing.T, region string) *rds.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return rds.NewFromConfig(cfg)
+}
+
+// AuroraClusterExists checks if an Aurora cluster with the given identifier exists.
+func AuroraClusterExists(t *testing.T, clusterIdentifier string, region string) bool {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.DBClusters) > 0
+}
+
+// GetAuroraClusterStatus returns the status of an Aurora cluster.
+func GetAuroraClusterStatus(t *testing.T, clusterIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	if result.DBClusters[0].Status != nil {
+		return *result.DBClusters[0].Status
+	}
+	return ""
+}
+
+// GetAuroraClusterEngine returns the engine of an Aurora cluster (e.g., "aurora-mysql", "aurora-postgresql").
+func GetAuroraClusterEngine(t *testing.T, clusterIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	if result.DBClusters[0].Engine != nil {
+		return *result.DBClusters[0].Engine
+	}
+	return ""
+}
+
+// GetAuroraClusterMemberCount returns the number of DB instances in an Aurora cluster.
+func GetAuroraClusterMemberCount(t *testing.T, clusterIdentifier string, region string) int {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	return len(result.DBClusters[0].DBClusterMembers)
+}
+
+// GetAuroraClusterWriterCount returns the number of writer instances in an Aurora cluster.
+func GetAuroraClusterWriterCount(t *testing.T, clusterIdentifier string, region string) int {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	writerCount := 0
+	for _, member := range result.DBClusters[0].DBClusterMembers {
+		if member.IsClusterWriter != nil && *member.IsClusterWriter {
+			writerCount++
+		}
+	}
+	return writerCount
+}
+
+// GetAuroraClusterReaderCount returns the number of reader instances in an Aurora cluster.
+func GetAuroraClusterReaderCount(t *testing.T, clusterIdentifier string, region string) int {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	readerCount := 0
+	for _, member := range result.DBClusters[0].DBClusterMembers {
+		if member.IsClusterWriter == nil || !*member.IsClusterWriter {
+			readerCount++
+		}
+	}
+	return readerCount
+}
+
+// GetAuroraClusterPort returns the port of an Aurora cluster.
+func GetAuroraClusterPort(t *testing.T, clusterIdentifier string, region string) int32 {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	if result.DBClusters[0].Port != nil {
+		return *result.DBClusters[0].Port
+	}
+	return 0
+}
+
+// GetAuroraClusterBacktrackWindow returns the backtrack window (in seconds) for an Aurora cluster.
+func GetAuroraClusterBacktrackWindow(t *testing.T, clusterIdentifier string, region string) int64 {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	if result.DBClusters[0].BacktrackWindow != nil {
+		return *result.DBClusters[0].BacktrackWindow
+	}
+	return 0
+}
+
+// AuroraInstanceExists checks if an Aurora DB instance with the given identifier exists.
+func AuroraInstanceExists(t *testing.T, instanceIdentifier string, region string) bool {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.DBInstances) > 0
+}
+
+// GetAuroraInstanceStatus returns the status of an Aurora DB instance.
+func GetAuroraInstanceStatus(t *testing.T, instanceIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora instance %s", instanceIdentifier)
+	require.Len(t, result.DBInstances, 1, "Expected exactly one instance with identifier %s", instanceIdentifier)
+
+	if result.DBInstances[0].DBInstanceStatus != nil {
+		return *result.DBInstances[0].DBInstanceStatus
+	}
+	return ""
+}
+
+// GetAuroraInstanceClass returns the instance class of an Aurora DB instance.
+func GetAuroraInstanceClass(t *testing.T, instanceIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora instance %s", instanceIdentifier)
+	require.Len(t, result.DBInstances, 1, "Expected exactly one instance with identifier %s", instanceIdentifier)
+
+	if result.DBInstances[0].DBInstanceClass != nil {
+		return *result.DBInstances[0].DBInstanceClass
+	}
+	return ""
+}
+
+// AllAuroraClusterMembersAvailable checks if all DB instances in an Aurora cluster are available.
+func AllAuroraClusterMembersAvailable(t *testing.T, clusterIdentifier string, region string) bool {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	for _, member := range result.DBClusters[0].DBClusterMembers {
+		if member.DBInstanceIdentifier == nil {
+			return false
+		}
+		status := GetAuroraInstanceStatus(t, *member.DBInstanceIdentifier, region)
+		if status != "available" {
+			return false
+		}
+	}
+	return true
+}
+
+// AuroraClusterEndpointExists checks if a custom endpoint exists for an Aurora cluster.
+func AuroraClusterEndpointExists(t *testing.T, endpointIdentifier string, region string) bool {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClusterEndpointsInput{
+		DBClusterEndpointIdentifier: &endpointIdentifier,
+	}
+
+	result, err := client.DescribeDBClusterEndpoints(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	// Filter to only custom endpoints (exclude WRITER and READER built-in endpoints)
+	for _, ep := range result.DBClusterEndpoints {
+		if ep.CustomEndpointType != nil {
+			return true
+		}
+	}
+	return len(result.DBClusterEndpoints) > 0
+}
+
+// GetAuroraClusterCustomEndpointCount returns the number of custom endpoints for a cluster.
+func GetAuroraClusterCustomEndpointCount(t *testing.T, clusterIdentifier string, region string) int {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClusterEndpointsInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusterEndpoints(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe cluster endpoints for %s", clusterIdentifier)
+
+	customCount := 0
+	for _, ep := range result.DBClusterEndpoints {
+		if ep.CustomEndpointType != nil && *ep.CustomEndpointType != "" {
+			customCount++
+		}
+	}
+	return customCount
+}
+
+// RDSAppAutoScalingTargetExists checks if an Application Auto Scaling target exists for an RDS resource.
+// resourceId should be in the format "cluster:{cluster-identifier}" for Aurora.
+func RDSAppAutoScalingTargetExists(t *testing.T, resourceId string, region string) bool {
+	client := getApplicationAutoScalingClient(t, region)
+
+	input := &applicationautoscaling.DescribeScalableTargetsInput{
+		ServiceNamespace: applicationautoscalingtypes.ServiceNamespaceRds,
+		ResourceIds:      []string{resourceId},
+	}
+
+	result, err := client.DescribeScalableTargets(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.ScalableTargets) > 0
+}
+
+// GetRDSAppAutoScalingPolicyCount returns the number of scaling policies for an RDS auto-scaling target.
+// resourceId should be in the format "cluster:{cluster-identifier}" for Aurora.
+func GetRDSAppAutoScalingPolicyCount(t *testing.T, resourceId string, region string) int {
+	client := getApplicationAutoScalingClient(t, region)
+
+	input := &applicationautoscaling.DescribeScalingPoliciesInput{
+		ServiceNamespace: applicationautoscalingtypes.ServiceNamespaceRds,
+		ResourceId:       &resourceId,
+	}
+
+	result, err := client.DescribeScalingPolicies(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe RDS scaling policies for %s", resourceId)
+
+	return len(result.ScalingPolicies)
+}
+
+// GetAuroraClusterServerlessV2ScalingConfig returns the serverless v2 scaling configuration for a cluster.
+// Returns (minCapacity, maxCapacity, hasConfig).
+func GetAuroraClusterServerlessV2ScalingConfig(t *testing.T, clusterIdentifier string, region string) (float64, float64, bool) {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBClustersInput{
+		DBClusterIdentifier: &clusterIdentifier,
+	}
+
+	result, err := client.DescribeDBClusters(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe Aurora cluster %s", clusterIdentifier)
+	require.Len(t, result.DBClusters, 1, "Expected exactly one cluster with identifier %s", clusterIdentifier)
+
+	if result.DBClusters[0].ServerlessV2ScalingConfiguration != nil {
+		cfg := result.DBClusters[0].ServerlessV2ScalingConfiguration
+		minCap := 0.0
+		maxCap := 0.0
+		if cfg.MinCapacity != nil {
+			minCap = *cfg.MinCapacity
+		}
+		if cfg.MaxCapacity != nil {
+			maxCap = *cfg.MaxCapacity
+		}
+		return minCap, maxCap, true
+	}
+	return 0, 0, false
+}
+
