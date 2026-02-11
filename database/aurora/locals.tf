@@ -42,4 +42,44 @@ locals {
     var.skip_final_snapshot ? null :
     coalesce(var.final_snapshot_identifier, "${var.name}-final-snapshot")
   )
+
+  # Resource creation flags
+  create_security_group    = var.create_security_group
+  create_monitoring_role   = var.create_monitoring_role && var.monitoring_interval > 0
+  create_cloudwatch_alarms = var.create_cloudwatch_alarms
+  create_subnet_group      = var.db_subnet_group_name == null
+
+  # Instance map generation
+  # If var.instances is non-empty, use it directly
+  # Otherwise, generate from instance_class + reader_count
+  is_serverless          = var.serverless_v2_scaling != null
+  default_instance_class = local.is_serverless ? "db.serverless" : var.instance_class
+  reader_instance_class  = coalesce(var.reader_instance_class, local.default_instance_class)
+
+  generated_instances = merge(
+    {
+      writer = {
+        instance_class               = local.default_instance_class
+        availability_zone            = null
+        publicly_accessible          = null
+        promotion_tier               = 0
+        performance_insights_enabled = null
+        monitoring_interval          = null
+        tags                         = null
+      }
+    },
+    {
+      for i in range(var.reader_count) : "reader-${i + 1}" => {
+        instance_class               = local.reader_instance_class
+        availability_zone            = null
+        publicly_accessible          = null
+        promotion_tier               = i + 1
+        performance_insights_enabled = null
+        monitoring_interval          = null
+        tags                         = null
+      }
+    }
+  )
+
+  instances = length(var.instances) > 0 ? var.instances : local.generated_instances
 }
