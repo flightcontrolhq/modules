@@ -54,6 +54,13 @@ locals {
   cluster_parameter_group_name = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].name : var.cluster_parameter_group_name
   db_parameter_group_name      = var.create_db_parameter_group ? aws_db_parameter_group.this[0].name : var.db_parameter_group_name
 
+  # Security group IDs — combines created SG, provided SG, and additional SGs
+  vpc_security_group_ids = concat(
+    local.create_security_group ? [module.security_group[0].security_group_id] : [],
+    var.security_group_id != null ? [var.security_group_id] : [],
+    var.security_group_ids,
+  )
+
   # Instance map generation
   # If var.instances is non-empty, use it directly
   # Otherwise, generate from instance_class + reader_count

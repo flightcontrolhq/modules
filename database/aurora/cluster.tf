@@ -31,7 +31,7 @@ resource "aws_rds_cluster" "this" {
 
   # Network
   db_subnet_group_name   = local.db_subnet_group_name
-  vpc_security_group_ids = concat(var.security_group_id != null ? [var.security_group_id] : [], var.security_group_ids)
+  vpc_security_group_ids = local.vpc_security_group_ids
   port                   = local.port
   network_type           = var.network_type
   availability_zones     = length(var.availability_zones) > 0 ? var.availability_zones : null
