@@ -1,0 +1,152 @@
+################################################################################
+# Aurora Basic Fixture
+#
+# A minimal Aurora PostgreSQL cluster for Terratest integration testing.
+# Creates a VPC, security group, subnet group, and Aurora cluster with
+# 1 writer + 1 reader (db.t4g.medium, smallest supported for Aurora).
+################################################################################
+
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+
+variable "name" {
+  type        = string
+  description = "Name prefix for all resources."
+}
+
+variable "region" {
+  type        = string
+  description = "AWS region to deploy resources."
+  default     = "us-east-1"
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "Additional tags for all resources."
+  default     = {}
+}
+
+locals {
+  common_tags = merge(
+    {
+      Environment = "terratest"
+      ManagedBy   = "terratest"
+    },
+    var.tags
+  )
+}
+
+################################################################################
+# VPC
+################################################################################
+
+module "vpc" {
+  source = "../../../../networking/vpc"
+
+  name         = var.name
+  vpc_cidr     = "10.0.0.0/16"
+  subnet_count = 2
+
+  tags = local.common_tags
+}
+
+################################################################################
+# Aurora Cluster
+################################################################################
+
+module "aurora" {
+  source = "../../../../database/aurora"
+
+  name           = var.name
+  engine         = "aurora-postgresql"
+  engine_version = "16.6"
+  instance_class = "db.t4g.medium"
+
+  # Network
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnet_ids
+
+  # Authentication — use Secrets Manager (default)
+  master_username = "testadmin"
+
+  # Security — allow access from VPC CIDR
+  create_security_group = true
+  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+
+  # Test-friendly settings
+  deletion_protection     = false
+  skip_final_snapshot     = true
+  backup_retention_period = 1
+  apply_immediately       = true
+
+  # Disable Performance Insights for simpler testing
+  performance_insights_enabled = false
+
+  tags = local.common_tags
+}
+
+################################################################################
+# Outputs
+################################################################################
+
+output "cluster_id" {
+  description = "The ID of the Aurora cluster."
+  value       = module.aurora.cluster_id
+}
+
+output "cluster_arn" {
+  description = "The ARN of the Aurora cluster."
+  value       = module.aurora.cluster_arn
+}
+
+output "cluster_endpoint" {
+  description = "The writer endpoint for the Aurora cluster."
+  value       = module.aurora.cluster_endpoint
+}
+
+output "cluster_reader_endpoint" {
+  description = "The reader endpoint for the Aurora cluster."
+  value       = module.aurora.cluster_reader_endpoint
+}
+
+output "cluster_port" {
+  description = "The port on which the Aurora cluster accepts connections."
+  value       = module.aurora.cluster_port
+}
+
+output "instance_identifiers" {
+  description = "Map of instance key to instance identifier."
+  value       = module.aurora.instance_identifiers
+}
+
+output "instance_endpoints" {
+  description = "Map of instance key to instance endpoint."
+  value       = module.aurora.instance_endpoints
+}
+
+output "security_group_id" {
+  description = "The ID of the Aurora security group."
+  value       = module.aurora.security_group_id
+}
+
+output "db_subnet_group_name" {
+  description = "The name of the DB subnet group."
+  value       = module.aurora.db_subnet_group_name
+}
+
+output "cluster_master_user_secret_arn" {
+  description = "The ARN of the Secrets Manager secret for master user credentials."
+  value       = module.aurora.cluster_master_user_secret_arn
+}
