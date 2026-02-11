@@ -54,6 +54,9 @@ locals {
   cluster_parameter_group_name = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].name : var.cluster_parameter_group_name
   db_parameter_group_name      = var.create_db_parameter_group ? aws_db_parameter_group.this[0].name : var.db_parameter_group_name
 
+  # Resolved monitoring role ARN — from created role or provided variable
+  monitoring_role_arn = local.create_monitoring_role ? aws_iam_role.monitoring[0].arn : var.monitoring_role_arn
+
   # Security group IDs — combines created SG, provided SG, and additional SGs
   vpc_security_group_ids = concat(
     local.create_security_group ? [module.security_group[0].security_group_id] : [],

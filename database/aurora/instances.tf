@@ -24,11 +24,8 @@ resource "aws_rds_cluster_instance" "this" {
   db_parameter_group_name = local.db_parameter_group_name
 
   # Monitoring
-  # Note: monitoring_role_arn currently references the variable directly. When
-  # monitoring.tf (Task 19) is implemented, this should be updated to reference
-  # the created role conditionally.
   monitoring_interval = coalesce(each.value.monitoring_interval, var.monitoring_interval)
-  monitoring_role_arn = coalesce(each.value.monitoring_interval, var.monitoring_interval) > 0 ? var.monitoring_role_arn : null
+  monitoring_role_arn = coalesce(each.value.monitoring_interval, var.monitoring_interval) > 0 ? local.monitoring_role_arn : null
 
   # Performance Insights
   performance_insights_enabled          = coalesce(each.value.performance_insights_enabled, var.performance_insights_enabled)
@@ -51,4 +48,8 @@ resource "aws_rds_cluster_instance" "this" {
   tags = merge(local.tags, {
     Name = "${var.name}-${each.key}"
   }, each.value.tags != null ? each.value.tags : {})
+
+  depends_on = [
+    aws_iam_role_policy_attachment.monitoring,
+  ]
 }

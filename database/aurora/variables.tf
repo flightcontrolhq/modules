@@ -605,6 +605,28 @@ variable "cloudwatch_alarm_cpu_threshold" {
   }
 }
 
+variable "cloudwatch_alarm_memory_threshold" {
+  description = "The freeable memory threshold in bytes for the CloudWatch alarm."
+  type        = number
+  default     = 268435456 # 256 MiB
+
+  validation {
+    condition     = var.cloudwatch_alarm_memory_threshold > 0
+    error_message = "Memory alarm threshold must be greater than 0."
+  }
+}
+
+variable "cloudwatch_alarm_connections_threshold" {
+  description = "The database connections threshold for the CloudWatch alarm."
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.cloudwatch_alarm_connections_threshold >= 1
+    error_message = "Connections alarm threshold must be at least 1."
+  }
+}
+
 variable "cloudwatch_alarm_actions" {
   description = "List of ARNs to notify when the alarm transitions to ALARM state."
   type        = list(string)
