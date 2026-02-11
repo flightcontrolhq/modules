@@ -21,7 +21,7 @@ resource "aws_rds_cluster_instance" "this" {
   availability_zone    = each.value.availability_zone
 
   # Parameter Group
-  db_parameter_group_name = var.db_parameter_group_name
+  db_parameter_group_name = local.db_parameter_group_name
 
   # Monitoring
   # Note: monitoring_role_arn currently references the variable directly. When

@@ -47,7 +47,7 @@ resource "aws_rds_cluster" "this" {
   database_name = var.database_name
 
   # Parameter Group
-  db_cluster_parameter_group_name = var.cluster_parameter_group_name
+  db_cluster_parameter_group_name = local.cluster_parameter_group_name
 
   # Backup
   backup_retention_period   = var.backup_retention_period

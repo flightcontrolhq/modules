@@ -50,7 +50,9 @@ locals {
   create_subnet_group      = var.db_subnet_group_name == null
 
   # Resolved resource names
-  db_subnet_group_name = local.create_subnet_group ? aws_db_subnet_group.this[0].name : var.db_subnet_group_name
+  db_subnet_group_name         = local.create_subnet_group ? aws_db_subnet_group.this[0].name : var.db_subnet_group_name
+  cluster_parameter_group_name = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].name : var.cluster_parameter_group_name
+  db_parameter_group_name      = var.create_db_parameter_group ? aws_db_parameter_group.this[0].name : var.db_parameter_group_name
 
   # Instance map generation
   # If var.instances is non-empty, use it directly
