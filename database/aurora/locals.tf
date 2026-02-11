@@ -49,6 +49,9 @@ locals {
   create_cloudwatch_alarms = var.create_cloudwatch_alarms
   create_subnet_group      = var.db_subnet_group_name == null
 
+  # Resolved resource names
+  db_subnet_group_name = local.create_subnet_group ? aws_db_subnet_group.this[0].name : var.db_subnet_group_name
+
   # Instance map generation
   # If var.instances is non-empty, use it directly
   # Otherwise, generate from instance_class + reader_count

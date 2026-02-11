@@ -30,7 +30,7 @@ resource "aws_rds_cluster" "this" {
   kms_key_id        = var.kms_key_id
 
   # Network
-  db_subnet_group_name   = var.db_subnet_group_name
+  db_subnet_group_name   = local.db_subnet_group_name
   vpc_security_group_ids = concat(var.security_group_id != null ? [var.security_group_id] : [], var.security_group_ids)
   port                   = local.port
   network_type           = var.network_type

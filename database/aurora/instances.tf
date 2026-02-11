@@ -16,11 +16,7 @@ resource "aws_rds_cluster_instance" "this" {
   instance_class = coalesce(each.value.instance_class, local.default_instance_class)
 
   # Network
-  # Note: db_subnet_group_name and db_parameter_group_name currently reference
-  # variables directly. When subnet_group.tf (Task 14) and parameter_group.tf
-  # (Task 15) are implemented, these should be updated to reference the created
-  # resources conditionally (e.g., local.create_subnet_group ? aws_db_subnet_group.this[0].name : var.db_subnet_group_name).
-  db_subnet_group_name = var.db_subnet_group_name
+  db_subnet_group_name = local.db_subnet_group_name
   publicly_accessible  = coalesce(each.value.publicly_accessible, var.publicly_accessible)
   availability_zone    = each.value.availability_zone
 
