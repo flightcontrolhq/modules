@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flightcontrol Module Schema",
+  "description": "Defines a Flightcontrol module's inputs (form fields), outputs (exported values), and UI configuration (links, logs, metrics).",
+  "type": "object",
+  "required": ["inputs"],
+  "additionalProperties": false,
+  "properties": {
+    "inputs": {
+      "type": "array",
+      "description": "Array of input property definitions. Each item is an object with exactly one key (the property name) mapping to an InputProperty.",
+      "items": { "$ref": "#/$defs/PropertyDefinition" }
+    },
+    "output": {
+      "$ref": "#/$defs/ModuleOutput",
+      "description": "Optional output configuration mapping variable names to values."
+    },
+    "ui": {
+      "$ref": "#/$defs/ModuleUI",
+      "description": "Optional UI configuration for links, logs, and metrics."
+    }
+  },
+  "$defs": {
+    "PropertyDefinition": {
+      "type": "object",
+      "description": "A record with exactly one key (the property name) mapping to an InputProperty value. Example: { \"region\": { \"type\": \"string\", \"label\": \"Region\" } }",
+      "additionalProperties": { "$ref": "#/$defs/InputProperty" }
+    },
+    "InputProperty": {
+      "oneOf": [
+        { "$ref": "#/$defs/StringInputProperty" },
+        { "$ref": "#/$defs/TextInputProperty" },
+        { "$ref": "#/$defs/JsonInputProperty" },
+        { "$ref": "#/$defs/ArrayStringInputProperty" },
+        { "$ref": "#/$defs/NumberInputProperty" },
+        { "$ref": "#/$defs/BooleanInputProperty" },
+        { "$ref": "#/$defs/DividerInputProperty" },
+        { "$ref": "#/$defs/CompoundInputProperty" },
+        { "$ref": "#/$defs/RefInputProperty" }
+      ],
+      "description": "Discriminated union of all input property types. Discriminated by the 'type' field."
+    },
+    "ShowWhenValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "integer" },
+        { "type": "boolean" }
+      ]
+    },
+    "ShowWhen": {
+      "type": "object",
+      "description": "Conditional visibility. Keys are property names, values are expected values. Property is shown only when all conditions are met.",
+      "additionalProperties": { "$ref": "#/$defs/ShowWhenValue" }
+    },
+    "ValidationPattern": {
+      "type": "object",
+      "required": ["pattern", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": { "type": "string", "description": "Regex pattern to match against the input value" },
+        "message": { "type": "string", "description": "Error message when pattern doesn't match" }
+      }
+    },
+    "StringValueItem": {
+      "type": "object",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "group_label": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    },
+    "NumberValueItem": {
+      "type": "object",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "group_label": { "type": "string" },
+        "value": { "type": "integer" }
+      }
+    },
+    "DynamicValuesRef": {
+      "type": "string",
+      "description": "Dynamic values reference. Must start with \"$values:\" prefix, e.g. \"$values:regions\"."
+    },
+    "StringValues": {
+      "anyOf": [
+        { "type": "array", "items": { "$ref": "#/$defs/StringValueItem" } },
+        { "$ref": "#/$defs/DynamicValuesRef" }
+      ]
+    },
+    "NumberValues": {
+      "anyOf": [
+        { "type": "array", "items": { "$ref": "#/$defs/NumberValueItem" } },
+        { "$ref": "#/$defs/DynamicValuesRef" }
+      ]
+    },
+    "CompoundFieldValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "integer" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "CompoundValueItem": {
+      "type": "object",
+      "description": "A compound option with arbitrary data fields plus optional display metadata (label, description, group_label).",
+      "properties": {
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "group_label": { "type": "string" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/CompoundFieldValue" }
+    },
+    "CompoundValues": {
+      "anyOf": [
+        { "type": "array", "items": { "$ref": "#/$defs/CompoundValueItem" } },
+        { "$ref": "#/$defs/DynamicValuesRef" }
+      ]
+    },
+    "RefTypeDiscriminator": {
+      "type": "string",
+      "pattern": "^\\$ref:.+$",
+      "minLength": 6,
+      "description": "Module reference type. Format: \"$ref:<module-type>\", e.g. \"$ref:ravion-aws-vpc\"."
+    },
+    "StringInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "string" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "default": { "type": "string" },
+        "placeholder": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "values": { "$ref": "#/$defs/StringValues" },
+        "patterns": { "type": "array", "items": { "$ref": "#/$defs/ValidationPattern" } },
+        "min_current_value": { "type": "boolean", "default": false }
+      }
+    },
+    "TextInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "text" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "default": { "type": "string" },
+        "placeholder": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "patterns": { "type": "array", "items": { "$ref": "#/$defs/ValidationPattern" } }
+      }
+    },
+    "JsonInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "json" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "default": { "description": "Default JSON value (any valid JSON)" },
+        "placeholder": { "type": "string" },
+        "required": { "type": "boolean", "default": false }
+      }
+    },
+    "ArrayStringInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "string_array" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "default": { "type": "array", "items": { "type": "string" } },
+        "placeholder": { "type": "string" },
+        "add_button_label": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "patterns": { "type": "array", "items": { "$ref": "#/$defs/ValidationPattern" } }
+      }
+    },
+    "NumberInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "number" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "default": { "type": "integer" },
+        "placeholder": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "values": { "$ref": "#/$defs/NumberValues" },
+        "min": { "type": "integer" },
+        "max": { "type": "integer" },
+        "min_current_value": { "type": "boolean", "default": false }
+      }
+    },
+    "BooleanInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "boolean" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "default": { "type": "boolean" }
+      }
+    },
+    "DividerInputProperty": {
+      "type": "object",
+      "required": ["label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "divider" },
+        "label": { "type": "string", "minLength": 1 }
+      }
+    },
+    "CompoundInputProperty": {
+      "type": "object",
+      "required": ["label", "type", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "compound" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "fields": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Field names to expose from the selected compound value" },
+        "default": { "type": "object", "additionalProperties": { "$ref": "#/$defs/CompoundFieldValue" } },
+        "required": { "type": "boolean", "default": false },
+        "values": { "$ref": "#/$defs/CompoundValues" },
+        "min_current_value": { "type": "boolean", "default": false }
+      }
+    },
+    "RefInputProperty": {
+      "type": "object",
+      "required": ["label", "type", "mapping"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "$ref": "#/$defs/RefTypeDiscriminator", "description": "Format: \"$ref:<module-type>\", e.g. \"$ref:ravion-aws-vpc\"" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "immutable": { "type": "boolean", "default": false },
+        "show_when": { "$ref": "#/$defs/ShowWhen" },
+        "mapping": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Maps field names to values. Values can be static strings or dynamic references using << >> syntax, e.g. \"<< instance.output.vpc_id >>\"."
+        },
+        "required": { "type": "boolean", "default": false }
+      }
+    },
+    "ModuleOutput": {
+      "type": "object",
+      "description": "Record mapping output variable names to values (string, boolean, or string[]).",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "string" },
+          { "type": "boolean" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      }
+    },
+    "ModuleUI": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "href"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "href": { "type": "string", "description": "URL, supports << output.xxx >> template syntax" }
+            }
+          }
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "log_stream_name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "log_stream_name": { "type": "string", "description": "CloudWatch log stream name, supports << output.xxx >> template syntax" }
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type", "cloudwatch_metric"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "type": { "type": "string", "const": "line" },
+              "cloudwatch_metric": { "type": "string", "description": "CloudWatch metric reference, supports << output.xxx >> template syntax" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

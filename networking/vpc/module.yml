@@ -1,196 +1,198 @@
-input:
-  properties:
-    - region:
-        type: string
-        label: "AWS region"
-        default: "us-west-2"
-        immutable: true
-        validation:
-          required: true
-          values: $values:aws/regions.select
-    - vpc_name:
-        type: string
-        label: "VPC name"
-        description: "How you will find the VPC in the AWS console"
-        validation:
-          required: true
-    - divider:
-        type: divider
-        label: "Network Configuration"
-    - automatic:
-        type: boolean
-        label: "Automatically Select CIDR"
-        description: "Automatically select CIDR range that doesn't conflict with other VPCs in the region"
-        default: true
-        immutable: true
-    - mask:
-        type: string
-        label: "VPC Size"
-        description: "Select the size of the VPC in IP addresses"
-        default: "16"
-        immutable: true
-        show_when:
-          automatic: true
-        validation:
-          required: true
-          values:
-            - value: "16"
-              label: "65k IP addresses (/16)"
-            - value: "17"
-              label: "32k IP addresses (/17)"
-            - value: "18"
-              label: "16k IP addresses (/18)"
-            - value: "19"
-              label: "8k IP addresses (/19)"
-            - value: "20"
-              label: "4k IP addresses (/20)"
-    - cidr:
-        type: string
-        label: "CIDR Range"
-        description: "Enter a CIDR range to use for the size of your VPC"
-        immutable: true
-        show_when:
-          automatic: false
-        validation:
-          required: true
-          patterns:
-            - pattern: "^(?:10.(?:[0-9]|[0-9]{2}|1[0-9][0-9]|2[0-4][0-9]|25[0-5])|172.(?:1[6-9]|2[0-9]|3[0-1])|192.168)(?:.(?:[0-9]|[0-9]{2}|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){2}(?:/(?:1[6-9]|20))$"
-              message: "Range must be from private networking space (10.X.X.X, 172.16-31.X.X, 192.168.X.X). Mask must be between /16 and /20"
-    - subnet_count:
-        type: number
-        label: "Number of Subnets"
-        description: "Number of public and private subnet pairs to create across availability zones"
-        default: 3
-        validation:
-          required: true
-          min: 1
-          max: 6
-    - divider:
-        type: divider
-        label: "NAT Gateway"
-    - enable_nat_gateway:
-        type: boolean
-        label: "Enable NAT Gateway"
-        description: "Allow private subnets to access the internet"
-        default: false
-    - single_nat_gateway:
-        type: boolean
-        label: "Single NAT Gateway"
-        description: "Use a single NAT Gateway (cost-effective). Disable for high availability (one NAT per AZ)"
-        default: true
-        show_when:
-          enable_nat_gateway: true
-    - divider:
-        type: divider
-        label: "IPv6"
-    - enable_ipv6:
-        type: boolean
-        label: "Enable IPv6"
-        description: "Enable IPv6 support for the VPC with an Amazon-provided IPv6 CIDR block"
-        default: false
-    - divider:
-        type: divider
-        label: "VPC Flow Logs"
-    - vpc_flow_logs_enabled:
-        type: boolean
-        label: "VPC flow logs"
-        description: "Must be enabled for SOC 2 compliance"
-        default: false
-    - flow_logs_destination:
-        type: string
-        label: "Flow Logs Destination"
-        description: "Where to send VPC Flow Logs"
-        default: "cloudwatch"
-        show_when:
-          vpc_flow_logs_enabled: true
-        validation:
-          required: true
-          values:
-            - value: "cloudwatch"
-              label: "CloudWatch Logs"
-            - value: "s3"
-              label: "S3 Bucket"
-    - flow_logs_s3_bucket_arn:
-        type: string
-        label: "S3 Bucket ARN"
-        description: "ARN of an existing S3 bucket for flow logs. Leave empty to create a new bucket"
-        show_when:
-          vpc_flow_logs_enabled: true
-          flow_logs_destination: "s3"
-        validation:
-          patterns:
-            - pattern: "^(arn:aws:s3:::.*)?$"
-              message: "Must be a valid S3 bucket ARN (e.g., arn:aws:s3:::my-bucket)"
-    - flow_logs_retention_days:
-        type: number
-        label: "Retention Days"
-        description: "Number of days to retain flow logs in CloudWatch"
-        default: 30
-        show_when:
-          vpc_flow_logs_enabled: true
-          flow_logs_destination: "cloudwatch"
-        validation:
-          required: true
-          values:
-            - value: 1
-              label: "1 day"
-            - value: 3
-              label: "3 days"
-            - value: 7
-              label: "7 days"
-            - value: 14
-              label: "14 days"
-            - value: 30
-              label: "30 days"
-            - value: 60
-              label: "60 days"
-            - value: 90
-              label: "90 days"
-            - value: 180
-              label: "180 days"
-            - value: 365
-              label: "1 year"
-    - flow_logs_traffic_type:
-        type: string
-        label: "Traffic Type"
-        description: "Type of traffic to capture in flow logs"
-        default: "ALL"
-        show_when:
-          vpc_flow_logs_enabled: true
-        validation:
-          required: true
-          values:
-            - value: "ALL"
-              label: "All traffic"
-            - value: "ACCEPT"
-              label: "Accepted traffic only"
-            - value: "REJECT"
-              label: "Rejected traffic only"
-    - divider:
-        type: divider
-        label: "DNS Settings"
-    - enable_dns_support:
-        type: boolean
-        label: "Enable DNS Support"
-        description: "Enable DNS resolution in the VPC"
-        default: true
-    - enable_dns_hostnames:
-        type: boolean
-        label: "Enable DNS Hostnames"
-        description: "Enable DNS hostnames in the VPC"
-        default: true
-    - tags:
-        type: map
-        label: "Tags"
-        description: "Additional tags to assign to all resources"
-        default: {}
+inputs:
+  # General
+  - name:
+      type: string
+      label: "Name"
+      description: "Name prefix for all resources created by this module (1-36 characters)"
+      required: true
+      immutable: true
+      patterns:
+        - pattern: "^.{1,36}$"
+          message: "Must be between 1 and 36 characters"
+  - region:
+      type: string
+      label: "AWS Region"
+      default: "us-west-2"
+      immutable: true
+      required: true
+      values: "$values:aws/regions.select"
+  - vpc_name:
+      type: string
+      label: "VPC Name"
+      description: "How you will find the VPC in the AWS console"
+      required: true
+  - divider:
+      type: divider
+      label: "Network Configuration"
+  - automatic:
+      type: boolean
+      label: "Automatically Select CIDR"
+      description: "Automatically select CIDR range that doesn't conflict with other VPCs in the region"
+      default: true
+      immutable: true
+  - mask:
+      type: string
+      label: "VPC Size"
+      description: "Select the size of the VPC in IP addresses"
+      default: "16"
+      immutable: true
+      required: true
+      show_when:
+        automatic: true
+      values:
+        - value: "16"
+          label: "65k IP addresses (/16)"
+        - value: "17"
+          label: "32k IP addresses (/17)"
+        - value: "18"
+          label: "16k IP addresses (/18)"
+        - value: "19"
+          label: "8k IP addresses (/19)"
+        - value: "20"
+          label: "4k IP addresses (/20)"
+  - cidr:
+      type: string
+      label: "CIDR Range"
+      description: "Enter a CIDR range to use for the size of your VPC"
+      immutable: true
+      required: true
+      show_when:
+        automatic: false
+      patterns:
+        - pattern: "^(?:10.(?:[0-9]|[0-9]{2}|1[0-9][0-9]|2[0-4][0-9]|25[0-5])|172.(?:1[6-9]|2[0-9]|3[0-1])|192.168)(?:.(?:[0-9]|[0-9]{2}|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){2}(?:/(?:1[6-9]|20))$"
+          message: "Range must be from private networking space (10.X.X.X, 172.16-31.X.X, 192.168.X.X). Mask must be between /16 and /20"
+  - subnet_count:
+      type: number
+      label: "Number of Subnets"
+      description: "Number of public and private subnet pairs to create across availability zones"
+      default: 3
+      required: true
+      min: 1
+      max: 6
+  # NAT Gateway
+  - divider:
+      type: divider
+      label: "NAT Gateway"
+  - enable_nat_gateway:
+      type: boolean
+      label: "Enable NAT Gateway"
+      description: "Allow private subnets to access the internet"
+      default: false
+  - single_nat_gateway:
+      type: boolean
+      label: "Single NAT Gateway"
+      description: "Use a single NAT Gateway (cost-effective). Disable for high availability (one NAT per AZ)"
+      default: true
+      show_when:
+        enable_nat_gateway: true
+  # IPv6
+  - divider:
+      type: divider
+      label: "IPv6"
+  - enable_ipv6:
+      type: boolean
+      label: "Enable IPv6"
+      description: "Enable IPv6 support for the VPC with an Amazon-provided IPv6 CIDR block"
+      default: false
+  # VPC Flow Logs
+  - divider:
+      type: divider
+      label: "VPC Flow Logs"
+  - vpc_flow_logs_enabled:
+      type: boolean
+      label: "VPC Flow Logs"
+      description: "Must be enabled for SOC 2 compliance"
+      default: false
+  - flow_logs_destination:
+      type: string
+      label: "Flow Logs Destination"
+      description: "Where to send VPC Flow Logs"
+      default: "cloudwatch"
+      required: true
+      show_when:
+        vpc_flow_logs_enabled: true
+      values:
+        - value: "cloudwatch"
+          label: "CloudWatch Logs"
+        - value: "s3"
+          label: "S3 Bucket"
+  - flow_logs_s3_bucket_arn:
+      type: string
+      label: "S3 Bucket ARN"
+      description: "ARN of an existing S3 bucket for flow logs. Leave empty to create a new bucket"
+      show_when:
+        vpc_flow_logs_enabled: true
+        flow_logs_destination: "s3"
+      patterns:
+        - pattern: "^(arn:aws:s3:::.*)?$"
+          message: "Must be a valid S3 bucket ARN (e.g., arn:aws:s3:::my-bucket)"
+  - flow_logs_retention_days:
+      type: number
+      label: "Retention Days"
+      description: "Number of days to retain flow logs in CloudWatch"
+      default: 30
+      required: true
+      show_when:
+        vpc_flow_logs_enabled: true
+        flow_logs_destination: "cloudwatch"
+      values:
+        - value: 1
+          label: "1 day"
+        - value: 3
+          label: "3 days"
+        - value: 7
+          label: "7 days"
+        - value: 14
+          label: "14 days"
+        - value: 30
+          label: "30 days"
+        - value: 60
+          label: "60 days"
+        - value: 90
+          label: "90 days"
+        - value: 180
+          label: "180 days"
+        - value: 365
+          label: "1 year"
+  - flow_logs_traffic_type:
+      type: string
+      label: "Traffic Type"
+      description: "Type of traffic to capture in flow logs"
+      default: "ALL"
+      required: true
+      show_when:
+        vpc_flow_logs_enabled: true
+      values:
+        - value: "ALL"
+          label: "All traffic"
+        - value: "ACCEPT"
+          label: "Accepted traffic only"
+        - value: "REJECT"
+          label: "Rejected traffic only"
+  # DNS Settings
+  - divider:
+      type: divider
+      label: "DNS Settings"
+  - enable_dns_support:
+      type: boolean
+      label: "Enable DNS Support"
+      description: "Enable DNS resolution in the VPC"
+      default: true
+  - enable_dns_hostnames:
+      type: boolean
+      label: "Enable DNS Hostnames"
+      description: "Enable DNS hostnames in the VPC"
+      default: true
 
 output:
+  # General
   region: string
+  # VPC
   vpc_id: string
   vpc_arn: string
   cidr: string
   vpc_ipv6_cidr_block: string
+  # Subnets
   public_subnet_ids:
     - string
   private_subnet_ids:
@@ -201,13 +203,17 @@ output:
     - string
   availability_zones:
     - string
+  # Internet Gateway
   internet_gateway_id: string
+  # NAT Gateway
   nat_gateway_ids:
     - string
   nat_gateway_public_ips:
     - string
+  # Route Tables
   public_route_table_id: string
   private_route_table_ids:
     - string
+  # Flow Logs
   vpc_flow_logs_enabled: boolean
   flow_log_id: string
