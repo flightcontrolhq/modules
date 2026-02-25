@@ -156,10 +156,10 @@ module "autoscaling" {
   # Launch template configuration
   create_launch_template = true
   launch_template = {
-    image_id               = data.aws_ami.amazon_linux_2023.id
-    instance_type          = "t3.micro"
+    image_id                 = data.aws_ami.amazon_linux_2023.id
+    instance_type            = "t3.micro"
     iam_instance_profile_arn = module.iam_role.instance_profile_arn
-    security_group_ids     = [module.security_group.security_group_id]
+    security_group_ids       = [module.security_group.security_group_id]
 
     # IMDSv2 required by default in the module
     metadata_options = {

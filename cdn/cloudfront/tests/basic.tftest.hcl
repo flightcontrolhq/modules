@@ -22,13 +22,13 @@ mock_provider "aws" {
   override_resource {
     target = aws_cloudfront_distribution.this
     values = {
-      arn                = "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
-      domain_name        = "d111111abcdef8.cloudfront.net"
-      hosted_zone_id     = "Z2FDTNDATAQYW2"
-      status             = "Deployed"
-      etag               = "E2QWRUHEXAMPLE"
-      id                 = "EDFDVBD6EXAMPLE"
-      caller_reference   = "test-ref-001"
+      arn                            = "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+      domain_name                    = "d111111abcdef8.cloudfront.net"
+      hosted_zone_id                 = "Z2FDTNDATAQYW2"
+      status                         = "Deployed"
+      etag                           = "E2QWRUHEXAMPLE"
+      id                             = "EDFDVBD6EXAMPLE"
+      caller_reference               = "test-ref-001"
       in_progress_validation_batches = 0
     }
   }
@@ -36,10 +36,10 @@ mock_provider "aws" {
   override_resource {
     target = aws_s3_bucket.logging
     values = {
-      arn           = "arn:aws:s3:::test-cf-logs-123456789012-us-east-1"
-      id            = "test-cf-logs-123456789012-us-east-1"
-      bucket        = "test-cf-logs-123456789012-us-east-1"
-      domain_name   = "test-cf-logs-123456789012-us-east-1.s3.amazonaws.com"
+      arn         = "arn:aws:s3:::test-cf-logs-123456789012-us-east-1"
+      id          = "test-cf-logs-123456789012-us-east-1"
+      bucket      = "test-cf-logs-123456789012-us-east-1"
+      domain_name = "test-cf-logs-123456789012-us-east-1.s3.amazonaws.com"
     }
   }
 }

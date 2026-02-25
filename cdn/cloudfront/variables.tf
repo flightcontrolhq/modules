@@ -48,7 +48,7 @@ variable "distributions" {
   }
 
   validation {
-    condition = length(flatten([for k, v in var.distributions : v.aliases])) == length(distinct(flatten([for k, v in var.distributions : v.aliases])))
+    condition     = length(flatten([for k, v in var.distributions : v.aliases])) == length(distinct(flatten([for k, v in var.distributions : v.aliases])))
     error_message = "Aliases must be unique across all distributions."
   }
 }

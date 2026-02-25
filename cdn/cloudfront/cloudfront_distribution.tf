@@ -57,12 +57,12 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   default_cache_behavior {
-    target_origin_id       = var.default_cache_behavior.target_origin_id
-    viewer_protocol_policy = var.default_cache_behavior.viewer_protocol_policy
-    allowed_methods        = var.default_cache_behavior.allowed_methods
-    cached_methods         = var.default_cache_behavior.cached_methods
-    compress               = var.default_cache_behavior.compress
-    cache_policy_id        = var.default_cache_behavior.cache_policy_id
+    target_origin_id           = var.default_cache_behavior.target_origin_id
+    viewer_protocol_policy     = var.default_cache_behavior.viewer_protocol_policy
+    allowed_methods            = var.default_cache_behavior.allowed_methods
+    cached_methods             = var.default_cache_behavior.cached_methods
+    compress                   = var.default_cache_behavior.compress
+    cache_policy_id            = var.default_cache_behavior.cache_policy_id
     origin_request_policy_id   = var.default_cache_behavior.origin_request_policy_id
     response_headers_policy_id = var.default_cache_behavior.response_headers_policy_id
 
@@ -87,13 +87,13 @@ resource "aws_cloudfront_distribution" "this" {
   dynamic "ordered_cache_behavior" {
     for_each = var.ordered_cache_behaviors
     content {
-      path_pattern           = ordered_cache_behavior.value.path_pattern
-      target_origin_id       = ordered_cache_behavior.value.target_origin_id
-      viewer_protocol_policy = ordered_cache_behavior.value.viewer_protocol_policy
-      allowed_methods        = ordered_cache_behavior.value.allowed_methods
-      cached_methods         = ordered_cache_behavior.value.cached_methods
-      compress               = ordered_cache_behavior.value.compress
-      cache_policy_id        = ordered_cache_behavior.value.cache_policy_id
+      path_pattern               = ordered_cache_behavior.value.path_pattern
+      target_origin_id           = ordered_cache_behavior.value.target_origin_id
+      viewer_protocol_policy     = ordered_cache_behavior.value.viewer_protocol_policy
+      allowed_methods            = ordered_cache_behavior.value.allowed_methods
+      cached_methods             = ordered_cache_behavior.value.cached_methods
+      compress                   = ordered_cache_behavior.value.compress
+      cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
       origin_request_policy_id   = ordered_cache_behavior.value.origin_request_policy_id
       response_headers_policy_id = ordered_cache_behavior.value.response_headers_policy_id
 
