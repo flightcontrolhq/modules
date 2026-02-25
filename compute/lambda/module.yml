@@ -1,0 +1,127 @@
+inputs:
+  - name:
+      type: string
+      label: "Function Name"
+      description: "Name of the Lambda function"
+      required: true
+      immutable: true
+      patterns:
+        - pattern: "^.{1,64}$"
+          message: "Must be between 1 and 64 characters"
+  - region:
+      type: string
+      label: "AWS Region"
+      default: "us-west-2"
+      immutable: true
+      required: true
+      values: "$values:aws/regions.select"
+  - package_type:
+      type: string
+      label: "Package Type"
+      default: "Zip"
+      required: true
+      values:
+        - value: "Zip"
+          label: "ZIP Archive"
+        - value: "Image"
+          label: "Container Image"
+  - runtime:
+      type: string
+      label: "Runtime"
+      description: "Runtime for ZIP functions"
+      default: "nodejs20.x"
+      show_when:
+        package_type: "Zip"
+  - handler:
+      type: string
+      label: "Handler"
+      description: "Entrypoint handler for ZIP functions"
+      default: "index.handler"
+      show_when:
+        package_type: "Zip"
+  - s3_bucket:
+      type: string
+      label: "S3 Bucket"
+      description: "S3 bucket containing ZIP package"
+      show_when:
+        package_type: "Zip"
+  - s3_key:
+      type: string
+      label: "S3 Key"
+      description: "S3 object key containing ZIP package"
+      show_when:
+        package_type: "Zip"
+  - image_uri:
+      type: string
+      label: "Image URI"
+      description: "Container image URI for Image package type"
+      show_when:
+        package_type: "Image"
+  - divider:
+      type: divider
+      label: "Execution"
+  - timeout:
+      type: number
+      label: "Timeout (seconds)"
+      default: 3
+      min: 1
+      max: 900
+  - memory_size:
+      type: number
+      label: "Memory (MB)"
+      default: 128
+      min: 128
+      max: 10240
+  - publish:
+      type: boolean
+      label: "Publish Versions"
+      default: false
+  - create_role:
+      type: boolean
+      label: "Create IAM Role"
+      default: true
+  - role_arn:
+      type: string
+      label: "Existing Role ARN"
+      description: "Used when Create IAM Role is disabled"
+      show_when:
+        create_role: false
+      patterns:
+        - pattern: "^arn:aws:iam::.*$"
+          message: "Must be a valid IAM role ARN"
+  - divider:
+      type: divider
+      label: "Lambda@Edge"
+  - is_lambda_at_edge:
+      type: boolean
+      label: "Lambda@Edge Mode"
+      description: "Enable Lambda@Edge compatibility validation rules"
+      default: false
+  - divider:
+      type: divider
+      label: "Optional Integrations"
+  - function_url_enabled:
+      type: boolean
+      label: "Enable Function URL"
+      default: false
+  - function_url_auth_type:
+      type: string
+      label: "Function URL Auth Type"
+      default: "AWS_IAM"
+      show_when:
+        function_url_enabled: true
+      values:
+        - value: "AWS_IAM"
+          label: "AWS IAM"
+        - value: "NONE"
+          label: "Public (None)"
+
+output:
+  function_name: string
+  function_arn: string
+  function_invoke_arn: string
+  function_qualified_arn: string
+  function_version: string
+  role_arn: string
+  log_group_name: string
+  function_url: string

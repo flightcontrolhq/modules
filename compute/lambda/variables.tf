@@ -1,0 +1,468 @@
+################################################################################
+# General
+################################################################################
+
+variable "name" {
+  type        = string
+  description = "Name of the Lambda function."
+
+  validation {
+    condition     = length(var.name) > 0 && length(var.name) <= 64
+    error_message = "The name must be between 1 and 64 characters."
+  }
+}
+
+variable "description" {
+  type        = string
+  description = "Description of the Lambda function."
+  default     = null
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "A map of tags to assign to all resources."
+  default     = {}
+}
+
+################################################################################
+# Lambda Function - Package and Runtime
+################################################################################
+
+variable "package_type" {
+  type        = string
+  description = "Lambda deployment package type. Valid values are 'Zip' and 'Image'."
+  default     = "Zip"
+
+  validation {
+    condition     = contains(["Zip", "Image"], var.package_type)
+    error_message = "The package_type must be 'Zip' or 'Image'."
+  }
+}
+
+variable "architectures" {
+  type        = list(string)
+  description = "Instruction set architecture for the Lambda function."
+  default     = ["x86_64"]
+
+  validation {
+    condition     = length(var.architectures) > 0 && alltrue([for a in var.architectures : contains(["x86_64", "arm64"], a)])
+    error_message = "The architectures must contain one or more values from: 'x86_64', 'arm64'."
+  }
+}
+
+variable "publish" {
+  type        = bool
+  description = "Whether to publish a new Lambda version on each update."
+  default     = false
+}
+
+variable "handler" {
+  type        = string
+  description = "Function entrypoint in your code. Required for Zip package type."
+  default     = null
+}
+
+variable "runtime" {
+  type        = string
+  description = "Function runtime. Required for Zip package type."
+  default     = null
+}
+
+variable "filename" {
+  type        = string
+  description = "Path to the local deployment package ZIP file."
+  default     = null
+}
+
+variable "source_code_hash" {
+  type        = string
+  description = "Base64-encoded SHA256 hash of the package file."
+  default     = null
+}
+
+variable "s3_bucket" {
+  type        = string
+  description = "S3 bucket containing the deployment package."
+  default     = null
+}
+
+variable "s3_key" {
+  type        = string
+  description = "S3 key of the deployment package."
+  default     = null
+}
+
+variable "s3_object_version" {
+  type        = string
+  description = "S3 object version containing the deployment package."
+  default     = null
+}
+
+variable "image_uri" {
+  type        = string
+  description = "Container image URI for Image package type."
+  default     = null
+}
+
+variable "image_config" {
+  type = object({
+    command           = optional(list(string))
+    entry_point       = optional(list(string))
+    working_directory = optional(string)
+  })
+  description = "Container image configuration overrides."
+  default     = null
+}
+
+################################################################################
+# Lambda Function - Configuration
+################################################################################
+
+variable "memory_size" {
+  type        = number
+  description = "Amount of memory in MB for the Lambda function."
+  default     = 128
+
+  validation {
+    condition     = var.memory_size >= 128 && var.memory_size <= 10240
+    error_message = "The memory_size must be between 128 and 10240 MB."
+  }
+}
+
+variable "timeout" {
+  type        = number
+  description = "Function timeout in seconds."
+  default     = 3
+
+  validation {
+    condition     = var.timeout >= 1 && var.timeout <= 900
+    error_message = "The timeout must be between 1 and 900 seconds."
+  }
+}
+
+variable "kms_key_arn" {
+  type        = string
+  description = "KMS key ARN used to encrypt environment variables."
+  default     = null
+
+  validation {
+    condition     = var.kms_key_arn == null || can(regex("^arn:aws:kms:", var.kms_key_arn))
+    error_message = "The kms_key_arn must be null or a valid KMS key ARN."
+  }
+}
+
+variable "layers" {
+  type        = list(string)
+  description = "List of Lambda layer ARNs."
+  default     = []
+}
+
+variable "reserved_concurrent_executions" {
+  type        = number
+  description = "Reserved concurrent executions for the function. Use -1 to remove limits."
+  default     = null
+
+  validation {
+    condition     = var.reserved_concurrent_executions == null || var.reserved_concurrent_executions >= -1
+    error_message = "The reserved_concurrent_executions must be null or greater than or equal to -1."
+  }
+}
+
+variable "ephemeral_storage_size" {
+  type        = number
+  description = "Size of /tmp directory in MB."
+  default     = 512
+
+  validation {
+    condition     = var.ephemeral_storage_size >= 512 && var.ephemeral_storage_size <= 10240
+    error_message = "The ephemeral_storage_size must be between 512 and 10240 MB."
+  }
+}
+
+variable "tracing_mode" {
+  type        = string
+  description = "X-Ray tracing mode. Valid values are 'PassThrough' and 'Active'."
+  default     = "PassThrough"
+
+  validation {
+    condition     = contains(["PassThrough", "Active"], var.tracing_mode)
+    error_message = "The tracing_mode must be 'PassThrough' or 'Active'."
+  }
+}
+
+variable "environment_variables" {
+  type        = map(string)
+  description = "Environment variables passed to the function."
+  default     = {}
+}
+
+variable "vpc_config" {
+  type = object({
+    subnet_ids                  = list(string)
+    security_group_ids          = list(string)
+    ipv6_allowed_for_dual_stack = optional(bool)
+  })
+  description = "VPC configuration for the Lambda function."
+  default     = null
+}
+
+variable "dead_letter_target_arn" {
+  type        = string
+  description = "Dead letter queue target ARN."
+  default     = null
+
+  validation {
+    condition = (
+      var.dead_letter_target_arn == null ||
+      can(regex("^arn:aws:(sqs|sns):", var.dead_letter_target_arn))
+    )
+    error_message = "The dead_letter_target_arn must be null or a valid SQS/SNS ARN."
+  }
+}
+
+variable "file_system_configs" {
+  type = list(object({
+    arn              = string
+    local_mount_path = string
+  }))
+  description = "EFS access point and mount path configurations."
+  default     = []
+}
+
+variable "snap_start_apply_on" {
+  type        = string
+  description = "SnapStart setting. Valid values are null and 'PublishedVersions'."
+  default     = null
+
+  validation {
+    condition     = var.snap_start_apply_on == null || var.snap_start_apply_on == "PublishedVersions"
+    error_message = "The snap_start_apply_on must be null or 'PublishedVersions'."
+  }
+}
+
+variable "code_signing_config_arn" {
+  type        = string
+  description = "Code signing configuration ARN."
+  default     = null
+}
+
+################################################################################
+# IAM Role
+################################################################################
+
+variable "create_role" {
+  type        = bool
+  description = "Whether to create an IAM role for the Lambda function."
+  default     = true
+}
+
+variable "role_arn" {
+  type        = string
+  description = "Existing IAM role ARN to use when create_role is false."
+  default     = null
+
+  validation {
+    condition     = var.role_arn == null || can(regex("^arn:aws:iam::", var.role_arn))
+    error_message = "The role_arn must be null or a valid IAM role ARN."
+  }
+}
+
+variable "role_name" {
+  type        = string
+  description = "Custom IAM role name. If null and create_role is true, defaults to '<name>-lambda-role'."
+  default     = null
+}
+
+variable "role_path" {
+  type        = string
+  description = "Path for the IAM role."
+  default     = "/"
+}
+
+variable "role_permissions_boundary" {
+  type        = string
+  description = "Permissions boundary ARN to use for the IAM role."
+  default     = null
+}
+
+variable "attach_basic_execution_policy" {
+  type        = bool
+  description = "Attach AWSLambdaBasicExecutionRole when creating the role."
+  default     = true
+}
+
+variable "attach_vpc_execution_policy" {
+  type        = bool
+  description = "Attach AWSLambdaVPCAccessExecutionRole when creating the role and vpc_config is set."
+  default     = true
+}
+
+variable "role_managed_policy_arns" {
+  type        = list(string)
+  description = "Additional managed policy ARNs to attach to the created IAM role."
+  default     = []
+}
+
+variable "role_inline_policies" {
+  type        = map(string)
+  description = "Inline policies to attach to the created IAM role. Map key is policy name, value is JSON policy."
+  default     = {}
+}
+
+################################################################################
+# CloudWatch Logs
+################################################################################
+
+variable "create_log_group" {
+  type        = bool
+  description = "Whether to create the CloudWatch log group for the function."
+  default     = true
+}
+
+variable "log_group_name" {
+  type        = string
+  description = "Custom CloudWatch log group name. If null, defaults to '/aws/lambda/<name>'."
+  default     = null
+}
+
+variable "log_retention_days" {
+  type        = number
+  description = "CloudWatch log retention in days. Set to 0 for never expire."
+  default     = 30
+
+  validation {
+    condition = contains([
+      0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365,
+      400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653
+    ], var.log_retention_days)
+    error_message = "The log_retention_days must be a valid CloudWatch retention value."
+  }
+}
+
+variable "log_kms_key_id" {
+  type        = string
+  description = "KMS key ID or ARN for log group encryption."
+  default     = null
+}
+
+################################################################################
+# Integrations - Permissions
+################################################################################
+
+variable "permissions" {
+  type = list(object({
+    statement_id           = optional(string)
+    action                 = optional(string, "lambda:InvokeFunction")
+    principal              = string
+    source_arn             = optional(string)
+    source_account         = optional(string)
+    event_source_token     = optional(string)
+    function_url_auth_type = optional(string)
+    qualifier              = optional(string)
+    principal_org_id       = optional(string)
+  }))
+  description = "Permission statements to create for invoking this function."
+  default     = []
+}
+
+################################################################################
+# Integrations - Event Source Mappings
+################################################################################
+
+variable "event_source_mappings" {
+  type = list(object({
+    event_source_arn                   = string
+    enabled                            = optional(bool, true)
+    batch_size                         = optional(number)
+    maximum_batching_window_in_seconds = optional(number)
+    starting_position                  = optional(string)
+    starting_position_timestamp        = optional(string)
+    parallelization_factor             = optional(number)
+    maximum_record_age_in_seconds      = optional(number)
+    bisect_batch_on_function_error     = optional(bool)
+    maximum_retry_attempts             = optional(number)
+    tumbling_window_in_seconds         = optional(number)
+    function_response_types            = optional(list(string))
+    queues                             = optional(list(string))
+    topics                             = optional(list(string))
+
+    source_access_configurations = optional(list(object({
+      type = string
+      uri  = string
+    })), [])
+
+    filter_criteria = optional(list(string), [])
+
+    scaling_config_maximum_concurrency = optional(number)
+
+    destination_config_on_failure_arn = optional(string)
+  }))
+  description = "Event source mappings for this Lambda function."
+  default     = []
+}
+
+################################################################################
+# Integrations - Aliases and URL
+################################################################################
+
+variable "aliases" {
+  type = map(object({
+    description                        = optional(string)
+    function_version                   = optional(string)
+    routing_additional_version_weights = optional(map(number), {})
+  }))
+  description = "Map of aliases to create, keyed by alias name."
+  default     = {}
+}
+
+variable "function_url_enabled" {
+  type        = bool
+  description = "Whether to create a Lambda function URL."
+  default     = false
+}
+
+variable "function_url_auth_type" {
+  type        = string
+  description = "Function URL authorization type. Valid values are 'NONE' and 'AWS_IAM'."
+  default     = "AWS_IAM"
+
+  validation {
+    condition     = contains(["NONE", "AWS_IAM"], var.function_url_auth_type)
+    error_message = "The function_url_auth_type must be 'NONE' or 'AWS_IAM'."
+  }
+}
+
+variable "function_url_invoke_mode" {
+  type        = string
+  description = "Function URL invoke mode. Valid values are 'BUFFERED' and 'RESPONSE_STREAM'."
+  default     = "BUFFERED"
+
+  validation {
+    condition     = contains(["BUFFERED", "RESPONSE_STREAM"], var.function_url_invoke_mode)
+    error_message = "The function_url_invoke_mode must be 'BUFFERED' or 'RESPONSE_STREAM'."
+  }
+}
+
+variable "function_url_cors" {
+  type = object({
+    allow_credentials = optional(bool)
+    allow_headers     = optional(list(string))
+    allow_methods     = optional(list(string))
+    allow_origins     = optional(list(string))
+    expose_headers    = optional(list(string))
+    max_age           = optional(number)
+  })
+  description = "CORS configuration for the function URL."
+  default     = null
+}
+
+################################################################################
+# Lambda@Edge
+################################################################################
+
+variable "is_lambda_at_edge" {
+  type        = bool
+  description = "Enable Lambda@Edge compatibility validations."
+  default     = false
+}
+
