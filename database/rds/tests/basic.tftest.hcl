@@ -22,8 +22,14 @@ mock_provider "aws" {
   override_data {
     target = data.aws_vpc.this
     values = {
-      id         = "vpc-12345678"
       cidr_block = "10.0.0.0/16"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.monitoring
+    values = {
+      arn = "arn:aws:iam::123456789012:role/test-rds-monitoring-role"
     }
   }
 }

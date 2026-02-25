@@ -38,9 +38,20 @@ locals {
       local.is_oracle ? "${var.engine}-${split(".", var.engine_version)[0]}" :
       local.is_sqlserver ? "${var.engine}-${regex("^[0-9]+\\.[0-9]+", var.engine_version)}" :
       null
-    ) : null
+      ) : (
+      local.is_mysql ? "mysql8.0" :
+      local.is_postgres ? "postgres16" :
+      local.is_mariadb ? "mariadb10.6" :
+      local.is_oracle ? "${var.engine}-19" :
+      local.is_sqlserver ? "${var.engine}-15.0" :
+      null
+    )
   )
-  parameter_group_family = coalesce(var.parameter_group_family, local.default_parameter_group_family)
+  parameter_group_family = (
+    var.parameter_group_family != null
+    ? var.parameter_group_family
+    : local.default_parameter_group_family
+  )
 
   # Option group major engine version derivation
   # For Oracle: 19, 21
@@ -50,9 +61,17 @@ locals {
       local.is_oracle ? split(".", var.engine_version)[0] :
       local.is_sqlserver ? regex("^[0-9]+\\.[0-9]+", var.engine_version) :
       split(".", var.engine_version)[0]
-    ) : null
+      ) : (
+      local.is_oracle ? "19" :
+      local.is_sqlserver ? "15.00" :
+      null
+    )
   )
-  option_group_engine_version = coalesce(var.option_group_engine_version, local.default_option_group_engine_version)
+  option_group_engine_version = (
+    var.option_group_engine_version != null
+    ? var.option_group_engine_version
+    : local.default_option_group_engine_version
+  )
 
   # Resource creation flags
   create_security_group  = var.create_security_group

@@ -13,6 +13,7 @@ import (
 	applicationautoscalingtypes "github.com/aws/aws-sdk-go-v2/service/applicationautoscaling/types"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	autoscalingtypes "github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -22,6 +23,7 @@ import (
 	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -2809,6 +2811,148 @@ func AutoScalingScheduledActionExists(t *testing.T, asgName string, actionName s
 }
 
 // ============================================================================
+// CloudFront Helpers
+// ============================================================================
+
+// getCloudFrontClient creates a CloudFront client.
+// CloudFront is a global service, but the SDK still requires a region in config.
+func getCloudFrontClient(t *testing.T, region string) *cloudfront.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return cloudfront.NewFromConfig(cfg)
+}
+
+// CloudFrontDistributionExists checks if a CloudFront distribution with the given ID exists.
+func CloudFrontDistributionExists(t *testing.T, distributionId string, region string) bool {
+	client := getCloudFrontClient(t, region)
+
+	input := &cloudfront.GetDistributionInput{
+		Id: &distributionId,
+	}
+
+	result, err := client.GetDistribution(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return result.Distribution != nil
+}
+
+// GetCloudFrontDistributionStatus returns the status of a CloudFront distribution (e.g., "InProgress", "Deployed").
+func GetCloudFrontDistributionStatus(t *testing.T, distributionId string, region string) string {
+	client := getCloudFrontClient(t, region)
+
+	input := &cloudfront.GetDistributionInput{
+		Id: &distributionId,
+	}
+
+	result, err := client.GetDistribution(context.TODO(), input)
+	require.NoError(t, err, "Failed to get CloudFront distribution %s", distributionId)
+	require.NotNil(t, result.Distribution, "CloudFront distribution %s should exist", distributionId)
+
+	if result.Distribution.Status != nil {
+		return *result.Distribution.Status
+	}
+	return ""
+}
+
+// ============================================================================
+// Lambda Helpers
+// ============================================================================
+
+// getLambdaClient creates a Lambda client for the specified region.
+func getLambdaClient(t *testing.T, region string) *lambda.Client {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	require.NoError(t, err, "Failed to load AWS config")
+	return lambda.NewFromConfig(cfg)
+}
+
+// LambdaFunctionExists checks if a Lambda function with the given name exists.
+func LambdaFunctionExists(t *testing.T, functionName string, region string) bool {
+	client := getLambdaClient(t, region)
+
+	input := &lambda.GetFunctionInput{
+		FunctionName: &functionName,
+	}
+
+	result, err := client.GetFunction(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return result.Configuration != nil
+}
+
+// GetLambdaFunctionRuntime returns the configured runtime for a Lambda function.
+func GetLambdaFunctionRuntime(t *testing.T, functionName string, region string) string {
+	client := getLambdaClient(t, region)
+
+	input := &lambda.GetFunctionInput{
+		FunctionName: &functionName,
+	}
+
+	result, err := client.GetFunction(context.TODO(), input)
+	require.NoError(t, err, "Failed to get Lambda function %s", functionName)
+	require.NotNil(t, result.Configuration, "Lambda function %s should have configuration", functionName)
+
+	return string(result.Configuration.Runtime)
+}
+
+// GetLambdaFunctionHandler returns the configured handler for a Lambda function.
+func GetLambdaFunctionHandler(t *testing.T, functionName string, region string) string {
+	client := getLambdaClient(t, region)
+
+	input := &lambda.GetFunctionInput{
+		FunctionName: &functionName,
+	}
+
+	result, err := client.GetFunction(context.TODO(), input)
+	require.NoError(t, err, "Failed to get Lambda function %s", functionName)
+	require.NotNil(t, result.Configuration, "Lambda function %s should have configuration", functionName)
+
+	if result.Configuration.Handler != nil {
+		return *result.Configuration.Handler
+	}
+	return ""
+}
+
+// GetLambdaFunctionTimeout returns the configured timeout in seconds for a Lambda function.
+func GetLambdaFunctionTimeout(t *testing.T, functionName string, region string) int32 {
+	client := getLambdaClient(t, region)
+
+	input := &lambda.GetFunctionInput{
+		FunctionName: &functionName,
+	}
+
+	result, err := client.GetFunction(context.TODO(), input)
+	require.NoError(t, err, "Failed to get Lambda function %s", functionName)
+	require.NotNil(t, result.Configuration, "Lambda function %s should have configuration", functionName)
+
+	if result.Configuration.Timeout != nil {
+		return *result.Configuration.Timeout
+	}
+	return 0
+}
+
+// GetLambdaFunctionRole returns the IAM role ARN used by the Lambda function.
+func GetLambdaFunctionRole(t *testing.T, functionName string, region string) string {
+	client := getLambdaClient(t, region)
+
+	input := &lambda.GetFunctionInput{
+		FunctionName: &functionName,
+	}
+
+	result, err := client.GetFunction(context.TODO(), input)
+	require.NoError(t, err, "Failed to get Lambda function %s", functionName)
+	require.NotNil(t, result.Configuration, "Lambda function %s should have configuration", functionName)
+
+	if result.Configuration.Role != nil {
+		return *result.Configuration.Role
+	}
+	return ""
+}
+
+// ============================================================================
 // Aurora / RDS Cluster Helpers
 // ============================================================================
 
@@ -2817,6 +2961,94 @@ func getRDSClient(t *testing.T, region string) *rds.Client {
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	require.NoError(t, err, "Failed to load AWS config")
 	return rds.NewFromConfig(cfg)
+}
+
+// RDSInstanceExists checks if an RDS DB instance with the given identifier exists.
+func RDSInstanceExists(t *testing.T, instanceIdentifier string, region string) bool {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	if err != nil {
+		return false
+	}
+
+	return len(result.DBInstances) > 0
+}
+
+// GetRDSInstanceStatus returns the status of an RDS DB instance.
+func GetRDSInstanceStatus(t *testing.T, instanceIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe RDS instance %s", instanceIdentifier)
+	require.Len(t, result.DBInstances, 1, "Expected exactly one RDS instance with identifier %s", instanceIdentifier)
+
+	if result.DBInstances[0].DBInstanceStatus != nil {
+		return *result.DBInstances[0].DBInstanceStatus
+	}
+	return ""
+}
+
+// GetRDSInstanceEngine returns the engine for an RDS DB instance (e.g., "postgres", "mysql").
+func GetRDSInstanceEngine(t *testing.T, instanceIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe RDS instance %s", instanceIdentifier)
+	require.Len(t, result.DBInstances, 1, "Expected exactly one RDS instance with identifier %s", instanceIdentifier)
+
+	if result.DBInstances[0].Engine != nil {
+		return *result.DBInstances[0].Engine
+	}
+	return ""
+}
+
+// GetRDSInstanceClass returns the instance class for an RDS DB instance.
+func GetRDSInstanceClass(t *testing.T, instanceIdentifier string, region string) string {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe RDS instance %s", instanceIdentifier)
+	require.Len(t, result.DBInstances, 1, "Expected exactly one RDS instance with identifier %s", instanceIdentifier)
+
+	if result.DBInstances[0].DBInstanceClass != nil {
+		return *result.DBInstances[0].DBInstanceClass
+	}
+	return ""
+}
+
+// IsRDSInstanceStorageEncrypted returns true if storage encryption is enabled for an RDS DB instance.
+func IsRDSInstanceStorageEncrypted(t *testing.T, instanceIdentifier string, region string) bool {
+	client := getRDSClient(t, region)
+
+	input := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &instanceIdentifier,
+	}
+
+	result, err := client.DescribeDBInstances(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe RDS instance %s", instanceIdentifier)
+	require.Len(t, result.DBInstances, 1, "Expected exactly one RDS instance with identifier %s", instanceIdentifier)
+
+	if result.DBInstances[0].StorageEncrypted != nil {
+		return *result.DBInstances[0].StorageEncrypted
+	}
+	return false
 }
 
 // AuroraClusterExists checks if an Aurora cluster with the given identifier exists.
@@ -3143,4 +3375,3 @@ func GetAuroraClusterServerlessV2ScalingConfig(t *testing.T, clusterIdentifier s
 	}
 	return 0, 0, false
 }
-
