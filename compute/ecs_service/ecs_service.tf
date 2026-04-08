@@ -109,9 +109,11 @@ resource "aws_ecs_service" "this" {
     aws_lb_listener_rule.alb,
   ]
 
-  # Lifecycle for blue/green deployments
+  # Lifecycle: desired_count is managed by autoscaling (or external controllers),
+  # so Terraform must not fight it on subsequent applies.
   lifecycle {
     ignore_changes = [
+      desired_count,
       # Ignore task definition changes for blue/green as CodeDeploy manages this
       # Uncomment if using external deployment tools:
       # task_definition,
