@@ -45,16 +45,31 @@ variable "private_subnet_ids" {
     condition     = alltrue([for s in var.private_subnet_ids : can(regex("^subnet-", s))])
     error_message = "All private_subnet_ids must be valid subnet IDs starting with 'subnet-'."
   }
+
+  validation {
+    condition     = !var.enable_private_alb || length(var.private_subnet_ids) >= 2
+    error_message = "At least 2 private_subnet_ids are required when enable_private_alb is true. ALBs require subnets in at least 2 availability zones for high availability."
+  }
 }
 
 variable "public_subnet_ids" {
   type        = list(string)
-  description = "A list of public subnet IDs for the public ALB. Required if enable_public_alb is true."
+  description = "A list of public subnet IDs for the public ALB/NLB. Required if enable_public_alb or enable_public_nlb is true."
   default     = []
 
   validation {
     condition     = alltrue([for s in var.public_subnet_ids : can(regex("^subnet-", s))])
     error_message = "All public_subnet_ids must be valid subnet IDs starting with 'subnet-'."
+  }
+
+  validation {
+    condition     = !var.enable_public_alb || length(var.public_subnet_ids) >= 2
+    error_message = "At least 2 public_subnet_ids are required when enable_public_alb is true. ALBs require subnets in at least 2 availability zones for high availability."
+  }
+
+  validation {
+    condition     = !var.enable_public_nlb || length(var.public_subnet_ids) >= 1
+    error_message = "At least 1 public_subnet_id is required when enable_public_nlb is true."
   }
 }
 

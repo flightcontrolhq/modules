@@ -177,9 +177,10 @@ module "ecs_autoscaling" {
   launch_template_version = "$Latest"
 
   # ECS integration
-  ecs_managed                     = true
-  protect_from_scale_in           = var.ec2_managed_termination_protection == "ENABLED"
-  ignore_desired_capacity_changes = true
+  # Note: the autoscaling submodule already ignores desired_capacity changes
+  # unconditionally, so no toggle is needed for ECS managed scaling.
+  ecs_managed           = true
+  protect_from_scale_in = var.ec2_managed_termination_protection == "ENABLED"
 
   # Instance refresh
   instance_refresh = {
