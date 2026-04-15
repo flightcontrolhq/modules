@@ -114,10 +114,8 @@ resource "aws_ecs_service" "this" {
   lifecycle {
     ignore_changes = [
       desired_count,
-      # Ignore task definition changes for blue/green as CodeDeploy manages this
-      # Uncomment if using external deployment tools:
-      # task_definition,
-      # load_balancer,
+      task_definition,
+      load_balancer,
     ]
   }
 }
