@@ -364,6 +364,17 @@ variable "security_group_ids" {
   }
 }
 
+variable "load_balancer_security_group_id" {
+  type        = string
+  description = "Security group ID of the load balancer. When provided, the ECS service ingress rule allows traffic only from this SG instead of the VPC CIDR."
+  default     = null
+
+  validation {
+    condition     = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
+    error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
+  }
+}
+
 variable "allowed_cidr_blocks" {
   type        = list(string)
   description = "CIDR blocks allowed to access the service (in addition to load balancer)."

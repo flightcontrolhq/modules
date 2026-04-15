@@ -14,9 +14,15 @@ module "security_group" {
   allow_all_egress = true
 
   ingress_rules = concat(
-    # Load balancer ingress (from VPC CIDR)
+    # Load balancer ingress (from LB security group if provided, else VPC CIDR)
     local.enable_load_balancer ? [
-      {
+      var.load_balancer_security_group_id != null ? {
+        description                  = "Allow traffic from load balancer on port ${local.lb_container_port}"
+        from_port                    = local.lb_container_port
+        to_port                      = local.lb_container_port
+        ip_protocol                  = "tcp"
+        referenced_security_group_id = var.load_balancer_security_group_id
+        } : {
         description = "Allow traffic from load balancer on port ${local.lb_container_port}"
         from_port   = local.lb_container_port
         to_port     = local.lb_container_port
