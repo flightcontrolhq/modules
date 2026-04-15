@@ -12,6 +12,10 @@ resource "aws_appautoscaling_target" "this" {
   service_namespace  = "ecs"
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 ################################################################################
