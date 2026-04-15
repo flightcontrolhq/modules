@@ -39,8 +39,6 @@ locals {
   create_execution_role = var.execution_role_arn == null
   create_task_role      = var.task_role_arn == null
 
-  # Placeholder container doesn't use secrets
-  has_secrets = false
 
   # Hardcoded placeholder container definition - CodeDeploy will replace with actual application
   container_definitions = jsonencode([
@@ -50,6 +48,8 @@ locals {
       essential = true
       cpu       = 0
       memory    = null
+
+      stopTimeout = 30
 
       portMappings = [
         {
@@ -61,11 +61,23 @@ locals {
         }
       ]
 
-      environment            = []
-      secrets                = []
-      healthCheck            = null
-      logConfiguration       = null
+      environment = []
+      secrets     = []
+      healthCheck = null
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/${var.name}"
+          awslogs-region        = data.aws_region.current.id
+          awslogs-stream-prefix = local.placeholder_container_name
+          awslogs-create-group  = "true"
+        }
+        secretOptions = []
+      }
+
       mountPoints            = []
+      volumesFrom            = []
       dependsOn              = []
       command                = null
       entryPoint             = null
@@ -74,8 +86,17 @@ locals {
       privileged             = false
       user                   = null
       ulimits                = []
-      linuxParameters        = null
-      dockerLabels           = null
+      systemControls         = []
+      linuxParameters = {
+        initProcessEnabled = true
+        capabilities       = null
+        devices            = []
+        maxSwap            = null
+        sharedMemorySize   = null
+        swappiness         = null
+        tmpfs              = []
+      }
+      dockerLabels = null
     }
   ])
 

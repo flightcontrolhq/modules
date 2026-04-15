@@ -32,9 +32,37 @@ resource "aws_iam_role_policy_attachment" "execution_base" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Allow the execution role to create/write to the CloudWatch log group used by
+# the awslogs driver (awslogs-create-group = true requires logs:CreateLogGroup).
+data "aws_iam_policy_document" "execution_logs" {
+  count = local.create_execution_role ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogStreams",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name}",
+      "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name}:*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "execution_logs" {
+  count = local.create_execution_role ? 1 : 0
+
+  name   = "cloudwatch-logs"
+  role   = aws_iam_role.execution[0].id
+  policy = data.aws_iam_policy_document.execution_logs[0].json
+}
+
 # Additional policy for Secrets Manager and SSM Parameter Store access
 data "aws_iam_policy_document" "execution_secrets" {
-  count = local.create_execution_role && local.has_secrets ? 1 : 0
+  count = local.create_execution_role ? 1 : 0
 
   statement {
     effect = "Allow"
@@ -75,7 +103,7 @@ data "aws_iam_policy_document" "execution_secrets" {
 }
 
 resource "aws_iam_role_policy" "execution_secrets" {
-  count = local.create_execution_role && local.has_secrets ? 1 : 0
+  count = local.create_execution_role ? 1 : 0
 
   name   = "secrets-access"
   role   = aws_iam_role.execution[0].id
