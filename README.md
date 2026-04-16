@@ -23,7 +23,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
 | `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) | v1.0.0  |
-| `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | Planned |
+| `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
 | `database/`   | `rds`             | AWS RDS instances                                                      | v1.0.0  |
 | `kubernetes/` | -                 | Kubernetes resources                                                   | Planned |
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
