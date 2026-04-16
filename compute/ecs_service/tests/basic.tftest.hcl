@@ -91,6 +91,41 @@ run "service_with_load_balancer" {
 }
 
 ################################################################################
+# Test: Service with Load Balancer (Auto Priority)
+################################################################################
+
+run "service_with_load_balancer_auto_priority" {
+  command = plan
+
+  variables {
+    container_port = 8080
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+      }
+      listener_rules = [{
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+        conditions = [{
+          type   = "path-pattern"
+          values = ["/api/*"]
+        }]
+      }]
+    }
+  }
+
+  assert {
+    condition     = length(aws_lb_target_group.this) == 1
+    error_message = "Should create one target group for rolling deployment"
+  }
+
+  assert {
+    condition     = aws_lb_listener_rule.alb["0"].priority == null
+    error_message = "Priority should be null (auto-assigned by AWS)"
+  }
+}
+
+################################################################################
 # Test: Blue/Green Deployment
 ################################################################################
 

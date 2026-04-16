@@ -424,7 +424,7 @@ variable "load_balancer_attachment" {
     # ALB: Listener rules (attach to existing ALB listener)
     listener_rules = optional(list(object({
       listener_arn = string
-      priority     = number
+      priority     = optional(number, null) # null = AWS auto-assigns next available priority
 
       conditions = list(object({
         type   = string

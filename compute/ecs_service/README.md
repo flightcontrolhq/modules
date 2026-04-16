@@ -61,7 +61,6 @@ module "api_service" {
     }
     listener_rules = [{
       listener_arn = module.ecs_cluster.public_alb_https_listener_arn
-      priority     = 100
       conditions = [{
         type   = "path-pattern"
         values = ["/api/*"]
@@ -107,7 +106,6 @@ module "api_service" {
     }
     listener_rules = [{
       listener_arn = module.ecs_cluster.public_alb_https_listener_arn
-      priority     = 100
       conditions = [{
         type   = "host-header"
         values = ["api.example.com"]
@@ -337,7 +335,7 @@ module "worker_service" {
 The `load_balancer_attachment` object includes:
 - `enabled` - Enable load balancer attachment (default: true)
 - `target_group` - Target group configuration (port, protocol, health_check, stickiness)
-- `listener_rules` - ALB listener rules with conditions
+- `listener_rules` - ALB listener rules with conditions. Each rule accepts an optional `priority` (1-50000); when omitted, AWS automatically assigns the next available priority after the current highest rule on the listener.
 - `nlb_listener` - NLB listener configuration (port, protocol, certificate_arn for TLS)
 - `container_name` / `container_port` - Override container to attach
 
@@ -560,7 +558,7 @@ The `service_discovery` object includes:
 ║  │ • load_balancer_attachment:                                                                                      │  ║
 ║  │   - enabled                     │ - target_group: port, protocol, target_type, deregistration_delay,             │  ║
 ║  │   - container_name/port         │               health_check{}, stickiness{}                                     │  ║
-║  │   - listener_rules[]: listener_arn, priority, conditions[], weight                                               │  ║
+║  │   - listener_rules[]: listener_arn, priority (optional), conditions[], weight                                     │  ║
 ║  │   - nlb_listener: nlb_arn, port, protocol, certificate_arn, ssl_policy, alpn_policy                              │  ║
 ║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
