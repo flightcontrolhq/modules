@@ -31,7 +31,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
 | `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
 | `networking/` | `nlb`             | AWS Network Load Balancers                                             | v1.0.0  |
-| `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | Planned |
+| `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | v1.0.0  |
 | `networking/` | `security-groups` | AWS Security Groups                                                    | v1.0.0  |
 | `networking/` | `vpc`             | AWS VPC and subnets                                                    | v1.0.0  |
 | `security/`   | `acm_certificate` | AWS ACM public certificates (DNS validation, optional Route53, optional wait) | v1.0.0  |
