@@ -28,6 +28,20 @@ output "nlb_zone_id" {
 }
 
 ################################################################################
+# Security Group
+################################################################################
+
+output "security_group_id" {
+  description = "The ID of the NLB security group."
+  value       = module.security_group.security_group_id
+}
+
+output "security_group_arn" {
+  description = "The ARN of the NLB security group."
+  value       = module.security_group.security_group_arn
+}
+
+################################################################################
 # Access Logs
 ################################################################################
 

@@ -9,7 +9,7 @@ This module creates an AWS Network Load Balancer (NLB) with optional access logg
 - Ultra-low latency with millions of requests per second
 - Static IP addresses via Elastic IPs for firewall whitelisting
 - Cross-zone load balancing for even traffic distribution
-- Optional security group attachment for NLBs
+- Managed security group with referenceable ID for downstream services
 - S3 access logging with automatic bucket creation
 - Configurable log retention and KMS encryption
 - DNS client routing policy configuration
@@ -141,36 +141,36 @@ module "nlb" {
 }
 ```
 
-### NLB with Security Groups
+### NLB with Managed Security Group
+
+The module creates a managed security group that can be referenced by downstream services to restrict traffic to only what comes through the NLB:
 
 ```hcl
-resource "aws_security_group" "nlb" {
-  name        = "nlb-sg"
-  description = "Security group for NLB"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
 module "nlb" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
-  name               = "secured"
-  vpc_id             = module.vpc.vpc_id
-  subnet_ids         = module.vpc.public_subnet_ids
-  security_group_ids = [aws_security_group.nlb.id]
+  name       = "secured"
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.public_subnet_ids
+
+  # Define which ports the NLB will expose
+  listener_ports = [
+    { port = 443, protocol = "tls" },
+    { port = 80, protocol = "tcp" },
+  ]
+
+  # Restrict ingress to specific CIDRs (defaults to 0.0.0.0/0)
+  ingress_cidr_blocks = ["10.0.0.0/8"]
+}
+
+# Reference the NLB security group in target service security groups
+resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
+  security_group_id            = module.service.security_group_id
+  referenced_security_group_id = module.nlb.security_group_id
+  from_port                    = 8080
+  to_port                      = 8080
+  ip_protocol                  = "tcp"
+  description                  = "Allow traffic from NLB"
 }
 ```
 
@@ -201,11 +201,14 @@ module "nlb" {
 | enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
 | dns_record_client_routing_policy | How traffic is distributed among NLB AZs (any_availability_zone, availability_zone_affinity, partial_availability_zone_affinity) | `string` | `null` | no |
 
-### Security
+### Security Group
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| security_group_ids | A list of security group IDs to attach to the NLB | `list(string)` | `[]` | no |
+| listener_ports | List of port/protocol pairs to allow in the NLB security group | `list(object({ port = number, protocol = string }))` | `[]` | no |
+| ingress_cidr_blocks | IPv4 CIDR blocks allowed to access the NLB | `list(string)` | `["0.0.0.0/0"]` | no |
+| ingress_ipv6_cidr_blocks | IPv6 CIDR blocks allowed to access the NLB | `list(string)` | `["::/0"]` | no |
+| additional_security_group_ids | Additional security group IDs to attach alongside the managed one | `list(string)` | `[]` | no |
 | enforce_security_group_inbound_rules_on_private_link_traffic | Whether inbound SG rules are enforced for PrivateLink traffic (on/off) | `string` | `null` | no |
 
 ### Elastic IPs (Static IPs)
@@ -237,6 +240,13 @@ module "nlb" {
 | nlb_arn_suffix | The ARN suffix of the NLB for use with CloudWatch Metrics |
 | nlb_dns_name | The DNS name of the Network Load Balancer |
 | nlb_zone_id | The canonical hosted zone ID of the NLB (for Route53 alias records) |
+
+### Security Group
+
+| Name | Description |
+|------|-------------|
+| security_group_id | The ID of the NLB security group |
+| security_group_arn | The ARN of the NLB security group |
 
 ### Access Logs
 
@@ -592,7 +602,7 @@ This module follows the principle of separation of concerns:
 
 ## Security Considerations
 
-- **Security Groups**: While optional for NLBs, you can attach security groups to control inbound traffic.
+- **Managed Security Group**: The module creates a security group that is automatically attached to the NLB. Use `listener_ports` to define which ports are allowed. Reference `security_group_id` in downstream service security groups to restrict traffic to NLB-only sources.
 - **Client IP Preservation**: NLB preserves the client's source IP by default (for non-TLS targets).
 - **Access Logs**: Enable access logging for audit trails, troubleshooting, and compliance.
 - **PrivateLink**: Use `enforce_security_group_inbound_rules_on_private_link_traffic` to control traffic from PrivateLink endpoints.
@@ -606,7 +616,7 @@ This module follows the principle of separation of concerns:
 | Protocols          | HTTP, HTTPS          | TCP, UDP, TLS, TCP_UDP            |
 | Latency            | Low (~ms)            | Ultra-low (~us)                   |
 | Static IPs         | No                   | Yes (via Elastic IPs)             |
-| Security Groups    | Yes (required)       | Optional                          |
+| Security Groups    | Yes (managed)        | Yes (managed)                     |
 | Path-based routing | Yes                  | No                                |
 | Host-based routing | Yes                  | No                                |
 | WebSocket          | Yes                  | Yes (TCP)                         |
@@ -623,4 +633,4 @@ This module follows the principle of separation of concerns:
 - The access logs S3 bucket name includes the AWS account ID and region to ensure uniqueness.
 - Access logs bucket has `force_destroy = true` - be aware this will delete all logs when the module is destroyed.
 - Deletion protection is disabled by default; enable it for production NLBs.
-- Security groups on NLBs are a newer feature and may not be supported in all regions.
+- The managed security group is always created and attached. Use `listener_ports` to define ingress rules and `security_group_id` output to reference it in downstream services.

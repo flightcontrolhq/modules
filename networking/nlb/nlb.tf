@@ -13,7 +13,7 @@ resource "aws_lb" "this" {
   dns_record_client_routing_policy                             = var.dns_record_client_routing_policy
   enforce_security_group_inbound_rules_on_private_link_traffic = var.enforce_security_group_inbound_rules_on_private_link_traffic
 
-  security_groups = var.security_group_ids
+  security_groups = concat([module.security_group.security_group_id], var.additional_security_group_ids)
 
   dynamic "subnet_mapping" {
     for_each = var.enable_elastic_ips ? var.subnet_ids : []

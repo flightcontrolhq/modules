@@ -39,6 +39,14 @@ mock_provider "aws" {
       id  = "test-nlb-access-logs-123456789012-us-east-1"
     }
   }
+
+  override_resource {
+    target = module.security_group.aws_security_group.this
+    values = {
+      id  = "sg-nlb12345678"
+      arn = "arn:aws:ec2:us-east-1:123456789012:security-group/sg-nlb12345678"
+    }
+  }
 }
 
 variables {
@@ -214,16 +222,43 @@ run "dns_routing_policy" {
   }
 }
 
-# Test 11: Security groups
-run "security_groups" {
+# Test 11: Managed security group is always created
+run "managed_security_group" {
+  command = plan
+
+  assert {
+    condition     = module.security_group.security_group_id != null
+    error_message = "NLB should have a managed security group"
+  }
+}
+
+# Test 12: Managed security group with listener ports
+run "security_group_with_listener_ports" {
   command = plan
 
   variables {
-    security_group_ids = ["sg-12345678", "sg-87654321"]
+    listener_ports = [
+      { port = 443, protocol = "tls" },
+      { port = 80, protocol = "tcp" },
+    ]
   }
 
   assert {
-    condition     = length(aws_lb.this.security_groups) == 2
-    error_message = "NLB should have 2 security groups attached"
+    condition     = module.security_group.security_group_id != null
+    error_message = "NLB should have a managed security group with listener port rules"
+  }
+}
+
+# Test 13: Additional security groups
+run "additional_security_groups" {
+  command = plan
+
+  variables {
+    additional_security_group_ids = ["sg-12345678", "sg-87654321"]
+  }
+
+  assert {
+    condition     = length(aws_lb.this.security_groups) == 3
+    error_message = "NLB should have 3 security groups (1 managed + 2 additional)"
   }
 }

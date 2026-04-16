@@ -47,15 +47,59 @@ variable "subnet_ids" {
   }
 }
 
-variable "security_group_ids" {
+variable "additional_security_group_ids" {
   type        = list(string)
-  description = "A list of security group IDs to attach to the NLB. Only valid for NLBs in a VPC."
+  description = "A list of additional security group IDs to attach to the NLB alongside the managed security group."
   default     = []
 
   validation {
-    condition     = alltrue([for sg in var.security_group_ids : can(regex("^sg-", sg))])
-    error_message = "All security_group_ids must be valid security group IDs starting with 'sg-'."
+    condition     = alltrue([for sg in var.additional_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All additional_security_group_ids must be valid security group IDs starting with 'sg-'."
   }
+}
+
+################################################################################
+# Security Group
+################################################################################
+
+variable "listener_ports" {
+  type = list(object({
+    port     = number
+    protocol = string
+  }))
+  description = <<-EOF
+    A list of listener port/protocol pairs to allow in the NLB security group.
+    Each entry opens an ingress rule for the specified port and protocol.
+    Protocol should be "tcp", "udp", or "tls" (TLS is treated as TCP at the security group level).
+  EOF
+  default     = []
+
+  validation {
+    condition     = alltrue([for lp in var.listener_ports : lp.port >= 1 && lp.port <= 65535])
+    error_message = "All listener ports must be between 1 and 65535."
+  }
+
+  validation {
+    condition     = alltrue([for lp in var.listener_ports : contains(["tcp", "udp", "tls", "tcp_udp"], lower(lp.protocol))])
+    error_message = "All listener protocols must be one of: tcp, udp, tls, tcp_udp."
+  }
+}
+
+variable "ingress_cidr_blocks" {
+  type        = list(string)
+  description = "A list of IPv4 CIDR blocks allowed to access the NLB."
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = alltrue([for cidr in var.ingress_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All ingress_cidr_blocks must be valid IPv4 CIDR blocks."
+  }
+}
+
+variable "ingress_ipv6_cidr_blocks" {
+  type        = list(string)
+  description = "A list of IPv6 CIDR blocks allowed to access the NLB."
+  default     = ["::/0"]
 }
 
 ################################################################################
