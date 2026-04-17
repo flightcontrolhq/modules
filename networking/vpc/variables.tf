@@ -202,3 +202,96 @@ variable "flow_logs_versioning_enabled" {
   description = "Enable versioning for the flow logs S3 bucket."
   default     = false
 }
+
+################################################################################
+# VPC Peering
+################################################################################
+
+variable "vpc_peering_connections" {
+  type = map(object({
+    peer_vpc_id                     = string
+    peer_cidr_blocks                = list(string)
+    peer_owner_id                   = optional(string)
+    peer_region                     = optional(string)
+    auto_accept                     = optional(bool, true)
+    allow_remote_vpc_dns_resolution = optional(bool, false)
+    add_to_public_route_table       = optional(bool, true)
+    add_to_private_route_tables     = optional(bool, true)
+    peer_route_table_ids            = optional(list(string), [])
+    tags                            = optional(map(string), {})
+  }))
+  description = <<-EOT
+    A map of VPC peering connections to create from this VPC to existing VPCs.
+
+    The map key is a logical name used for the resource and tags. Each value configures
+    one peering connection:
+      - peer_vpc_id: The ID of the existing VPC to peer with.
+      - peer_cidr_blocks: CIDR blocks of the peer VPC. Routes will be added in this
+        VPC's route tables for each CIDR pointing at the peering connection.
+      - peer_owner_id: AWS account ID that owns the peer VPC. Defaults to the current
+        account. Required for cross-account peering.
+      - peer_region: AWS region of the peer VPC. Defaults to the current region.
+        Required for cross-region peering.
+      - auto_accept: Whether to auto-accept the peering. Only valid for same-account,
+        same-region peerings. For cross-account or cross-region, the peering must be
+        accepted on the peer side.
+      - allow_remote_vpc_dns_resolution: Allow DNS resolution of private hostnames in
+        the peer VPC from this VPC. Only valid for same-account, same-region peerings.
+      - add_to_public_route_table: Add routes for peer_cidr_blocks to this VPC's public
+        route table.
+      - add_to_private_route_tables: Add routes for peer_cidr_blocks to this VPC's
+        private route table(s).
+      - peer_route_table_ids: Optional list of route table IDs in the peer VPC to add
+        return routes to (destination = this VPC's CIDR, target = the peering
+        connection). Only supported for same-account, same-region peerings, since the
+        AWS provider used by this module must have access to the peer's route tables.
+        For cross-account or cross-region peerings, manage the return routes from the
+        peer side instead.
+      - tags: Additional tags to apply to the peering connection.
+
+    NOTE: For cross-account or cross-region peerings, this module cannot manage the
+    peer VPC's route tables. The owner of the peer VPC is responsible for adding
+    return routes pointing at the peering connection.
+  EOT
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.vpc_peering_connections : alltrue([
+        for cidr in v.peer_cidr_blocks : can(cidrhost(cidr, 0))
+      ])
+    ])
+    error_message = "All peer_cidr_blocks must be valid IPv4 CIDR blocks."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.vpc_peering_connections : length(v.peer_cidr_blocks) > 0
+    ])
+    error_message = "Each peering connection must specify at least one peer CIDR block."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.vpc_peering_connections : can(regex("^vpc-[a-f0-9]+$", v.peer_vpc_id))
+    ])
+    error_message = "Each peer_vpc_id must be a valid VPC ID (e.g., vpc-0123456789abcdef0)."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.vpc_peering_connections :
+      length(v.peer_route_table_ids) == 0 || (v.peer_owner_id == null && v.peer_region == null)
+    ])
+    error_message = "peer_route_table_ids can only be set for same-account, same-region peerings (peer_owner_id and peer_region must be null)."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.vpc_peering_connections : alltrue([
+        for rt_id in v.peer_route_table_ids : can(regex("^rtb-[a-f0-9]+$", rt_id))
+      ])
+    ])
+    error_message = "Each peer_route_table_ids entry must be a valid route table ID (e.g., rtb-0123456789abcdef0)."
+  }
+}

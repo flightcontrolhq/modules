@@ -155,3 +155,17 @@ output "flow_log_s3_bucket_arn" {
   description = "The ARN of the S3 bucket for VPC Flow Logs (if destination is s3)."
   value       = local.create_flow_log_s3 ? local.flow_log_s3_bucket_arn : null
 }
+
+################################################################################
+# VPC Peering
+################################################################################
+
+output "vpc_peering_connection_ids" {
+  description = "Map of VPC peering connection logical names to their connection IDs."
+  value       = { for k, v in aws_vpc_peering_connection.this : k => v.id }
+}
+
+output "vpc_peering_connection_accept_statuses" {
+  description = "Map of VPC peering connection logical names to their acceptance status. Cross-account or cross-region peerings will be 'pending-acceptance' until accepted on the peer side."
+  value       = { for k, v in aws_vpc_peering_connection.this : k => v.accept_status }
+}

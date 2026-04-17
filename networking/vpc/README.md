@@ -10,6 +10,7 @@ This module creates a production-ready AWS VPC with public and private subnets, 
 - Optional NAT Gateway (single or per-AZ for high availability)
 - Optional IPv6 support with Amazon-provided CIDR and Egress-Only Internet Gateway
 - Optional VPC Flow Logs to CloudWatch or S3 with configurable retention
+- Optional VPC peering with one or more existing VPCs (same- or cross-account/region)
 - Internet Gateway for public subnet internet access
 - Route tables with automatic association and IPv6 routing support
 - Comprehensive tagging with ManagedBy and Module defaults
@@ -104,6 +105,88 @@ module "vpc" {
   enable_flow_logs        = true
   flow_logs_destination   = "s3"
   flow_logs_s3_bucket_arn = "arn:aws:s3:::my-existing-flow-logs-bucket"
+}
+```
+
+### With VPC Peering to an Existing VPC (Same Account, Same Region)
+
+```hcl
+module "vpc" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+
+  name     = "my-vpc"
+  vpc_cidr = "10.0.0.0/16"
+
+  vpc_peering_connections = {
+    shared-services = {
+      peer_vpc_id      = "vpc-0123456789abcdef0"
+      peer_cidr_blocks = ["10.50.0.0/16"]
+
+      # Optionally manage return routes on the peer VPC's route tables.
+      # Only valid for same-account, same-region peerings.
+      peer_route_table_ids = [
+        "rtb-0aaaa1111bbbb2222c",
+        "rtb-0aaaa1111bbbb3333d",
+      ]
+    }
+  }
+}
+```
+
+This creates the peering connection, auto-accepts it, and adds routes to both the
+public and private route tables in this VPC for the peer CIDR. When
+`peer_route_table_ids` is provided, the module also adds return routes
+(`destination = this VPC's CIDR`, `target = the peering connection`) to each of the
+specified peer route tables.
+
+### With VPC Peering Across Accounts or Regions
+
+```hcl
+module "vpc" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+
+  name     = "my-vpc"
+  vpc_cidr = "10.0.0.0/16"
+
+  vpc_peering_connections = {
+    prod-east = {
+      peer_vpc_id      = "vpc-0fedcba9876543210"
+      peer_cidr_blocks = ["10.100.0.0/16"]
+      peer_owner_id    = "111122223333" # Different AWS account
+      peer_region      = "us-east-1"    # Different region
+    }
+  }
+}
+```
+
+For cross-account or cross-region peerings, `auto_accept` is ignored and the peering
+will be in `pending-acceptance` status until the owner of the peer VPC accepts it
+(via `aws_vpc_peering_connection_accepter` or the AWS console). The peer's return
+routes also need to be managed from the peer side (this module does not support
+`peer_route_table_ids` in that case, since the AWS provider used here cannot reach
+the peer's route tables).
+
+### Multiple Peering Connections with Custom Routing
+
+```hcl
+module "vpc" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+
+  name     = "my-vpc"
+  vpc_cidr = "10.0.0.0/16"
+
+  vpc_peering_connections = {
+    shared-services = {
+      peer_vpc_id                     = "vpc-0123456789abcdef0"
+      peer_cidr_blocks                = ["10.50.0.0/16"]
+      allow_remote_vpc_dns_resolution = true
+    }
+    data-platform = {
+      peer_vpc_id                 = "vpc-0aaaa1111bbbb2222c"
+      peer_cidr_blocks            = ["10.60.0.0/16", "10.61.0.0/16"]
+      add_to_public_route_table   = false # Only add routes to private route tables
+    }
+  }
 }
 ```
 
@@ -216,6 +299,29 @@ module "vpc" {
 | flow_logs_kms_key_id | KMS key ID for S3 bucket encryption. If null, uses AES256 (SSE-S3) | `string` | `null` | no |
 | flow_logs_versioning_enabled | Enable versioning for the flow logs S3 bucket | `bool` | `false` | no |
 
+### VPC Peering
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| vpc_peering_connections | Map of VPC peering connections to create from this VPC to existing VPCs. See below for the object schema | `map(object({...}))` | `{}` | no |
+
+Each entry in `vpc_peering_connections` accepts the following attributes:
+
+| Attribute | Description | Type | Default | Required |
+|-----------|-------------|------|---------|----------|
+| peer_vpc_id | The ID of the existing VPC to peer with | `string` | n/a | yes |
+| peer_cidr_blocks | CIDR blocks of the peer VPC. Routes are added in this VPC's route tables for each CIDR pointing at the peering connection | `list(string)` | n/a | yes |
+| peer_owner_id | AWS account ID that owns the peer VPC. Required for cross-account peering | `string` | `null` | no |
+| peer_region | AWS region of the peer VPC. Required for cross-region peering | `string` | `null` | no |
+| auto_accept | Whether to auto-accept the peering. Only valid for same-account, same-region peerings | `bool` | `true` | no |
+| allow_remote_vpc_dns_resolution | Allow DNS resolution of private hostnames in the peer VPC. Only valid for same-account, same-region peerings | `bool` | `false` | no |
+| add_to_public_route_table | Add routes for `peer_cidr_blocks` to this VPC's public route table | `bool` | `true` | no |
+| add_to_private_route_tables | Add routes for `peer_cidr_blocks` to this VPC's private route table(s) | `bool` | `true` | no |
+| peer_route_table_ids | Optional list of route table IDs in the peer VPC to add return routes to (destination = this VPC's CIDR). Only supported for same-account, same-region peerings | `list(string)` | `[]` | no |
+| tags | Additional tags to apply to the peering connection | `map(string)` | `{}` | no |
+
+> **Note:** For cross-account or cross-region peerings, this module cannot manage the peer VPC's route tables (the AWS provider used here doesn't have access to them). The peer VPC's owner is responsible for adding return routes and accepting the peering request (e.g. via `aws_vpc_peering_connection_accepter`).
+
 ## Outputs
 
 ### VPC
@@ -278,6 +384,13 @@ module "vpc" {
 | flow_log_cloudwatch_log_group_arn | The ARN of the CloudWatch Log Group for VPC Flow Logs (if destination is cloudwatch) |
 | flow_log_cloudwatch_iam_role_arn | The ARN of the IAM Role for VPC Flow Logs to CloudWatch (if destination is cloudwatch) |
 | flow_log_s3_bucket_arn | The ARN of the S3 bucket for VPC Flow Logs (if destination is s3) |
+
+### VPC Peering
+
+| Name | Description |
+|------|-------------|
+| vpc_peering_connection_ids | Map of VPC peering connection logical names to their connection IDs |
+| vpc_peering_connection_accept_statuses | Map of VPC peering connection logical names to their acceptance status |
 
 ## Architecture
 

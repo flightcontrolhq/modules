@@ -551,3 +551,299 @@ run "s3_security" {
     error_message = "S3 bucket should have lifecycle configuration"
   }
 }
+
+# Test 26: No VPC peering connections by default
+run "vpc_peering_disabled" {
+  command = plan
+
+  assert {
+    condition     = length(aws_vpc_peering_connection.this) == 0
+    error_message = "Should not create any VPC peering connections by default"
+  }
+
+  assert {
+    condition     = length(aws_route.public_vpc_peering) == 0
+    error_message = "Should not create any public VPC peering routes by default"
+  }
+
+  assert {
+    condition     = length(aws_route.private_vpc_peering) == 0
+    error_message = "Should not create any private VPC peering routes by default"
+  }
+}
+
+# Test 27: Single VPC peering, same account/region, single private route table
+run "vpc_peering_single" {
+  command = plan
+
+  variables {
+    enable_nat_gateway = true
+    single_nat_gateway = true
+    vpc_peering_connections = {
+      shared = {
+        peer_vpc_id      = "vpc-0123456789abcdef0"
+        peer_cidr_blocks = ["10.50.0.0/16"]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_vpc_peering_connection.this) == 1
+    error_message = "Should create 1 VPC peering connection"
+  }
+
+  assert {
+    condition     = aws_vpc_peering_connection.this["shared"].peer_vpc_id == "vpc-0123456789abcdef0"
+    error_message = "Peering connection should target the configured peer VPC"
+  }
+
+  assert {
+    condition     = aws_vpc_peering_connection.this["shared"].auto_accept == true
+    error_message = "Same-account/region peering should auto-accept by default"
+  }
+
+  assert {
+    condition     = length(aws_route.public_vpc_peering) == 1
+    error_message = "Should create 1 public peering route"
+  }
+
+  assert {
+    condition     = length(aws_route.private_vpc_peering) == 1
+    error_message = "Should create 1 private peering route (single private RT)"
+  }
+
+  assert {
+    condition     = aws_route.public_vpc_peering["shared-10.50.0.0/16"].destination_cidr_block == "10.50.0.0/16"
+    error_message = "Public peering route should use the peer CIDR as destination"
+  }
+}
+
+# Test 28: VPC peering with multi-AZ NAT (multiple private route tables)
+run "vpc_peering_multi_private_route_tables" {
+  command = plan
+
+  variables {
+    subnet_count       = 3
+    enable_nat_gateway = true
+    single_nat_gateway = false
+    vpc_peering_connections = {
+      shared = {
+        peer_vpc_id      = "vpc-0123456789abcdef0"
+        peer_cidr_blocks = ["10.50.0.0/16", "10.51.0.0/16"]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_route.public_vpc_peering) == 2
+    error_message = "Should create 2 public peering routes (one per peer CIDR)"
+  }
+
+  assert {
+    condition     = length(aws_route.private_vpc_peering) == 6
+    error_message = "Should create 6 private peering routes (3 RTs x 2 peer CIDRs)"
+  }
+}
+
+# Test 29: Cross-account VPC peering does not auto-accept
+run "vpc_peering_cross_account" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      external = {
+        peer_vpc_id      = "vpc-0fedcba9876543210"
+        peer_cidr_blocks = ["10.100.0.0/16"]
+        peer_owner_id    = "111122223333"
+      }
+    }
+  }
+
+  assert {
+    condition     = aws_vpc_peering_connection.this["external"].auto_accept == false
+    error_message = "Cross-account peering must not auto-accept"
+  }
+
+  assert {
+    condition     = aws_vpc_peering_connection.this["external"].peer_owner_id == "111122223333"
+    error_message = "Cross-account peering should record the peer owner ID"
+  }
+}
+
+# Test 30: Cross-region VPC peering does not auto-accept
+run "vpc_peering_cross_region" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      remote = {
+        peer_vpc_id      = "vpc-0fedcba9876543210"
+        peer_cidr_blocks = ["10.100.0.0/16"]
+        peer_region      = "eu-west-1"
+      }
+    }
+  }
+
+  assert {
+    condition     = aws_vpc_peering_connection.this["remote"].auto_accept == false
+    error_message = "Cross-region peering must not auto-accept"
+  }
+
+  assert {
+    condition     = aws_vpc_peering_connection.this["remote"].peer_region == "eu-west-1"
+    error_message = "Cross-region peering should record the peer region"
+  }
+}
+
+# Test 31: Peering with route placement disabled
+run "vpc_peering_no_routes" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      private-only = {
+        peer_vpc_id                 = "vpc-0123456789abcdef0"
+        peer_cidr_blocks            = ["10.50.0.0/16"]
+        add_to_public_route_table   = false
+        add_to_private_route_tables = true
+      }
+      none = {
+        peer_vpc_id                 = "vpc-0123456789abcdee0"
+        peer_cidr_blocks            = ["10.60.0.0/16"]
+        add_to_public_route_table   = false
+        add_to_private_route_tables = false
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_route.public_vpc_peering) == 0
+    error_message = "Should not create public peering routes when disabled"
+  }
+
+  assert {
+    condition     = length(aws_route.private_vpc_peering) == 1
+    error_message = "Should only create the private route for the private-only peering"
+  }
+}
+
+# Test 32: VPC peering connection options created when DNS resolution allowed
+run "vpc_peering_dns_resolution" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      shared = {
+        peer_vpc_id                     = "vpc-0123456789abcdef0"
+        peer_cidr_blocks                = ["10.50.0.0/16"]
+        allow_remote_vpc_dns_resolution = true
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_vpc_peering_connection_options.requester) == 1
+    error_message = "Should create requester options when DNS resolution is enabled"
+  }
+}
+
+# Test 33: Peer-side return routes for same-account, same-region peering
+run "vpc_peering_peer_route_tables" {
+  command = plan
+
+  variables {
+    vpc_cidr = "10.0.0.0/16"
+    vpc_peering_connections = {
+      shared = {
+        peer_vpc_id      = "vpc-0123456789abcdef0"
+        peer_cidr_blocks = ["10.50.0.0/16"]
+        peer_route_table_ids = [
+          "rtb-0aaaa1111bbbb2222c",
+          "rtb-0aaaa1111bbbb3333d",
+        ]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_route.peer_vpc_peering) == 2
+    error_message = "Should create 1 peer-side route per peer route table"
+  }
+
+  assert {
+    condition     = aws_route.peer_vpc_peering["shared-rtb-0aaaa1111bbbb2222c"].destination_cidr_block == "10.0.0.0/16"
+    error_message = "Peer-side route destination should equal this VPC's CIDR"
+  }
+
+  assert {
+    condition     = aws_route.peer_vpc_peering["shared-rtb-0aaaa1111bbbb2222c"].route_table_id == "rtb-0aaaa1111bbbb2222c"
+    error_message = "Peer-side route should target the configured peer route table"
+  }
+}
+
+# Test 34: No peer-side routes when peer_route_table_ids is empty
+run "vpc_peering_no_peer_route_tables" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      shared = {
+        peer_vpc_id      = "vpc-0123456789abcdef0"
+        peer_cidr_blocks = ["10.50.0.0/16"]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_route.peer_vpc_peering) == 0
+    error_message = "Should not create peer-side routes when peer_route_table_ids is empty"
+  }
+}
+
+# Test 35: peer_route_table_ids rejected for cross-account peering
+run "vpc_peering_peer_routes_cross_account_rejected" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      external = {
+        peer_vpc_id          = "vpc-0123456789abcdef0"
+        peer_cidr_blocks     = ["10.50.0.0/16"]
+        peer_owner_id        = "111122223333"
+        peer_route_table_ids = ["rtb-0aaaa1111bbbb2222c"]
+      }
+    }
+  }
+
+  expect_failures = [
+    var.vpc_peering_connections,
+  ]
+}
+
+# Test 36: Multiple peering connections
+run "vpc_peering_multiple" {
+  command = plan
+
+  variables {
+    vpc_peering_connections = {
+      shared = {
+        peer_vpc_id      = "vpc-0123456789abcdef0"
+        peer_cidr_blocks = ["10.50.0.0/16"]
+      }
+      data = {
+        peer_vpc_id      = "vpc-0aaaa1111bbbb2222c"
+        peer_cidr_blocks = ["10.60.0.0/16"]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_vpc_peering_connection.this) == 2
+    error_message = "Should create 2 VPC peering connections"
+  }
+
+  assert {
+    condition     = length(aws_route.public_vpc_peering) == 2
+    error_message = "Should create 1 public peering route per connection"
+  }
+}
