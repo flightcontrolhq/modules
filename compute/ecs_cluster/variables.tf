@@ -368,6 +368,17 @@ variable "public_alb_certificate_arn" {
   }
 }
 
+variable "public_alb_additional_certificate_arns" {
+  type        = list(string)
+  description = "Additional ACM certificate ARNs to attach to the public ALB HTTPS listener for SNI."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.public_alb_additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    error_message = "All public_alb_additional_certificate_arns must be valid ACM certificate ARNs."
+  }
+}
+
 variable "public_alb_ssl_policy" {
   type        = string
   description = "The SSL policy for the public ALB HTTPS listener."
@@ -454,6 +465,17 @@ variable "private_alb_certificate_arn" {
   validation {
     condition     = var.private_alb_certificate_arn == null || can(regex("^arn:aws:acm:", var.private_alb_certificate_arn))
     error_message = "The private_alb_certificate_arn must be a valid ACM certificate ARN."
+  }
+}
+
+variable "private_alb_additional_certificate_arns" {
+  type        = list(string)
+  description = "Additional ACM certificate ARNs to attach to the private ALB HTTPS listener for SNI."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.private_alb_additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    error_message = "All private_alb_additional_certificate_arns must be valid ACM certificate ARNs."
   }
 }
 
