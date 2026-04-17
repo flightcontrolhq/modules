@@ -20,6 +20,7 @@ This is the **Ravion Modules** repository - an OpenTofu/Terraform module library
 | `cdn/` | Content delivery (CloudFront) |
 | `compute/` | Compute resources (EC2, ECS, Lambda, Auto Scaling) |
 | `database/` | Database services (RDS, DynamoDB, Aurora) |
+| `hosting/` | Composite end-to-end hosting solutions for deployable workloads (composes primitives from other categories) |
 | `kubernetes/` | Kubernetes resources |
 | `messaging/` | Message queues and notifications (SQS, SNS) |
 | `monitoring/` | Observability and alerting (CloudWatch) |
