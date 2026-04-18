@@ -85,8 +85,9 @@ locals {
   # Auth token segment (only applies to Redis/Valkey with auth_token set)
   connection_auth_segment = (local.is_redis_compatible && var.auth_token != null) ? ":${var.auth_token}@" : ""
 
-  # Full connection string
-  connection_string = local.connection_host == null ? null : "${local.connection_scheme}://${local.connection_auth_segment}${local.connection_host}:${local.port}"
+  # Full connection string. connection_host is always set when one of the three
+  # resources is created (invariant enforced by the engine-based count flags).
+  connection_string = "${local.connection_scheme}://${local.connection_auth_segment}${local.connection_host}:${local.port}"
 
   # A secret is created when explicitly enabled OR when a secret_name is provided.
   create_secret = var.create_secret || var.secret_name != null

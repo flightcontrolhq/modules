@@ -42,6 +42,12 @@ variable "secret_json" {
   sensitive   = true
 }
 
+variable "create_version" {
+  type        = bool
+  description = "Create an initial secret version from secret_string / secret_json. Disable if the value will be populated out-of-band (e.g., by a rotation lambda)."
+  default     = true
+}
+
 ################################################################################
 # Encryption & Lifecycle
 ################################################################################

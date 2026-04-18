@@ -43,6 +43,7 @@ module "api_credentials" {
 | tags | Tags to assign to the secret. | `map(string)` | `{}` | no |
 | secret_string | The plaintext value to store. Mutually exclusive with `secret_json`. | `string` | `null` | no |
 | secret_json | A map stored as JSON. Mutually exclusive with `secret_string`. | `any` | `null` | no |
+| create_version | Create an initial secret version. Disable if the value is populated out-of-band (e.g., rotation lambda). | `bool` | `true` | no |
 | kms_key_id | KMS key ARN, ID, or alias used to encrypt the secret. | `string` | `null` | no |
 | recovery_window_in_days | Recovery window in days (0 for immediate delete, else 7–30). | `number` | `7` | no |
 | policy | JSON resource policy document to attach to the secret. | `string` | `null` | no |
