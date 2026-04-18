@@ -88,7 +88,7 @@ locals {
   # Full connection string
   connection_string = local.connection_host == null ? null : "${local.connection_scheme}://${local.connection_auth_segment}${local.connection_host}:${local.port}"
 
-  # Secret creation flag
-  create_secret = var.create_secret
+  # A secret is created when explicitly enabled OR when a secret_name is provided.
+  create_secret = var.create_secret || var.secret_name != null
   secret_name   = coalesce(var.secret_name, "${var.name}/connection-string")
 }

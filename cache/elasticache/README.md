@@ -252,8 +252,8 @@ module "redis" {
 | cloudwatch_ok_actions | A list of ARNs to notify on OK state. | `list(string)` | `[]` | no |
 | serverless_enabled | Create an ElastiCache Serverless cache. | `bool` | `false` | no |
 | serverless_cache_usage_limits | Usage limits for Serverless (data_storage_maximum in GB, ecpu_per_second_maximum). | `object` | `{}` | no |
-| create_secret | Create a Secrets Manager secret containing the connection string. | `bool` | `true` | no |
-| secret_name | Name of the Secrets Manager secret. Defaults to `<name>/connection-string`. | `string` | `null` | no |
+| create_secret | Create a Secrets Manager secret containing the connection string. A secret is also created when `secret_name` is set. | `bool` | `true` | no |
+| secret_name | Name of the Secrets Manager secret. Defaults to `<name>/connection-string`. Setting this implies `create_secret=true`. | `string` | `null` | no |
 | secret_kms_key_arn | KMS key ARN used to encrypt the Secrets Manager secret. | `string` | `null` | no |
 | secret_recovery_window_in_days | Recovery window in days for the secret (0 for immediate delete, else 7–30). | `number` | `7` | no |
 

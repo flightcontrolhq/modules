@@ -476,13 +476,13 @@ variable "cloudwatch_ok_actions" {
 
 variable "create_secret" {
   type        = bool
-  description = "Create a Secrets Manager secret containing the cache connection string."
+  description = "Create a Secrets Manager secret containing the cache connection string. A secret is also created when secret_name is set, regardless of this flag."
   default     = true
 }
 
 variable "secret_name" {
   type        = string
-  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'."
+  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'. Providing a value implies create_secret=true."
   default     = null
 }
 
