@@ -28,7 +28,7 @@ locals {
   lb_container_name = local.enable_load_balancer ? coalesce(
     var.load_balancer_attachment.container_name,
     local.placeholder_container_name
-  ) : null
+  ) : local.placeholder_container_name
 
   lb_container_port = local.enable_load_balancer ? coalesce(
     var.load_balancer_attachment.container_port,

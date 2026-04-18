@@ -197,12 +197,12 @@ output "codedeploy_config" {
 ################################################################################
 
 output "container_name" {
-  description = "The name of the primary container (used for load balancer attachment)."
+  description = "The name of the primary container."
   value       = local.lb_container_name
 }
 
 output "container_port" {
-  description = "The port of the primary container (used for load balancer attachment)."
+  description = "The port of the primary container (null if load balancer disabled)."
   value       = local.lb_container_port
 }
 
