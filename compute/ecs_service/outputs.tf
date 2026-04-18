@@ -207,6 +207,20 @@ output "container_port" {
 }
 
 ################################################################################
+# CloudWatch Logs
+################################################################################
+
+output "log_group_name" {
+  description = "The name of the CloudWatch log group used by the task (auto-created by ECS)."
+  value       = "/ecs/${var.name}"
+}
+
+output "log_stream_prefix" {
+  description = "The awslogs stream prefix for the primary container."
+  value       = local.placeholder_container_name
+}
+
+################################################################################
 # ECR
 ################################################################################
 
