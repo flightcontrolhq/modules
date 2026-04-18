@@ -68,4 +68,27 @@ locals {
   cloudwatch_dimension_value = local.create_replication_group ? aws_elasticache_replication_group.this[0].id : (
     local.create_cluster ? aws_elasticache_cluster.this[0].cluster_id : null
   )
+
+  # Primary connection endpoint (host) used to build the connection string
+  connection_host = local.create_replication_group ? (
+    local.cluster_mode_enabled ? aws_elasticache_replication_group.this[0].configuration_endpoint_address : aws_elasticache_replication_group.this[0].primary_endpoint_address
+    ) : local.create_cluster ? aws_elasticache_cluster.this[0].cluster_address : (
+    local.create_serverless_cache ? aws_elasticache_serverless_cache.this[0].endpoint[0].address : null
+  )
+
+  # URI scheme: rediss:// for TLS Redis/Valkey, redis:// for plaintext, memcached:// for Memcached.
+  # Serverless Redis/Valkey always uses TLS.
+  connection_scheme = local.is_memcached ? "memcached" : (
+    (local.is_serverless || var.transit_encryption_enabled) ? "rediss" : "redis"
+  )
+
+  # Auth token segment (only applies to Redis/Valkey with auth_token set)
+  connection_auth_segment = (local.is_redis_compatible && var.auth_token != null) ? ":${var.auth_token}@" : ""
+
+  # Full connection string
+  connection_string = local.connection_host == null ? null : "${local.connection_scheme}://${local.connection_auth_segment}${local.connection_host}:${local.port}"
+
+  # Secret creation flag
+  create_secret = var.create_secret
+  secret_name   = coalesce(var.secret_name, "${var.name}/connection-string")
 }

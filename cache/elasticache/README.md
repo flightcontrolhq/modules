@@ -252,6 +252,10 @@ module "redis" {
 | cloudwatch_ok_actions | A list of ARNs to notify on OK state. | `list(string)` | `[]` | no |
 | serverless_enabled | Create an ElastiCache Serverless cache. | `bool` | `false` | no |
 | serverless_cache_usage_limits | Usage limits for Serverless (data_storage_maximum in GB, ecpu_per_second_maximum). | `object` | `{}` | no |
+| create_secret | Create a Secrets Manager secret containing the connection string. | `bool` | `true` | no |
+| secret_name | Name of the Secrets Manager secret. Defaults to `<name>/connection-string`. | `string` | `null` | no |
+| secret_kms_key_arn | KMS key ARN used to encrypt the Secrets Manager secret. | `string` | `null` | no |
+| secret_recovery_window_in_days | Recovery window in days for the secret (0 for immediate delete, else 7–30). | `number` | `7` | no |
 
 ## Outputs
 
@@ -278,6 +282,8 @@ module "redis" {
 | subnet_group_name | The name of the ElastiCache subnet group. |
 | parameter_group_name | The name of the ElastiCache parameter group. |
 | cloudwatch_alarm_arns | Map of CloudWatch alarm ARNs. |
+| connection_string_secret_arn | The ARN of the Secrets Manager secret holding the connection string. |
+| connection_string_secret_name | The name of the Secrets Manager secret holding the connection string. |
 
 ## Architecture
 

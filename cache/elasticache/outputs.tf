@@ -139,6 +139,20 @@ output "parameter_group_arn" {
 }
 
 ################################################################################
+# Secrets Manager Outputs
+################################################################################
+
+output "connection_string_secret_arn" {
+  description = "The ARN of the Secrets Manager secret containing the cache connection string."
+  value       = local.create_secret ? module.connection_string_secret[0].arn : null
+}
+
+output "connection_string_secret_name" {
+  description = "The name of the Secrets Manager secret containing the cache connection string."
+  value       = local.create_secret ? module.connection_string_secret[0].name : null
+}
+
+################################################################################
 # CloudWatch Alarm Outputs
 ################################################################################
 

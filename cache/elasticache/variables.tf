@@ -471,6 +471,44 @@ variable "cloudwatch_ok_actions" {
 }
 
 ################################################################################
+# Secrets Manager
+################################################################################
+
+variable "create_secret" {
+  type        = bool
+  description = "Create a Secrets Manager secret containing the cache connection string."
+  default     = true
+}
+
+variable "secret_name" {
+  type        = string
+  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'."
+  default     = null
+}
+
+variable "secret_kms_key_arn" {
+  type        = string
+  description = "The ARN of the KMS key used to encrypt the Secrets Manager secret. If not specified, the default AWS managed key is used."
+  default     = null
+
+  validation {
+    condition     = var.secret_kms_key_arn == null || can(regex("^arn:aws(-[a-z]+)?:kms:", var.secret_kms_key_arn))
+    error_message = "The secret_kms_key_arn must be a valid KMS key ARN."
+  }
+}
+
+variable "secret_recovery_window_in_days" {
+  type        = number
+  description = "The number of days that AWS Secrets Manager waits before it can delete the secret. Set to 0 to force immediate deletion without recovery."
+  default     = 7
+
+  validation {
+    condition     = var.secret_recovery_window_in_days == 0 || (var.secret_recovery_window_in_days >= 7 && var.secret_recovery_window_in_days <= 30)
+    error_message = "The secret_recovery_window_in_days must be 0 or between 7 and 30."
+  }
+}
+
+################################################################################
 # Serverless
 ################################################################################
 
