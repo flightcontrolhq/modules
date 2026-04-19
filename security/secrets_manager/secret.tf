@@ -23,13 +23,8 @@ resource "aws_secretsmanager_secret" "this" {
 resource "aws_secretsmanager_secret_version" "this" {
   count = var.create_version ? 1 : 0
 
-  secret_id = aws_secretsmanager_secret.this.id
-
-  # Write-only: the provider does not call GetSecretValue on refresh, and the
-  # plaintext is never stored in state. The version trigger is a hash of the
-  # value, so any change to the plaintext pushes a new secret version.
-  secret_string_wo         = local.secret_value
-  secret_string_wo_version = local.secret_value_version
+  secret_id     = aws_secretsmanager_secret.this.id
+  secret_string = local.secret_value
 }
 
 resource "aws_secretsmanager_secret_policy" "this" {
