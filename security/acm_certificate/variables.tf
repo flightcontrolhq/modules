@@ -2,6 +2,12 @@
 # General
 ################################################################################
 
+variable "region" {
+  type        = string
+  description = "AWS region to create the certificate in. Use 'us-east-1' for certificates attached to CloudFront distributions. When null, uses the provider's configured region."
+  default     = null
+}
+
 variable "name" {
   type        = string
   description = "Name prefix used for tagging the ACM certificate."
