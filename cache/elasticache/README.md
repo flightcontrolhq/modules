@@ -229,7 +229,9 @@ module "redis" {
 | security_group_id | The ID of an existing security group to use. | `string` | `null` | no |
 | allowed_security_group_ids | A list of security group IDs allowed to access the cluster. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | A list of CIDR blocks allowed to access the cluster. | `list(string)` | `[]` | no |
-| auth_token | The password for Redis/Valkey AUTH. Requires transit encryption. | `string` | `null` | no |
+| auth_token | The password for Redis/Valkey AUTH. Requires transit encryption. Takes precedence over auto-generation. | `string` | `null` | no |
+| generate_auth_token | Auto-generate an AUTH token for Redis/Valkey when `auth_token` is not provided. Requires transit encryption. | `bool` | `true` | no |
+| auth_token_length | Length of the auto-generated AUTH token. | `number` | `32` | no |
 | transit_encryption_enabled | Enable encryption in-transit (TLS). | `bool` | `true` | no |
 | at_rest_encryption_enabled | Enable encryption at-rest. | `bool` | `true` | no |
 | kms_key_arn | The ARN of the KMS key for at-rest encryption. | `string` | `null` | no |

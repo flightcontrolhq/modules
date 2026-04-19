@@ -82,8 +82,20 @@ locals {
     (local.is_serverless || var.transit_encryption_enabled) ? "rediss" : "redis"
   )
 
-  # Auth token segment (only applies to Redis/Valkey with auth_token set)
-  connection_auth_segment = (local.is_redis_compatible && var.auth_token != null) ? ":${var.auth_token}@" : ""
+  # Auth token handling — generate_auth_token takes effect only when the user did not
+  # supply one, and only for Redis/Valkey with transit encryption (serverless always has TLS).
+  generate_auth_token = (
+    var.generate_auth_token
+    && local.is_redis_compatible
+    && var.auth_token == null
+    && (var.transit_encryption_enabled || local.is_serverless)
+  )
+  effective_auth_token = var.auth_token != null ? var.auth_token : (
+    local.generate_auth_token ? random_password.auth_token[0].result : null
+  )
+
+  # Auth token segment (only applies to Redis/Valkey when a token is set)
+  connection_auth_segment = local.effective_auth_token != null ? ":${local.effective_auth_token}@" : ""
 
   # Full connection string. connection_host is always set when one of the three
   # resources is created (invariant enforced by the engine-based count flags).

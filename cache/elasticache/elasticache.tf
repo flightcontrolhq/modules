@@ -37,7 +37,7 @@ resource "aws_elasticache_replication_group" "this" {
   # Security
   at_rest_encryption_enabled = var.at_rest_encryption_enabled
   transit_encryption_enabled = var.transit_encryption_enabled
-  auth_token                 = var.auth_token
+  auth_token                 = local.effective_auth_token
   kms_key_id                 = var.kms_key_arn
 
   # Log delivery
@@ -70,7 +70,7 @@ resource "aws_elasticache_replication_group" "this" {
 
   lifecycle {
     precondition {
-      condition     = var.auth_token == null || var.transit_encryption_enabled
+      condition     = local.effective_auth_token == null || var.transit_encryption_enabled
       error_message = "auth_token requires transit_encryption_enabled to be true."
     }
 

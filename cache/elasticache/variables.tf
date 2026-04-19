@@ -211,13 +211,30 @@ variable "port" {
 
 variable "auth_token" {
   type        = string
-  description = "The password used to access a password protected Redis/Valkey server. Can be specified only if transit_encryption_enabled is true."
+  description = "The password used to access a password protected Redis/Valkey server. Can be specified only if transit_encryption_enabled is true. Takes precedence over generate_auth_token."
   default     = null
   sensitive   = true
 
   validation {
     condition     = var.auth_token == null || (length(var.auth_token) >= 16 && length(var.auth_token) <= 128)
     error_message = "The auth_token must be between 16 and 128 characters."
+  }
+}
+
+variable "generate_auth_token" {
+  type        = bool
+  description = "Auto-generate an AUTH token for Redis/Valkey when auth_token is not provided. Requires transit_encryption_enabled=true. No effect on Memcached."
+  default     = true
+}
+
+variable "auth_token_length" {
+  type        = number
+  description = "Length of the auto-generated AUTH token when generate_auth_token is true."
+  default     = 32
+
+  validation {
+    condition     = var.auth_token_length >= 16 && var.auth_token_length <= 128
+    error_message = "The auth_token_length must be between 16 and 128."
   }
 }
 
