@@ -202,8 +202,8 @@ output "container_name" {
 }
 
 output "container_port" {
-  description = "The port of the primary container (null if load balancer disabled)."
-  value       = local.lb_container_port
+  description = "The port of the primary container (dummy value of 3000 if load balancer disabled)."
+  value       = local.enable_load_balancer ? local.lb_container_port : 3000
 }
 
 ################################################################################

@@ -280,8 +280,8 @@ run "default_container_port" {
   command = plan
 
   assert {
-    condition     = output.container_port == 80
-    error_message = "Default container port should be 80"
+    condition     = output.container_port == 3000
+    error_message = "Default container port should be dummy value 3000 when load balancer is not connected"
   }
 
   assert {
