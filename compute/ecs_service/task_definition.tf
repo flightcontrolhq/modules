@@ -180,7 +180,7 @@ resource "aws_iam_role_policy" "task_inline" {
 
   name   = each.key
   role   = aws_iam_role.task[0].id
-  policy = each.value
+  policy = jsonencode(each.value)
 }
 
 ################################################################################

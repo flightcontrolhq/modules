@@ -229,8 +229,8 @@ variable "task_role_policies" {
 }
 
 variable "task_role_inline_policies" {
-  type        = map(string)
-  description = "Inline IAM policies to attach to the task role, keyed by policy name. Values are JSON policy documents (use jsonencode). Only used if task_role_arn is null."
+  type        = map(any)
+  description = "Inline IAM policies to attach to the task role, keyed by policy name. Values are policy documents as HCL/JSON objects. Only used if task_role_arn is null."
   default     = {}
 }
 
