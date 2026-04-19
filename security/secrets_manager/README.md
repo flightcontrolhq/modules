@@ -2,6 +2,12 @@
 
 Creates an AWS Secrets Manager secret and optionally an initial version and resource policy.
 
+The secret value is written via the **write-only** `secret_string_wo` argument, so the
+AWS provider never calls `GetSecretValue` on refresh and the plaintext is never stored
+in Terraform state. A new version is pushed whenever the plaintext hash changes.
+
+Requires Terraform 1.11+ / OpenTofu 1.11+ and AWS provider 5.83+.
+
 ## Usage
 
 ```hcl
