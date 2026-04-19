@@ -81,7 +81,7 @@ variable "ingress_rules" {
     - self: Set to true to allow traffic from the same security group
 
     For ip_protocol, use "tcp", "udp", "icmp", "icmpv6", or "-1" for all protocols.
-    When ip_protocol is "-1", from_port and to_port should be 0.
+    When ip_protocol is "-1", from_port and to_port must be -1.
   EOF
   default     = []
 
@@ -184,7 +184,7 @@ variable "egress_rules" {
     - self: Set to true to allow traffic to the same security group
 
     For ip_protocol, use "tcp", "udp", "icmp", "icmpv6", or "-1" for all protocols.
-    When ip_protocol is "-1", from_port and to_port should be 0.
+    When ip_protocol is "-1", from_port and to_port must be -1.
   EOF
   default     = []
 

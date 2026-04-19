@@ -46,12 +46,13 @@ module "security_group" {
     ]
   )
 
-  # Egress to VPC only
+  # Egress to VPC only. For ip_protocol="-1" (all protocols), AWS requires
+  # from_port/to_port to be -1; setting them to 0 causes update failures.
   egress_rules = [
     {
       description = "Allow outbound traffic within VPC"
-      from_port   = 0
-      to_port     = 0
+      from_port   = -1
+      to_port     = -1
       ip_protocol = "-1"
       cidr_ipv4   = data.aws_vpc.this.cidr_block
     }
