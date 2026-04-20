@@ -233,3 +233,9 @@ variable "custom_policy" {
     error_message = "custom_policy must be valid JSON."
   }
 }
+
+variable "create_bucket_policy" {
+  type        = bool
+  description = "Override the default decision to create a bucket policy. When null (default), the module creates a policy if policy_templates or custom_policy is set. Set to true when passing a custom_policy whose value is known-after-apply."
+  default     = null
+}

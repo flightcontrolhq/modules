@@ -21,7 +21,8 @@ module "hosting" {
   kms_key_id         = var.kms_key_arn
   lifecycle_rules    = var.bucket_lifecycle_rules
 
-  custom_policy = data.aws_iam_policy_document.hosting_bucket_policy.json
+  custom_policy        = data.aws_iam_policy_document.hosting_bucket_policy.json
+  create_bucket_policy = true
 
   tags = local.tags
 }
