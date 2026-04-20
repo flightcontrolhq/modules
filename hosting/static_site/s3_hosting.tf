@@ -3,10 +3,9 @@
 #
 # Composes storage/s3 with a private bucket plus an OAC-style bucket policy that
 # grants the CloudFront service principal read-only access (scoped to the
-# distributions created by this module). In filesystem_previews mode, the
-# Lambda@Edge execution role also gets read access for direct S3 lookups.
+# distributions created by this module).
 #
-# Note: the policy_document references module.cdn outputs, but
+# Note: the policy document references module.cdn outputs, but
 # aws_s3_bucket_policy is created separately from aws_s3_bucket inside
 # storage/s3, so there is no cycle. The policy is rendered after the
 # distributions exist.

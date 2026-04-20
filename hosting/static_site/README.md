@@ -1,80 +1,64 @@
 # Static Site Hosting
 
-End-to-end composite module for hosting static sites on AWS using S3 + CloudFront. Composes [`storage/s3`](../../storage/s3), [`cdn/cloudfront`](../../cdn/cloudfront), and (optionally) [`compute/lambda`](../../compute/lambda).
+End-to-end composite module for hosting static sites on AWS using S3 + CloudFront. Composes [`storage/s3`](../../storage/s3) and [`cdn/cloudfront`](../../cdn/cloudfront).
 
-This is a hosting solution, not a CDN primitive — it bundles an S3 hosting bucket, a private CloudFront distribution (with OAC), modern cache behaviors, an optional CloudFront Function for clean URLs, and an optional Lambda@Edge handler for FC-style preview environments and deployment versioning.
+Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> version` map; a single CloudFront Function rewrites every viewer request to `/<version>/...` before the cache lookup. Promoting or rolling back a build is one `put-key` call against the KVS.
 
 ## Features
 
-- **Three modes** selectable via a single `mode` variable (`spa`, `filesystem`, `filesystem_previews`)
-- **Origin Access Control (OAC)** by default — no public buckets, no legacy OAI
-- **SPA fallback** via CloudFront `custom_error_responses` (no Lambda needed)
-- **CloudFront Function** for cheap path rewriting at every edge POP (`filesystem` mode)
-- **Lambda@Edge handler** for filesystem-mode existence checks, deployment versioning, and preview environments (`filesystem_previews` mode)
-- **CloudFront KeyValueStore** for `Host` -> deployment-prefix lookups at the edge
-- **Multiple distributions** sharing one origin (e.g., a production domain group + staging domain group)
-- **Cache strategy**: long-cache hashed assets via `CachingOptimized`, short/no-cache for `/index.html` to prevent stale shells after deploys
-- **HTTP/2 + HTTP/3** by default
-- **Optional WAFv2** integration
-- **Optional access logging** (existing or module-created bucket)
-- **Optional CI deploy role** with least-privilege `s3:Put*` + `cloudfront:CreateInvalidation`
-- **Origin Shield** support
-- **SSE-KMS** support on the hosting bucket
-
-## Mode Matrix
-
-| Mode | Edge compute | SPA fallback | Path rewriting | Deployment versioning | Preview environments | Use when |
-|---|---|---|---|---|---|---|
-| `spa` (default) | none | CloudFront error responses (403/404 -> `/index.html`) | none | client-side router | external | Single-page apps (React, Vue, Svelte, etc.) |
-| `filesystem` | CloudFront Function | none | clean URLs (`/foo` -> `/foo/index.html`), trailing-slash | static origin header | external | Multi-page static sites (Astro, Hugo, MkDocs, plain HTML) |
-| `filesystem_previews` | CloudFront Function + Lambda@Edge + optional KVS | conditional via `static_mode_header_value` | existence-based (`/foo` matches `/foo.html` or `/foo/index.html`), trailing-slash redirect, custom 404 | per-request via `x-fc-deployment-id` | host -> prefix mapped at the edge | Flightcontrol-style hosting with PR previews and atomic deploys |
+- **Versioned-by-default**: every deploy lands at `s3://<bucket>/<version>/`, the KVS `active` key points at the live one.
+- **Instant rollback**: flip `active` (or any per-host KVS entry) — KVS reads at the edge propagate within seconds.
+- **No CloudFront invalidations needed**: the rewriter changes the rewritten URI, which is part of the cache key, so each promotion is automatically a fresh cache key.
+- **Two routing styles**: `spa` (every non-asset path serves `<version>/index.html` for client-side routers) and `filesystem` (clean URLs, `/foo` → `<version>/foo/index.html`).
+- **Per-host overrides**: pin staging to a specific version, run PR previews on `pr-*.preview.example.com` subdomains, gradual cutovers — all via KVS keys.
+- **Origin Access Control (OAC)** by default — no public buckets, no legacy OAI.
+- **Multiple distributions** sharing one origin (e.g., a production domain group + staging domain group).
+- **HTTP/2 + HTTP/3** by default.
+- **Optional WAFv2** integration.
+- **Optional access logging** (existing or module-created bucket).
+- **Optional CI deploy role** with least-privilege `s3:Put*` + KVS `PutKey`/`DeleteKey` + `cloudfront:CreateInvalidation`.
+- **Origin Shield** support.
+- **SSE-KMS** support on the hosting bucket.
 
 ## Architecture
 
 ```
-                     +----------+
-                     |  Viewer  |
-                     +----+-----+
-                          | HTTPS
-                          v
-              +-----------+------------+
-              |  CloudFront            |
-              |   - HTTP/2 + HTTP/3    |
-              |   - WAF (optional)     |
-              |   - Logging (optional) |
-              +--+---------+------+----+
-                 | viewer  |      | origin
-                 | request |      | request
-                 v         |      v
-        +--------+-----+   |   +--+---------------+
-        | CloudFront   |   |   | Lambda@Edge      |
-        | Function     |   |   | (filesystem_     |
-        | (filesystem  |   |   |  previews only)  |
-        |  modes only) |   |   +--+---------------+
-        +-----+--------+   |      |
-              |            |      | SigV4
-              | KVS lookup |      v
-              v            |   +--+----------+
-        +-----+---+        |   | S3 Hosting  |
-        |   KVS   |        +-->| Bucket      |<---+ OAC SigV4
-        +---------+            | (private)   |
-                               +-------------+
+                +----------+
+                |  Viewer  |
+                +----+-----+
+                     | HTTPS
+                     v
+         +-----------+------------+
+         |  CloudFront            |
+         |   - HTTP/2 + HTTP/3    |
+         |   - WAF (optional)     |
+         |   - Logging (optional) |
+         +-----------+------------+
+                     | viewer-request
+                     v
+         +-----------+------------+        +-----+
+         | CloudFront Function    |<------>| KVS |
+         |   1. host -> version   |        +-----+
+         |   2. rewrite URI:      |
+         |      /foo -> /<v>/...  |
+         +-----------+------------+
+                     | (rewritten URI = cache key)
+                     v
+         +-----------+------------+
+         | S3 Hosting Bucket      |
+         | (private, OAC SigV4)   |
+         +------------------------+
 ```
 
 ## Quick Start
 
-### SPA mode (React/Vue/etc.)
+### SPA (React/Vue/TanStack Router/etc.)
 
 ```hcl
 module "site" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  name = "my-marketing-site"
+  name = "my-app"
 
   distributions = {
     main = {
@@ -82,26 +66,19 @@ module "site" {
       acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
     }
   }
-}
 
-# Deploy from CI:
-#   aws s3 sync ./dist s3://my-marketing-site/
-#   aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
+  long_cache_paths = ["/assets/*"]
+}
 ```
 
-### Filesystem mode (Astro/Hugo/MkDocs)
+### Filesystem (Astro/Hugo/MkDocs)
 
 ```hcl
 module "site" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  name = "my-docs-site"
-  mode = "filesystem"
+  name    = "my-docs"
+  routing = "filesystem"
 
   distributions = {
     main = {
@@ -109,93 +86,28 @@ module "site" {
       acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
     }
   }
-
-  long_cache_paths = ["/_astro/*", "/assets/*"]
 }
 ```
 
-### Filesystem + Previews (Flightcontrol parity)
+### With deploy role + per-host pinning
 
 ```hcl
 module "site" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
   name = "my-app"
-  mode = "filesystem_previews"
 
   distributions = {
     main = {
-      aliases             = ["app.example.com", "*.preview.example.com"]
+      aliases             = ["app.example.com", "staging.example.com", "*.preview.example.com"]
       acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
     }
   }
 
-  static_mode_header_value   = "filesystem"
-  deployment_id_header_value = "main"
-  trailing_slash_enabled     = true
-
-  create_key_value_store = true
-
+  # Pin staging to a known-good version while prod tracks 'active'.
   kvs_initial_data = {
-    "pr-42.preview.example.com" = "versions/pr-42"
-    "pr-87.preview.example.com" = "versions/pr-87"
+    "staging.example.com" = "v_staging"
   }
-}
-
-# Deploy a PR preview from CI:
-#   aws s3 sync ./dist s3://my-app/versions/pr-42/
-#   aws cloudfront-keyvaluestore put-key \
-#     --kvs-arn $(tofu output -raw key_value_store_arn) \
-#     --if-match $(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn ... --query ETag --output text) \
-#     --key pr-42.preview.example.com \
-#     --value versions/pr-42
-```
-
-### Multi-distribution (production + staging)
-
-```hcl
-module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
-
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  name = "my-app"
-
-  distributions = {
-    production = {
-      aliases             = ["app.example.com"]
-      acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/prod-cert"
-    }
-    staging = {
-      aliases             = ["staging.example.com"]
-      acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/staging-cert"
-    }
-  }
-}
-```
-
-### With CI Deploy Role (GitHub OIDC)
-
-```hcl
-module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
-
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  name = "my-app"
-
-  distributions = { main = {} }
 
   create_deploy_role = true
   deploy_role_trust_policy = jsonencode({
@@ -206,61 +118,90 @@ module "site" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:my-org/my-repo:ref:refs/heads/main" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:my-org/my-repo:*" }
       }
     }]
   })
 }
 ```
 
-## Provider configuration
+## Deploy and rollback
 
-This module always requires two AWS provider configurations:
+A new build is two steps from CI: upload, then flip.
+
+```bash
+VERSION="v$(git rev-parse --short HEAD)"
+
+# 1. Upload the build to its own prefix (idempotent — re-runnable, no live impact)
+aws s3 sync ./dist s3://${HOSTING_BUCKET}/${VERSION}/ --delete
+
+# 2. Promote: point 'active' at the new version
+KVS_ARN=$(tofu output -raw key_value_store_arn)
+ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn $KVS_ARN --query ETag --output text)
+aws cloudfront-keyvaluestore put-key \
+  --kvs-arn $KVS_ARN --if-match $ETAG \
+  --key active --value $VERSION
+```
+
+Rollback is the same `put-key` call with the previous version. `outputs.set_active_version_command` returns the snippet pre-filled with the KVS ARN.
+
+### PR previews
+
+```bash
+# Build for the PR's preview host
+aws s3 sync ./dist s3://${HOSTING_BUCKET}/v_pr-42/ --delete
+
+# Map the preview hostname to that version
+ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn $KVS_ARN --query ETag --output text)
+aws cloudfront-keyvaluestore put-key \
+  --kvs-arn $KVS_ARN --if-match $ETAG \
+  --key pr-42.preview.example.com --value v_pr-42
+
+# Tear down on PR close
+ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn $KVS_ARN --query ETag --output text)
+aws cloudfront-keyvaluestore delete-key \
+  --kvs-arn $KVS_ARN --if-match $ETAG \
+  --key pr-42.preview.example.com
+```
+
+The deploy role created when `create_deploy_role = true` has exactly the S3 + KVS permissions to do all of this.
+
+## How the rewriter resolves a version
+
+For each viewer request, the CloudFront Function does:
+
+1. Look up `host` in the KVS → if hit, that version wins.
+2. Look up `active` in the KVS → that's the production default.
+3. Fall back to `default_version` (apply-time constant, defaults to `"main"`) → makes the very first deploy work before any KVS edits.
+
+It then rewrites the URI by routing style:
+
+| Routing | `/` | `/foo.js` | `/foo` or `/foo/` |
+|---|---|---|---|
+| `spa` | `/<v>/index.html` | `/<v>/foo.js` | `/<v>/index.html` |
+| `filesystem` | `/<v>/index.html` | `/<v>/foo.js` | `/<v>/foo/index.html` |
+
+Because CloudFront's cache key incorporates the rewritten URI, two different versions never collide in cache.
+
+## Provider configuration
 
 ```hcl
 provider "aws" {
   region = "us-west-2"
 }
-
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-}
 ```
 
-The `us_east_1` alias is required by Lambda@Edge (only used in `filesystem_previews` mode but declared unconditionally so the same module call works across modes). All other resources go to the default provider's region.
-
-ACM certificates for CloudFront aliases must also live in `us-east-1` regardless of the rest of your stack. Provision them with [`security/acm_certificate`](../../security/acm_certificate) using the `us_east_1` alias and pass the ARN to `distributions[].acm_certificate_arn`.
-
-## Comparison vs the legacy Flightcontrol CloudFormation stack
-
-| Concern | Legacy `create-static-stack.json` | `hosting/static_site` (this module) |
-|---|---|---|
-| Origin access | `CloudFrontOriginAccessIdentity` (OAI) | Origin Access Control (OAC) — supports SSE-KMS, SigV4 |
-| SPA fallback | Lambda@Edge `headObject` round trip | CloudFront `custom_error_responses` (zero compute, no S3 RPS) |
-| Trivial path rewriting | Lambda@Edge | CloudFront Function (cheaper, runs at all POPs) |
-| Build pipeline | CodeBuild bundled in the stack | Out of scope — driven by CI; optional `create_deploy_role` |
-| Buckets created | Hosting + Build | Hosting only |
-| HTTP/3 | Off (HTTP/2 only) | On by default |
-| Preview host -> prefix lookup | Lambda@Edge runtime check on Referer | CloudFront Function + KeyValueStore at the edge |
-| Lambda@Edge handler | Always created | Only in `filesystem_previews` mode |
-| Lambda@Edge IAM | `AmazonS3ReadOnlyAccess` managed policy | Inline policy scoped to `${hosting_bucket_arn}/*` |
-
-For migration from the FC stack, deploy this module side-by-side, copy objects via `aws s3 sync s3://hosting-old/main/ s3://hosting-new/`, swap your DNS record (or update the CloudFront alias), then delete the legacy stack.
-
-## Lambda@Edge build
-
-The bundled handler under `edge/handler/` declares its dependencies in `package.json`. The first apply runs `npm install --omit=dev` automatically via a `null_resource` provisioner (you need `npm` on the machine running `tofu apply`). To use your own handler instead, set `lambda_source_dir` to a directory containing `index.js` (and `node_modules/` if needed); the bundled `npm install` is skipped.
+Only the default `aws` provider is required. ACM certificates for CloudFront aliases must still live in `us-east-1` regardless of the rest of your stack — provision them with [`security/acm_certificate`](../../security/acm_certificate) using a `us_east_1` provider alias in your root module and pass the ARN to `distributions[].acm_certificate_arn`.
 
 ## Cache strategy
 
 | Path pattern | Cache policy | Why |
 |---|---|---|
-| (default) | AWS-managed `CachingOptimized` (1y TTL, no headers/cookies/QS) | Hashed assets are immutable |
-| `/index.html` | AWS-managed `CachingDisabled` | Prevents stale shells; HTML must be revalidated every deploy |
-| `/assets/*`, `/_next/static/*`, etc. | `CachingOptimized` | Explicit echo of the default for clarity (configure via `long_cache_paths`) |
+| (default) | AWS-managed `CachingOptimized` (1y TTL, no headers/cookies/QS) | Hashed assets are immutable; HTML files at `/<v>/index.html` are unique per version. |
+| `long_cache_paths` | Same `CachingOptimized` | Explicit echo for documentation/clarity (e.g. `/_astro/*`, `/assets/*`). |
+| `no_cache_paths` | AWS-managed `CachingDisabled` | Optional escape hatch — versioning makes per-path cache busting unnecessary in most cases. |
 
-Override per-path patterns via `no_cache_paths` and `long_cache_paths`. Override the cache policy entirely via `cache_policy_id`, `origin_request_policy_id`, and `response_headers_policy_id`.
+Override the cache policy entirely via `cache_policy_id`, `origin_request_policy_id`, and `response_headers_policy_id`.
 
 ## Requirements
 
@@ -268,11 +209,8 @@ Override per-path patterns via `no_cache_paths` and `long_cache_paths`. Override
 |---|---|
 | opentofu/terraform | >= 1.10.0 |
 | aws | >= 5.0 |
-| archive | >= 2.4.0 |
 
-External tools used at apply time (only when `mode = "filesystem_previews"` and `lambda_source_dir` is unset):
-
-- `npm` (Node.js 18+) — bundled with most CI images and developer machines
+No external apply-time tools required.
 
 ## Inputs
 
@@ -286,7 +224,8 @@ External tools used at apply time (only when `mode = "filesystem_previews"` and 
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| mode | Hosting mode: `spa`, `filesystem`, `filesystem_previews`. | `string` | `"spa"` |
+| routing | URI rewrite style: `spa` or `filesystem`. | `string` | `"spa"` |
+| default_version | Fallback version prefix when KVS has neither host nor `active` entries. Also seeds `active` on first apply. | `string` | `"main"` |
 | distributions | Map of CloudFront distributions sharing the same origin. | `map(object)` | `{ main = {} }` |
 | tags | Tags to apply to all resources. | `map(string)` | `{}` |
 
@@ -315,7 +254,6 @@ External tools used at apply time (only when `mode = "filesystem_previews"` and 
 | Name | Description | Type | Default |
 |---|---|---|---|
 | origin_shield_region | Enable Origin Shield in this region. | `string` | `null` |
-| origin_path | Path prefix prepended to origin requests. | `string` | `null` |
 | additional_origin_headers | Extra custom headers sent to S3. | `list(object({name, value}))` | `[]` |
 
 ### Cache Behavior
@@ -325,10 +263,15 @@ External tools used at apply time (only when `mode = "filesystem_previews"` and 
 | cache_policy_id | Default cache policy ID. | `string` | AWS-managed CachingOptimized |
 | origin_request_policy_id | Origin request policy ID. | `string` | AWS-managed CORS-S3Origin |
 | response_headers_policy_id | Response headers policy ID. | `string` | `null` |
-| no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `["/index.html"]` |
+| no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
 | long_cache_paths | Path patterns explicitly served with the default long-cache policy. | `list(string)` | `[]` |
-| default_root_object | Object returned for `/`. | `string` | `"index.html"` |
-| spa_error_caching_min_ttl | TTL for the SPA fallback response. Only used in `spa` mode. | `number` | `10` |
+| default_root_object | Object name for `/` requests. | `string` | `"index.html"` |
+
+### KeyValueStore
+
+| Name | Description | Type | Default |
+|---|---|---|---|
+| kvs_initial_data | Seed entries (`host -> version` or `"active" -> version`). Subsequent edits should happen via the AWS CLI from CI. | `map(string)` | `{}` |
 
 ### Logging
 
@@ -339,27 +282,6 @@ External tools used at apply time (only when `mode = "filesystem_previews"` and 
 | logging_bucket_domain_name | Existing logging bucket domain name. | `string` | `null` |
 | logging_prefix | Base prefix for log files. | `string` | `""` |
 | logging_retention_days | Days to retain logs in the created bucket. | `number` | `90` |
-
-### Lambda@Edge (`filesystem_previews` mode)
-
-| Name | Description | Type | Default |
-|---|---|---|---|
-| lambda_source_dir | Override directory for the Lambda@Edge handler. | `string` | `null` (use bundled handler) |
-| lambda_memory_size | Lambda@Edge memory (MB). | `number` | `256` |
-| lambda_timeout | Lambda@Edge timeout (seconds, max 30). | `number` | `5` |
-| lambda_runtime | Node.js runtime. | `string` | `"nodejs20.x"` |
-| lambda_log_retention_days | CloudWatch log retention. | `number` | `30` |
-| static_mode_header_value | `spa` or `filesystem`. | `string` | `"spa"` |
-| deployment_id_header_value | Default deployment prefix when KVS does not match. | `string` | `"main"` |
-| preview_url_header_value | Optional value for the X-FC-PREVIEW-URL origin header. | `string` | `""` |
-| trailing_slash_enabled | Enable 302 redirects to add trailing slashes. | `bool` | `false` |
-
-### CloudFront KeyValueStore (`filesystem_previews` mode)
-
-| Name | Description | Type | Default |
-|---|---|---|---|
-| create_key_value_store | Create a CloudFront KVS. | `bool` | `false` |
-| kvs_initial_data | Map of host -> deployment-prefix used as the initial seed. | `map(string)` | `{}` |
 
 ### Deploy Role
 
@@ -381,31 +303,29 @@ External tools used at apply time (only when `mode = "filesystem_previews"` and 
 | distribution_arns | Map of distribution key -> distribution ARN. |
 | distribution_domain_names | Map of distribution key -> CloudFront domain name. |
 | distribution_hosted_zone_ids | Map of distribution key -> Route53 zone ID for alias records. |
-| cloudfront_function_arn | ARN of the CloudFront Function (null in `spa` mode). |
-| lambda_edge_function_arn | Unqualified Lambda@Edge ARN (null unless `filesystem_previews`). |
-| lambda_edge_qualified_arn | Versioned Lambda@Edge ARN used in CloudFront associations. |
-| lambda_edge_role_arn | IAM role ARN attached to the Lambda@Edge function. |
-| key_value_store_arn | ARN of the CloudFront KVS (null unless created). |
-| key_value_store_id | ID of the CloudFront KVS. |
+| cloudfront_function_arn | ARN of the viewer-request rewriter function. |
+| key_value_store_arn | ARN of the KeyValueStore. |
+| key_value_store_id | ID of the KeyValueStore. |
+| default_version | Apply-time fallback version (also seeded into `active`). |
 | deploy_role_arn | ARN of the deploy role (null unless created). |
 | deploy_role_name | Name of the deploy role. |
-| invalidation_commands | Map of distribution key -> ready-to-run `aws cloudfront create-invalidation` command. |
+| set_active_version_command | Bash snippet that flips the `active` KVS key to `$VERSION`. |
+| invalidation_commands | Map of distribution key -> ready-to-run `aws cloudfront create-invalidation`. Rarely needed. |
 
 ## Security Considerations
 
-- Hosting bucket has all four S3 public access block settings enabled by default (inherited from `storage/s3`)
-- CloudFront uses OAC, not OAI — supports SSE-KMS and Object Lambda
-- Bucket policy grants `s3:GetObject` only to `cloudfront.amazonaws.com` scoped to the specific distribution ARNs created by this module (defense in depth)
-- In `filesystem_previews` mode, the Lambda@Edge role gets an inline policy scoped to `${hosting_bucket_arn}/*` only (not the AWS-managed `AmazonS3ReadOnlyAccess` policy, which grants account-wide read)
-- Optional deploy role uses a fully user-supplied trust policy — no implicit cross-account trust
-- TLS 1.2+ enforced on the viewer side (`minimum_protocol_version` defaults to `TLSv1.2_2021`)
-- HTTP -> HTTPS redirect is the default viewer protocol policy
+- Hosting bucket has all four S3 public access block settings enabled by default (inherited from `storage/s3`).
+- CloudFront uses OAC, not OAI — supports SSE-KMS and Object Lambda.
+- Bucket policy grants `s3:GetObject` only to `cloudfront.amazonaws.com` scoped to the specific distribution ARNs created by this module (defense in depth).
+- Optional deploy role uses a fully user-supplied trust policy — no implicit cross-account trust.
+- TLS 1.2+ enforced on the viewer side (`minimum_protocol_version` defaults to `TLSv1.2_2021`).
+- HTTP -> HTTPS redirect is the default viewer protocol policy.
 
 ## Notes
 
-- **Build is your job**: this module does not run a build step. Use any CI to produce a `dist/` directory and `aws s3 sync` it to the hosting bucket.
+- **Build is your job**: this module does not run a build step. CI produces a `dist/` directory and `aws s3 sync`s it to `s3://<bucket>/<version>/`.
+- **First deploy**: with `default_version = "main"`, a fresh apply works as soon as you sync to `s3://<bucket>/main/`. No KVS edit needed for the very first cutover.
 - **First request is slow**: CloudFront distributions take 5-15 minutes to deploy globally. `wait_for_deployment = true` (default) blocks `tofu apply` until ready; set to `false` for faster iteration.
-- **KVS updates**: only the initial seed is managed via Terraform. Subsequent additions/deletions should be made via `aws cloudfront-keyvaluestore put-key`/`delete-key` from CI to avoid Terraform state churn for ephemeral previews.
-- **Lambda@Edge replication**: function changes take 5-10 minutes to propagate to all regional edge caches. Plan deploys accordingly.
+- **KVS updates**: only the seed entries are managed via Terraform. Subsequent additions/deletions (preview hosts, `active` flips) belong in CI.
 - **Route53 records**: create externally with [`networking/route53`](../../networking/route53) using the `distribution_domain_names` and `distribution_hosted_zone_ids` outputs.
-- **ACM certificates**: create externally with [`security/acm_certificate`](../../security/acm_certificate) using the `us_east_1` provider alias.
+- **ACM certificates**: create externally with [`security/acm_certificate`](../../security/acm_certificate) using a `us_east_1` provider alias.

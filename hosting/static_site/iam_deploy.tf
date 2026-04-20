@@ -2,15 +2,15 @@
 # Deploy Role (optional)
 #
 # A least-privilege IAM role for CI to assume when uploading new builds and
-# invalidating CloudFront. The trust policy is fully user-supplied so any
+# flipping the active version. The trust policy is fully user-supplied so any
 # identity provider can be used (GitHub OIDC, GitLab OIDC, an external account,
 # a specific user/role principal, etc.).
 #
-# This replaces the FC `CodeBuildServiceRole` pattern: instead of running
-# builds inside the same CloudFormation stack, your CI runs the build, assumes
-# this role, and runs:
-#   aws s3 sync ./dist s3://${hosting_bucket}/
-#   aws cloudfront create-invalidation --distribution-id <id> --paths '/*'
+# Typical CI flow:
+#   aws s3 sync ./dist s3://${hosting_bucket}/${VERSION}/ --delete
+#   aws cloudfront-keyvaluestore put-key \
+#     --kvs-arn ${kvs_arn} --if-match ${etag} \
+#     --key active --value ${VERSION}
 ################################################################################
 
 resource "aws_iam_role" "deploy" {

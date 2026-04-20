@@ -23,7 +23,7 @@ output "hosting_bucket_region" {
 }
 
 ################################################################################
-# CloudFront Distributions (passthrough from cdn/cloudfront)
+# CloudFront Distributions
 ################################################################################
 
 output "distribution_ids" {
@@ -47,37 +47,27 @@ output "distribution_hosted_zone_ids" {
 }
 
 ################################################################################
-# Edge Compute
+# Edge / Versioning
 ################################################################################
 
 output "cloudfront_function_arn" {
-  description = "ARN of the CloudFront Function (null in spa mode)."
-  value       = local.uses_cloudfront_function ? aws_cloudfront_function.this[0].arn : null
-}
-
-output "lambda_edge_function_arn" {
-  description = "Unqualified ARN of the Lambda@Edge function (null unless mode = 'filesystem_previews')."
-  value       = local.uses_lambda_edge ? module.edge_lambda[0].function_arn : null
-}
-
-output "lambda_edge_qualified_arn" {
-  description = "Versioned (qualified) ARN of the Lambda@Edge function used by CloudFront associations (null unless mode = 'filesystem_previews')."
-  value       = local.uses_lambda_edge ? module.edge_lambda[0].function_qualified_arn : null
-}
-
-output "lambda_edge_role_arn" {
-  description = "IAM role ARN attached to the Lambda@Edge function (null unless mode = 'filesystem_previews')."
-  value       = local.uses_lambda_edge ? module.edge_lambda[0].role_arn : null
+  description = "ARN of the viewer-request rewriter function."
+  value       = aws_cloudfront_function.this.arn
 }
 
 output "key_value_store_arn" {
-  description = "ARN of the CloudFront KeyValueStore (null unless mode = 'filesystem_previews' and create_key_value_store = true)."
-  value       = local.uses_kvs ? aws_cloudfront_key_value_store.this[0].arn : null
+  description = "ARN of the CloudFront KeyValueStore that holds host -> version mappings."
+  value       = aws_cloudfront_key_value_store.this.arn
 }
 
 output "key_value_store_id" {
-  description = "ID of the CloudFront KeyValueStore (null unless mode = 'filesystem_previews' and create_key_value_store = true)."
-  value       = local.uses_kvs ? aws_cloudfront_key_value_store.this[0].id : null
+  description = "ID of the CloudFront KeyValueStore."
+  value       = aws_cloudfront_key_value_store.this.id
+}
+
+output "default_version" {
+  description = "Version prefix the function falls back to when KVS has no host or active entry. The 'active' KVS key is seeded to this on first apply."
+  value       = var.default_version
 }
 
 ################################################################################
@@ -98,8 +88,17 @@ output "deploy_role_name" {
 # Convenience
 ################################################################################
 
+output "set_active_version_command" {
+  description = "Bash snippet that flips the 'active' KVS key to a new version. Set VERSION before running. Reads the current KVS ETag with describe-key-value-store and passes it via --if-match (KVS requires optimistic concurrency)."
+  value       = <<-EOT
+    KVS_ARN=${aws_cloudfront_key_value_store.this.arn}
+    ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn $KVS_ARN --query ETag --output text)
+    aws cloudfront-keyvaluestore put-key --kvs-arn $KVS_ARN --if-match $ETAG --key active --value $VERSION
+  EOT
+}
+
 output "invalidation_commands" {
-  description = "Map of distribution key -> ready-to-run AWS CLI command that invalidates the entire distribution. Use after `aws s3 sync` from CI."
+  description = "Map of distribution key -> ready-to-run AWS CLI command that invalidates the entire distribution. Versioned deploys do not need invalidations (each promotion produces a fresh cache key); kept as an escape hatch."
   value = {
     for k, id in module.cdn.distribution_ids :
     k => "aws cloudfront create-invalidation --distribution-id ${id} --paths '/*'"

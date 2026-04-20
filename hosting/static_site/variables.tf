@@ -23,14 +23,25 @@ variable "tags" {
   default     = {}
 }
 
-variable "mode" {
+variable "routing" {
   type        = string
-  description = "Hosting mode. 'spa' uses CloudFront error responses to fall back to /index.html with no edge compute. 'filesystem' adds a CloudFront Function for clean URLs and trailing slashes (no Lambda). 'filesystem_previews' adds Lambda@Edge for FC-style deployment-versioned previews and existence-based path resolution (the only mode that creates a Lambda)."
+  description = "URI rewriting style applied at the edge before the version prefix is added. 'spa' rewrites every non-asset path to /<version>/index.html so a client-side router takes over. 'filesystem' rewrites /foo and /foo/ to /<version>/foo/index.html and serves /foo.js etc. as-is. Both styles are versioned identically."
   default     = "spa"
 
   validation {
-    condition     = contains(["spa", "filesystem", "filesystem_previews"], var.mode)
-    error_message = "The mode must be one of: 'spa', 'filesystem', 'filesystem_previews'."
+    condition     = contains(["spa", "filesystem"], var.routing)
+    error_message = "The routing must be 'spa' or 'filesystem'."
+  }
+}
+
+variable "default_version" {
+  type        = string
+  description = "Version prefix used when KVS has neither a host-specific entry nor an 'active' key. Also used as the seed value for the 'active' KVS key on first apply. Pick a stable name like 'main' so the first deploy can sync to s3://<bucket>/<default_version>/ without further setup."
+  default     = "main"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._/-]+$", var.default_version))
+    error_message = "The default_version must contain only letters, numbers, '.', '_', '-', '/'."
   }
 }
 
@@ -113,7 +124,7 @@ variable "wait_for_deployment" {
 
 variable "bucket_versioning" {
   type        = bool
-  description = "Enable versioning on the hosting bucket. Recommended for static sites so you can roll back deployments."
+  description = "Enable versioning on the hosting bucket. Disable only if you know what you're doing — this is independent of the per-deploy version prefix and protects against accidental overwrites."
   default     = true
 }
 
@@ -183,18 +194,12 @@ variable "origin_shield_region" {
   default     = null
 }
 
-variable "origin_path" {
-  type        = string
-  description = "Optional path prepended to all origin requests (e.g. '/build')."
-  default     = null
-}
-
 variable "additional_origin_headers" {
   type = list(object({
     name  = string
     value = string
   }))
-  description = "Extra custom headers to send to the S3 origin (in addition to the mode-driven defaults)."
+  description = "Extra custom headers to send to the S3 origin."
   default     = []
 }
 
@@ -222,31 +227,30 @@ variable "response_headers_policy_id" {
 
 variable "no_cache_paths" {
   type        = list(string)
-  description = "Path patterns that should bypass CloudFront caching. Defaults to the root index document so deploys are visible immediately while hashed assets remain long-cached."
-  default     = ["/index.html"]
+  description = "Path patterns that should bypass CloudFront caching. Empty by default — versioned deploys make every promotion a fresh cache key, so per-path cache busting is rarely needed."
+  default     = []
 }
 
 variable "long_cache_paths" {
   type        = list(string)
-  description = "Path patterns that should use the default long-cache policy explicitly (useful for documentation/clarity in the distribution config). These are typically immutable, hash-named asset directories."
+  description = "Path patterns that should explicitly use the default long-cache policy (useful for documentation/clarity in the distribution config). These are typically immutable, hash-named asset directories."
   default     = []
 }
 
 variable "default_root_object" {
   type        = string
-  description = "Object returned for root URL requests. Defaults to 'index.html'."
+  description = "Object name resolved when a viewer requests '/'. Defaults to 'index.html'."
   default     = "index.html"
 }
 
-variable "spa_error_caching_min_ttl" {
-  type        = number
-  description = "Minimum TTL (seconds) CloudFront caches the SPA fallback response for. Only applies when mode = 'spa'."
-  default     = 10
+################################################################################
+# CloudFront KeyValueStore (always created)
+################################################################################
 
-  validation {
-    condition     = var.spa_error_caching_min_ttl >= 0
-    error_message = "The spa_error_caching_min_ttl must be >= 0."
-  }
+variable "kvs_initial_data" {
+  type        = map(string)
+  description = "Optional seed entries for the KeyValueStore. Use `host -> version` to pin specific aliases (e.g. {\"staging.example.com\" = \"v_staging\"}) or `\"active\" -> version` to override the default_version seed. Subsequent edits should happen via `aws cloudfront-keyvaluestore put-key` from CI to avoid Terraform churn for ephemeral previews."
+  default     = {}
 }
 
 ################################################################################
@@ -284,106 +288,12 @@ variable "logging_retention_days" {
 }
 
 ################################################################################
-# Lambda@Edge (filesystem_previews mode only)
-################################################################################
-
-variable "lambda_source_dir" {
-  type        = string
-  description = "Optional override for the Lambda@Edge source directory. Defaults to the bundled handler under '<module>/edge/handler'. Only used when mode = 'filesystem_previews'."
-  default     = null
-}
-
-variable "lambda_memory_size" {
-  type        = number
-  description = "Memory size (MB) for the Lambda@Edge function. Capped at 3008 MB by CloudFront."
-  default     = 256
-
-  validation {
-    condition     = var.lambda_memory_size >= 128 && var.lambda_memory_size <= 3008
-    error_message = "Lambda@Edge memory_size must be between 128 and 3008 MB."
-  }
-}
-
-variable "lambda_timeout" {
-  type        = number
-  description = "Timeout (seconds) for the Lambda@Edge function. Capped at 30 seconds by CloudFront for origin-request triggers."
-  default     = 5
-
-  validation {
-    condition     = var.lambda_timeout >= 1 && var.lambda_timeout <= 30
-    error_message = "Lambda@Edge timeout must be between 1 and 30 seconds."
-  }
-}
-
-variable "lambda_runtime" {
-  type        = string
-  description = "Lambda@Edge Node.js runtime."
-  default     = "nodejs20.x"
-
-  validation {
-    condition     = contains(["nodejs18.x", "nodejs20.x", "nodejs22.x"], var.lambda_runtime)
-    error_message = "Only Node.js 18/20/22 runtimes are supported for Lambda@Edge."
-  }
-}
-
-variable "lambda_log_retention_days" {
-  type        = number
-  description = "CloudWatch log retention for the Lambda@Edge function logs."
-  default     = 30
-}
-
-variable "static_mode_header_value" {
-  type        = string
-  description = "Value of the STATIC_MODE custom origin header read by the Lambda@Edge handler. 'spa' falls back to /index.html on missing files; 'filesystem' returns a 404."
-  default     = "spa"
-
-  validation {
-    condition     = contains(["spa", "filesystem"], var.static_mode_header_value)
-    error_message = "The static_mode_header_value must be 'spa' or 'filesystem'."
-  }
-}
-
-variable "deployment_id_header_value" {
-  type        = string
-  description = "Value of the X-FC-DEPLOYMENT-ID origin header used to select the active S3 deployment prefix when the CloudFront Function/KVS does not override it."
-  default     = "main"
-}
-
-variable "preview_url_header_value" {
-  type        = string
-  description = "Optional value of the X-FC-PREVIEW-URL origin header. When set, the handler resolves preview prefixes from the request's Referer/host."
-  default     = ""
-}
-
-variable "trailing_slash_enabled" {
-  type        = bool
-  description = "When true, the Lambda@Edge handler issues a 302 redirect to add trailing slashes on extension-less paths."
-  default     = false
-}
-
-################################################################################
-# CloudFront KeyValueStore (filesystem_previews mode only)
-################################################################################
-
-variable "create_key_value_store" {
-  type        = bool
-  description = "Whether to create a CloudFront KeyValueStore for the filesystem_previews CloudFront Function (host -> deployment prefix lookups). Ignored unless mode = 'filesystem_previews'."
-  default     = false
-}
-
-variable "kvs_initial_data" {
-  type        = map(string)
-  description = "Optional seed data for the KeyValueStore as a host -> deployment-prefix map. Written via the KVS import_source."
-  default     = {}
-}
-
-################################################################################
 # Deploy Role (optional)
 ################################################################################
 
 variable "create_deploy_role" {
   type        = bool
-  description = "Whether to create an IAM role that CI can assume to upload to the hosting bucket and create CloudFront invalidations."
+  description = "Whether to create an IAM role that CI can assume to upload to the hosting bucket and flip the active version in KVS."
   default     = false
 }
 

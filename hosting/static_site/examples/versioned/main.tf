@@ -1,17 +1,18 @@
 ################################################################################
-# Example: filesystem_previews mode
+# Example: versioned static site with PR previews and instant rollback.
 #
-# Provisions a Flightcontrol-equivalent static site stack: private S3 hosting
-# bucket, CloudFront distribution with OAC, CloudFront Function for host ->
-# deployment-prefix lookup via KeyValueStore, and a Lambda@Edge handler for
-# filesystem-style path resolution and custom 404 pages.
+# Provisions a private S3 hosting bucket, a CloudFront distribution with OAC,
+# a CloudFront KeyValueStore, and a viewer-request rewriter function.
 #
-# Apply notes:
-#   - npm must be available on the machine running `tofu apply` (used to install
-#     dependencies for the bundled Lambda@Edge handler).
-#   - Lambda@Edge functions must live in us-east-1; the us_east_1 alias is
-#     wired through to the composite.
-#   - This example creates a deploy role assuming GitHub OIDC.
+# Deploy and rollback are CI-driven via the KVS:
+#   VERSION="v$(git rev-parse --short HEAD)"
+#   aws s3 sync ./dist s3://${hosting_bucket}/$VERSION/ --delete
+#   # then run the set_active_version_command output to flip 'active'
+#
+# Per-host overrides (PR previews):
+#   aws cloudfront-keyvaluestore put-key \
+#     --kvs-arn $KVS_ARN --if-match $ETAG \
+#     --key pr-42.preview.example.com --value v_pr-42
 ################################################################################
 
 terraform {
@@ -29,21 +30,11 @@ provider "aws" {
   region = "us-west-2"
 }
 
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-}
-
 module "site" {
   source = "../.."
 
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  name = "ravion-example-site"
-  mode = "filesystem_previews"
+  name    = "ravion-example-site"
+  routing = "filesystem"
 
   distributions = {
     main = {
@@ -53,15 +44,11 @@ module "site" {
     }
   }
 
-  static_mode_header_value   = "filesystem"
-  deployment_id_header_value = "main"
-  trailing_slash_enabled     = true
-
   long_cache_paths = ["/_astro/*", "/assets/*"]
 
-  create_key_value_store = true
+  # Pin staging to a specific version while production tracks 'active'.
   kvs_initial_data = {
-    "pr-42.preview.example.com" = "versions/pr-42"
+    "staging.example.com" = "v_staging"
   }
 
   create_deploy_role = true
@@ -113,6 +100,6 @@ output "key_value_store_arn" {
   value = module.site.key_value_store_arn
 }
 
-output "deploy_command" {
-  value = module.site.invalidation_commands["main"]
+output "set_active_version_command" {
+  value = module.site.set_active_version_command
 }

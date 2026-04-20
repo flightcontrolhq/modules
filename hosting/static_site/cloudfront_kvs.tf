@@ -1,32 +1,27 @@
 ################################################################################
 # CloudFront KeyValueStore
 #
-# Used by the filesystem_previews CloudFront Function to map request Host
-# headers (typically PR/branch preview subdomains) to S3 deployment prefixes
-# without an extra round trip. Created only when create_key_value_store = true
-# and mode = 'filesystem_previews'.
+# Holds the host -> version map read by the rewriter function on every viewer
+# request. Always created — versioning is the only deploy model.
 #
-# Initial entries supplied via kvs_initial_data are managed as individual
-# `aws_cloudfrontkeyvaluestore_key` resources. This is intentional, not
-# `aws_cloudfrontkeyvaluestore_keys_exclusive`: exclusive mode would delete
-# preview entries created out-of-band by CI when adding/removing PR previews.
-# The seed map is meant for long-lived hosts (e.g., the production canonical
-# alias if you want to override the default prefix); ephemeral previews should
-# be added/removed by CI via `aws cloudfront-keyvaluestore put-key` /
-# `delete-key`.
+# Seed entries:
+#   - 'active' is always seeded with var.default_version so a fresh stack works
+#     before the first KVS edit. Override by including 'active' in
+#     var.kvs_initial_data.
+#   - Additional entries from kvs_initial_data are managed individually (not
+#     `aws_cloudfrontkeyvaluestore_keys_exclusive`) so previews added/removed
+#     out-of-band by CI are not stomped by Terraform.
 ################################################################################
 
 resource "aws_cloudfront_key_value_store" "this" {
-  count = local.uses_kvs ? 1 : 0
-
   name    = local.kvs_name
-  comment = "${var.name} preview host -> deployment prefix lookup"
+  comment = "${var.name} host -> version lookup"
 }
 
 resource "aws_cloudfrontkeyvaluestore_key" "seed" {
-  for_each = local.uses_kvs ? var.kvs_initial_data : {}
+  for_each = local.active_kvs_seed
 
-  key_value_store_arn = aws_cloudfront_key_value_store.this[0].arn
+  key_value_store_arn = aws_cloudfront_key_value_store.this.arn
   key                 = each.key
   value               = each.value
 }

@@ -4,9 +4,7 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-# Bucket policy granting CloudFront (via OAC) read access to the hosting bucket,
-# and granting the Lambda@Edge role read access in filesystem_previews mode so
-# the handler can perform headObject / getObject lookups directly against S3.
+# Bucket policy granting CloudFront (via OAC) read access to the hosting bucket.
 data "aws_iam_policy_document" "hosting_bucket_policy" {
   statement {
     sid       = local.oac_policy_sid
@@ -25,48 +23,10 @@ data "aws_iam_policy_document" "hosting_bucket_policy" {
       values   = [for k, v in module.cdn.distribution_arns : v]
     }
   }
-
-  dynamic "statement" {
-    for_each = local.uses_lambda_edge ? [1] : []
-    content {
-      sid    = local.edge_policy_sid
-      effect = "Allow"
-      actions = [
-        "s3:GetObject",
-        "s3:ListBucket"
-      ]
-      resources = [
-        local.hosting_bucket_arn,
-        "${local.hosting_bucket_arn}/*"
-      ]
-
-      principals {
-        type        = "AWS"
-        identifiers = [module.edge_lambda[0].role_arn]
-      }
-    }
-  }
 }
 
-# Inline least-privilege S3 policy attached to the Lambda@Edge execution role.
-data "aws_iam_policy_document" "lambda_edge_s3_read" {
-  count = local.uses_lambda_edge ? 1 : 0
-
-  statement {
-    sid    = "ReadHostingBucket"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:ListBucket"
-    ]
-    resources = [
-      local.hosting_bucket_arn,
-      "${local.hosting_bucket_arn}/*"
-    ]
-  }
-}
-
-# Deploy role policy: sync to the hosting bucket and create CloudFront invalidations.
+# Deploy role policy: sync to the hosting bucket, update the KVS active pointer,
+# and (optionally) create CloudFront invalidations.
 data "aws_iam_policy_document" "deploy_role_policy" {
   count = var.create_deploy_role ? 1 : 0
 
@@ -88,6 +48,28 @@ data "aws_iam_policy_document" "deploy_role_policy" {
       "s3:AbortMultipartUpload"
     ]
     resources = ["${local.hosting_bucket_arn}/*"]
+  }
+
+  statement {
+    sid    = "KvsDescribe"
+    effect = "Allow"
+    actions = [
+      "cloudfront-keyvaluestore:DescribeKeyValueStore",
+      "cloudfront-keyvaluestore:ListKeys",
+      "cloudfront-keyvaluestore:GetKey"
+    ]
+    resources = [aws_cloudfront_key_value_store.this.arn]
+  }
+
+  statement {
+    sid    = "KvsWrite"
+    effect = "Allow"
+    actions = [
+      "cloudfront-keyvaluestore:PutKey",
+      "cloudfront-keyvaluestore:DeleteKey",
+      "cloudfront-keyvaluestore:UpdateKeys"
+    ]
+    resources = [aws_cloudfront_key_value_store.this.arn]
   }
 
   statement {

@@ -2,21 +2,14 @@
 # hosting/static_site - Variable validation tests
 #
 # These tests focus on input variable validation rules. Child-module behavior
-# (storage/s3, cdn/cloudfront, compute/lambda) is exercised by the per-module
-# tests under their own `tests/` directories; here we only verify that this
-# composite accepts/rejects the right inputs.
+# (storage/s3, cdn/cloudfront) is exercised by the per-module tests under their
+# own `tests/` directories; here we only verify that this composite accepts and
+# rejects the right inputs.
 ################################################################################
 
 mock_provider "aws" {
   override_data {
     target = data.aws_iam_policy_document.hosting_bucket_policy
-    values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
-    }
-  }
-
-  override_data {
-    target = data.aws_iam_policy_document.lambda_edge_s3_read
     values = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
@@ -45,48 +38,80 @@ mock_provider "aws" {
   }
 }
 
-mock_provider "aws" {
-  alias = "us_east_1"
-}
-
 variables {
   name = "ravion-test-site"
 }
 
 #-------------------------------------------------------------------------------
-# Mode validation
+# Routing validation
 #-------------------------------------------------------------------------------
 
-run "mode_default_is_spa" {
+run "routing_default_is_spa" {
   command = plan
 
   assert {
-    condition     = var.mode == "spa"
-    error_message = "mode should default to 'spa'."
+    condition     = var.routing == "spa"
+    error_message = "routing should default to 'spa'."
   }
 }
 
-run "mode_accepts_filesystem" {
+run "routing_accepts_filesystem" {
   command = plan
 
   variables {
-    mode = "filesystem"
+    routing = "filesystem"
   }
 
   assert {
-    condition     = var.mode == "filesystem"
-    error_message = "mode should accept 'filesystem'."
+    condition     = var.routing == "filesystem"
+    error_message = "routing should accept 'filesystem'."
   }
 }
 
-run "mode_rejects_unknown" {
+run "routing_rejects_unknown" {
   command = plan
 
   variables {
-    mode = "ssr"
+    routing = "ssr"
   }
 
-  expect_failures = [var.mode]
+  expect_failures = [var.routing]
+}
+
+#-------------------------------------------------------------------------------
+# default_version validation
+#-------------------------------------------------------------------------------
+
+run "default_version_default_is_main" {
+  command = plan
+
+  assert {
+    condition     = var.default_version == "main"
+    error_message = "default_version should default to 'main'."
+  }
+}
+
+run "default_version_accepts_versions_prefix" {
+  command = plan
+
+  variables {
+    default_version = "versions/v1"
+  }
+
+  assert {
+    condition     = var.default_version == "versions/v1"
+    error_message = "default_version should accept 'versions/v1'."
+  }
+}
+
+run "default_version_rejects_invalid_chars" {
+  command = plan
+
+  variables {
+    default_version = "v 1!"
+  }
+
+  expect_failures = [var.default_version]
 }
 
 #-------------------------------------------------------------------------------
@@ -154,54 +179,6 @@ run "distributions_rejects_empty" {
   }
 
   expect_failures = [var.distributions]
-}
-
-#-------------------------------------------------------------------------------
-# Lambda@Edge constraints
-#-------------------------------------------------------------------------------
-
-run "lambda_timeout_rejects_above_30" {
-  command = plan
-
-  variables {
-    lambda_timeout = 60
-  }
-
-  expect_failures = [var.lambda_timeout]
-}
-
-run "lambda_memory_rejects_above_3008" {
-  command = plan
-
-  variables {
-    lambda_memory_size = 4096
-  }
-
-  expect_failures = [var.lambda_memory_size]
-}
-
-run "lambda_runtime_rejects_python" {
-  command = plan
-
-  variables {
-    lambda_runtime = "python3.12"
-  }
-
-  expect_failures = [var.lambda_runtime]
-}
-
-#-------------------------------------------------------------------------------
-# Static mode header
-#-------------------------------------------------------------------------------
-
-run "static_mode_rejects_invalid" {
-  command = plan
-
-  variables {
-    static_mode_header_value = "ssr"
-  }
-
-  expect_failures = [var.static_mode_header_value]
 }
 
 #-------------------------------------------------------------------------------

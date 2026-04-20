@@ -5,10 +5,9 @@
 # and cache behaviors; per-distribution config (aliases, ACM cert, comment)
 # comes from var.distributions and is forwarded as-is.
 #
-# In SPA mode, custom_error_responses map 403/404 -> /index.html (200) so the
-# router-aware shell handles unknown paths client-side. In filesystem and
-# filesystem_previews modes the CFF / Lambda@Edge handle path resolution and
-# we leave error responses alone so users see real S3 errors.
+# The viewer-request CloudFront Function rewrites every URI to /<version>/...
+# before the cache lookup, so each promoted version produces a fresh cache key
+# automatically — no CreateInvalidation, no custom_error_responses needed.
 ################################################################################
 
 module "cdn" {
@@ -22,9 +21,8 @@ module "cdn" {
     {
       origin_id      = local.origin_id
       domain_name    = module.hosting.bucket_regional_domain_name
-      origin_path    = var.origin_path
       s3_origin      = true
-      custom_headers = local.origin_custom_headers
+      custom_headers = var.additional_origin_headers
       origin_shield = var.origin_shield_region == null ? null : {
         enabled              = true
         origin_shield_region = var.origin_shield_region
@@ -42,12 +40,10 @@ module "cdn" {
     origin_request_policy_id     = var.origin_request_policy_id
     response_headers_policy_id   = var.response_headers_policy_id
     function_associations        = local.cff_associations
-    lambda_function_associations = local.edge_associations
+    lambda_function_associations = []
   }
 
   ordered_cache_behaviors = local.ordered_behaviors
-
-  custom_error_responses = local.spa_error_responses
 
   default_root_object = var.default_root_object
   price_class         = var.price_class
