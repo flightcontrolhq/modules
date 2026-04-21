@@ -26,6 +26,13 @@ locals {
   # NAT Gateway count
   nat_gateway_count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : var.subnet_count) : 0
 
+  # NAT Gateway EIPs
+  # When the caller supplies pre-allocated EIPs, skip creating internal ones and
+  # use the supplied allocation IDs directly. Otherwise, fall back to the EIPs
+  # created by aws_eip.nat in this module.
+  create_nat_eips                = var.enable_nat_gateway && var.nat_gateway_eip_allocation_ids == null
+  nat_gateway_eip_allocation_ids = var.nat_gateway_eip_allocation_ids != null ? var.nat_gateway_eip_allocation_ids : aws_eip.nat[*].allocation_id
+
   # Flow Logs
   create_flow_log_cloudwatch = var.enable_flow_logs && var.flow_logs_destination == "cloudwatch"
   create_flow_log_s3         = var.enable_flow_logs && var.flow_logs_destination == "s3"

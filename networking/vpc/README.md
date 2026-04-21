@@ -54,6 +54,35 @@ module "vpc" {
 }
 ```
 
+When `single_nat_gateway = false`, the module creates one NAT Gateway per AZ and one private route table per AZ, with each private subnet routed through the NAT Gateway in its own AZ. This avoids cross-AZ data transfer charges for outbound internet traffic from private subnets.
+
+### With Reserved (Pre-allocated) Elastic IPs
+
+Allocate the EIPs in a separate module so they survive VPC replacements (useful for partner allowlists or firewall rules that must not change), then pass them in:
+
+```hcl
+module "nat_eips" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//networking/eips?ref=v1.0.0"
+
+  name      = "prod-nat"
+  eip_count = 3 # one per AZ
+}
+
+module "vpc" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+
+  name               = "prod"
+  vpc_cidr           = "10.0.0.0/16"
+  subnet_count       = 3
+  enable_nat_gateway = true
+  single_nat_gateway = false # one NAT per AZ
+
+  nat_gateway_eip_allocation_ids = module.nat_eips.allocation_ids
+}
+```
+
+The list length must equal `1` when `single_nat_gateway = true`, or `subnet_count` when `single_nat_gateway = false`. EIP allocations are consumed in order, so `allocation_ids[i]` is attached to the NAT Gateway in `availability_zones[i]`.
+
 ### With IPv6 Support
 
 ```hcl
@@ -280,6 +309,7 @@ module "vpc" {
 |------|-------------|------|---------|----------|
 | enable_nat_gateway | Enable NAT Gateway(s) to allow private subnets to access the internet | `bool` | `false` | no |
 | single_nat_gateway | Use a single NAT Gateway for all private subnets (cost-effective). Set to false for high availability (one NAT per AZ) | `bool` | `true` | no |
+| nat_gateway_eip_allocation_ids | Pre-allocated EIP allocation IDs to attach to the NAT Gateway(s). When null, the module allocates new EIPs internally. Length must equal 1 when `single_nat_gateway = true`, or `subnet_count` when `false` | `list(string)` | `null` | no |
 
 ### IPv6
 
@@ -907,7 +937,7 @@ module "vpc" {
 - DNS support and hostnames are enabled by default, which is required for services like RDS, ECS, and EFS
 - When using automatic subnet CIDR allocation, public subnets use offsets 1-6 and private subnets use offsets 11-16
 - NAT Gateway requires an Internet Gateway to exist first (handled automatically via `depends_on`)
-- Elastic IPs for NAT Gateways are allocated with `domain = "vpc"` for VPC usage
+- Elastic IPs for NAT Gateways are allocated with `domain = "vpc"` for VPC usage. To reuse pre-allocated EIPs (e.g. from the `networking/eips` module), set `nat_gateway_eip_allocation_ids`; the module will skip creating internal EIPs.
 - The Egress-Only Internet Gateway only routes IPv6 traffic and only allows outbound connections
 - VPC Flow Logs have a 60-second aggregation interval for near real-time monitoring
 - When using S3 for flow logs with an existing bucket, ensure the bucket policy allows the VPC Flow Logs service principal

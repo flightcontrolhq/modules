@@ -95,13 +95,13 @@ output "nat_gateway_ids" {
 }
 
 output "nat_gateway_public_ips" {
-  description = "List of public IP addresses of NAT Gateways (if NAT Gateway is enabled)."
-  value       = aws_eip.nat[*].public_ip
+  description = "List of public IP addresses of NAT Gateways (if NAT Gateway is enabled). Sourced from the NAT Gateway resource itself, so it works whether EIPs were created by this module or supplied via nat_gateway_eip_allocation_ids."
+  value       = aws_nat_gateway.this[*].public_ip
 }
 
 output "nat_gateway_allocation_ids" {
-  description = "List of Elastic IP allocation IDs for NAT Gateways (if NAT Gateway is enabled)."
-  value       = aws_eip.nat[*].allocation_id
+  description = "List of Elastic IP allocation IDs in use by the NAT Gateways (if NAT Gateway is enabled). Reflects either the EIPs created by this module or the supplied nat_gateway_eip_allocation_ids."
+  value       = aws_nat_gateway.this[*].allocation_id
 }
 
 ################################################################################

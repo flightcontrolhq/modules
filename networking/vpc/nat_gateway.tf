@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_eip" "nat" {
-  count = local.nat_gateway_count
+  count = local.create_nat_eips ? local.nat_gateway_count : 0
 
   domain = "vpc"
 
@@ -17,7 +17,7 @@ resource "aws_eip" "nat" {
 resource "aws_nat_gateway" "this" {
   count = local.nat_gateway_count
 
-  allocation_id = aws_eip.nat[count.index].id
+  allocation_id = local.nat_gateway_eip_allocation_ids[count.index]
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(local.tags, {

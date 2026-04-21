@@ -119,6 +119,44 @@ variable "single_nat_gateway" {
   default     = true
 }
 
+variable "nat_gateway_eip_allocation_ids" {
+  type        = list(string)
+  description = <<-EOT
+    A list of pre-allocated Elastic IP allocation IDs (for example from the
+    networking/eips module) to associate with the NAT Gateway(s). When null
+    (default), the module allocates new EIPs internally.
+
+    The list length must match the number of NAT Gateways the module will create:
+      - 1 when single_nat_gateway = true
+      - subnet_count when single_nat_gateway = false
+
+    Supplied EIPs must already exist with domain = "vpc". This is useful for
+    keeping NAT public IPs stable across VPC replacements (e.g. for partner
+    allowlists or firewall rules).
+  EOT
+  default     = null
+
+  validation {
+    condition = (
+      var.nat_gateway_eip_allocation_ids == null ||
+      alltrue([
+        for id in coalesce(var.nat_gateway_eip_allocation_ids, []) :
+        can(regex("^eipalloc-[a-f0-9]+$", id))
+      ])
+    )
+    error_message = "Each nat_gateway_eip_allocation_ids entry must be a valid EIP allocation ID (e.g. eipalloc-0123456789abcdef0)."
+  }
+
+  validation {
+    condition = (
+      var.nat_gateway_eip_allocation_ids == null ||
+      !var.enable_nat_gateway ||
+      length(var.nat_gateway_eip_allocation_ids) == (var.single_nat_gateway ? 1 : var.subnet_count)
+    )
+    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 when single_nat_gateway = true, or subnet_count when single_nat_gateway = false."
+  }
+}
+
 ################################################################################
 # IPv6
 ################################################################################
