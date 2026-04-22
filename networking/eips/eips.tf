@@ -5,6 +5,7 @@
 resource "aws_eip" "this" {
   count = var.eip_count
 
+  region               = var.region
   domain               = "vpc"
   network_border_group = var.network_border_group
 

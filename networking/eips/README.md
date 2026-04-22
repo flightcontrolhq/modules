@@ -48,6 +48,7 @@ AWS's default Elastic IP quota is **5 per region**. Allocations above that requi
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------- | ------- | -------- |
 | `name`                 | Name prefix for each EIP's `Name` tag (e.g. `egress-prod` → `egress-prod-01`, `egress-prod-02`, ...). 1–48 characters.  | `string`      | n/a     | yes      |
 | `eip_count`            | Number of EIPs to allocate. 1–20. AWS's default quota is 5/region — values above 5 require a prior quota increase.      | `number`      | n/a     | yes      |
+| `region`               | AWS region for the EIP allocations. Defaults to the `aws` provider's region. Requires AWS provider v6.0+ when set.      | `string`      | `null`  | no       |
 | `network_border_group` | Region's default border group unless set. Only needed for Local Zones / Wavelength targets.                             | `string`      | `null`  | no       |
 | `tags`                 | Extra tags merged onto every EIP.                                                                                       | `map(string)` | `{}`    | no       |
 

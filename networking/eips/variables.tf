@@ -22,6 +22,17 @@ variable "eip_count" {
   }
 }
 
+variable "region" {
+  type        = string
+  description = "AWS region in which to allocate the Elastic IPs. Defaults to the region configured on the `aws` provider. Requires AWS provider v6.0 or later when set explicitly."
+  default     = null
+
+  validation {
+    condition     = var.region == null || can(regex("^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$", coalesce(var.region, "us-east-1")))
+    error_message = "The region must be a valid AWS region identifier (e.g. us-east-1, eu-west-2, us-gov-west-1)."
+  }
+}
+
 variable "network_border_group" {
   type        = string
   description = "The location from which the EIP is advertised. Defaults to the region's default network border group. Typically only set for regions with multiple border groups (Local Zones / Wavelength)."
