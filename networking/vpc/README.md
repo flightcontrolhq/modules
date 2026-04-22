@@ -947,4 +947,4 @@ module "vpc" {
 
 ## License
 
-This module is part of the Ravion Modules library and is licensed under the AGPL-3.0 license.
+This module is part of the Ravion Modules library and is licensed under the MIT License.

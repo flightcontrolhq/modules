@@ -149,12 +149,12 @@ For detailed information about the test architecture and adding new tests, see [
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+This project is licensed under the **MIT License**.
 
 See the [LICENSE](LICENSE) file for the full license text.
 
 This means:
 
-- You can use, modify, and distribute this code
-- If you modify and use this code (including as a network service), you must make your source code available under the same license
-- Commercial use in closed-source projects is not permitted without a separate license agreement
+- You can use, modify, distribute, and sublicense this code
+- You must retain the copyright notice and license text in substantial portions of the software
+- The software is provided "as is", without warranty
