@@ -195,13 +195,23 @@ Only the default `aws` provider is required. ACM certificates for CloudFront ali
 
 ## Cache strategy
 
+CloudFront cache policy (CDN side):
+
 | Path pattern | Cache policy | Why |
 |---|---|---|
 | (default) | AWS-managed `CachingOptimized` (1y TTL, no headers/cookies/QS) | Hashed assets are immutable; HTML files at `/<v>/index.html` are unique per version. |
 | `long_cache_paths` | Same `CachingOptimized` | Explicit echo for documentation/clarity (e.g. `/_astro/*`, `/assets/*`). |
+| `*.html` | Same `CachingOptimized` | Versioned paths make each HTML response a unique cache key; the response headers policy below is what gives the browser-side semantics. |
 | `no_cache_paths` | AWS-managed `CachingDisabled` | Optional escape hatch — versioning makes per-path cache busting unnecessary in most cases. |
 
-Override the cache policy entirely via `cache_policy_id`, `origin_request_policy_id`, and `response_headers_policy_id`.
+Default response headers policy (browser side, attached automatically when `manage_response_headers_policies = true`, the default):
+
+| Path pattern | `Cache-Control` header | Origin override | Why |
+|---|---|---|---|
+| (default) | `public, max-age=31536000, immutable` | yes | Browsers cache hashed assets for a year and skip even the conditional `If-None-Match` revalidation. |
+| `*.html` | `s-maxage=5, stale-while-revalidate=31536000` | yes | CDN edge holds HTML for 5s fresh then serves stale while it revalidates against S3 in the background — flips of `active` propagate within ~5s without ever blocking on a cache miss. |
+
+Tune individual values with `html_cache_control`, `assets_cache_control`, `html_cache_control_override`, `assets_cache_control_override`, or `html_path_pattern`. Set `manage_response_headers_policies = false` to disable the feature entirely (no `*.html` ordered behavior, no module-managed headers policies). Override the CDN cache policy via `cache_policy_id`, `origin_request_policy_id`, and `response_headers_policy_id`; a caller-supplied `response_headers_policy_id` always wins on the default behavior.
 
 ## Requirements
 
@@ -266,6 +276,12 @@ No external apply-time tools required.
 | no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
 | long_cache_paths | Path patterns explicitly served with the default long-cache policy. | `list(string)` | `[]` |
 | default_root_object | Object name for `/` requests. | `string` | `"index.html"` |
+| manage_response_headers_policies | Create the default Cache-Control response headers policies and the `*.html` ordered behavior. | `bool` | `true` |
+| html_cache_control | Cache-Control value for `*.html` responses. | `string` | `"s-maxage=5, stale-while-revalidate=31536000"` |
+| html_cache_control_override | Whether the html policy overrides Cache-Control coming from the origin. | `bool` | `true` |
+| assets_cache_control | Cache-Control value for the default behavior (everything other than `*.html`). | `string` | `"public, max-age=31536000, immutable"` |
+| assets_cache_control_override | Whether the assets policy overrides Cache-Control coming from the origin. | `bool` | `true` |
+| html_path_pattern | Path pattern for the HTML ordered behavior. | `string` | `"*.html"` |
 
 ### KeyValueStore
 
@@ -311,6 +327,8 @@ No external apply-time tools required.
 | deploy_role_name | Name of the deploy role. |
 | set_active_version_command | Bash snippet that flips the `active` KVS key to `$VERSION`. |
 | invalidation_commands | Map of distribution key -> ready-to-run `aws cloudfront create-invalidation`. Rarely needed. |
+| html_response_headers_policy_id | ID of the module-managed response headers policy attached to `*.html`. Null when disabled. |
+| assets_response_headers_policy_id | ID of the module-managed response headers policy attached to the default behavior. Null when disabled. |
 
 ## Security Considerations
 

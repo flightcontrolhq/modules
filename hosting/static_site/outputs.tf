@@ -71,6 +71,20 @@ output "default_version" {
 }
 
 ################################################################################
+# Response Headers Policies
+################################################################################
+
+output "html_response_headers_policy_id" {
+  description = "ID of the module-managed response headers policy attached to the `*.html` ordered behavior. Null when manage_response_headers_policies = false."
+  value       = local.html_response_headers_policy_id
+}
+
+output "assets_response_headers_policy_id" {
+  description = "ID of the module-managed response headers policy attached to the default cache behavior. Null when manage_response_headers_policies = false. Note: this is the policy the module created; the policy actually attached to the default behavior is var.response_headers_policy_id when set, otherwise this one."
+  value       = local.assets_response_headers_policy_id
+}
+
+################################################################################
 # Deploy Role
 ################################################################################
 

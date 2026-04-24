@@ -249,3 +249,144 @@ run "deploy_role_trust_policy_rejects_invalid_json" {
 
   expect_failures = [var.deploy_role_trust_policy]
 }
+
+#-------------------------------------------------------------------------------
+# Response headers policies (defaults)
+#-------------------------------------------------------------------------------
+
+run "manage_response_headers_policies_defaults_to_true" {
+  command = plan
+
+  assert {
+    condition     = var.manage_response_headers_policies == true
+    error_message = "manage_response_headers_policies should default to true."
+  }
+}
+
+run "html_cache_control_default" {
+  command = plan
+
+  assert {
+    condition     = var.html_cache_control == "s-maxage=5, stale-while-revalidate=31536000"
+    error_message = "html_cache_control should default to short s-maxage + long stale-while-revalidate."
+  }
+}
+
+run "html_cache_control_override_defaults_to_true" {
+  command = plan
+
+  assert {
+    condition     = var.html_cache_control_override == true
+    error_message = "html_cache_control_override should default to true so CloudFront wins over S3 metadata."
+  }
+}
+
+run "assets_cache_control_default" {
+  command = plan
+
+  assert {
+    condition     = var.assets_cache_control == "public, max-age=31536000, immutable"
+    error_message = "assets_cache_control should default to a 1-year immutable browser cache."
+  }
+}
+
+run "assets_cache_control_override_defaults_to_true" {
+  command = plan
+
+  assert {
+    condition     = var.assets_cache_control_override == true
+    error_message = "assets_cache_control_override should default to true so CloudFront wins over S3 metadata."
+  }
+}
+
+run "html_path_pattern_default" {
+  command = plan
+
+  assert {
+    condition     = var.html_path_pattern == "*.html"
+    error_message = "html_path_pattern should default to '*.html'."
+  }
+}
+
+run "default_creates_html_and_assets_policies" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.html) == 1
+    error_message = "html response headers policy should be created by default."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.assets) == 1
+    error_message = "assets response headers policy should be created by default."
+  }
+
+  assert {
+    condition     = length(local.html_cache_behaviors) == 1
+    error_message = "an ordered cache behavior for *.html should be present by default."
+  }
+
+  assert {
+    condition     = local.html_cache_behaviors[0].path_pattern == "*.html"
+    error_message = "the html ordered cache behavior should target the *.html path pattern."
+  }
+}
+
+run "manage_response_headers_policies_false_skips_resources" {
+  command = plan
+
+  variables {
+    manage_response_headers_policies = false
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.html) == 0
+    error_message = "html response headers policy should not be created when manage_response_headers_policies = false."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.assets) == 0
+    error_message = "assets response headers policy should not be created when manage_response_headers_policies = false."
+  }
+
+  assert {
+    condition     = length(local.html_cache_behaviors) == 0
+    error_message = "no html ordered cache behavior should be added when manage_response_headers_policies = false."
+  }
+
+  assert {
+    condition     = local.effective_default_response_headers_policy_id == null
+    error_message = "default behavior should attach no response headers policy when both manage flag and var.response_headers_policy_id are unset."
+  }
+}
+
+run "caller_supplied_response_headers_policy_id_wins_on_default" {
+  command = plan
+
+  variables {
+    response_headers_policy_id = "11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition     = local.effective_default_response_headers_policy_id == "11111111-2222-3333-4444-555555555555"
+    error_message = "Caller-supplied response_headers_policy_id should take precedence on the default behavior."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.html) == 1
+    error_message = "html response headers policy should still be created when the caller supplies their own default policy."
+  }
+}
+
+run "html_path_pattern_override_flows_through" {
+  command = plan
+
+  variables {
+    html_path_pattern = "*.htm"
+  }
+
+  assert {
+    condition     = local.html_cache_behaviors[0].path_pattern == "*.htm"
+    error_message = "html_path_pattern override should flow into the ordered cache behavior."
+  }
+}

@@ -243,6 +243,42 @@ variable "default_root_object" {
   default     = "index.html"
 }
 
+variable "manage_response_headers_policies" {
+  type        = bool
+  description = "Whether the module should create and attach default CloudFront response headers policies that set Cache-Control on the default behavior (assets) and on a `*.html` ordered behavior (HTML documents). Disable to fully delegate Cache-Control to S3 metadata or to a caller-supplied response_headers_policy_id."
+  default     = true
+}
+
+variable "html_cache_control" {
+  type        = string
+  description = "Cache-Control header value emitted for `*.html` responses when manage_response_headers_policies = true. Defaults to a short CDN s-maxage with a long stale-while-revalidate window so version flips propagate within seconds without ever blocking on a cache miss."
+  default     = "s-maxage=5, stale-while-revalidate=31536000"
+}
+
+variable "html_cache_control_override" {
+  type        = bool
+  description = "Whether the html response headers policy overrides Cache-Control coming from the origin. Defaults to true so CloudFront is the single source of truth for HTML cache semantics."
+  default     = true
+}
+
+variable "assets_cache_control" {
+  type        = string
+  description = "Cache-Control header value emitted for the default behavior (everything other than `*.html`) when manage_response_headers_policies = true. Defaults to a one-year immutable browser cache, which is safe because the rewriter pins every asset to a versioned path."
+  default     = "public, max-age=31536000, immutable"
+}
+
+variable "assets_cache_control_override" {
+  type        = bool
+  description = "Whether the assets response headers policy overrides Cache-Control coming from the origin. Defaults to true so CloudFront is the single source of truth for asset cache semantics."
+  default     = true
+}
+
+variable "html_path_pattern" {
+  type        = string
+  description = "Path pattern used for the HTML ordered cache behavior created when manage_response_headers_policies = true. Override (e.g. to '*.htm' or a more specific glob) to change scope without disabling the feature."
+  default     = "*.html"
+}
+
 ################################################################################
 # CloudFront KeyValueStore (always created)
 ################################################################################

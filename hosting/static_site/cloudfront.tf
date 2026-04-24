@@ -38,7 +38,7 @@ module "cdn" {
     compress                     = true
     cache_policy_id              = var.cache_policy_id
     origin_request_policy_id     = var.origin_request_policy_id
-    response_headers_policy_id   = var.response_headers_policy_id
+    response_headers_policy_id   = local.effective_default_response_headers_policy_id
     function_associations        = local.cff_associations
     lambda_function_associations = []
   }
