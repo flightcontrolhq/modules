@@ -17,10 +17,14 @@
 //   spa routing:
 //     /             -> /<v>/<index>
 //     /foo.js       -> /<v>/foo.js                (asset, has extension)
+//     /.well-known/openid-configuration
+//                   -> /<v>/.well-known/openid-configuration  (dotted seg)
 //     /foo[/]       -> /<v>/<index>               (router handles client-side)
 //   filesystem routing:
 //     /             -> /<v>/<index>
 //     /foo.js       -> /<v>/foo.js
+//     /.well-known/foo
+//                   -> /<v>/.well-known/foo       (dotted seg)
 //     /foo[/]       -> /<v>/foo/<index>           (clean URLs)
 //
 // Tokens substituted at apply time via templatefile():
@@ -57,10 +61,17 @@ async function handler(event) {
     var lastSlash = uri.lastIndexOf('/');
     var lastDot = uri.lastIndexOf('.');
     var hasExtension = lastDot > lastSlash;
+    // Any path segment beginning with a dot (e.g. `/.well-known/...`,
+    // `/.config/...`) is treated as a literal asset path. By convention
+    // these directories hold configuration files that must be served
+    // verbatim — clean-URL rewriting to `<dir>/index.html` would 404
+    // even when the file exists. RFC 8615 (`.well-known`) is the
+    // canonical case.
+    var hasDottedSegment = uri.indexOf('/.') >= 0;
 
     if (uri === '/') {
         request.uri = '/' + version + '/' + INDEX_DOCUMENT;
-    } else if (hasExtension) {
+    } else if (hasExtension || hasDottedSegment) {
         request.uri = '/' + version + uri;
     } else if (ROUTING === 'spa') {
         request.uri = '/' + version + '/' + INDEX_DOCUMENT;
