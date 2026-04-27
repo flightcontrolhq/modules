@@ -38,12 +38,12 @@ resource "aws_route_table_association" "public" {
 # When using a single NAT gateway, we only need one private route table
 # When using multiple NAT gateways (one per AZ), we need one route table per AZ
 resource "aws_route_table" "private" {
-  count = var.single_nat_gateway ? 1 : var.subnet_count
+  count = var.nat_gateway_high_availability ? var.subnet_count : 1
 
   vpc_id = aws_vpc.this.id
 
   tags = merge(local.tags, {
-    Name = var.single_nat_gateway ? "${var.name}-private" : "${var.name}-private-${local.azs[count.index]}"
+    Name = var.nat_gateway_high_availability ? "${var.name}-private-${local.azs[count.index]}" : "${var.name}-private"
   })
 }
 
@@ -51,7 +51,7 @@ resource "aws_route_table_association" "private" {
   count = var.subnet_count
 
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = var.single_nat_gateway ? aws_route_table.private[0].id : aws_route_table.private[count.index].id
+  route_table_id = var.nat_gateway_high_availability ? aws_route_table.private[count.index].id : aws_route_table.private[0].id
 }
 
 

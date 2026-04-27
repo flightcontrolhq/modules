@@ -24,7 +24,7 @@ locals {
   ]
 
   # NAT Gateway count
-  nat_gateway_count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : var.subnet_count) : 0
+  nat_gateway_count = var.enable_nat_gateway ? (var.nat_gateway_high_availability ? var.subnet_count : 1) : 0
 
   # NAT Gateway EIPs
   # When the caller supplies pre-allocated EIPs, skip creating internal ones and

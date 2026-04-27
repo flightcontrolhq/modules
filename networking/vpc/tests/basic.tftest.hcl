@@ -120,13 +120,13 @@ run "nat_gateway_single" {
   command = plan
 
   variables {
-    enable_nat_gateway = true
-    single_nat_gateway = true
+    enable_nat_gateway            = true
+    nat_gateway_high_availability = false
   }
 
   assert {
     condition     = length(aws_nat_gateway.this) == 1
-    error_message = "Should create 1 NAT Gateway when single_nat_gateway is true"
+    error_message = "Should create 1 NAT Gateway when nat_gateway_high_availability is false"
   }
 
   assert {
@@ -140,14 +140,14 @@ run "nat_gateway_ha" {
   command = plan
 
   variables {
-    enable_nat_gateway = true
-    single_nat_gateway = false
-    subnet_count       = 3
+    enable_nat_gateway            = true
+    nat_gateway_high_availability = true
+    subnet_count                  = 3
   }
 
   assert {
     condition     = length(aws_nat_gateway.this) == 3
-    error_message = "Should create 3 NAT Gateways when single_nat_gateway is false"
+    error_message = "Should create 3 NAT Gateways when nat_gateway_high_availability is true"
   }
 
   assert {
@@ -404,12 +404,12 @@ run "route_tables" {
   command = plan
 
   variables {
-    single_nat_gateway = true
+    nat_gateway_high_availability = false
   }
 
   assert {
     condition     = length(aws_route_table.private) == 1
-    error_message = "Should create 1 private route table when single_nat_gateway is true"
+    error_message = "Should create 1 private route table when nat_gateway_high_availability is false"
   }
 }
 
@@ -418,13 +418,13 @@ run "route_tables_ha" {
   command = plan
 
   variables {
-    single_nat_gateway = false
-    subnet_count       = 3
+    nat_gateway_high_availability = true
+    subnet_count                  = 3
   }
 
   assert {
     condition     = length(aws_route_table.private) == 3
-    error_message = "Should create 3 private route tables when single_nat_gateway is false"
+    error_message = "Should create 3 private route tables when nat_gateway_high_availability is true"
   }
 }
 
@@ -577,8 +577,8 @@ run "vpc_peering_single" {
   command = plan
 
   variables {
-    enable_nat_gateway = true
-    single_nat_gateway = true
+    enable_nat_gateway            = true
+    nat_gateway_high_availability = false
     vpc_peering_connections = {
       shared = {
         peer_vpc_id      = "vpc-0123456789abcdef0"
@@ -623,9 +623,9 @@ run "vpc_peering_multi_private_route_tables" {
   command = plan
 
   variables {
-    subnet_count       = 3
-    enable_nat_gateway = true
-    single_nat_gateway = false
+    subnet_count                  = 3
+    enable_nat_gateway            = true
+    nat_gateway_high_availability = true
     vpc_peering_connections = {
       shared = {
         peer_vpc_id      = "vpc-0123456789abcdef0"

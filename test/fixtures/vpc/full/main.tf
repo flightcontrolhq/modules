@@ -52,8 +52,8 @@ module "vpc" {
   subnet_count = 3
 
   # High availability NAT Gateways (one per AZ)
-  enable_nat_gateway = true
-  single_nat_gateway = false
+  enable_nat_gateway            = true
+  nat_gateway_high_availability = true
 
   # IPv6 support
   enable_ipv6 = true

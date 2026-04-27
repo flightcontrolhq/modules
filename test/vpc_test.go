@@ -110,7 +110,7 @@ func TestVpcWithNatGateway(t *testing.T) {
 	// Assert vpc_id is not empty
 	require.NotEmpty(t, vpcId, "vpc_id should not be empty")
 
-	// Assert NAT gateway is created (single_nat_gateway=true means 1 NAT gateway)
+	// Assert NAT gateway is created (nat_gateway_high_availability=false means 1 NAT gateway)
 	require.Len(t, natGatewayIds, 1, "nat_gateway_ids should have 1 element (single NAT gateway)")
 	require.NotEmpty(t, natGatewayIds[0], "nat_gateway_id should not be empty")
 
@@ -177,7 +177,7 @@ func TestVpcWithHaNat(t *testing.T) {
 	// Assert vpc_id is not empty
 	require.NotEmpty(t, vpcId, "vpc_id should not be empty")
 
-	// Assert 3 NAT gateways are created (one per AZ, since single_nat_gateway=false)
+	// Assert 3 NAT gateways are created (one per AZ, since nat_gateway_high_availability=true)
 	require.Len(t, natGatewayIds, 3, "nat_gateway_ids should have 3 elements (one per AZ)")
 	for i, natGatewayId := range natGatewayIds {
 		require.NotEmpty(t, natGatewayId, "nat_gateway_id[%d] should not be empty", i)

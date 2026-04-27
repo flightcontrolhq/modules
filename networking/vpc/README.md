@@ -37,7 +37,7 @@ module "vpc" {
   name               = "my-vpc"
   vpc_cidr           = "10.0.0.0/16"
   enable_nat_gateway = true
-  single_nat_gateway = true  # Default: single NAT for all private subnets
+  # nat_gateway_high_availability defaults to false: single NAT for all private subnets
 }
 ```
 
@@ -47,14 +47,14 @@ module "vpc" {
 module "vpc" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
 
-  name               = "my-vpc"
-  vpc_cidr           = "10.0.0.0/16"
-  enable_nat_gateway = true
-  single_nat_gateway = false  # One NAT per AZ for high availability
+  name                          = "my-vpc"
+  vpc_cidr                      = "10.0.0.0/16"
+  enable_nat_gateway            = true
+  nat_gateway_high_availability = true  # One NAT per AZ for high availability
 }
 ```
 
-When `single_nat_gateway = false`, the module creates one NAT Gateway per AZ and one private route table per AZ, with each private subnet routed through the NAT Gateway in its own AZ. This avoids cross-AZ data transfer charges for outbound internet traffic from private subnets.
+When `nat_gateway_high_availability = true`, the module creates one NAT Gateway per AZ and one private route table per AZ, with each private subnet routed through the NAT Gateway in its own AZ. This avoids cross-AZ data transfer charges for outbound internet traffic from private subnets.
 
 ### With Reserved (Pre-allocated) Elastic IPs
 
@@ -71,17 +71,17 @@ module "nat_eips" {
 module "vpc" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
 
-  name               = "prod"
-  vpc_cidr           = "10.0.0.0/16"
-  subnet_count       = 3
-  enable_nat_gateway = true
-  single_nat_gateway = false # one NAT per AZ
+  name                          = "prod"
+  vpc_cidr                      = "10.0.0.0/16"
+  subnet_count                  = 3
+  enable_nat_gateway            = true
+  nat_gateway_high_availability = true # one NAT per AZ
 
   nat_gateway_eip_allocation_ids = module.nat_eips.allocation_ids
 }
 ```
 
-The list length must equal `1` when `single_nat_gateway = true`, or `subnet_count` when `single_nat_gateway = false`. EIP allocations are consumed in order, so `allocation_ids[i]` is attached to the NAT Gateway in `availability_zones[i]`.
+The list length must equal `1` when `nat_gateway_high_availability = false`, or `subnet_count` when `nat_gateway_high_availability = true`. EIP allocations are consumed in order, so `allocation_ids[i]` is attached to the NAT Gateway in `availability_zones[i]`.
 
 ### With IPv6 Support
 
@@ -251,8 +251,8 @@ module "vpc" {
   enable_dns_hostnames = true
 
   # NAT Gateway
-  enable_nat_gateway = true
-  single_nat_gateway = false  # HA: one NAT per AZ
+  enable_nat_gateway            = true
+  nat_gateway_high_availability = true  # HA: one NAT per AZ
 
   # IPv6
   enable_ipv6 = true
@@ -308,8 +308,8 @@ module "vpc" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_nat_gateway | Enable NAT Gateway(s) to allow private subnets to access the internet | `bool` | `false` | no |
-| single_nat_gateway | Use a single NAT Gateway for all private subnets (cost-effective). Set to false for high availability (one NAT per AZ) | `bool` | `true` | no |
-| nat_gateway_eip_allocation_ids | Pre-allocated EIP allocation IDs to attach to the NAT Gateway(s). When null, the module allocates new EIPs internally. Length must equal 1 when `single_nat_gateway = true`, or `subnet_count` when `false` | `list(string)` | `null` | no |
+| nat_gateway_high_availability | Deploy one NAT Gateway per AZ for high availability. Set to false (default) to use a single NAT Gateway for all private subnets (cost-effective) | `bool` | `false` | no |
+| nat_gateway_eip_allocation_ids | Pre-allocated EIP allocation IDs to attach to the NAT Gateway(s). When null, the module allocates new EIPs internally. Length must equal 1 when `nat_gateway_high_availability = false`, or `subnet_count` when `true` | `list(string)` | `null` | no |
 
 ### IPv6
 
@@ -498,7 +498,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║  │  │ • private_subnet_cidrs = cidrsubnet(vpc_cidr, 8, i + 11)  # 10.0.11.0/24, 10.0.12.0/24, ...               │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
-║  │  │ • nat_gateway_count = enable_nat_gateway ? (single_nat_gateway ? 1 : subnet_count) : 0                    │   │  ║
+║  │  │ • nat_gateway_count = enable_nat_gateway ? (nat_gateway_high_availability ? subnet_count : 1) : 0         │   │  ║
 ║  │  │ • create_flow_log_cloudwatch = enable_flow_logs && flow_logs_destination == "cloudwatch"                  │   │  ║
 ║  │  │ • create_flow_log_s3 = enable_flow_logs && flow_logs_destination == "s3"                                  │   │  ║
 ║  │  │ • create_flow_log_s3_bucket = create_flow_log_s3 && flow_logs_s3_bucket_arn == null                       │   │  ║
@@ -509,7 +509,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║  │       NAT GATEWAY           │   │           IPv6                  │   │           VPC FLOW LOGS                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • enable_nat_gateway        │   │ • enable_ipv6                   │   │ • enable_flow_logs                      │  ║
-║  │ • single_nat_gateway        │   │                                 │   │ • flow_logs_destination                 │  ║
+║  │ • nat_gateway_high_avail.   │   │                                 │   │ • flow_logs_destination                 │  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • flow_logs_s3_bucket_arn               │  ║
 ║                                                                          │ • flow_logs_retention_days              │  ║
 ║                                                                          │ • flow_logs_traffic_type                │  ║
@@ -568,7 +568,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║    │ aws_nat_gateway.this         │    │  aws_route.private_nat       │    │ aws_egress_only_internet     │          ║
 ║    │      (0, 1, or N)            │    │       (0, 1, or N)           │    │    _gateway.this (0 or 1)    │          ║
 ║    ├──────────────────────────────┤    ├──────────────────────────────┤    ├──────────────────────────────┤          ║
-║    │ • 1 if single_nat_gateway    │    │ • 0.0.0.0/0 → NAT Gateway    │    │ • Only if enable_ipv6        │          ║
+║    │ • 1 if HA disabled (default) │    │ • 0.0.0.0/0 → NAT Gateway    │    │ • Only if enable_ipv6        │          ║
 ║    │ • N if multi-NAT (per AZ)    │    │ • Associates private route   │    │ • Allows IPv6 egress only    │          ║
 ║    │ • Placed in public subnets   │    │   tables with NAT GWs        │    │   from private subnets       │          ║
 ║    └──────────────────────────────┘    └──────────────────────────────┘    └──────────────────────────────┘          ║
@@ -689,7 +689,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║                              │                        │                                                               ║
 ║                              │                        │                                                               ║
 ║  var.enable_nat_gateway ─────┼────────────────────────┼─────────────────────────────────────────────────┐              ║
-║  var.single_nat_gateway ─────┼────► local.nat_gateway_count ────────────────────────────────────────────┤              ║
+║  var.nat_gateway_high_availability ──► local.nat_gateway_count ─────────────────────────────────────────┤              ║
 ║                              │                        │                                                 │              ║
 ║                              │                        ▼                                                 │              ║
 ║                              │      aws_eip.nat[] ──► aws_nat_gateway.this[] ──► aws_route.private_nat[]│              ║
@@ -728,7 +728,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 | `aws_subnet` (public) | subnet_count | Public subnets across AZs with auto-assign public IP |
 | `aws_subnet` (private) | subnet_count | Private subnets across AZs without public IP |
 | `aws_route_table` (public) | 1 | Shared route table for all public subnets |
-| `aws_route_table` (private) | 1 or subnet_count | 1 if single_nat_gateway, N if multi-NAT |
+| `aws_route_table` (private) | 1 or subnet_count | 1 if nat_gateway_high_availability=false, N if true |
 | `aws_route_table_association` | subnet_count * 2 | Associates subnets with route tables |
 | `aws_eip` | 0, 1, or subnet_count | Elastic IPs for NAT Gateways |
 | `aws_nat_gateway` | 0, 1, or subnet_count | NAT for private subnet outbound IPv4 |
@@ -778,10 +778,10 @@ Internet
 
 ### Which NAT Gateway strategy should I use?
 
-| Strategy | `single_nat_gateway` | Cost | Availability | Use Case |
-|----------|---------------------|------|--------------|----------|
-| Single NAT | `true` (default) | ~$32/month + data | Single AZ dependency | Dev/staging, cost-sensitive |
-| Multi-NAT | `false` | ~$32/month per AZ + data | High availability | Production workloads |
+| Strategy | `nat_gateway_high_availability` | Cost | Availability | Use Case |
+|----------|--------------------------------|------|--------------|----------|
+| Single NAT | `false` (default) | ~$32/month + data | Single AZ dependency | Dev/staging, cost-sensitive |
+| Multi-NAT | `true` | ~$32/month per AZ + data | High availability | Production workloads |
 
 **Single NAT Gateway:**
 ```
@@ -941,7 +941,7 @@ module "vpc" {
 - The Egress-Only Internet Gateway only routes IPv6 traffic and only allows outbound connections
 - VPC Flow Logs have a 60-second aggregation interval for near real-time monitoring
 - When using S3 for flow logs with an existing bucket, ensure the bucket policy allows the VPC Flow Logs service principal
-- Private route tables: 1 table when `single_nat_gateway = true`, or 1 per AZ when `false`
+- Private route tables: 1 table when `nat_gateway_high_availability = false`, or 1 per AZ when `true`
 - All resources are tagged with `ManagedBy = "terraform"` and `Module = "networking/vpc"` by default
 - Subnet preconditions validate that `subnet_count` doesn't exceed available AZs in the region
 

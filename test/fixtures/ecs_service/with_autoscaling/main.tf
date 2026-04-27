@@ -60,8 +60,8 @@ module "vpc" {
   subnet_count = 2
 
   # Enable NAT Gateway so Fargate tasks in private subnets can pull container images
-  enable_nat_gateway = true
-  single_nat_gateway = true
+  enable_nat_gateway            = true
+  nat_gateway_high_availability = false
 
   tags = local.common_tags
 }
