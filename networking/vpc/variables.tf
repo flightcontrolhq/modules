@@ -113,10 +113,23 @@ variable "enable_nat_gateway" {
   default     = false
 }
 
+variable "nat_gateway_high_availability" {
+  type        = bool
+  description = "Deploy one NAT Gateway per AZ for high availability. Set to false (default) to use a single NAT Gateway for all private subnets (cost-effective)."
+  default     = false
+}
+
 variable "single_nat_gateway" {
   type        = bool
-  description = "Use a single NAT Gateway for all private subnets (cost-effective). Set to false for high availability (one NAT per AZ)."
-  default     = true
+  description = <<-EOT
+    DEPRECATED: use `nat_gateway_high_availability` instead. This variable will
+    be removed in a future major version. The semantics are inverted:
+      - single_nat_gateway = true  → nat_gateway_high_availability = false
+      - single_nat_gateway = false → nat_gateway_high_availability = true
+    When set (non-null), this variable takes precedence over
+    nat_gateway_high_availability.
+  EOT
+  default     = null
 }
 
 variable "nat_gateway_eip_allocation_ids" {
@@ -127,8 +140,8 @@ variable "nat_gateway_eip_allocation_ids" {
     (default), the module allocates new EIPs internally.
 
     The list length must match the number of NAT Gateways the module will create:
-      - 1 when single_nat_gateway = true
-      - subnet_count when single_nat_gateway = false
+      - 1 when nat_gateway_high_availability = false
+      - subnet_count when nat_gateway_high_availability = true
 
     Supplied EIPs must already exist with domain = "vpc". This is useful for
     keeping NAT public IPs stable across VPC replacements (e.g. for partner
@@ -151,9 +164,13 @@ variable "nat_gateway_eip_allocation_ids" {
     condition = (
       var.nat_gateway_eip_allocation_ids == null ||
       !var.enable_nat_gateway ||
-      length(var.nat_gateway_eip_allocation_ids) == (var.single_nat_gateway ? 1 : var.subnet_count)
+      length(var.nat_gateway_eip_allocation_ids) == (
+        (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability)
+        ? var.subnet_count
+        : 1
+      )
     )
-    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 when single_nat_gateway = true, or subnet_count when single_nat_gateway = false."
+    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 for single-NAT mode, or subnet_count for HA mode (nat_gateway_high_availability = true, or deprecated single_nat_gateway = false)."
   }
 }
 

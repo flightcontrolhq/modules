@@ -50,7 +50,7 @@ locals {
   ]...)
 
   # Cartesian product of (peering route x private route table) for the private route tables.
-  # aws_route_table.private may be 1 or N depending on single_nat_gateway.
+  # aws_route_table.private may be 1 or N depending on nat_gateway_high_availability.
   vpc_peering_private_routes = merge([
     for k, v in var.vpc_peering_connections : merge([
       for rt_idx in range(length(aws_route_table.private)) : {

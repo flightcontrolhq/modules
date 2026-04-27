@@ -78,11 +78,11 @@ inputs:
       label: "Enable NAT Gateway"
       description: "Allow private subnets to access the internet"
       default: false
-  - single_nat_gateway:
+  - nat_gateway_high_availability:
       type: boolean
-      label: "Single NAT Gateway"
-      description: "Use a single NAT Gateway (cost-effective). Disable for high availability (one NAT per AZ)"
-      default: true
+      label: "NAT Gateway High Availability"
+      description: "Deploy one NAT Gateway per AZ for high availability. Disable for a single cost-effective NAT Gateway"
+      default: false
       show_when:
         enable_nat_gateway: true
   # IPv6

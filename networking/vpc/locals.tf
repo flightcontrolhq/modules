@@ -23,8 +23,11 @@ locals {
     for i in range(var.subnet_count) : cidrsubnet(var.vpc_cidr, 8, i + 11)
   ]
 
+  # NAT Gateway HA mode (with deprecated single_nat_gateway override)
+  nat_gateway_high_availability = var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability
+
   # NAT Gateway count
-  nat_gateway_count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : var.subnet_count) : 0
+  nat_gateway_count = var.enable_nat_gateway ? (local.nat_gateway_high_availability ? var.subnet_count : 1) : 0
 
   # NAT Gateway EIPs
   # When the caller supplies pre-allocated EIPs, skip creating internal ones and
