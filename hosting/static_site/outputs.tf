@@ -31,9 +31,14 @@ output "distribution_ids" {
   value       = module.cdn.distribution_ids
 }
 
-output "distribution_arns" {
+output "cloudfront_distribution_arns_map" {
   description = "Map of distribution key -> CloudFront distribution ARN."
   value       = module.cdn.distribution_arns
+}
+
+output "cloudfront_distribution_arns" {
+  description = "List of all CloudFront distribution ARNs."
+  value       = values(module.cdn.distribution_arns)
 }
 
 output "distribution_domain_names" {
@@ -55,7 +60,7 @@ output "cloudfront_function_arn" {
   value       = aws_cloudfront_function.this.arn
 }
 
-output "key_value_store_arn" {
+output "cloudfront_keyvaluestore_arn" {
   description = "ARN of the CloudFront KeyValueStore that holds host -> version mappings."
   value       = aws_cloudfront_key_value_store.this.arn
 }

@@ -96,8 +96,8 @@ output "deploy_role_arn" {
   value = module.site.deploy_role_arn
 }
 
-output "key_value_store_arn" {
-  value = module.site.key_value_store_arn
+output "cloudfront_keyvaluestore_arn" {
+  value = module.site.cloudfront_keyvaluestore_arn
 }
 
 output "set_active_version_command" {

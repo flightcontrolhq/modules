@@ -136,7 +136,7 @@ VERSION="v$(git rev-parse --short HEAD)"
 aws s3 sync ./dist s3://${HOSTING_BUCKET}/${VERSION}/ --delete
 
 # 2. Promote: point 'active' at the new version
-KVS_ARN=$(tofu output -raw key_value_store_arn)
+KVS_ARN=$(tofu output -raw cloudfront_keyvaluestore_arn)
 ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn $KVS_ARN --query ETag --output text)
 aws cloudfront-keyvaluestore put-key \
   --kvs-arn $KVS_ARN --if-match $ETAG \
@@ -316,11 +316,12 @@ No external apply-time tools required.
 | hosting_bucket_regional_domain_name | Regional domain name of the hosting bucket. |
 | hosting_bucket_region | AWS region of the hosting bucket. |
 | distribution_ids | Map of distribution key -> CloudFront distribution ID. |
-| distribution_arns | Map of distribution key -> distribution ARN. |
+| cloudfront_distribution_arns_map | Map of distribution key -> distribution ARN. |
+| cloudfront_distribution_arns | List of all CloudFront distribution ARNs. |
 | distribution_domain_names | Map of distribution key -> CloudFront domain name. |
 | distribution_hosted_zone_ids | Map of distribution key -> Route53 zone ID for alias records. |
 | cloudfront_function_arn | ARN of the viewer-request rewriter function. |
-| key_value_store_arn | ARN of the KeyValueStore. |
+| cloudfront_keyvaluestore_arn | ARN of the KeyValueStore. |
 | key_value_store_id | ID of the KeyValueStore. |
 | default_version | Apply-time fallback version (also seeded into `active`). |
 | deploy_role_arn | ARN of the deploy role (null unless created). |
