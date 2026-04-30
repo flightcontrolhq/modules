@@ -24,4 +24,8 @@ resource "aws_cloudfrontkeyvaluestore_key" "seed" {
   key_value_store_arn = aws_cloudfront_key_value_store.this.arn
   key                 = each.key
   value               = each.value
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
