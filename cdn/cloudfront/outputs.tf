@@ -59,3 +59,17 @@ output "logging_bucket_domain_name" {
   description = "The domain name of the logging S3 bucket."
   value       = var.create_logging_bucket ? aws_s3_bucket.logging[0].bucket_domain_name : null
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}

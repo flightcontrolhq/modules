@@ -54,3 +54,17 @@ output "egress_rule_arns" {
   description = "Map of egress rule keys to their ARNs."
   value       = { for k, v in aws_vpc_security_group_egress_rule.this : k => v.arn }
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}

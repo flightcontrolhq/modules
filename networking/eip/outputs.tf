@@ -26,3 +26,17 @@ output "eip_count" {
   description = "The number of Elastic IPs allocated by this module invocation."
   value       = length(aws_eip.this)
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}

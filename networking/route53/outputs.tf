@@ -84,3 +84,17 @@ output "query_log_id" {
   description = "The ID of the Route53 query log configuration (null when disabled)."
   value       = var.enable_query_logging ? aws_route53_query_log.this[0].id : null
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}

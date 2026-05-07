@@ -72,3 +72,17 @@ output "inline_policy_names" {
     local.has_inline_policy_statements ? ["inline-statements"] : []
   )
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}

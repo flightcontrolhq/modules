@@ -20,6 +20,8 @@
 
 data "aws_caller_identity" "current" {}
 
+data "aws_region" "current" {}
+
 # Policy statements are composed as HCL objects and then jsonencode'd at the
 # bottom of this file. Building them this way (rather than via
 # aws_iam_policy_document) keeps the module testable under mock_provider and

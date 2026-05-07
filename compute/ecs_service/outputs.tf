@@ -27,16 +27,6 @@ output "cluster_name" {
   value       = split("/", var.cluster_arn)[1]
 }
 
-output "aws_account_id" {
-  description = "The AWS account ID where the service is deployed."
-  value       = data.aws_caller_identity.current.account_id
-}
-
-output "region" {
-  description = "The AWS region where the service is deployed."
-  value       = data.aws_region.current.id
-}
-
 ################################################################################
 # Task Definition
 ################################################################################
@@ -252,6 +242,20 @@ output "ecr_repository_name" {
 output "ecr_repository_url" {
   description = "The URL of the ECR repository (null if disabled)."
   value       = var.enable_ecr ? module.ecr[0].repository_url : null
+}
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
 }
 
 

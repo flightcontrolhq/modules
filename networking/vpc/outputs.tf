@@ -169,3 +169,17 @@ output "vpc_peering_connection_accept_statuses" {
   description = "Map of VPC peering connection logical names to their acceptance status. Cross-account or cross-region peerings will be 'pending-acceptance' until accepted on the peer side."
   value       = { for k, v in aws_vpc_peering_connection.this : k => v.accept_status }
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}

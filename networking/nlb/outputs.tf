@@ -54,3 +54,17 @@ output "access_logs_bucket_arn" {
   description = "The ARN of the S3 bucket for access logs (null if access logs disabled or using existing bucket)."
   value       = local.create_access_logs_bucket ? aws_s3_bucket.access_logs[0].arn : null
 }
+
+################################################################################
+# Account & Region
+################################################################################
+
+output "aws_account_id" {
+  description = "The AWS account ID where the resources are deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}
