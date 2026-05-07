@@ -221,3 +221,9 @@ variable "access_logs_versioning_enabled" {
   description = "Enable versioning for the access logs S3 bucket."
   default     = false
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

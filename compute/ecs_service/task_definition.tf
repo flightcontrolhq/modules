@@ -46,8 +46,8 @@ data "aws_iam_policy_document" "execution_logs" {
       "logs:DescribeLogStreams",
     ]
     resources = [
-      "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name}",
-      "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name}:*",
+      "arn:${data.aws_partition.current.partition}:logs:${local.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name}",
+      "arn:${data.aws_partition.current.partition}:logs:${local.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.name}:*",
     ]
   }
 }
@@ -84,7 +84,7 @@ data "aws_iam_policy_document" "execution_secrets" {
       "ssm:GetParameter",
     ]
     resources = [
-      "arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:parameter/*"
+      "arn:${data.aws_partition.current.partition}:ssm:${local.region}:${data.aws_caller_identity.current.account_id}:parameter/*"
     ]
   }
 

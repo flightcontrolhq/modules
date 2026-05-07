@@ -350,3 +350,9 @@ variable "vpc_peering_connections" {
     error_message = "Each peer_route_table_ids entry must be a valid route table ID (e.g., rtb-0123456789abcdef0)."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

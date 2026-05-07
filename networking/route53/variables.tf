@@ -202,3 +202,9 @@ variable "dnssec_signing_status" {
     error_message = "The dnssec_signing_status must be SIGNING or NOT_SIGNING."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

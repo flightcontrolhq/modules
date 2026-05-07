@@ -835,3 +835,9 @@ variable "iam_role_associations" {
   }))
   default = {}
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

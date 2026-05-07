@@ -275,3 +275,9 @@ variable "allow_all_egress_ipv4_only" {
   description = "If true and allow_all_egress is true, only creates the IPv4 egress rule (0.0.0.0/0). Useful for VPCs without IPv6."
   default     = false
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

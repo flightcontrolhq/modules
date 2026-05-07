@@ -239,3 +239,9 @@ variable "create_bucket_policy" {
   description = "Override the default decision to create a bucket policy. When null (default), the module creates a policy if policy_templates or custom_policy is set. Set to true when passing a custom_policy whose value is known-after-apply."
   default     = null
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

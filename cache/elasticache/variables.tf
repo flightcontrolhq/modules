@@ -581,3 +581,9 @@ variable "serverless_daily_snapshot_time" {
     error_message = "The serverless_daily_snapshot_time must be in HH:MM format (e.g., 05:00)."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

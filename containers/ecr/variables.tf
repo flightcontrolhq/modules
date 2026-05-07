@@ -135,3 +135,9 @@ variable "allowed_push_principal_arns" {
   description = "A list of IAM principal ARNs granted push access (read and write) to the repository. Used to generate a repository policy when repository_policy is null."
   default     = []
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

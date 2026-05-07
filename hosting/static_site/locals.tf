@@ -1,4 +1,8 @@
 locals {
+  region = coalesce(var.region, data.aws_region.current.id)
+}
+
+locals {
   default_tags = {
     ManagedBy = "terraform"
     Module    = "hosting/static_site"

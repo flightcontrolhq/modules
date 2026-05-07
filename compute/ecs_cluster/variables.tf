@@ -664,3 +664,8 @@ variable "private_nlb_elastic_ip_allocation_ids" {
   }
 }
 
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

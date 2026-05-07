@@ -1,3 +1,7 @@
+locals {
+  region = coalesce(var.region, data.aws_region.current.id)
+}
+
 ################################################################################
 # Local Values
 ################################################################################
@@ -69,7 +73,7 @@ locals {
         logDriver = "awslogs"
         options = {
           awslogs-group         = "/ecs/${var.name}"
-          awslogs-region        = data.aws_region.current.id
+          awslogs-region        = local.region
           awslogs-stream-prefix = local.placeholder_container_name
           awslogs-create-group  = "true"
         }

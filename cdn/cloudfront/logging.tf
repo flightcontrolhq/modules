@@ -1,7 +1,7 @@
 resource "aws_s3_bucket" "logging" {
   count = var.create_logging_bucket ? 1 : 0
 
-  bucket = "${var.name}-cf-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
+  bucket = "${var.name}-cf-logs-${data.aws_caller_identity.current.account_id}-${local.region}"
   tags   = merge(local.tags, { Name = "${var.name}-cf-logs" })
 }
 

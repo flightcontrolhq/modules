@@ -349,3 +349,9 @@ variable "deploy_role_name" {
   description = "Override name for the deploy role. Defaults to '<name>-deploy'."
   default     = null
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

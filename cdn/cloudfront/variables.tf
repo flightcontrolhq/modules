@@ -414,3 +414,9 @@ variable "origin_access_control_signing_protocol" {
     error_message = "The origin_access_control_signing_protocol must be 'sigv4'."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

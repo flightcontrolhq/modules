@@ -79,3 +79,9 @@ variable "policy" {
   description = "A JSON resource policy document to attach to the secret."
   default     = null
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

@@ -738,3 +738,9 @@ variable "blue_green_update" {
   description = "Configuration for Blue/Green deployments."
   default     = null
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

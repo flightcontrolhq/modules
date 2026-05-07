@@ -84,5 +84,5 @@ output "aws_account_id" {
 
 output "region" {
   description = "The AWS region where the resources are deployed."
-  value       = data.aws_region.current.id
+  value       = local.region
 }

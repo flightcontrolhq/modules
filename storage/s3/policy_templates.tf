@@ -11,7 +11,6 @@ locals {
   # Data sources for policy templates
   #-----------------------------------------------------------------------------
   account_id      = data.aws_caller_identity.current.account_id
-  region          = data.aws_region.current.id
   elb_service_arn = data.aws_elb_service_account.current.arn
   bucket_arn      = aws_s3_bucket.this.arn
 

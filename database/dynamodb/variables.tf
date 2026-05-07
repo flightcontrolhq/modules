@@ -418,3 +418,9 @@ variable "timeouts" {
   description = "Custom timeouts for create, update, and delete operations (e.g., \"30m\")."
   default     = {}
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

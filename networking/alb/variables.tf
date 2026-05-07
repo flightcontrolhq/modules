@@ -329,3 +329,9 @@ variable "web_acl_arn" {
     error_message = "The web_acl_arn must be a valid WAFv2 Web ACL ARN."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

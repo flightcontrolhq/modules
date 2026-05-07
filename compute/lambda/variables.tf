@@ -466,3 +466,8 @@ variable "is_lambda_at_edge" {
   default     = false
 }
 
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

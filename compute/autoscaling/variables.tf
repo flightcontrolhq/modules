@@ -1351,3 +1351,9 @@ variable "instance_maintenance_policy" {
     error_message = "The max_healthy_percentage must be between 100 and 200."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

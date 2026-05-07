@@ -343,3 +343,9 @@ variable "instance_profile_path" {
     error_message = "The instance_profile_path must start and end with '/'."
   }
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}

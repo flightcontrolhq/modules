@@ -594,3 +594,8 @@ variable "ecr_enable_default_lifecycle_policy" {
   default     = false
 }
 
+variable "region" {
+  type        = string
+  description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}
