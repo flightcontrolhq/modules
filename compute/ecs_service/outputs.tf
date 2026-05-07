@@ -22,6 +22,21 @@ output "service_cluster" {
   value       = aws_ecs_service.this.cluster
 }
 
+output "cluster_name" {
+  description = "The name of the ECS cluster where the service is running."
+  value       = split("/", var.cluster_arn)[1]
+}
+
+output "aws_account_id" {
+  description = "The AWS account ID where the service is deployed."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "region" {
+  description = "The AWS region where the service is deployed."
+  value       = data.aws_region.current.id
+}
+
 ################################################################################
 # Task Definition
 ################################################################################
