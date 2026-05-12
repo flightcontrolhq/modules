@@ -129,7 +129,7 @@ module "alb" {
   enable_https_listener = true
 
   # Certificate for HTTPS
-  certificate_arn = aws_acm_certificate.this.arn
+  certificate_arns = [aws_acm_certificate.this.arn]
 
   # Enable HTTP to HTTPS redirect
   http_to_https_redirect = true

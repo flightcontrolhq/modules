@@ -34,7 +34,7 @@ module "alb" {
 
 ### ALB with HTTPS
 
-To enable HTTPS, you must set `enable_https_listener = true` and provide a `certificate_arn`:
+To enable HTTPS, you must set `enable_https_listener = true` and provide `certificate_arns`. The first ARN in the list is used as the default certificate; any additional ARNs are attached for SNI:
 
 ```hcl
 module "alb" {
@@ -45,7 +45,7 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   enable_https_listener = true
-  certificate_arn       = aws_acm_certificate.main.arn
+  certificate_arns      = [aws_acm_certificate.main.arn]
 
   tags = {
     Environment = "production"
@@ -65,7 +65,7 @@ module "alb" {
   internal   = true
 
   enable_https_listener = true
-  certificate_arn       = aws_acm_certificate.internal.arn
+  certificate_arns      = [aws_acm_certificate.internal.arn]
 }
 ```
 
@@ -80,7 +80,7 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   enable_https_listener = true
-  certificate_arn       = aws_acm_certificate.main.arn
+  certificate_arns      = [aws_acm_certificate.main.arn]
 
   # Access Logs - creates S3 bucket automatically
   enable_access_logs         = true
@@ -108,7 +108,7 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   enable_https_listener = true
-  certificate_arn       = aws_acm_certificate.main.arn
+  certificate_arns      = [aws_acm_certificate.main.arn]
 }
 
 # ECS service creates its own target group and listener rule
@@ -169,7 +169,7 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   enable_https_listener = true
-  certificate_arn       = aws_acm_certificate.main.arn
+  certificate_arns      = [aws_acm_certificate.main.arn]
 }
 
 # Create target group for EKS service
@@ -265,7 +265,7 @@ spec:
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_http_listener | Create an HTTP listener on port 80 | `bool` | `true` | no |
-| enable_https_listener | Create an HTTPS listener on port 443 (requires certificate_arn) | `bool` | `false` | no |
+| enable_https_listener | Create an HTTPS listener on port 443 (requires certificate_arns) | `bool` | `false` | no |
 | http_listener_port | The port for the HTTP listener | `number` | `80` | no |
 | https_listener_port | The port for the HTTPS listener | `number` | `443` | no |
 | http_to_https_redirect | Redirect HTTP traffic to HTTPS (when both listeners enabled) | `bool` | `true` | no |
@@ -274,9 +274,8 @@ spec:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| certificate_arn | The ARN of the ACM certificate for HTTPS listener | `string` | `null` | no |
+| certificate_arns | ACM certificate ARNs for the HTTPS listener. The first ARN is the default certificate; additional ARNs are attached for SNI | `list(string)` | `[]` | no |
 | ssl_policy | The SSL policy for the HTTPS listener | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
-| additional_certificate_arns | Additional ACM certificate ARNs for SNI | `list(string)` | `[]` | no |
 
 ### Default Action
 
@@ -419,9 +418,9 @@ spec:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │      LISTENERS              │   │         SSL/TLS                 │   │       DEFAULT ACTION                    │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • enable_http_listener      │   │ • certificate_arn               │   │ • default_action_status_code            │  ║
+║  │ • enable_http_listener      │   │ • certificate_arns              │   │ • default_action_status_code            │  ║
 ║  │ • enable_https_listener     │   │ • ssl_policy                    │   │ • default_action_content_type           │  ║
-║  │ • http_listener_port        │   │ • additional_certificate_arns   │   │ • default_action_message                │  ║
+║  │ • http_listener_port        │   │                                 │   │ • default_action_message                │  ║
 ║  │ • https_listener_port       │   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
 ║  │ • http_to_https_redirect    │                                                                                       ║
 ║  └─────────────────────────────┘                                                                                       ║
@@ -475,7 +474,7 @@ spec:
 ║    │  │ dynamic "access_logs" {...} │  (enabled when var.enable_access_logs = true)                               │    ║
 ║    │  └─────────────────────────────┘                                                                             │    ║
 ║    │                                                                                                              │    ║
-║    │  lifecycle { precondition: certificate_arn required when HTTPS enabled }                                     │    ║
+║    │  lifecycle { precondition: certificate_arns required when HTTPS enabled }                                    │    ║
 ║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
 ║                                                           │                                                            ║
 ║           ┌───────────────────────────────────────────────┼───────────────────────────────────────┐                    ║
@@ -593,9 +592,9 @@ spec:
 ║           ▼                                               ▼                               ▼                            ║
 ║  var.enable_http_listener                    var.enable_https_listener       var.enable_access_logs                   ║
 ║  var.http_listener_port                      var.https_listener_port         var.access_logs_bucket_arn               ║
-║  var.http_to_https_redirect                  var.certificate_arn             var.access_logs_retention_days           ║
+║  var.http_to_https_redirect                  var.certificate_arns            var.access_logs_retention_days           ║
 ║  var.default_action_*                        var.ssl_policy                  var.access_logs_kms_key_id               ║
-║           │                                  var.additional_certificate_arns           │                              ║
+║           │                                               │                               │                            ║
 ║           │                                               │                               │                            ║
 ║           ▼                                               ▼                               ▼                            ║
 ║  aws_lb_listener.http[0]                    aws_lb_listener.https[0]         aws_s3_bucket.access_logs[0]            ║
@@ -654,7 +653,7 @@ spec:
 enable_http_listener  = true   # Keep for redirect
 enable_https_listener = true
 http_to_https_redirect = true  # Redirect HTTP to HTTPS
-certificate_arn       = aws_acm_certificate.main.arn
+certificate_arns      = [aws_acm_certificate.main.arn]
 ```
 
 ### How do I integrate WAF with the ALB?
@@ -749,10 +748,10 @@ module "alb" {
   source = "..."
 
   enable_https_listener = true
-  certificate_arn       = aws_acm_certificate.primary.arn  # Default cert
 
-  # Additional certs for other domains
-  additional_certificate_arns = [
+  # First ARN is the default cert; the rest are attached for SNI
+  certificate_arns = [
+    aws_acm_certificate.primary.arn,
     aws_acm_certificate.domain2.arn,
     aws_acm_certificate.domain3.arn,
   ]

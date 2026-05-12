@@ -357,25 +357,14 @@ variable "public_alb_enable_https" {
   default     = false
 }
 
-variable "public_alb_certificate_arn" {
-  type        = string
-  description = "The ARN of the ACM certificate for the public ALB HTTPS listener."
-  default     = null
-
-  validation {
-    condition     = var.public_alb_certificate_arn == null || can(regex("^arn:aws:acm:", var.public_alb_certificate_arn))
-    error_message = "The public_alb_certificate_arn must be a valid ACM certificate ARN."
-  }
-}
-
-variable "public_alb_additional_certificate_arns" {
+variable "public_alb_certificate_arns" {
   type        = list(string)
-  description = "Additional ACM certificate ARNs to attach to the public ALB HTTPS listener for SNI."
+  description = "ACM certificate ARNs for the public ALB HTTPS listener. The first ARN is used as the default certificate; the rest are attached for SNI."
   default     = []
 
   validation {
-    condition     = alltrue([for arn in var.public_alb_additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
-    error_message = "All public_alb_additional_certificate_arns must be valid ACM certificate ARNs."
+    condition     = alltrue([for arn in var.public_alb_certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    error_message = "All public_alb_certificate_arns must be valid ACM certificate ARNs."
   }
 }
 
@@ -457,25 +446,14 @@ variable "private_alb_enable_https" {
   default     = false
 }
 
-variable "private_alb_certificate_arn" {
-  type        = string
-  description = "The ARN of the ACM certificate for the private ALB HTTPS listener."
-  default     = null
-
-  validation {
-    condition     = var.private_alb_certificate_arn == null || can(regex("^arn:aws:acm:", var.private_alb_certificate_arn))
-    error_message = "The private_alb_certificate_arn must be a valid ACM certificate ARN."
-  }
-}
-
-variable "private_alb_additional_certificate_arns" {
+variable "private_alb_certificate_arns" {
   type        = list(string)
-  description = "Additional ACM certificate ARNs to attach to the private ALB HTTPS listener for SNI."
+  description = "ACM certificate ARNs for the private ALB HTTPS listener. The first ARN is used as the default certificate; the rest are attached for SNI."
   default     = []
 
   validation {
-    condition     = alltrue([for arn in var.private_alb_additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
-    error_message = "All private_alb_additional_certificate_arns must be valid ACM certificate ARNs."
+    condition     = alltrue([for arn in var.private_alb_certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    error_message = "All private_alb_certificate_arns must be valid ACM certificate ARNs."
   }
 }
 

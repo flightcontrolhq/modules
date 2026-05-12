@@ -628,10 +628,10 @@ run "public_alb_with_https" {
   command = plan
 
   variables {
-    enable_public_alb          = true
-    public_subnet_ids          = ["subnet-public1", "subnet-public2"]
-    public_alb_enable_https    = true
-    public_alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    enable_public_alb           = true
+    public_subnet_ids           = ["subnet-public1", "subnet-public2"]
+    public_alb_enable_https     = true
+    public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -691,9 +691,9 @@ run "private_alb_with_https" {
   command = plan
 
   variables {
-    enable_private_alb          = true
-    private_alb_enable_https    = true
-    private_alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    enable_private_alb           = true
+    private_alb_enable_https     = true
+    private_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {

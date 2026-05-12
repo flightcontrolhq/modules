@@ -319,15 +319,16 @@ input:
         default: false
         show_when:
           enable_public_alb: true
-    - public_alb_certificate_arn:
-        type: string
-        label: "ACM Certificate ARN"
-        description: "ARN of the ACM certificate for HTTPS"
+    - public_alb_certificate_arns:
+        type: list
+        label: "ACM Certificate ARNs"
+        description: "ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI"
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
         validation:
           required: true
+          min_length: 1
           patterns:
             - pattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-z0-9-]+$"
               message: "Must be a valid ACM certificate ARN"
@@ -419,15 +420,16 @@ input:
         default: false
         show_when:
           enable_private_alb: true
-    - private_alb_certificate_arn:
-        type: string
-        label: "ACM Certificate ARN"
-        description: "ARN of the ACM certificate for HTTPS"
+    - private_alb_certificate_arns:
+        type: list
+        label: "ACM Certificate ARNs"
+        description: "ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI"
         show_when:
           enable_private_alb: true
           private_alb_enable_https: true
         validation:
           required: true
+          min_length: 1
           patterns:
             - pattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-z0-9-]+$"
               message: "Must be a valid ACM certificate ARN"

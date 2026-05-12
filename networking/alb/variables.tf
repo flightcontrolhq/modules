@@ -132,7 +132,7 @@ variable "enable_http_listener" {
 
 variable "enable_https_listener" {
   type        = bool
-  description = "Create an HTTPS listener on port 443. Requires certificate_arn to be provided."
+  description = "Create an HTTPS listener on port 443. Requires certificate_arns to be provided."
   default     = false
 }
 
@@ -168,14 +168,14 @@ variable "http_to_https_redirect" {
 # SSL/TLS
 ################################################################################
 
-variable "certificate_arn" {
-  type        = string
-  description = "The ARN of the ACM certificate for the HTTPS listener. Required if enable_https_listener is true."
-  default     = null
+variable "certificate_arns" {
+  type        = list(string)
+  description = "ACM certificate ARNs for the HTTPS listener. The first ARN is used as the default certificate; the rest are attached for SNI. Required if enable_https_listener is true."
+  default     = []
 
   validation {
-    condition     = var.certificate_arn == null || can(regex("^arn:aws:acm:", var.certificate_arn))
-    error_message = "The certificate_arn must be a valid ACM certificate ARN."
+    condition     = alltrue([for arn in var.certificate_arns : can(regex("^arn:aws:acm:", arn))])
+    error_message = "All certificate_arns must be valid ACM certificate ARNs."
   }
 }
 
@@ -183,17 +183,6 @@ variable "ssl_policy" {
   type        = string
   description = "The SSL policy for the HTTPS listener."
   default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-}
-
-variable "additional_certificate_arns" {
-  type        = list(string)
-  description = "A list of additional ACM certificate ARNs for SNI."
-  default     = []
-
-  validation {
-    condition     = alltrue([for arn in var.additional_certificate_arns : can(regex("^arn:aws:acm:", arn))])
-    error_message = "All additional_certificate_arns must be valid ACM certificate ARNs."
-  }
 }
 
 ################################################################################

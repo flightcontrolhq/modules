@@ -20,9 +20,8 @@ module "public_alb" {
   http_to_https_redirect = var.public_alb_enable_https
 
   # SSL/TLS
-  certificate_arn             = var.public_alb_certificate_arn
-  additional_certificate_arns = var.public_alb_additional_certificate_arns
-  ssl_policy                  = var.public_alb_ssl_policy
+  certificate_arns = var.public_alb_certificate_arns
+  ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings
   idle_timeout               = var.public_alb_idle_timeout
@@ -61,9 +60,8 @@ module "private_alb" {
   http_to_https_redirect = var.private_alb_enable_https
 
   # SSL/TLS
-  certificate_arn             = var.private_alb_certificate_arn
-  additional_certificate_arns = var.private_alb_additional_certificate_arns
-  ssl_policy                  = var.private_alb_ssl_policy
+  certificate_arns = var.private_alb_certificate_arns
+  ssl_policy       = var.private_alb_ssl_policy
 
   # ALB settings
   idle_timeout               = var.private_alb_idle_timeout

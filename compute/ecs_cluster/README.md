@@ -52,7 +52,7 @@ module "ecs" {
   # Public ALB with HTTPS
   enable_public_alb          = true
   public_alb_enable_https    = true
-  public_alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+  public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 }
 ```
 
@@ -117,11 +117,11 @@ module "ecs" {
   # Both ALBs
   enable_public_alb           = true
   public_alb_enable_https     = true
-  public_alb_certificate_arn  = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+  public_alb_certificate_arns  = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 
-  enable_private_alb          = true
-  private_alb_enable_https    = true
-  private_alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xyz789"
+  enable_private_alb           = true
+  private_alb_enable_https     = true
+  private_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/xyz789"]
 
   tags = {
     Environment = "production"
@@ -257,7 +257,7 @@ module "api_service" {
 |------|-------------|------|---------|----------|
 | enable_public_alb | Enable public ALB | `bool` | `false` | no |
 | public_alb_enable_https | Enable HTTPS listener | `bool` | `false` | no |
-| public_alb_certificate_arn | ACM certificate ARN for HTTPS | `string` | `null` | no |
+| public_alb_certificate_arns | ACM certificate ARNs for HTTPS. First ARN is the default certificate; the rest are attached for SNI | `list(string)` | `[]` | no |
 | public_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | public_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | public_alb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
@@ -272,7 +272,7 @@ module "api_service" {
 |------|-------------|------|---------|----------|
 | enable_private_alb | Enable private ALB | `bool` | `false` | no |
 | private_alb_enable_https | Enable HTTPS listener | `bool` | `false` | no |
-| private_alb_certificate_arn | ACM certificate ARN for HTTPS | `string` | `null` | no |
+| private_alb_certificate_arns | ACM certificate ARNs for HTTPS. First ARN is the default certificate; the rest are attached for SNI | `list(string)` | `[]` | no |
 | private_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | private_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | private_alb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
@@ -474,7 +474,7 @@ module "api_service" {
 ║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
 ║  │ • enable_public_alb                        │ • enable_private_alb                                                │  ║
 ║  │ • public_alb_enable_https                  │ • private_alb_enable_https                                          │  ║
-║  │ • public_alb_certificate_arn               │ • private_alb_certificate_arn                                       │  ║
+║  │ • public_alb_certificate_arns              │ • private_alb_certificate_arns                                      │  ║
 ║  │ • public_alb_ssl_policy                    │ • private_alb_ssl_policy                                            │  ║
 ║  │ • public_alb_idle_timeout                  │ • private_alb_idle_timeout                                          │  ║
 ║  │ • public_alb_enable_deletion_protection    │ • private_alb_enable_deletion_protection                            │  ║
@@ -882,7 +882,7 @@ module "ecs" {
   # ALB for HTTP/HTTPS traffic with path-based routing
   enable_public_alb          = true
   public_alb_enable_https    = true
-  public_alb_certificate_arn = "arn:aws:acm:..."
+  public_alb_certificate_arns = ["arn:aws:acm:..."]
 
   # NLB for TCP/UDP traffic or static IPs
   enable_public_nlb           = true

@@ -119,7 +119,7 @@ run "https_listener_enabled" {
 
   variables {
     enable_https_listener = true
-    certificate_arn       = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -144,7 +144,7 @@ run "http_to_https_redirect" {
 
   variables {
     enable_https_listener  = true
-    certificate_arn        = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
     http_to_https_redirect = true
   }
 
@@ -171,7 +171,7 @@ run "http_no_redirect" {
 
   variables {
     enable_https_listener  = true
-    certificate_arn        = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
     http_to_https_redirect = false
   }
 
@@ -188,7 +188,7 @@ run "http_listener_disabled" {
   variables {
     enable_http_listener  = false
     enable_https_listener = true
-    certificate_arn       = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -231,7 +231,7 @@ run "custom_ports" {
     http_listener_port    = 8080
     https_listener_port   = 8443
     enable_https_listener = true
-    certificate_arn       = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -401,7 +401,7 @@ run "security_group_https_ingress" {
 
   variables {
     enable_https_listener = true
-    certificate_arn       = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -460,7 +460,7 @@ run "custom_ssl_policy" {
 
   variables {
     enable_https_listener = true
-    certificate_arn       = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
     ssl_policy            = "ELBSecurityPolicy-TLS-1-2-2017-01"
   }
 
@@ -490,8 +490,8 @@ run "additional_certificates" {
 
   variables {
     enable_https_listener = true
-    certificate_arn       = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
-    additional_certificate_arns = [
+    certificate_arns = [
+      "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012",
       "arn:aws:acm:us-east-1:123456789012:certificate/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       "arn:aws:acm:us-east-1:123456789012:certificate/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
     ]
@@ -509,7 +509,7 @@ run "no_additional_certs_without_https" {
 
   variables {
     enable_https_listener = false
-    additional_certificate_arns = [
+    certificate_arns = [
       "arn:aws:acm:us-east-1:123456789012:certificate/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     ]
   }

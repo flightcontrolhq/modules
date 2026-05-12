@@ -34,7 +34,7 @@ module "ecs_cluster" {
 
   enable_public_alb       = true
   public_alb_enable_https = true
-  public_alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+  public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 }
 
 module "api_service" {

@@ -37,8 +37,8 @@ resource "aws_lb" "this" {
 
   lifecycle {
     precondition {
-      condition     = !var.enable_https_listener || var.certificate_arn != null
-      error_message = "A certificate_arn is required when enable_https_listener is true."
+      condition     = !var.enable_https_listener || length(var.certificate_arns) > 0
+      error_message = "At least one entry in certificate_arns is required when enable_https_listener is true."
     }
   }
 }
