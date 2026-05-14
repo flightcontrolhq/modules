@@ -17,12 +17,11 @@ module "code_bucket" {
 resource "aws_s3_object" "placeholder" {
   count = local.create_code_bucket ? 1 : 0
 
-  bucket      = module.code_bucket[0].bucket_id
-  key         = var.placeholder_object_key
-  source      = data.archive_file.placeholder[0].output_path
-  source_hash = data.archive_file.placeholder[0].output_base64sha256
+  bucket         = module.code_bucket[0].bucket_id
+  key            = var.placeholder_object_key
+  content_base64 = local.placeholder_zip_base64
 
   lifecycle {
-    ignore_changes = [source, source_hash, etag]
+    ignore_changes = [content_base64, etag]
   }
 }
