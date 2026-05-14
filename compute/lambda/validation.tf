@@ -19,14 +19,15 @@ check "zip_package_configuration" {
       (
         var.handler != null &&
         var.runtime != null &&
+        var.image_uri == null &&
         (
-          var.filename != null ||
-          (var.s3_bucket != null && var.s3_key != null)
-        ) &&
-        var.image_uri == null
+          (var.filename != null && var.s3_bucket == null && var.s3_key == null) ||
+          (var.filename == null && var.s3_bucket != null && var.s3_key != null) ||
+          (var.filename == null && var.s3_bucket == null && var.s3_key == null)
+        )
       )
     )
-    error_message = "For package_type 'Zip', set handler/runtime and either filename or (s3_bucket + s3_key), and do not set image_uri."
+    error_message = "For package_type 'Zip', set handler/runtime and exactly one of: filename, (s3_bucket + s3_key), or neither (the module will create a code bucket and seed a placeholder). Do not set image_uri."
   }
 }
 

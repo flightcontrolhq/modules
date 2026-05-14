@@ -20,8 +20,8 @@ resource "aws_lambda_function" "this" {
 
   filename          = var.package_type == "Zip" ? var.filename : null
   source_code_hash  = var.source_code_hash
-  s3_bucket         = var.package_type == "Zip" ? var.s3_bucket : null
-  s3_key            = var.package_type == "Zip" ? var.s3_key : null
+  s3_bucket         = var.package_type == "Zip" ? local.effective_s3_bucket : null
+  s3_key            = var.package_type == "Zip" ? local.effective_s3_key : null
   s3_object_version = var.package_type == "Zip" ? var.s3_object_version : null
 
   image_uri = var.package_type == "Image" ? var.image_uri : null

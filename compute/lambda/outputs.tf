@@ -86,6 +86,25 @@ output "function_url" {
 }
 
 ################################################################################
+# Code Bucket
+################################################################################
+
+output "code_bucket_id" {
+  description = "The name of the auto-created S3 bucket holding the deployment package, or null if not created."
+  value       = local.create_code_bucket ? module.code_bucket[0].bucket_id : null
+}
+
+output "code_bucket_arn" {
+  description = "The ARN of the auto-created S3 bucket holding the deployment package, or null if not created."
+  value       = local.create_code_bucket ? module.code_bucket[0].bucket_arn : null
+}
+
+output "code_object_key" {
+  description = "The S3 key of the initial placeholder deployment package, or null if not created."
+  value       = local.create_code_bucket ? aws_s3_object.placeholder[0].key : null
+}
+
+################################################################################
 # Account & Region
 ################################################################################
 

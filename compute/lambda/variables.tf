@@ -98,6 +98,24 @@ variable "s3_object_version" {
   default     = null
 }
 
+variable "code_bucket_name" {
+  type        = string
+  description = "Name for the auto-created S3 bucket used to store the deployment package. Only used when package_type is 'Zip' and neither filename nor s3_bucket is provided. Defaults to '<name>-code-<account_id>'."
+  default     = null
+}
+
+variable "code_bucket_force_destroy" {
+  type        = bool
+  description = "Whether the auto-created code bucket should be force-destroyed. Use with caution."
+  default     = false
+}
+
+variable "placeholder_object_key" {
+  type        = string
+  description = "S3 key for the placeholder deployment package uploaded to the auto-created code bucket."
+  default     = "placeholder.zip"
+}
+
 variable "image_uri" {
   type        = string
   description = "Container image URI for Image package type."
