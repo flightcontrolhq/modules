@@ -34,7 +34,10 @@ resource "aws_cloudfront_response_headers_policy" "html" {
 }
 
 resource "aws_cloudfront_response_headers_policy" "assets" {
-  count   = var.manage_response_headers_policies ? 1 : 0
+  count = var.manage_response_headers_policies ? 1 : 0
+
+  provider = aws.us_east_1
+
   name    = substr(replace("${var.name}-assets-rh", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   comment = "Long-lived browser cache for hashed/versioned assets (${var.name})"
 
