@@ -3,7 +3,6 @@
 ################################################################################
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
-  region = var.region
   bucket = aws_s3_bucket.this.id
 
   rule {

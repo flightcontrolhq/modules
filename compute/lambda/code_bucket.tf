@@ -17,7 +17,6 @@ module "code_bucket" {
 resource "aws_s3_object" "placeholder" {
   count = local.create_code_bucket ? 1 : 0
 
-  region         = var.region
   bucket         = module.code_bucket[0].bucket_id
   key            = var.placeholder_object_key
   content_base64 = local.placeholder_zip_base64
