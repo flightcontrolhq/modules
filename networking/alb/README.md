@@ -251,7 +251,7 @@ spec:
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | internal | If true, the ALB will be internal (not internet-facing) | `bool` | `false` | no |
-| enable_deletion_protection | Enable deletion protection on the ALB | `bool` | `false` | no |
+| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false | `bool` | `true` | no |
 | idle_timeout | The time in seconds that the connection is allowed to be idle (1-4000) | `number` | `60` | no |
 | enable_http2 | Enable HTTP/2 on the ALB | `bool` | `true` | no |
 | drop_invalid_header_fields | Drop HTTP headers with invalid header fields | `bool` | `true` | no |
@@ -391,7 +391,7 @@ spec:
 ║  │       GENERAL               │   │         NETWORK                 │   │          ALB SETTINGS                   │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
-║  │ • tags                      │   │ • subnet_ids (required, min 2)  │   │ • enable_deletion_protection            │  ║
+║  │ • tags                      │   │ • subnet_ids (required, min 2)  │   │ • deletion_protection                   │  ║
 ║  └──────────────┬──────────────┘   └─────────────────────────────────┘   │ • idle_timeout                          │  ║
 ║                 │                                                         │ • enable_http2                          │  ║
 ║                 │                                                         │ • drop_invalid_header_fields            │  ║
@@ -468,7 +468,7 @@ spec:
 ║    │  • security_groups = [module.security_group.security_group_id]                                               │    ║
 ║    │  • subnets, idle_timeout, enable_http2, drop_invalid_header_fields                                           │    ║
 ║    │  • desync_mitigation_mode, preserve_host_header, xff_header_processing_mode                                  │    ║
-║    │  • enable_waf_fail_open, enable_deletion_protection                                                          │    ║
+║    │  • enable_waf_fail_open, deletion_protection                                                                 │    ║
 ║    │                                                                                                              │    ║
 ║    │  ┌─────────────────────────────┐                                                                             │    ║
 ║    │  │ dynamic "access_logs" {...} │  (enabled when var.enable_access_logs = true)                               │    ║

@@ -152,7 +152,7 @@ module "alb" {
   web_acl_arn            = aws_wafv2_web_acl.this.arn
 
   # Disable deletion protection for test cleanup
-  enable_deletion_protection = false
+  deletion_protection = false
 
   tags = local.common_tags
 }

@@ -177,7 +177,7 @@ run "deletion_protection" {
   command = plan
 
   variables {
-    enable_deletion_protection = true
+    deletion_protection = true
   }
 
   assert {

@@ -18,6 +18,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "deletion_protection" {
+  type        = bool
+  description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers (public/private ALB and NLB) created by this module. Safe-by-default."
+  default     = true
+}
+
 ################################################################################
 # Network
 ################################################################################
@@ -385,12 +391,6 @@ variable "public_alb_idle_timeout" {
   }
 }
 
-variable "public_alb_enable_deletion_protection" {
-  type        = bool
-  description = "Enable deletion protection for the public ALB."
-  default     = false
-}
-
 variable "public_alb_ingress_cidr_blocks" {
   type        = list(string)
   description = "IPv4 CIDR blocks allowed to access the public ALB."
@@ -474,12 +474,6 @@ variable "private_alb_idle_timeout" {
   }
 }
 
-variable "private_alb_enable_deletion_protection" {
-  type        = bool
-  description = "Enable deletion protection for the private ALB."
-  default     = false
-}
-
 variable "private_alb_ingress_cidr_blocks" {
   type        = list(string)
   description = "IPv4 CIDR blocks allowed to access the private ALB."
@@ -515,12 +509,6 @@ variable "private_alb_access_logs_bucket_arn" {
 variable "enable_public_nlb" {
   type        = bool
   description = "Enable a public (internet-facing) Network Load Balancer."
-  default     = false
-}
-
-variable "public_nlb_enable_deletion_protection" {
-  type        = bool
-  description = "Enable deletion protection for the public NLB."
   default     = false
 }
 
@@ -582,12 +570,6 @@ variable "public_nlb_elastic_ip_allocation_ids" {
 variable "enable_private_nlb" {
   type        = bool
   description = "Enable a private (internal) Network Load Balancer."
-  default     = false
-}
-
-variable "private_nlb_enable_deletion_protection" {
-  type        = bool
-  description = "Enable deletion protection for the private NLB."
   default     = false
 }
 

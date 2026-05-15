@@ -15,7 +15,7 @@ resource "aws_dynamodb_table" "this" {
   stream_enabled   = var.stream_enabled || local.has_replicas
   stream_view_type = (var.stream_enabled || local.has_replicas) ? var.stream_view_type : null
 
-  deletion_protection_enabled = var.deletion_protection_enabled
+  deletion_protection_enabled = var.deletion_protection
 
   dynamic "attribute" {
     for_each = var.attributes

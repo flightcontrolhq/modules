@@ -13,6 +13,11 @@ input:
         label: "Tags"
         description: "Additional tags to assign to all resources"
         default: {}
+    - deletion_protection:
+        type: boolean
+        label: "Enable Deletion Protection"
+        description: "If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers (public/private ALB and NLB) created by this module."
+        default: true
     # Network Configuration
     - divider:
         type: divider
@@ -360,13 +365,6 @@ input:
         validation:
           min: 1
           max: 4000
-    - public_alb_enable_deletion_protection:
-        type: boolean
-        label: "Enable Deletion Protection"
-        description: "Prevent accidental deletion of the ALB"
-        default: false
-        show_when:
-          enable_public_alb: true
     - public_alb_ingress_cidr_blocks:
         type: list
         label: "Ingress CIDR Blocks"
@@ -461,13 +459,6 @@ input:
         validation:
           min: 1
           max: 4000
-    - private_alb_enable_deletion_protection:
-        type: boolean
-        label: "Enable Deletion Protection"
-        description: "Prevent accidental deletion of the ALB"
-        default: false
-        show_when:
-          enable_private_alb: true
     - private_alb_ingress_cidr_blocks:
         type: list
         label: "Ingress CIDR Blocks"

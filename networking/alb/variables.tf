@@ -57,10 +57,10 @@ variable "internal" {
   default     = false
 }
 
-variable "enable_deletion_protection" {
+variable "deletion_protection" {
   type        = bool
-  description = "Enable deletion protection on the ALB."
-  default     = false
+  description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
+  default     = true
 }
 
 variable "idle_timeout" {

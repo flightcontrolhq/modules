@@ -197,7 +197,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | internal | If true, the NLB will be internal (not internet-facing) | `bool` | `false` | no |
-| enable_deletion_protection | Enable deletion protection on the NLB | `bool` | `false` | no |
+| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false | `bool` | `true` | no |
 | enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
 | dns_record_client_routing_policy | How traffic is distributed among NLB AZs (any_availability_zone, availability_zone_affinity, partial_availability_zone_affinity) | `string` | `null` | no |
 
@@ -303,7 +303,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║  │       GENERAL               │   │      NETWORK                    │   │      NLB SETTINGS                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
-║  │ • tags                      │   │ • subnet_ids (required)         │   │ • enable_deletion_protection            │  ║
+║  │ • tags                      │   │ • subnet_ids (required)         │   │ • deletion_protection                   │  ║
 ║  └──────────────┬──────────────┘   │ • security_group_ids            │   │ • enable_cross_zone_load_balancing      │  ║
 ║                 │                  └─────────────────────────────────┘   │ • dns_record_client_routing_policy      │  ║
 ║                 │                                                        │ • enforce_security_group_inbound_rules  │  ║
@@ -435,7 +435,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║  var.subnet_ids ─────────────────────────►      │                                                                     ║
 ║  var.internal ───────────────────────────►      │                                                                     ║
 ║  var.security_group_ids ─────────────────►      │                                                                     ║
-║  var.enable_deletion_protection ─────────►      │                                                                     ║
+║  var.deletion_protection ────────────────►      │                                                                     ║
 ║  var.enable_cross_zone_load_balancing ───►      │                                                                     ║
 ║  var.dns_record_client_routing_policy ───►      │                                                                     ║
 ║  local.tags ─────────────────────────────►      │                                                                     ║

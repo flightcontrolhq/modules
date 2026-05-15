@@ -24,8 +24,8 @@ module "public_alb" {
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings
-  idle_timeout               = var.public_alb_idle_timeout
-  enable_deletion_protection = var.public_alb_enable_deletion_protection
+  idle_timeout        = var.public_alb_idle_timeout
+  deletion_protection = var.deletion_protection
 
   # Security
   ingress_cidr_blocks = var.public_alb_ingress_cidr_blocks
@@ -64,8 +64,8 @@ module "private_alb" {
   ssl_policy       = var.private_alb_ssl_policy
 
   # ALB settings
-  idle_timeout               = var.private_alb_idle_timeout
-  enable_deletion_protection = var.private_alb_enable_deletion_protection
+  idle_timeout        = var.private_alb_idle_timeout
+  deletion_protection = var.deletion_protection
 
   # Security
   ingress_cidr_blocks = var.private_alb_ingress_cidr_blocks
@@ -92,7 +92,7 @@ module "public_nlb" {
   internal   = false
 
   # NLB settings
-  enable_deletion_protection       = var.public_nlb_enable_deletion_protection
+  deletion_protection              = var.deletion_protection
   enable_cross_zone_load_balancing = var.public_nlb_enable_cross_zone_load_balancing
 
   # Security groups
@@ -124,7 +124,7 @@ module "private_nlb" {
   internal   = true
 
   # NLB settings
-  enable_deletion_protection       = var.private_nlb_enable_deletion_protection
+  deletion_protection              = var.deletion_protection
   enable_cross_zone_load_balancing = var.private_nlb_enable_cross_zone_load_balancing
 
   # Security groups

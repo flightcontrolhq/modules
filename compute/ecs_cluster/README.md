@@ -200,6 +200,7 @@ module "api_service" {
 |------|-------------|------|---------|----------|
 | name | Name prefix for all resources | `string` | n/a | yes |
 | tags | Map of tags to assign to resources | `map(string)` | `{}` | no |
+| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers created by this module | `bool` | `true` | no |
 | vpc_id | VPC ID for ECS resources | `string` | n/a | yes |
 | private_subnet_ids | Private subnet IDs for ECS tasks | `list(string)` | n/a | yes |
 | public_subnet_ids | Public subnet IDs for public ALB | `list(string)` | `[]` | no |
@@ -260,7 +261,6 @@ module "api_service" {
 | public_alb_certificate_arns | ACM certificate ARNs for HTTPS. First ARN is the default certificate; the rest are attached for SNI | `list(string)` | `[]` | no |
 | public_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | public_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
-| public_alb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
 | public_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["0.0.0.0/0"]` | no |
 | public_alb_enable_access_logs | Enable access logs | `bool` | `false` | no |
 | public_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
@@ -275,7 +275,6 @@ module "api_service" {
 | private_alb_certificate_arns | ACM certificate ARNs for HTTPS. First ARN is the default certificate; the rest are attached for SNI | `list(string)` | `[]` | no |
 | private_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | private_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
-| private_alb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
 | private_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]` | no |
 | private_alb_enable_access_logs | Enable access logs | `bool` | `false` | no |
 | private_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
@@ -285,7 +284,6 @@ module "api_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_public_nlb | Enable public NLB | `bool` | `false` | no |
-| public_nlb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
 | public_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
 | public_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
 | public_nlb_enable_access_logs | Enable access logs | `bool` | `false` | no |
@@ -298,7 +296,6 @@ module "api_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_private_nlb | Enable private NLB | `bool` | `false` | no |
-| private_nlb_enable_deletion_protection | Enable deletion protection | `bool` | `false` | no |
 | private_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
 | private_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
 | private_nlb_enable_access_logs | Enable access logs | `bool` | `false` | no |
@@ -477,7 +474,6 @@ module "api_service" {
 ║  │ • public_alb_certificate_arns              │ • private_alb_certificate_arns                                      │  ║
 ║  │ • public_alb_ssl_policy                    │ • private_alb_ssl_policy                                            │  ║
 ║  │ • public_alb_idle_timeout                  │ • private_alb_idle_timeout                                          │  ║
-║  │ • public_alb_enable_deletion_protection    │ • private_alb_enable_deletion_protection                            │  ║
 ║  │ • public_alb_ingress_cidr_blocks           │ • private_alb_ingress_cidr_blocks                                   │  ║
 ║  │ • public_alb_enable_access_logs            │ • private_alb_enable_access_logs                                    │  ║
 ║  │ • public_alb_access_logs_bucket_arn        │ • private_alb_access_logs_bucket_arn                                │  ║
@@ -486,7 +482,6 @@ module "api_service" {
 ║  │           PUBLIC NLB                       │                    PRIVATE NLB                                      │  ║
 ║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
 ║  │ • enable_public_nlb                        │ • enable_private_nlb                                                │  ║
-║  │ • public_nlb_enable_deletion_protection    │ • private_nlb_enable_deletion_protection                            │  ║
 ║  │ • public_nlb_enable_cross_zone_load_bal... │ • private_nlb_enable_cross_zone_load_balancing                      │  ║
 ║  │ • public_nlb_security_group_ids            │ • private_nlb_security_group_ids                                    │  ║
 ║  │ • public_nlb_enable_access_logs            │ • private_nlb_enable_access_logs                                    │  ║

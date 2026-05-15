@@ -221,10 +221,10 @@ variable "point_in_time_recovery_enabled" {
   default     = true
 }
 
-variable "deletion_protection_enabled" {
+variable "deletion_protection" {
   type        = bool
-  description = "Protect the table from accidental deletion."
-  default     = false
+  description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
+  default     = true
 }
 
 ################################################################################

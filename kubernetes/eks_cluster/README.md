@@ -58,7 +58,7 @@ module "eks" {
 | Name               | Version    |
 | ------------------ | ---------- |
 | opentofu/terraform | >= 1.10.0  |
-| aws                | >= 5.0     |
+| aws                | >= 6.0     |
 | tls                | >= 4.0     |
 
 ## Inputs
@@ -94,6 +94,7 @@ module "eks" {
 | pod_identity_associations | Extra `{ namespace, service_account, role_arn }` associations. | `map(object)` | `{}` | no |
 | tags | Tags applied to all created resources. | `map(string)` | `{}` | no |
 | region | AWS region override. | `string` | `null` | no |
+| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
 
 ## Outputs
 

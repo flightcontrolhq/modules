@@ -77,7 +77,7 @@ module "nlb" {
   internal = false
 
   # Disable deletion protection for test cleanup
-  enable_deletion_protection = false
+  deletion_protection = false
 
   tags = local.common_tags
 }

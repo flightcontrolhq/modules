@@ -35,6 +35,12 @@ variable "region" {
   default     = null
 }
 
+variable "deletion_protection" {
+  type        = bool
+  description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
+  default     = true
+}
+
 ################################################################################
 # Network
 ################################################################################
