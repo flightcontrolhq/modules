@@ -44,7 +44,7 @@ locals {
   create_task_role      = var.task_role_arn == null
 
 
-  # Hardcoded placeholder container definition - CodeDeploy will replace with actual application
+  # Hardcoded placeholder container definition - the external deployment controller will replace with the actual application
   container_definitions = jsonencode([
     {
       name      = local.placeholder_container_name

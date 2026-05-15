@@ -144,8 +144,13 @@ output "target_group_arns" {
 }
 
 ################################################################################
-# NLB Listener
+# Listeners
 ################################################################################
+
+output "listener_arns" {
+  description = "ARNs of the ALB listeners the service is attached to (empty if no load balancer or NLB)."
+  value       = local.enable_load_balancer ? [for rule in var.load_balancer_attachment.listener_rules : rule.listener_arn] : []
+}
 
 output "nlb_listener_arn" {
   description = "The ARN of the NLB listener created by this module (null if not using NLB)."
@@ -180,21 +185,6 @@ output "service_discovery_arn" {
 output "service_discovery_id" {
   description = "The ID of the Cloud Map service (null if service discovery disabled)."
   value       = local.enable_service_discovery ? aws_service_discovery_service.this[0].id : null
-}
-
-################################################################################
-# CodeDeploy Integration Outputs
-################################################################################
-
-output "codedeploy_config" {
-  description = "Configuration values needed for CodeDeploy blue/green deployments."
-  value = var.deployment_type == "blue_green" && local.enable_load_balancer ? {
-    cluster_name       = split("/", var.cluster_arn)[1]
-    service_name       = aws_ecs_service.this.name
-    blue_target_group  = aws_lb_target_group.tg_1[0].name
-    green_target_group = aws_lb_target_group.tg_2[0].name
-    listener_arns      = [for rule in var.load_balancer_attachment.listener_rules : rule.listener_arn]
-  } : null
 }
 
 ################################################################################

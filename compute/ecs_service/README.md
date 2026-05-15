@@ -2,12 +2,12 @@
 
 This module creates an Amazon ECS service with a placeholder task definition, load balancer integration, auto scaling, and service discovery. It supports both rolling and blue/green deployment strategies.
 
-**Note:** This module provisions infrastructure with a placeholder container (hello-world). CodeDeploy or another CI/CD tool is expected to deploy the actual application by updating the task definition.
+**Note:** This module provisions infrastructure with a placeholder container (hello-world). An external deployment controller (e.g. CodeDeploy or another CI/CD tool) is expected to deploy the actual application by updating the task definition.
 
 ## Features
 
 - ECS service with configurable deployment strategies (rolling or blue/green)
-- Placeholder task definition (hello-world) - CodeDeploy updates with actual application
+- Placeholder task definition (hello-world) - the external deployment controller updates with the actual application
 - IAM roles for task execution and task roles with optional ECS Exec support
 - Security group for ECS tasks with configurable ingress rules
 - Target group creation for ALB/NLB integration
@@ -15,7 +15,7 @@ This module creates an Amazon ECS service with a placeholder task definition, lo
 - NLB listener creation with TLS support
 - Application Auto Scaling with target tracking and scheduled scaling
 - AWS Cloud Map service discovery integration
-- Blue/green deployment infrastructure (CodeDeploy managed externally)
+- Blue/green deployment infrastructure (managed by an external deployment controller)
 - Support for EFS and Docker volume configurations
 - Capacity provider strategy support for mixed Fargate/EC2 deployments
 
@@ -80,7 +80,7 @@ module "api_service" {
   }
 }
 
-# After infrastructure is provisioned, deploy actual application via CodeDeploy
+# After infrastructure is provisioned, deploy the actual application via your external deployment controller
 ```
 
 ### Blue/Green Deployment
@@ -114,10 +114,9 @@ module "api_service" {
   }
 }
 
-# Use the outputs to configure CodeDeploy externally
+# Use the outputs to configure an external deployment controller
 # module.api_service.blue_target_group_arn
 # module.api_service.green_target_group_arn
-# module.api_service.codedeploy_config
 ```
 
 ### With Service Discovery
@@ -245,7 +244,7 @@ module "worker_service" {
 
   # Uses defaults: 256 CPU, 512 MiB memory, port 80
   # Placeholder hello-world container will be deployed initially
-  # CodeDeploy will update with actual worker container
+  # The external deployment controller will update with the actual worker container
 }
 ```
 
@@ -437,12 +436,6 @@ The `service_discovery` object includes:
 | service_discovery_arn | Cloud Map service ARN |
 | service_discovery_id | Cloud Map service ID |
 
-### CodeDeploy Integration
-
-| Name | Description |
-|------|-------------|
-| codedeploy_config | Configuration values for CodeDeploy blue/green deployments |
-
 ### Container Information
 
 | Name | Description |
@@ -606,7 +599,7 @@ The `service_discovery` object includes:
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
 ║    │ Configures: family, CPU, memory, network mode, container definitions (placeholder),                         │    ║
 ║    │             execution_role_arn, task_role_arn, runtime_platform, volumes (EFS/Docker)                       │    ║
-║    │ Lifecycle: ignore_changes = all (CodeDeploy manages updates)                                                │    ║
+║    │ Lifecycle: ignore_changes = all (external deployment controller manages updates)                            │    ║
 ║    └──────────────────────────────────────────────────────────────────────┬──────────────────────────────────────┘    ║
 ║                                                                           │                                            ║
 ║                   ┌───────────────────────────────────────────────────────┼───────────────────────────────────┐        ║
@@ -642,7 +635,7 @@ The `service_discovery` object includes:
 ║    │                       │    │ • query-string condition      │    │ • SSL policy     │   │ • Custom health check  │ ║
 ║    │ Blue/Green:           │    │ • source-ip condition         │    └──────────────────┘   └────────────────────────┘ ║
 ║    │  aws_lb_target_group  │    │ lifecycle: ignore action      │                                                      ║
-║    │   .tg_1[0] (blue)     │    │  (CodeDeploy manages)         │                                                      ║
+║    │   .tg_1[0] (blue)     │    │  (external controller swaps)  │                                                      ║
 ║    │  aws_lb_target_group  │    └───────────────────────────────┘                                                      ║
 ║    │   .tg_2[0] (green)    │                                                                                           ║
 ║    └───────────────────────┘                                                                                           ║
@@ -708,17 +701,11 @@ The `service_discovery` object includes:
 ║  └─────────────────────────────────────────┘   └─────────────────────────────────────────┘                            ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
-║  │         CODEDEPLOY CONFIG               │   │       CONTAINER INFO                    │                            ║
+║  │         CONTAINER INFO                  │   │         NLB LISTENER                    │                            ║
 ║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
-║  │ • codedeploy_config:                    │   │ • container_name                        │                            ║
-║  │   - cluster_name                        │   │ • container_port                        │                            ║
-║  │   - service_name                        │   └─────────────────────────────────────────┘                            ║
-║  │   - blue_target_group                   │                                                                          ║
-║  │   - green_target_group                  │   ┌─────────────────────────────────────────┐                            ║
-║  │   - listener_arns                       │   │         NLB LISTENER                    │                            ║
-║  └─────────────────────────────────────────┘   ├─────────────────────────────────────────┤                            ║
-║                                                │ • nlb_listener_arn                      │                            ║
-║                                                └─────────────────────────────────────────┘                            ║
+║  │ • container_name                        │   │ • nlb_listener_arn                      │                            ║
+║  │ • container_port                        │   └─────────────────────────────────────────┘                            ║
+║  └─────────────────────────────────────────┘                                                                          ║
 ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -816,16 +803,16 @@ The `service_discovery` object includes:
 The module deploys `public.ecr.aws/docker/library/hello-world:latest` as a placeholder container. This enables an **infrastructure-first provisioning workflow**:
 
 1. **Provision Infrastructure**: Terraform creates the ECS service, target groups, auto scaling, etc.
-2. **Configure CodeDeploy**: Use module outputs to set up CodeDeploy application and deployment group
-3. **Deploy Application**: CodeDeploy updates the task definition with your actual application
+2. **Configure External Deployment Controller**: Use module outputs to set up the external deployment controller (e.g. CodeDeploy application and deployment group)
+3. **Deploy Application**: The external controller updates the task definition with your actual application
 
 The placeholder container prints a message and exits, so load balancer health checks will fail until the actual application is deployed. This is expected behavior.
 
 ### When should I use rolling vs blue/green deployment?
 
-| Feature | Rolling (ECS) | Blue/Green (CodeDeploy) |
-|---------|--------------|------------------------|
-| **Complexity** | Simple | More complex (requires CodeDeploy) |
+| Feature | Rolling (ECS) | Blue/Green (external controller) |
+|---------|--------------|----------------------------------|
+| **Complexity** | Simple | More complex (requires an external deployment controller) |
 | **Rollback** | Automatic via circuit breaker | Instant traffic switch |
 | **Traffic shift** | Gradual (min/max healthy %) | All-at-once or gradual |
 | **Testing** | No pre-production testing | Test green before switching |
@@ -922,7 +909,7 @@ volumes = [
 ]
 ```
 
-Note: The placeholder task definition does not mount volumes. Your application task definition (deployed via CodeDeploy) should include the volume mounts.
+Note: The placeholder task definition does not mount volumes. Your application task definition (deployed by the external controller) should include the volume mounts.
 
 ### How do I enable ECS Exec for debugging?
 
@@ -980,15 +967,15 @@ When `capacity_provider_strategies` is set, `launch_type` is ignored.
 This module is designed for an infrastructure-first provisioning workflow:
 
 1. **Provision Infrastructure**: This module creates the ECS service with a placeholder container
-2. **Configure CodeDeploy**: Use the module outputs to set up CodeDeploy application and deployment group
-3. **Deploy Application**: CodeDeploy updates the task definition with the actual application container
+2. **Configure External Deployment Controller**: Use the module outputs to set up your external deployment controller (e.g. CodeDeploy application and deployment group)
+3. **Deploy Application**: The external controller updates the task definition with the actual application container
 
 ### Placeholder Container
 
 The module deploys the hello-world container (`public.ecr.aws/docker/library/hello-world:latest`) as a placeholder. This container prints a message and exits, so:
 - Load balancer health checks will fail until the actual application is deployed
 - This is expected behavior for infrastructure-first provisioning
-- CodeDeploy should deploy the actual application immediately after infrastructure is ready
+- The external deployment controller should deploy the actual application immediately after infrastructure is ready
 
 ## Deployment Strategies
 
@@ -1001,20 +988,20 @@ Uses the ECS deployment controller for zero-downtime rolling updates:
 
 ### Blue/Green Deployment
 
-Sets up infrastructure for CodeDeploy-managed blue/green deployments:
+Sets up infrastructure for blue/green deployments managed by an external controller:
 - Creates two target groups (tg-1 and tg-2)
 - Sets deployment controller to CODE_DEPLOY
-- Outputs all ARNs needed for CodeDeploy configuration
-- CodeDeploy application and deployment group must be managed externally
+- Outputs all ARNs needed to wire up the external controller
+- The external deployment controller (application, deployment group, etc.) must be managed outside of this module
 
 ## Notes
 
 - The module creates a security group that allows inbound traffic from the VPC CIDR on the container port
 - For Fargate tasks in public subnets without NAT, set `assign_public_ip = true`
 - The placeholder container uses hello-world from public ECR - no special permissions needed
-- For blue/green deployments, the module only creates the infrastructure; CodeDeploy must be configured separately
-- The task definition has `lifecycle { ignore_changes = all }` since CodeDeploy manages updates
-- Listener rules have `lifecycle { ignore_changes = [action] }` for blue/green deployments where CodeDeploy switches target groups
+- For blue/green deployments, the module only creates the infrastructure; the external deployment controller must be configured separately
+- The task definition has `lifecycle { ignore_changes = all }` since the external deployment controller manages updates
+- Listener rules have `lifecycle { ignore_changes = [action] }` for blue/green deployments where the external controller switches target groups
 - When using `ALBRequestCountPerTarget` metric for auto scaling, a load balancer must be configured
-- The `desired_count` defaults to 0 for infrastructure-first provisioning; CodeDeploy will manage the actual count
+- The `desired_count` defaults to 0 for infrastructure-first provisioning; the external controller will manage the actual count
 - Target group names are truncated to meet AWS naming requirements (max 32 characters)

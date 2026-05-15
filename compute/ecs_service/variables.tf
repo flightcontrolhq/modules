@@ -151,7 +151,7 @@ variable "runtime_platform" {
 
 variable "container_port" {
   type        = number
-  description = "The port the placeholder container listens on. CodeDeploy will update with actual container configuration."
+  description = "The port the placeholder container listens on. The external deployment controller will update with the actual container configuration."
   default     = 80
 
   validation {

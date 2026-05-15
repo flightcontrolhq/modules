@@ -1,6 +1,6 @@
 ################################################################################
 # ALB Listener Rules
-# For blue/green deployments, CodeDeploy manages switching between target groups
+# For blue/green deployments, an external controller manages target group switching
 ################################################################################
 
 resource "aws_lb_listener_rule" "alb" {
@@ -80,7 +80,7 @@ resource "aws_lb_listener_rule" "alb" {
     Name = "${var.name}-rule-${each.key}"
   })
 
-  # Ignore changes to action as CodeDeploy manages target group switching for blue/green
+  # Ignore changes to action as the external deployment controller manages target group switching for blue/green
   # This is a no-op for rolling deployments (nothing external modifies the action)
   lifecycle {
     ignore_changes = [action]
@@ -90,7 +90,7 @@ resource "aws_lb_listener_rule" "alb" {
 ################################################################################
 # NLB Listeners
 # For NLB, we create the listener directly (no listener rules in NLB)
-# For blue/green deployments, CodeDeploy manages switching between target groups
+# For blue/green deployments, an external controller manages target group switching
 ################################################################################
 
 resource "aws_lb_listener" "nlb" {
@@ -118,7 +118,7 @@ resource "aws_lb_listener" "nlb" {
     Name = "${var.name}-nlb-listener"
   })
 
-  # Ignore changes to default_action as CodeDeploy manages target group switching for blue/green
+  # Ignore changes to default_action as the external deployment controller manages target group switching for blue/green
   # This is a no-op for rolling deployments (nothing external modifies the action)
   lifecycle {
     ignore_changes = [default_action]
