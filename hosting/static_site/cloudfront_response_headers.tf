@@ -17,7 +17,10 @@
 ################################################################################
 
 resource "aws_cloudfront_response_headers_policy" "html" {
-  count   = var.manage_response_headers_policies ? 1 : 0
+  count = var.manage_response_headers_policies ? 1 : 0
+
+  provider = aws.us_east_1
+
   name    = substr(replace("${var.name}-html-rh", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   comment = "Short s-maxage + long SWR for HTML documents (${var.name})"
 

@@ -14,12 +14,16 @@
 ################################################################################
 
 resource "aws_cloudfront_key_value_store" "this" {
+  provider = aws.us_east_1
+
   name    = local.kvs_name
   comment = "${var.name} host -> version lookup"
 }
 
 resource "aws_cloudfrontkeyvaluestore_key" "seed" {
   for_each = local.active_kvs_seed
+
+  provider = aws.us_east_1
 
   key_value_store_arn = aws_cloudfront_key_value_store.this.arn
   key                 = each.key

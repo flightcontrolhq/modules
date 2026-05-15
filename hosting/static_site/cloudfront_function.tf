@@ -16,6 +16,8 @@ locals {
 }
 
 resource "aws_cloudfront_function" "this" {
+  provider = aws.us_east_1
+
   name    = local.cff_name
   runtime = "cloudfront-js-2.0"
   comment = "${var.name} ${var.routing} viewer-request rewriter"
