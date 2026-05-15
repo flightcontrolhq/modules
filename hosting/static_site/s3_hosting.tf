@@ -15,6 +15,7 @@ module "hosting" {
   source = "../../storage/s3"
 
   name               = var.name
+  region             = var.region
   force_destroy      = var.bucket_force_destroy
   versioning_enabled = var.bucket_versioning
   kms_key_id         = var.kms_key_arn
