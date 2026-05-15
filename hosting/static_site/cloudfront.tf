@@ -13,6 +13,10 @@
 module "cdn" {
   source = "../../cdn/cloudfront"
 
+  providers = {
+    aws = aws.us_east_1
+  }
+
   name = var.name
 
   distributions = var.distributions
