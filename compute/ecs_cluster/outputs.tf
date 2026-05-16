@@ -266,6 +266,11 @@ output "ravion_public_alb_default_cert_arn" {
   value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_cert_arn, null) : null
 }
 
+output "ravion_public_alb_default_app_domain_id" {
+  description = "App-domain id of the public ALB's auto allocation. Pass to ecs_service `ravion_parent_app_domain_id` so per-service auto-domains live under the cluster's cert."
+  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_app_domain_id, null) : null
+}
+
 # Private ALB
 output "ravion_private_alb_default_url" {
   description = "Auto-provisioned https URL for the private ALB (null if disabled)."
@@ -280,4 +285,9 @@ output "ravion_private_alb_default_fqdn" {
 output "ravion_private_alb_default_cert_arn" {
   description = "ARN of the Ravion-issued cluster cert wired as the private ALB listener default."
   value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_cert_arn, null) : null
+}
+
+output "ravion_private_alb_default_app_domain_id" {
+  description = "App-domain id of the private ALB's auto allocation. Pass to ecs_service `ravion_parent_app_domain_id` for private-routed services."
+  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_app_domain_id, null) : null
 }

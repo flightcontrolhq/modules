@@ -272,4 +272,23 @@ output "ravion_cert_status" {
   value       = length(var.domains) > 0 ? domains_module_certificate.this[0].status : null
 }
 
+################################################################################
+# Per-service auto-domain (null when var.domains is non-empty or no parent)
+################################################################################
+
+output "ravion_auto_domain_enabled" {
+  description = "Whether the per-service auto-domain (<svc>-<hash>.<cluster-fqdn>) is active."
+  value       = local.ravion_auto_domain_enabled
+}
+
+output "ravion_auto_domain_fqdn" {
+  description = "Allocated auto-FQDN under the cluster's apex. Null when the auto-domain is off (custom domains active OR no parent)."
+  value       = local.ravion_auto_domain_enabled ? domains_app_domain.auto[0].domain : null
+}
+
+output "ravion_auto_domain_url" {
+  description = "Convenience https URL for the auto-domain. Routes via cluster ALB + cluster wildcard cert."
+  value       = local.ravion_auto_domain_enabled ? "https://${domains_app_domain.auto[0].domain}" : null
+}
+
 

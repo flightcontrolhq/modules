@@ -111,3 +111,8 @@ output "ravion_alb_attachment_id" {
   description = "Opaque id of the alb_attachment resource — pass downstream callers that need to bind per-service certs to this ALB."
   value       = var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0 ? domains_alb_attachment.this[0].id : null
 }
+
+output "ravion_default_app_domain_id" {
+  description = "Opaque id of the auto-allocated app_domain inside this ALB's alb_attachment. Pass to `domains_app_domain.parent_id` on a child allocation so the cluster wildcard cert covers it without per-service ACM work."
+  value       = var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0 ? domains_alb_attachment.this[0].app_domain_id : null
+}

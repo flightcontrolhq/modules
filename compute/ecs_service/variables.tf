@@ -657,3 +657,36 @@ variable "ravion_aws_region" {
   description = "AWS region the Ravion provider should use for cert issuance. Defaults to var.region when null."
   default     = null
 }
+
+variable "ravion_parent_app_domain_id" {
+  type        = string
+  description = "Opaque app_domain id of the cluster ALB's auto allocation (cluster output `ravion_public_alb_default_app_domain_id`). When set AND var.domains is empty, this module allocates a child auto-domain `<svc>-<hash>.<cluster-fqdn>`, points it at the cluster ALB, and adds a host-routed listener rule to this service's target group. The cluster's wildcard cert covers it — no per-service ACM. Auto-retires the moment var.domains becomes non-empty."
+  default     = null
+}
+
+variable "ravion_auto_domain_listener_arn" {
+  type        = string
+  description = "ALB HTTPS listener ARN where the auto-domain's host-routing listener rule should be installed. Typically passed from the cluster module's `public_alb_https_listener_arn`. Required when ravion_parent_app_domain_id is set."
+  default     = null
+
+  validation {
+    condition     = var.ravion_auto_domain_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_auto_domain_listener_arn))
+    error_message = "The ravion_auto_domain_listener_arn must be a valid ELBv2 listener ARN."
+  }
+}
+
+variable "ravion_auto_domain_alb_dns_name" {
+  type        = string
+  description = "ALB DNS name (aws_lb.X.dns_name from the cluster ALB) used as the CNAME target for the auto-domain. Required when ravion_parent_app_domain_id is set."
+  default     = null
+}
+
+variable "ravion_auto_domain_listener_rule_priority" {
+  type        = number
+  description = "Listener rule priority (1-50000) for the auto-domain host-routing rule. Default 50000 so user listener_rules take precedence."
+  default     = 50000
+  validation {
+    condition     = var.ravion_auto_domain_listener_rule_priority >= 1 && var.ravion_auto_domain_listener_rule_priority <= 50000
+    error_message = "priority must be between 1 and 50000."
+  }
+}
