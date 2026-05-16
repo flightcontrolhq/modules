@@ -51,7 +51,7 @@ resource "aws_lb_listener" "https" {
   port              = var.https_listener_port
   protocol          = "HTTPS"
   ssl_policy        = var.ssl_policy
-  certificate_arn   = var.certificate_arns[0]
+  certificate_arn   = local.https_default_cert_arn
 
   default_action {
     type = "fixed-response"
@@ -72,7 +72,7 @@ resource "aws_lb_listener" "https" {
 ################################################################################
 
 resource "aws_lb_listener_certificate" "additional" {
-  for_each = local.create_https_listener ? toset(slice(var.certificate_arns, 1, length(var.certificate_arns))) : toset([])
+  for_each = local.create_https_listener && length(var.certificate_arns) > 1 ? toset(slice(var.certificate_arns, 1, length(var.certificate_arns))) : toset([])
 
   listener_arn    = aws_lb_listener.https[0].arn
   certificate_arn = each.value

@@ -599,3 +599,61 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Ravion-managed domains (optional)
+################################################################################
+# When `domains` is non-empty, this module declares one
+# `domains_module_certificate` that hands the FQDN list + listener ARN to
+# Ravion's API. The api-go reconciler then:
+#   1. requests an ACM cert covering every FQDN
+#   2. persists the required validation CNAMEs and exposes them in the
+#      Domains tab (the user adds them to their DNS provider)
+#   3. polls until ISSUED, then attaches the cert as an SNI cert on the
+#      cluster's HTTPS listener — no `aws_lb_listener_certificate` plumbing
+#      in user TF, no apply blocked on customer DNS
+#   4. records the cert in the DB; ON DELETE the api detaches from the
+#      listener and deletes the ACM cert
+# Pair with cluster module's `use_ravion_managed_domains = true` so the
+# listener has a default cert (cluster wildcard) that SNI can layer onto.
+
+variable "domains" {
+  type        = list(string)
+  description = "Custom FQDNs to attach to this service. Empty = service only reachable via the cluster auto-domain."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for d in var.domains : can(regex("^(?!\\*\\.)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", d))
+    ])
+    error_message = "Each domain must be a valid FQDN with no wildcard prefix (wildcards are auto-issued via the cluster cert)."
+  }
+}
+
+variable "ravion_listener_arn" {
+  type        = string
+  description = "ALB HTTPS listener ARN to attach Ravion-issued per-service certs to as SNI. Required when var.domains is non-empty. Typically passed from the cluster module's `public_alb_https_listener_arn` output."
+  default     = null
+
+  validation {
+    condition     = var.ravion_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_listener_arn))
+    error_message = "The ravion_listener_arn must be a valid ELBv2 listener ARN."
+  }
+}
+
+variable "ravion_aws_account_id" {
+  type        = string
+  description = "Ravion AwsAccount id (aws_xxx) that owns the per-service cert. Required when var.domains is non-empty."
+  default     = null
+
+  validation {
+    condition     = var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id))
+    error_message = "The ravion_aws_account_id must be a Ravion AWS account id (e.g. aws_abc123)."
+  }
+}
+
+variable "ravion_aws_region" {
+  type        = string
+  description = "AWS region the Ravion provider should use for cert issuance. Defaults to var.region when null."
+  default     = null
+}

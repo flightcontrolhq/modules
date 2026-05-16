@@ -248,4 +248,28 @@ output "region" {
   value       = local.region
 }
 
+################################################################################
+# Ravion-managed per-service domains (null when var.domains is empty)
+################################################################################
+
+output "ravion_domains" {
+  description = "FQDNs the Ravion-managed cert covers for this service."
+  value       = var.domains
+}
+
+output "ravion_cert_id" {
+  description = "Opaque ManagedCertificate id (null when no domains are configured)."
+  value       = length(var.domains) > 0 ? domains_module_certificate.this[0].id : null
+}
+
+output "ravion_cert_arn" {
+  description = "ACM ARN of the per-service cert (null when no domains; populated after Ravion issues the cert)."
+  value       = length(var.domains) > 0 ? domains_module_certificate.this[0].cert_arn : null
+}
+
+output "ravion_cert_status" {
+  description = "Cert status — PENDING_VALIDATION until DNS resolves, ISSUED once live."
+  value       = length(var.domains) > 0 ? domains_module_certificate.this[0].status : null
+}
+
 

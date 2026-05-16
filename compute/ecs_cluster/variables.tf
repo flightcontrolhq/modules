@@ -629,3 +629,45 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Ravion-managed domains (optional)
+################################################################################
+# Single toggle that flips both the public and private ALBs into Ravion-managed
+# HTTPS mode. When on:
+#   - public/private ALB modules get use_ravion_managed_domains = true
+#   - their HTTPS listeners use a Ravion-issued cluster wildcard cert as default
+#   - HTTP-to-HTTPS redirect is forced on
+#   - public_alb_certificate_arns / private_alb_certificate_arns index 0 are
+#     ignored (additional ARNs still attach as SNI)
+# Per-service domains are wired separately via the ECS service module's
+# `domains` input — those certs attach as SNI on top of the cluster cert.
+
+variable "use_ravion_managed_domains" {
+  type        = bool
+  description = "Toggle Ravion-managed default cert + auto-domain on the public AND private ALBs created by this module."
+  default     = false
+}
+
+variable "ravion_aws_account_id" {
+  type        = string
+  description = "Ravion AwsAccount id (aws_xxx) that owns the cluster cert + Route53 records. Required when use_ravion_managed_domains is true."
+  default     = null
+
+  validation {
+    condition     = var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id))
+    error_message = "The ravion_aws_account_id must be a Ravion AWS account id (e.g. aws_abc123)."
+  }
+}
+
+variable "ravion_aws_region" {
+  type        = string
+  description = "AWS region the Ravion provider should use. Defaults to var.region when null."
+  default     = null
+}
+
+variable "ravion_custom_domains" {
+  type        = list(string)
+  description = "Optional cluster-level custom domains issued at apply time. Per-service custom domains belong on the ECS service module's `domains` input instead — that path is non-blocking on customer DNS."
+  default     = []
+}

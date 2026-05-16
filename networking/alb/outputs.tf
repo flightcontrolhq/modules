@@ -82,3 +82,32 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
+
+################################################################################
+# Ravion-managed domains (null when use_ravion_managed_domains = false)
+################################################################################
+
+output "ravion_managed_domains_enabled" {
+  description = "Whether the listener's default cert + auto-domain are managed by Ravion."
+  value       = var.use_ravion_managed_domains
+}
+
+output "ravion_default_url" {
+  description = "Auto-provisioned https URL backed by the cluster wildcard cert. Null when Ravion-managed domains are off."
+  value       = var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0 ? domains_alb_attachment.this[0].default_url : null
+}
+
+output "ravion_default_fqdn" {
+  description = "Auto-provisioned FQDN (bare, no scheme). Null when Ravion-managed domains are off."
+  value       = var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0 ? domains_alb_attachment.this[0].default_fqdn : null
+}
+
+output "ravion_default_cert_arn" {
+  description = "ARN of the Ravion-issued cluster wildcard cert wired as the listener default. Null when Ravion-managed domains are off."
+  value       = var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0 ? domains_alb_attachment.this[0].default_cert_arn : null
+}
+
+output "ravion_alb_attachment_id" {
+  description = "Opaque id of the alb_attachment resource — pass downstream callers that need to bind per-service certs to this ALB."
+  value       = var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0 ? domains_alb_attachment.this[0].id : null
+}

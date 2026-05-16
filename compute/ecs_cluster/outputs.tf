@@ -240,3 +240,44 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
+
+################################################################################
+# Ravion-managed domains (null when use_ravion_managed_domains = false)
+################################################################################
+
+output "ravion_managed_domains_enabled" {
+  description = "Whether the public + private ALBs have Ravion-managed default certs."
+  value       = var.use_ravion_managed_domains
+}
+
+# Public ALB
+output "ravion_public_alb_default_url" {
+  description = "Auto-provisioned https URL for the public ALB (null if disabled)."
+  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_url, null) : null
+}
+
+output "ravion_public_alb_default_fqdn" {
+  description = "Auto-provisioned FQDN for the public ALB (null if disabled)."
+  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_fqdn, null) : null
+}
+
+output "ravion_public_alb_default_cert_arn" {
+  description = "ARN of the Ravion-issued cluster cert wired as the public ALB listener default."
+  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_cert_arn, null) : null
+}
+
+# Private ALB
+output "ravion_private_alb_default_url" {
+  description = "Auto-provisioned https URL for the private ALB (null if disabled)."
+  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_url, null) : null
+}
+
+output "ravion_private_alb_default_fqdn" {
+  description = "Auto-provisioned FQDN for the private ALB (null if disabled)."
+  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_fqdn, null) : null
+}
+
+output "ravion_private_alb_default_cert_arn" {
+  description = "ARN of the Ravion-issued cluster cert wired as the private ALB listener default."
+  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_cert_arn, null) : null
+}
