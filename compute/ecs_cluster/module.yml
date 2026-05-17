@@ -525,6 +525,97 @@ input:
             - pattern: "^arn:aws:s3:::[a-z0-9][a-z0-9.-]*$"
               message: "Must be a valid S3 bucket ARN"
 
+readme: |
+  ## ECS Cluster
+
+  Production ECS cluster with configurable capacity providers (Fargate, Fargate Spot, EC2 with managed scaling) and optional public/private Application Load Balancers + Network Load Balancers.
+
+  ### Typical wiring
+  - Wire `vpc_id` + subnet ids from the upstream VPC module via a `vpc` ref.
+  - Default capacity: Fargate (on-demand) only. Enable Fargate Spot for cost savings on stateless workloads, or EC2 capacity for GPU/large-instance tasks.
+  - Public ALB is the most common attach point for ECS services — set `enable_public_alb = true` and either supply ACM cert ARNs or flip `use_ravion_managed_domains = true` to have Ravion issue + attach a wildcard cluster cert.
+
+  ### Ravion-managed domains
+  When `use_ravion_managed_domains = true`, Ravion provisions a `*.<random>.ravion.app` wildcard cert + DNS apex and wires it as the listener default cert on both ALBs. Per-service domains live on the ECS Service module and ride on the cluster's parent app-domain via the `ravion_public_alb_default_app_domain_id` output.
+
+  ### Dashboard
+  Metrics on this dashboard query ALB request volume + latency and ECS Container Insights CPU/Memory utilization. They are only meaningful when the corresponding feature (Public ALB / Container Insights) is enabled AND a Ravion AWS account id is configured (the same id used by `use_ravion_managed_domains`).
+
+ui:
+  links:
+    - name: "ECS Console"
+      href: "https://console.aws.amazon.com/ecs/v2/clusters/<< stack.output.cluster_name >>?region=<< stack.output.region >>"
+    - name: "Public ALB"
+      href: "https://console.aws.amazon.com/ec2/home?region=<< stack.output.region >>#LoadBalancer:loadBalancerArn=<< stack.output.public_alb_arn >>"
+    - name: "Private ALB"
+      href: "https://console.aws.amazon.com/ec2/home?region=<< stack.output.region >>#LoadBalancer:loadBalancerArn=<< stack.output.private_alb_arn >>"
+    - name: "Container Insights"
+      href: "https://console.aws.amazon.com/cloudwatch/home?region=<< stack.output.region >>#container-insights:performance/ECS:Cluster?~(query~(controls~(CW*3a*3aECS.cluster~(~'<< stack.output.cluster_name >>))))"
+  metrics:
+    # Public ALB metrics — populated when enable_public_alb = true.
+    - id: public_alb_request_count
+      name: "Public ALB — Requests"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ApplicationELB
+        name: RequestCount
+        statistic: Sum
+        dimensions:
+          LoadBalancer: << stack.output.public_alb_arn_suffix >>
+    - id: public_alb_target_response_time
+      name: "Public ALB — Target Response Time (p95)"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ApplicationELB
+        name: TargetResponseTime
+        statistic: p95
+        dimensions:
+          LoadBalancer: << stack.output.public_alb_arn_suffix >>
+    - id: public_alb_5xx
+      name: "Public ALB — Target 5XX"
+      type: bar
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ApplicationELB
+        name: HTTPCode_Target_5XX_Count
+        statistic: Sum
+        dimensions:
+          LoadBalancer: << stack.output.public_alb_arn_suffix >>
+    # Cluster-level metrics from Container Insights — populated when
+    # enable_container_insights = true.
+    - id: cluster_cpu_utilization
+      name: "Cluster — CPU Utilization"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: ECS/ContainerInsights
+        name: CpuUtilized
+        statistic: Average
+        dimensions:
+          ClusterName: << stack.output.cluster_name >>
+    - id: cluster_memory_utilization
+      name: "Cluster — Memory Utilization"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: ECS/ContainerInsights
+        name: MemoryUtilized
+        statistic: Average
+        dimensions:
+          ClusterName: << stack.output.cluster_name >>
+
 output:
   # ECS Cluster
   cluster_id: string

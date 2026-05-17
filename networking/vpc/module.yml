@@ -183,6 +183,79 @@ inputs:
       label: "Enable DNS Hostnames"
       description: "Enable DNS hostnames in the VPC"
       default: true
+  # Dashboard / Metrics
+  - divider:
+      type: divider
+      label: "Dashboard"
+  - ravion_aws_account_id:
+      type: string
+      label: "Ravion AWS Account ID"
+      description: "Ravion AwsAccount id (aws_xxx) used to query CloudWatch for the metrics shown on this module's dashboard. Leave blank to disable metric queries — terraform apply still works."
+      validation:
+        patterns:
+          - pattern: "^(aws_[a-z0-9]+)?$"
+            message: "Must be a Ravion AWS account id (e.g. aws_abc123) or empty"
+
+readme: |
+  ## AWS VPC
+
+  Production-ready VPC: configurable CIDR, public + private subnets across AZs, optional NAT Gateway (single or per-AZ HA), optional IPv6 with egress-only IGW, optional VPC Flow Logs to CloudWatch or S3, and optional VPC peering.
+
+  ### Typical wiring
+  - Pass `vpc_id` + `private_subnet_ids` into an ECS Cluster module via a `vpc` ref.
+  - Enable NAT Gateway only if private workloads need outbound internet (NAT Gateway costs ~$32/mo per AZ plus per-GB data charges).
+  - Enable Flow Logs in production environments — they're cheap and invaluable during incident response.
+
+  ### Dashboard
+  Metrics on this module's dashboard query NAT Gateway throughput + connections from CloudWatch. They are only meaningful when `enable_nat_gateway = true` and a Ravion AWS account id is configured under "Dashboard".
+
+ui:
+  links:
+    - name: "VPC Console"
+      href: "https://console.aws.amazon.com/vpcconsole/home?region=<< stack.output.region >>#VpcDetails:VpcId=<< stack.output.vpc_id >>"
+    - name: "Flow Logs"
+      href: "https://console.aws.amazon.com/cloudwatch/home?region=<< stack.output.region >>#logsV2:log-groups/log-group/<< stack.output.flow_log_cloudwatch_log_group_name >>"
+  # NAT Gateway metrics: each dimension is a single NatGatewayId. The default
+  # `dimensions.NatGatewayId` template picks the first NAT in the list — fine
+  # for the single-NAT setup. HA setups (one NAT per AZ) need per-NAT charts
+  # added manually below.
+  metrics:
+    - id: nat_bytes_out_to_destination
+      name: "NAT Gateway — Bytes Out (Internet)"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/NATGateway
+        name: BytesOutToDestination
+        statistic: Sum
+        dimensions:
+          NatGatewayId: << stack.output.nat_gateway_ids >>
+    - id: nat_bytes_in_from_destination
+      name: "NAT Gateway — Bytes In (Internet)"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/NATGateway
+        name: BytesInFromDestination
+        statistic: Sum
+        dimensions:
+          NatGatewayId: << stack.output.nat_gateway_ids >>
+    - id: nat_active_connections
+      name: "NAT Gateway — Active Connections"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/NATGateway
+        name: ActiveConnectionCount
+        statistic: Maximum
+        dimensions:
+          NatGatewayId: << stack.output.nat_gateway_ids >>
 
 output:
   # General

@@ -1,0 +1,256 @@
+inputs:
+  # Service Configuration
+  - name:
+      type: string
+      label: "Name prefix"
+      description: "Unique name prefix for the ECS service + IAM roles + log group. Also used as the Flightcontrol state-backend workspace name."
+      required: true
+      immutable: true
+      validation:
+        max_length: 32
+  - region:
+      type: string
+      label: "AWS Region"
+      default: "us-east-1"
+      description: "AWS region the service runs in. Must match the upstream cluster's region."
+
+  # Upstream wiring (filled in from the cluster + VPC outputs)
+  - divider:
+      type: divider
+      label: "Upstream Wiring"
+  - vpc_id:
+      type: string
+      label: "VPC ID"
+      description: "VPC id where the service tasks run. Use the upstream VPC module's vpc_id output."
+      required: true
+      immutable: true
+      validation:
+        patterns:
+          - pattern: "^vpc-[a-z0-9]+$"
+            message: "Must be a valid VPC ID starting with 'vpc-'"
+  - subnet_ids_json:
+      type: string
+      label: "Subnet IDs (JSON)"
+      description: "JSON array of subnet IDs to place tasks in. Pass the VPC module's private_subnet_ids output (JSON-encoded)."
+      required: true
+      placeholder: '["subnet-aaa","subnet-bbb"]'
+  - cluster_arn:
+      type: string
+      label: "ECS Cluster ARN"
+      description: "ARN of the upstream ECS Cluster module's cluster."
+      required: true
+      validation:
+        patterns:
+          - pattern: "^arn:aws:ecs:[a-z0-9-]+:[0-9]+:cluster/[A-Za-z0-9_-]+$"
+            message: "Must be a valid ECS cluster ARN"
+  - load_balancer_attachment_json:
+      type: string
+      label: "Load Balancer Attachment (JSON)"
+      description: "JSON describing the target group + listener rule wiring. listener_arn comes from the cluster's public_alb_https_listener_arn output."
+      required: true
+      placeholder: '{"enabled":true,"target_group":{"port":3000,"protocol":"HTTP","target_type":"ip"},"listener_rules":[{"listener_arn":"arn:...","priority":100,"conditions":[{"type":"path-pattern","values":["/*"]}]}]}'
+
+  # Task definition
+  - divider:
+      type: divider
+      label: "Task Definition"
+  - container_port:
+      type: number
+      label: "Container port"
+      default: 3000
+      min: 1
+      max: 65535
+  - task_cpu:
+      type: number
+      label: "Task CPU units"
+      description: "Fargate task CPU. Allowed: 256, 512, 1024, 2048, 4096."
+      default: 256
+  - task_memory:
+      type: number
+      label: "Task memory (MiB)"
+      description: "Fargate task memory. Allowed: 512, 1024, 2048, 3072, 4096, ..., 30720 (paired with CPU)."
+      default: 512
+  - desired_count:
+      type: number
+      label: "Desired task count"
+      default: 1
+      min: 0
+      max: 1000
+
+  # Ravion-managed domains
+  - divider:
+      type: divider
+      label: "Ravion-Managed Domains"
+  - domains:
+      type: list
+      label: "Custom domains (FQDNs)"
+      description: "FQDNs the per-service Ravion ACM cert should cover. Leaving this empty falls back to the per-service auto-domain (<svc>-<hash>.<cluster-fqdn>) covered by the cluster wildcard cert."
+      default: []
+  - ravion_aws_account_id:
+      type: string
+      label: "Ravion AWS Account ID"
+      description: "Ravion AwsAccount id (aws_xxx). Required for any Ravion domain feature (custom cert OR auto-domain) AND to query CloudWatch for the dashboard metrics."
+      validation:
+        patterns:
+          - pattern: "^(aws_[a-z0-9]+)?$"
+            message: "Must be a Ravion AWS account id (e.g. aws_abc123) or empty"
+  - ravion_aws_region:
+      type: string
+      label: "Ravion AWS Region"
+      description: "AWS region the Ravion provider should use. Leave blank to default to the service's region."
+  - ravion_listener_arn:
+      type: string
+      label: "Custom-Domain Listener ARN"
+      description: "HTTPS listener ARN the per-service Ravion cert attaches to. Only used when `domains` is non-empty."
+      show_when:
+        domains: "!="
+
+  # Per-service auto-domain (covered by cluster wildcard cert)
+  - divider:
+      type: divider
+      label: "Per-Service Auto-Domain"
+  - ravion_parent_app_domain_id:
+      type: string
+      label: "Parent App Domain ID"
+      description: "Pass the cluster's ravion_public_alb_default_app_domain_id (or private). When set AND `domains` is empty, allocates `<svc>-<hash>.<cluster-fqdn>` covered by the cluster wildcard cert."
+  - ravion_auto_domain_listener_arn:
+      type: string
+      label: "Auto-Domain Listener ARN"
+      description: "Cluster HTTPS listener ARN where the host_header rule for the auto-domain is installed."
+  - ravion_auto_domain_alb_dns_name:
+      type: string
+      label: "Auto-Domain ALB DNS Name"
+      description: "DNS name of the cluster ALB the auto-domain ALIAS record should point at."
+  - ravion_auto_domain_listener_rule_priority:
+      type: number
+      label: "Auto-Domain Listener Rule Priority"
+      description: "Listener rule priority for the auto-domain host_header rule. Bump per service to avoid collisions."
+      default: 1000
+      min: 1
+      max: 50000
+
+readme: |
+  ## ECS Service
+
+  Fargate service that runs a containerized workload on an upstream ECS cluster. Handles task definition, target group, listener rule, security group, optional auto-scaling, optional ECR repo, optional service-discovery — plus the per-service Ravion domain wiring (custom cert and/or auto-domain).
+
+  ### Typical wiring
+  - `cluster_arn`, `load_balancer_attachment_json.listener_rules[].listener_arn` — come from the upstream ECS Cluster outputs.
+  - `vpc_id`, `subnet_ids_json` — from the upstream VPC module.
+  - Set `domains` to an FQDN list to provision a per-service ACM cert via Ravion. Leave it empty to fall back to the auto-domain path.
+  - The auto-domain path requires `ravion_parent_app_domain_id`, `ravion_auto_domain_listener_arn`, and `ravion_auto_domain_alb_dns_name`, all sourced from the cluster module's `ravion_public_alb_default_*` outputs.
+
+  ### Lifecycle notes
+  - Editing `domains` is a Requires Replace on the ACM cert (ACM does not allow SAN edits).
+  - The auto-domain (`<svc>-<hash>.<cluster-fqdn>`) is destroyed when `domains` becomes non-empty, and recreated if it goes back to empty.
+  - `task_cpu` / `task_memory` must follow Fargate's allowed combinations — TF apply fails otherwise.
+
+  ### Dashboard
+  Metrics on this dashboard query the service's CPU/Memory utilization (from CloudWatch AWS/ECS) and ALB target-side request volume + latency. They require `ravion_aws_account_id` to be set.
+
+ui:
+  links:
+    - name: "ECS Service Console"
+      href: "https://console.aws.amazon.com/ecs/v2/clusters/<< stack.output.cluster_name >>/services/<< stack.output.service_name >>/health?region=<< stack.output.region >>"
+    - name: "Task Logs"
+      href: "https://console.aws.amazon.com/cloudwatch/home?region=<< stack.output.region >>#logsV2:log-groups/log-group/<< stack.output.log_group_name >>"
+    - name: "Target Group"
+      href: "https://console.aws.amazon.com/ec2/home?region=<< stack.output.region >>#TargetGroup:targetGroupArn=<< stack.output.target_group_arn >>"
+  metrics:
+    - id: service_cpu
+      name: "Service — CPU Utilization"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ECS
+        name: CPUUtilization
+        statistic: Average
+        dimensions:
+          ClusterName: << stack.output.cluster_name >>
+          ServiceName: << stack.output.service_name >>
+    - id: service_memory
+      name: "Service — Memory Utilization"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ECS
+        name: MemoryUtilization
+        statistic: Average
+        dimensions:
+          ClusterName: << stack.output.cluster_name >>
+          ServiceName: << stack.output.service_name >>
+    - id: target_request_count
+      name: "Target Group — Requests"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ApplicationELB
+        name: RequestCountPerTarget
+        statistic: Sum
+        dimensions:
+          TargetGroup: << stack.output.target_group_arn_suffix >>
+    - id: target_response_time_p95
+      name: "Target Group — Response Time (p95)"
+      type: line
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ApplicationELB
+        name: TargetResponseTime
+        statistic: p95
+        dimensions:
+          TargetGroup: << stack.output.target_group_arn_suffix >>
+    - id: target_healthy_hosts
+      name: "Target Group — Healthy Hosts"
+      type: bar
+      source:
+        type: cloudwatch
+        aws_account_id: << module.input.ravion_aws_account_id >>
+        region: << stack.output.region >>
+        namespace: AWS/ApplicationELB
+        name: HealthyHostCount
+        statistic: Minimum
+        dimensions:
+          TargetGroup: << stack.output.target_group_arn_suffix >>
+
+output:
+  # Service
+  service_id: string
+  service_arn: string
+  service_name: string
+  service_cluster: string
+  cluster_name: string
+  # Task definition
+  task_definition_arn: string
+  task_definition_family: string
+  task_definition_revision: number
+  # IAM
+  execution_role_arn: string
+  task_role_arn: string
+  # Networking
+  security_group_id: string
+  target_group_arn: string
+  target_group_arn_suffix: string
+  target_group_name: string
+  # CloudWatch
+  log_group_name: string
+  log_stream_prefix: string
+  # Account & region
+  aws_account_id: string
+  region: string
+  # Ravion domains
+  ravion_domains:
+    - string
+  ravion_cert_id: string
+  ravion_cert_arn: string
+  ravion_cert_status: string
+  ravion_auto_domain_enabled: boolean
+  ravion_auto_domain_fqdn: string
+  ravion_auto_domain_url: string

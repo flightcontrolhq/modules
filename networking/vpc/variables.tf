@@ -77,12 +77,12 @@ variable "public_subnet_cidrs" {
   default     = null
 
   validation {
-    condition     = var.public_subnet_cidrs == null || alltrue([for cidr in var.public_subnet_cidrs : can(cidrhost(cidr, 0))])
+    condition     = try(alltrue([for cidr in var.public_subnet_cidrs : can(cidrhost(cidr, 0))]), true)
     error_message = "All public_subnet_cidrs must be valid IPv4 CIDR blocks."
   }
 
   validation {
-    condition     = var.public_subnet_cidrs == null || length(var.public_subnet_cidrs) == var.subnet_count
+    condition     = try(length(var.public_subnet_cidrs) == var.subnet_count, true)
     error_message = "The number of public_subnet_cidrs must equal subnet_count."
   }
 }
@@ -93,12 +93,12 @@ variable "private_subnet_cidrs" {
   default     = null
 
   validation {
-    condition     = var.private_subnet_cidrs == null || alltrue([for cidr in var.private_subnet_cidrs : can(cidrhost(cidr, 0))])
+    condition     = try(alltrue([for cidr in var.private_subnet_cidrs : can(cidrhost(cidr, 0))]), true)
     error_message = "All private_subnet_cidrs must be valid IPv4 CIDR blocks."
   }
 
   validation {
-    condition     = var.private_subnet_cidrs == null || length(var.private_subnet_cidrs) == var.subnet_count
+    condition     = try(length(var.private_subnet_cidrs) == var.subnet_count, true)
     error_message = "The number of private_subnet_cidrs must equal subnet_count."
   }
 }
@@ -162,12 +162,14 @@ variable "nat_gateway_eip_allocation_ids" {
 
   validation {
     condition = (
-      var.nat_gateway_eip_allocation_ids == null ||
       !var.enable_nat_gateway ||
-      length(var.nat_gateway_eip_allocation_ids) == (
-        (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability)
-        ? var.subnet_count
-        : 1
+      try(
+        length(var.nat_gateway_eip_allocation_ids) == (
+          (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability)
+          ? var.subnet_count
+          : 1
+        ),
+        true
       )
     )
     error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 for single-NAT mode, or subnet_count for HA mode (nat_gateway_high_availability = true, or deprecated single_nat_gateway = false)."
