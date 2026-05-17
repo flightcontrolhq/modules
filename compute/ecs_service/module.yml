@@ -121,6 +121,10 @@ inputs:
       type: string
       label: "Auto-Domain ALB DNS Name"
       description: "DNS name of the cluster ALB the auto-domain ALIAS record should point at."
+  - ravion_auto_domain_alb_zone_id:
+      type: string
+      label: "Auto-Domain ALB Hosted Zone ID"
+      description: "Hosted-zone id of the cluster ALB. Required to build the ALIAS record value alongside dns_name."
   - ravion_auto_domain_listener_rule_priority:
       type: number
       label: "Auto-Domain Listener Rule Priority"

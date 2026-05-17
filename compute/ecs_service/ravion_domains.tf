@@ -69,7 +69,7 @@ resource "domains_dns_record" "auto_alias" {
   type      = "ALIAS"
   value = jsonencode({
     dns_name = var.ravion_auto_domain_alb_dns_name
-    zone_id  = ""
+    zone_id  = var.ravion_auto_domain_alb_zone_id
   })
 }
 

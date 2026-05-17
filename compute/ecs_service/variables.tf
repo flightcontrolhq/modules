@@ -632,6 +632,12 @@ variable "ravion_auto_domain_alb_dns_name" {
   default     = null
 }
 
+variable "ravion_auto_domain_alb_zone_id" {
+  type        = string
+  description = "ALB hosted-zone id (aws_lb.X.zone_id from the cluster ALB) used as the ALIAS target's hosted-zone for the auto-domain. Required when ravion_parent_app_domain_id is set — server-side DNS record validation rejects ALIAS values without zone_id."
+  default     = null
+}
+
 variable "ravion_auto_domain_listener_rule_priority" {
   type        = number
   description = "Listener rule priority (1-50000) for the auto-domain host-routing rule. Default 50000 so user listener_rules take precedence."
