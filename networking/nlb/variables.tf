@@ -130,7 +130,7 @@ variable "dns_record_client_routing_policy" {
   default     = null
 
   validation {
-    condition     = var.dns_record_client_routing_policy == null || contains(["any_availability_zone", "availability_zone_affinity", "partial_availability_zone_affinity"], var.dns_record_client_routing_policy)
+    condition     = try(contains(["any_availability_zone", "availability_zone_affinity", "partial_availability_zone_affinity"], var.dns_record_client_routing_policy), true)
     error_message = "The dns_record_client_routing_policy must be 'any_availability_zone', 'availability_zone_affinity', or 'partial_availability_zone_affinity'."
   }
 }
@@ -141,7 +141,7 @@ variable "enforce_security_group_inbound_rules_on_private_link_traffic" {
   default     = null
 
   validation {
-    condition     = var.enforce_security_group_inbound_rules_on_private_link_traffic == null || contains(["on", "off"], var.enforce_security_group_inbound_rules_on_private_link_traffic)
+    condition     = try(contains(["on", "off"], var.enforce_security_group_inbound_rules_on_private_link_traffic), true)
     error_message = "The enforce_security_group_inbound_rules_on_private_link_traffic must be 'on' or 'off'."
   }
 }

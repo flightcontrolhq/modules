@@ -1336,17 +1336,19 @@ variable "instance_maintenance_policy" {
   default     = null
 
   validation {
-    condition = var.instance_maintenance_policy == null || (
+    condition = try(
       coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) >= 0 &&
-      coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) <= 100
+      coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) <= 100,
+      true
     )
     error_message = "The min_healthy_percentage must be between 0 and 100."
   }
 
   validation {
-    condition = var.instance_maintenance_policy == null || (
+    condition = try(
       coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) >= 100 &&
-      coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) <= 200
+      coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) <= 200,
+      true
     )
     error_message = "The max_healthy_percentage must be between 100 and 200."
   }
