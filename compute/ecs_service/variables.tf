@@ -307,8 +307,8 @@ variable "force_new_deployment" {
 
 variable "wait_for_steady_state" {
   type        = bool
-  description = "Wait for the service to reach a steady state before completing."
-  default     = true
+  description = "Wait for the service to reach a steady state before completing. Default false: the initial TF apply runs against the placeholder hello-world task definition (no real app image yet), which never stabilises. The deploy workflow that pushes the actual image is what waits for steady state."
+  default     = false
 }
 
 variable "health_check_grace_period_seconds" {
