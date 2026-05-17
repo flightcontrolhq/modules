@@ -152,12 +152,14 @@ For detailed information about the test architecture and adding new tests, see [
 
 ## License
 
-This project is licensed under the **MIT License**.
+This project is licensed under the **Functional Source License, Version 1.1, MIT Future License (FSL-1.1-MIT)**.
 
 See the [LICENSE](LICENSE) file for the full license text.
 
 This means:
 
-- You can use, modify, distribute, and sublicense this code
-- You must retain the copyright notice and license text in substantial portions of the software
+- You can use, copy, modify, create derivative works, publicly perform, publicly display, and redistribute this code for any permitted purpose
+- You may not use this code for a competing commercial product or service before the future license date
+- Each software version becomes available under the MIT License on the second anniversary of its release
+- You must retain copyright notices and include the license terms when redistributing copies, modifications, or derivatives
 - The software is provided "as is", without warranty

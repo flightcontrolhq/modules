@@ -1038,4 +1038,4 @@ The variable was renamed (and inverted) in a recent version. The old `single_nat
 
 ## License
 
-This module is part of the Ravion Modules library and is licensed under the MIT License.
+This module is part of the Ravion Modules library and is licensed under the Functional Source License, Version 1.1, MIT Future License (FSL-1.1-MIT).
