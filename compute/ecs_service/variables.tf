@@ -396,87 +396,34 @@ variable "allowed_cidr_blocks" {
 # Load Balancer
 ################################################################################
 
-variable "load_balancer_attachment" {
-  type = object({
-    enabled = optional(bool, true)
+variable "load_balancer_attachment_json" {
+  type        = string
+  description = <<-EOT
+    Load balancer configuration as a JSON-encoded string. The control plane
+    sends this as a string so it can template ALB/listener ARNs from
+    upstream module outputs; the module decodes it into the structured
+    object used throughout the resources (see local.load_balancer_attachment).
+    Set to null (or empty) to disable load-balancer attachment.
 
-    target_group = object({
-      port                 = number
-      protocol             = optional(string, "HTTP") # HTTP, HTTPS for ALB; TCP, UDP, TLS for NLB
-      target_type          = optional(string, "ip")
-      deregistration_delay = optional(number, 300)
-      slow_start           = optional(number, 0) # Only applicable for ALB (HTTP/HTTPS)
-
-      health_check = optional(object({
-        enabled             = optional(bool, true)
-        path                = optional(string, "/") # Only applicable for HTTP/HTTPS
-        port                = optional(string, "traffic-port")
-        protocol            = optional(string, null)
-        matcher             = optional(string, "200") # Only applicable for HTTP/HTTPS
-        interval            = optional(number, 30)
-        timeout             = optional(number, 5)
-        healthy_threshold   = optional(number, 3)
-        unhealthy_threshold = optional(number, 3)
-      }), {})
-
-      stickiness = optional(object({
-        enabled         = optional(bool, false)
-        type            = string                  # lb_cookie or app_cookie for ALB; source_ip for NLB
-        cookie_duration = optional(number, 86400) # Only applicable for ALB (lb_cookie/app_cookie)
-        cookie_name     = optional(string, null)  # Only applicable for ALB (app_cookie)
-      }), null)
-    })
-
-    # ALB: Listener rules (attach to existing ALB listener)
-    listener_rules = optional(list(object({
-      listener_arn = string
-      priority     = optional(number, null) # null = AWS auto-assigns next available priority
-
-      conditions = list(object({
-        type   = string
-        values = list(string)
-      }))
-
-      # Optional: for weighted target groups
-      weight = optional(number, 100)
-    })), [])
-
-    # NLB: Listener configuration (creates a new NLB listener)
-    nlb_listener = optional(object({
-      nlb_arn         = string           # ARN of the NLB to attach to
-      port            = number           # Listener port
-      protocol        = string           # TCP, TLS, UDP, TCP_UDP
-      certificate_arn = optional(string) # Required for TLS protocol
-      ssl_policy      = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
-      alpn_policy     = optional(string) # For TLS: HTTP1Only, HTTP2Only, etc.
-    }), null)
-
-    container_name = optional(string, null)
-    container_port = optional(number, null)
-  })
-  description = "Load balancer configuration including target group and listener rules."
+    Schema (after jsondecode):
+      {
+        "enabled": bool,
+        "target_group": {
+          "port": number,
+          "protocol": "HTTP|HTTPS|TCP|UDP|TLS|TCP_UDP|GENEVE",
+          "target_type": "ip|instance|...",
+          "deregistration_delay": number,
+          "slow_start": number,
+          "health_check": { ... },
+          "stickiness": { ... } | null
+        },
+        "listener_rules": [ { "listener_arn": ..., "priority": ..., "conditions": [...], "weight": ... }, ... ],
+        "nlb_listener": { ... } | null,
+        "container_name": string | null,
+        "container_port": number | null
+      }
+  EOT
   default     = null
-
-  validation {
-    condition = try(
-var.load_balancer_attachment == null || contains(
-      ["HTTP", "HTTPS", "TCP", "UDP", "TLS", "TCP_UDP", "GENEVE"],
-      var.load_balancer_attachment.target_group.protocol
-    )
-    , true)
-    error_message = "The protocol must be one of: HTTP, HTTPS (for ALB), or TCP, UDP, TLS, TCP_UDP, GENEVE (for NLB/GWLB)."
-  }
-
-  validation {
-    condition = try(
-var.load_balancer_attachment == null || var.load_balancer_attachment.target_group.stickiness == null || (
-      contains(["HTTP", "HTTPS"], var.load_balancer_attachment.target_group.protocol)
-      ? contains(["lb_cookie", "app_cookie"], var.load_balancer_attachment.target_group.stickiness.type)
-      : var.load_balancer_attachment.target_group.stickiness.type == "source_ip"
-    )
-    , true)
-    error_message = "Stickiness type must be 'lb_cookie' or 'app_cookie' for ALB (HTTP/HTTPS), or 'source_ip' for NLB (TCP/UDP/TLS)."
-  }
 }
 
 ################################################################################

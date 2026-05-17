@@ -5,7 +5,7 @@
 
 resource "aws_lb_listener_rule" "alb" {
   for_each = local.enable_load_balancer ? {
-    for idx, rule in var.load_balancer_attachment.listener_rules : idx => rule
+    for idx, rule in local.load_balancer_attachment.listener_rules : idx => rule
   } : {}
 
   listener_arn = each.value.listener_arn
@@ -96,14 +96,14 @@ resource "aws_lb_listener_rule" "alb" {
 resource "aws_lb_listener" "nlb" {
   count = local.enable_load_balancer && local.enable_nlb_listener ? 1 : 0
 
-  load_balancer_arn = var.load_balancer_attachment.nlb_listener.nlb_arn
-  port              = var.load_balancer_attachment.nlb_listener.port
-  protocol          = var.load_balancer_attachment.nlb_listener.protocol
+  load_balancer_arn = local.load_balancer_attachment.nlb_listener.nlb_arn
+  port              = local.load_balancer_attachment.nlb_listener.port
+  protocol          = local.load_balancer_attachment.nlb_listener.protocol
 
   # TLS-specific settings
-  certificate_arn = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.certificate_arn : null
-  ssl_policy      = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.ssl_policy : null
-  alpn_policy     = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.alpn_policy : null
+  certificate_arn = local.load_balancer_attachment.nlb_listener.protocol == "TLS" ? local.load_balancer_attachment.nlb_listener.certificate_arn : null
+  ssl_policy      = local.load_balancer_attachment.nlb_listener.protocol == "TLS" ? local.load_balancer_attachment.nlb_listener.ssl_policy : null
+  alpn_policy     = local.load_balancer_attachment.nlb_listener.protocol == "TLS" ? local.load_balancer_attachment.nlb_listener.alpn_policy : null
 
   default_action {
     type = "forward"

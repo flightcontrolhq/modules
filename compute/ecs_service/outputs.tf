@@ -149,7 +149,7 @@ output "target_group_arns" {
 
 output "listener_arns" {
   description = "ARNs of the ALB listeners the service is attached to (empty if no load balancer or NLB)."
-  value       = local.enable_load_balancer ? [for rule in var.load_balancer_attachment.listener_rules : rule.listener_arn] : []
+  value       = local.enable_load_balancer ? [for rule in local.load_balancer_attachment.listener_rules : rule.listener_arn] : []
 }
 
 output "nlb_listener_arn" {

@@ -18,11 +18,49 @@ locals {
   # Determine deployment controller type
   deployment_controller_type = var.deployment_type == "blue_green" ? "CODE_DEPLOY" : "ECS"
 
+  # The control plane sends load_balancer_attachment as a JSON-encoded string
+  # so it can template-substitute listener/ALB ARNs from upstream module
+  # outputs. Decode it once here, then merge with defaults so downstream
+  # references can rely on the fully-populated shape (the original
+  # `optional()` defaults on the variable type no longer apply post-decode).
+  load_balancer_attachment_raw = (
+    var.load_balancer_attachment_json == null || var.load_balancer_attachment_json == ""
+    ? null
+    : jsondecode(var.load_balancer_attachment_json)
+  )
+
+  load_balancer_attachment = local.load_balancer_attachment_raw == null ? null : {
+    enabled        = try(local.load_balancer_attachment_raw.enabled, true)
+    container_name = try(local.load_balancer_attachment_raw.container_name, null)
+    container_port = try(local.load_balancer_attachment_raw.container_port, null)
+    listener_rules = try(local.load_balancer_attachment_raw.listener_rules, [])
+    nlb_listener   = try(local.load_balancer_attachment_raw.nlb_listener, null)
+    target_group = {
+      port                 = local.load_balancer_attachment_raw.target_group.port
+      protocol             = try(local.load_balancer_attachment_raw.target_group.protocol, "HTTP")
+      target_type          = try(local.load_balancer_attachment_raw.target_group.target_type, "ip")
+      deregistration_delay = try(local.load_balancer_attachment_raw.target_group.deregistration_delay, 300)
+      slow_start           = try(local.load_balancer_attachment_raw.target_group.slow_start, 0)
+      health_check = {
+        enabled             = try(local.load_balancer_attachment_raw.target_group.health_check.enabled, true)
+        path                = try(local.load_balancer_attachment_raw.target_group.health_check.path, "/")
+        port                = try(local.load_balancer_attachment_raw.target_group.health_check.port, "traffic-port")
+        protocol            = try(local.load_balancer_attachment_raw.target_group.health_check.protocol, null)
+        matcher             = try(local.load_balancer_attachment_raw.target_group.health_check.matcher, "200")
+        interval            = try(local.load_balancer_attachment_raw.target_group.health_check.interval, 30)
+        timeout             = try(local.load_balancer_attachment_raw.target_group.health_check.timeout, 5)
+        healthy_threshold   = try(local.load_balancer_attachment_raw.target_group.health_check.healthy_threshold, 3)
+        unhealthy_threshold = try(local.load_balancer_attachment_raw.target_group.health_check.unhealthy_threshold, 3)
+      }
+      stickiness = try(local.load_balancer_attachment_raw.target_group.stickiness, null)
+    }
+  }
+
   # Determine if load balancer is configured
-  enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled
+  enable_load_balancer = local.load_balancer_attachment != null && local.load_balancer_attachment.enabled
 
   # Determine if NLB listener should be created (vs ALB listener rules)
-  enable_nlb_listener = local.enable_load_balancer && var.load_balancer_attachment.nlb_listener != null
+  enable_nlb_listener = local.enable_load_balancer && local.load_balancer_attachment.nlb_listener != null
 
   # Placeholder container name and port
   placeholder_container_name = "app"
@@ -30,12 +68,12 @@ locals {
 
   # Container name and port for load balancer
   lb_container_name = local.enable_load_balancer ? coalesce(
-    var.load_balancer_attachment.container_name,
+    local.load_balancer_attachment.container_name,
     local.placeholder_container_name
   ) : local.placeholder_container_name
 
   lb_container_port = local.enable_load_balancer ? coalesce(
-    var.load_balancer_attachment.container_port,
+    local.load_balancer_attachment.container_port,
     local.placeholder_container_port
   ) : null
 
