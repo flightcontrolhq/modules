@@ -24,7 +24,7 @@ resource "aws_subnet" "public" {
     }
 
     precondition {
-      condition     = var.public_subnet_cidrs == null || length(var.public_subnet_cidrs) == var.subnet_count
+      condition     = try(length(var.public_subnet_cidrs) == var.subnet_count, true)
       error_message = "The number of public_subnet_cidrs (${var.public_subnet_cidrs != null ? length(var.public_subnet_cidrs) : 0}) must match subnet_count (${var.subnet_count})."
     }
   }
@@ -51,7 +51,7 @@ resource "aws_subnet" "private" {
 
   lifecycle {
     precondition {
-      condition     = var.private_subnet_cidrs == null || length(var.private_subnet_cidrs) == var.subnet_count
+      condition     = try(length(var.private_subnet_cidrs) == var.subnet_count, true)
       error_message = "The number of private_subnet_cidrs (${var.private_subnet_cidrs != null ? length(var.private_subnet_cidrs) : 0}) must match subnet_count (${var.subnet_count})."
     }
   }
