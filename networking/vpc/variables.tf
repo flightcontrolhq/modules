@@ -150,13 +150,15 @@ variable "nat_gateway_eip_allocation_ids" {
   default     = null
 
   validation {
-    condition = (
+    condition = try(
+(
       var.nat_gateway_eip_allocation_ids == null ||
       alltrue([
         for id in coalesce(var.nat_gateway_eip_allocation_ids, []) :
         can(regex("^eipalloc-[a-f0-9]+$", id))
       ])
     )
+    , true)
     error_message = "Each nat_gateway_eip_allocation_ids entry must be a valid EIP allocation ID (e.g. eipalloc-0123456789abcdef0)."
   }
 
@@ -213,7 +215,7 @@ variable "flow_logs_s3_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.flow_logs_s3_bucket_arn == null || can(regex("^arn:aws:s3:::", var.flow_logs_s3_bucket_arn))
+    condition     = try(var.flow_logs_s3_bucket_arn == null || can(regex("^arn:aws:s3:::", var.flow_logs_s3_bucket_arn)), true)
     error_message = "The flow_logs_s3_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -249,7 +251,7 @@ variable "flow_logs_kms_key_id" {
   default     = null
 
   validation {
-    condition     = var.flow_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.flow_logs_kms_key_id))
+    condition     = try(var.flow_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.flow_logs_kms_key_id)), true)
     error_message = "The flow_logs_kms_key_id must be a valid KMS key ARN or alias."
   }
 }

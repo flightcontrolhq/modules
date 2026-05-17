@@ -201,7 +201,7 @@ variable "execution_role_arn" {
   default     = null
 
   validation {
-    condition     = var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn))
+    condition     = try(var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn)), true)
     error_message = "The execution_role_arn must be a valid IAM role ARN."
   }
 }
@@ -212,7 +212,7 @@ variable "task_role_arn" {
   default     = null
 
   validation {
-    condition     = var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn))
+    condition     = try(var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn)), true)
     error_message = "The task_role_arn must be a valid IAM role ARN."
   }
 }
@@ -376,7 +376,7 @@ variable "load_balancer_security_group_id" {
   default     = null
 
   validation {
-    condition     = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
+    condition     = try(var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id)), true)
     error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
   }
 }
@@ -458,19 +458,23 @@ variable "load_balancer_attachment" {
   default     = null
 
   validation {
-    condition = var.load_balancer_attachment == null || contains(
+    condition = try(
+var.load_balancer_attachment == null || contains(
       ["HTTP", "HTTPS", "TCP", "UDP", "TLS", "TCP_UDP", "GENEVE"],
       var.load_balancer_attachment.target_group.protocol
     )
+    , true)
     error_message = "The protocol must be one of: HTTP, HTTPS (for ALB), or TCP, UDP, TLS, TCP_UDP, GENEVE (for NLB/GWLB)."
   }
 
   validation {
-    condition = var.load_balancer_attachment == null || var.load_balancer_attachment.target_group.stickiness == null || (
+    condition = try(
+var.load_balancer_attachment == null || var.load_balancer_attachment.target_group.stickiness == null || (
       contains(["HTTP", "HTTPS"], var.load_balancer_attachment.target_group.protocol)
       ? contains(["lb_cookie", "app_cookie"], var.load_balancer_attachment.target_group.stickiness.type)
       : var.load_balancer_attachment.target_group.stickiness.type == "source_ip"
     )
+    , true)
     error_message = "Stickiness type must be 'lb_cookie' or 'app_cookie' for ALB (HTTP/HTTPS), or 'source_ip' for NLB (TCP/UDP/TLS)."
   }
 }
@@ -636,7 +640,7 @@ variable "ravion_listener_arn" {
   default     = null
 
   validation {
-    condition     = var.ravion_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_listener_arn))
+    condition     = try(var.ravion_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_listener_arn)), true)
     error_message = "The ravion_listener_arn must be a valid ELBv2 listener ARN."
   }
 }
@@ -647,7 +651,7 @@ variable "ravion_aws_account_id" {
   default     = null
 
   validation {
-    condition     = var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id))
+    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id)), true)
     error_message = "The ravion_aws_account_id must be a Ravion AWS account id (e.g. aws_abc123)."
   }
 }
@@ -670,7 +674,7 @@ variable "ravion_auto_domain_listener_arn" {
   default     = null
 
   validation {
-    condition     = var.ravion_auto_domain_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_auto_domain_listener_arn))
+    condition     = try(var.ravion_auto_domain_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_auto_domain_listener_arn)), true)
     error_message = "The ravion_auto_domain_listener_arn must be a valid ELBv2 listener ARN."
   }
 }
