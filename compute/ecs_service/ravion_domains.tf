@@ -75,7 +75,10 @@ resource "ravion_domain" "auto" {
 }
 
 # Mode B — additional resource that issues a service cert covering only
-# var.domains. Independent of the Mode A auto-FQDN.
+# var.domains. Ravion handles the SNI attach to the cluster's HTTPS listener
+# server-side via `resource_arn`: TF returns fast (cert REQUESTED), the
+# bind lands once ACM validates the cert. No separate
+# `aws_lb_listener_certificate` resource needed.
 resource "ravion_domain" "custom" {
   count = local.ravion_mode_b ? 1 : 0
 
@@ -93,6 +96,8 @@ resource "ravion_domain" "custom" {
     domains        = var.domains
   }
 
+  resource_arn = var.cluster_https_listener_arn
+
   lifecycle {
     precondition {
       condition     = var.cluster_alb_dns_name != null && var.cluster_alb_dns_name != "" && var.cluster_alb_zone_id != null && var.cluster_alb_zone_id != ""
@@ -102,15 +107,11 @@ resource "ravion_domain" "custom" {
       condition     = var.ravion_aws_account_id != null && var.ravion_aws_account_id != ""
       error_message = "Setting `domains` (Mode B) requires ravion_aws_account_id (pipe module.cluster.ravion_aws_account_id)."
     }
+    precondition {
+      condition     = var.cluster_https_listener_arn != null && var.cluster_https_listener_arn != ""
+      error_message = "Setting `domains` (Mode B) requires cluster_https_listener_arn so Ravion can attach the new cert to the ALB."
+    }
   }
-}
-
-# Mode B only: attach the service cert as SNI extra on the cluster listener.
-resource "aws_lb_listener_certificate" "ravion" {
-  count = local.ravion_mode_b && local.ravion_has_listener ? 1 : 0
-
-  listener_arn    = var.cluster_https_listener_arn
-  certificate_arn = ravion_domain.custom[0].cert_arn
 }
 
 resource "aws_lb_listener_rule" "ravion" {
