@@ -21,19 +21,15 @@ locals {
   )
 
   # Listener configuration
-  create_http_listener = var.enable_http_listener
-  # HTTPS listener is created when either the user opts in explicitly OR
-  # Ravion-managed domains are enabled (always implies HTTPS).
-  create_https_listener = var.enable_https_listener || var.use_ravion_managed_domains
+  create_http_listener  = var.enable_http_listener
+  create_https_listener = var.enable_https_listener
 
-  # Default cert for the HTTPS listener: Ravion-managed wins over the
-  # user-supplied list. Additional SNI certs are attached out-of-band by
-  # api-go's reconciler (NOT here) — keeps apply from blocking on customer DNS.
-  https_default_cert_arn = (
-    var.use_ravion_managed_domains && length(domains_alb_attachment.this) > 0
-    ? domains_alb_attachment.this[0].default_cert_arn
-    : (length(var.certificate_arns) > 0 ? var.certificate_arns[0] : null)
-  )
+  # Default cert for the HTTPS listener. Customer-supplied; first entry is
+  # the listener default, remainder attach as SNI extras (see listeners.tf).
+  # Ravion-managed service certs are wired by callers (e.g. ecs_service) as
+  # additional SNI certs via aws_lb_listener_certificate against this ALB's
+  # listener_arn output — this module does not touch listeners after create.
+  https_default_cert_arn = length(var.certificate_arns) > 0 ? var.certificate_arns[0] : null
 }
 
 

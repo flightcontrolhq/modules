@@ -15,14 +15,11 @@ module "public_alb" {
   internal   = false
 
   # Listener configuration
-  # When Ravion-managed domains are on, HTTPS + redirect are forced on; the
-  # alb module derives the default cert from Ravion's cluster cert.
   enable_http_listener   = true
-  enable_https_listener  = var.public_alb_enable_https || var.use_ravion_managed_domains
-  http_to_https_redirect = var.public_alb_enable_https || var.use_ravion_managed_domains
+  enable_https_listener  = var.public_alb_enable_https
+  http_to_https_redirect = var.public_alb_enable_https
 
-  # SSL/TLS — index 0 is ignored when use_ravion_managed_domains = true; any
-  # additional ARNs still attach as SNI certs.
+  # SSL/TLS
   certificate_arns = var.public_alb_certificate_arns
   ssl_policy       = var.public_alb_ssl_policy
 
@@ -39,13 +36,6 @@ module "public_alb" {
 
   # WAF
   web_acl_arn = var.public_alb_web_acl_arn
-
-  # Ravion-managed domains (opt-in)
-  use_ravion_managed_domains = var.use_ravion_managed_domains
-  ravion_aws_account_id      = var.ravion_aws_account_id
-  ravion_aws_region          = var.ravion_aws_region
-  ravion_slot                = "public_alb"
-  ravion_custom_domains      = var.ravion_custom_domains
 }
 
 ################################################################################
@@ -66,10 +56,10 @@ module "private_alb" {
 
   # Listener configuration
   enable_http_listener   = true
-  enable_https_listener  = var.private_alb_enable_https || var.use_ravion_managed_domains
-  http_to_https_redirect = var.private_alb_enable_https || var.use_ravion_managed_domains
+  enable_https_listener  = var.private_alb_enable_https
+  http_to_https_redirect = var.private_alb_enable_https
 
-  # SSL/TLS — index 0 is ignored when use_ravion_managed_domains = true.
+  # SSL/TLS
   certificate_arns = var.private_alb_certificate_arns
   ssl_policy       = var.private_alb_ssl_policy
 
@@ -83,14 +73,6 @@ module "private_alb" {
   # Access logs
   enable_access_logs     = var.private_alb_enable_access_logs
   access_logs_bucket_arn = var.private_alb_access_logs_bucket_arn
-
-  # Ravion-managed domains (opt-in). Same toggle as the public ALB but with a
-  # separate slot so both can coexist on the same module instance.
-  use_ravion_managed_domains = var.use_ravion_managed_domains
-  ravion_aws_account_id      = var.ravion_aws_account_id
-  ravion_aws_region          = var.ravion_aws_region
-  ravion_slot                = "private_alb"
-  ravion_custom_domains      = var.ravion_custom_domains
 }
 
 ################################################################################

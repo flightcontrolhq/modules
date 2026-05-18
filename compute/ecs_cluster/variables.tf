@@ -631,43 +631,43 @@ variable "region" {
 }
 
 ################################################################################
-# Ravion-managed domains (optional)
+# Ravion-managed cluster domain (optional)
 ################################################################################
-# Single toggle that flips both the public and private ALBs into Ravion-managed
-# HTTPS mode. When on:
-#   - public/private ALB modules get use_ravion_managed_domains = true
-#   - their HTTPS listeners use a Ravion-issued cluster wildcard cert as default
-#   - HTTP-to-HTTPS redirect is forced on
-#   - public_alb_certificate_arns / private_alb_certificate_arns index 0 are
-#     ignored (additional ARNs still attach as SNI)
-# Per-service domains are wired separately via the ECS service module's
-# `domains` input — those certs attach as SNI on top of the cluster cert.
+# Opt-in: when `use_ravion_managed_domains = true`, the cluster module
+# allocates a `ravion_domain` of its own (wildcard cert covering
+# `*.<cluster-fqdn>` + `<cluster-fqdn>`), attaches the cert to the public
+# ALB HTTPS listener as an SNI extra, and exposes the parent_id +
+# listener_arn as outputs that `ecs_service` instances consume.
+#
+# Requires `enable_public_alb = true` (the cluster domain's DNS target is
+# the public ALB).
 
 variable "use_ravion_managed_domains" {
   type        = bool
-  description = "Toggle Ravion-managed default cert + auto-domain on the public AND private ALBs created by this module."
+  description = "Allocate a Ravion-managed wildcard domain for the cluster. When true, the module creates a `ravion_domain` (wildcard cert) and binds the cert as an SNI extra on the public ALB HTTPS listener. Service modules consume `ravion_cluster_domain_id` to nest under it. Requires enable_public_alb = true."
   default     = false
+}
+
+variable "ravion_cluster_name" {
+  type        = string
+  description = "Free-form name leaf for the cluster's Ravion domain (becomes `<name>-<hash>.<platform-apex>`). Defaults to `var.name` if unset. Changing forces replacement of the Ravion domain (and a new wildcard cert)."
+  default     = null
 }
 
 variable "ravion_aws_account_id" {
   type        = string
-  description = "Ravion AwsAccount id (aws_xxx) that owns the cluster cert + Route53 records. Required when use_ravion_managed_domains is true."
+  description = "Ravion `AwsAccount` row id (e.g. `aws_abc123`) — the AWS account the wildcard ACM cert is issued in. Required when use_ravion_managed_domains = true. NOT the 12-digit AWS account number."
   default     = null
 
   validation {
-    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id)), true)
-    error_message = "The ravion_aws_account_id must be a Ravion AWS account id (e.g. aws_abc123)."
+    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_", var.ravion_aws_account_id)), true)
+    error_message = "ravion_aws_account_id must be a Ravion AwsAccount row id (starts with 'aws_')."
   }
 }
 
 variable "ravion_aws_region" {
   type        = string
-  description = "AWS region the Ravion provider should use. Defaults to var.region when null."
+  description = "AWS region the cluster wildcard cert lives in. Defaults to this module's region. Override only when issuing in a different region (e.g. us-east-1 for CloudFront viewer certs — usually irrelevant for an ALB-fronted cluster)."
   default     = null
 }
 
-variable "ravion_custom_domains" {
-  type        = list(string)
-  description = "Optional cluster-level custom domains issued at apply time. Per-service custom domains belong on the ECS service module's `domains` input instead — that path is non-blocking on customer DNS."
-  default     = []
-}

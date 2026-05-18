@@ -101,7 +101,7 @@ inputs:
   - ravion_listener_arn:
       type: string
       label: "Custom-Domain Listener ARN"
-      description: "HTTPS listener ARN the per-service Ravion cert attaches to. Only used when `domains` is non-empty."
+      description: "HTTPS listener ARN the per-service Ravion cert is bound to as an additional SNI cert. Required when `domains` is non-empty. Wire from the cluster's `public_alb_https_listener_arn` output."
       show_when:
         domains: "!="
 

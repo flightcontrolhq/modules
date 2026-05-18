@@ -552,98 +552,90 @@ variable "region" {
 }
 
 ################################################################################
-# Ravion-managed domains (optional)
+# Ravion-managed service domain (optional)
 ################################################################################
-# When `domains` is non-empty, this module declares one
-# `domains_module_certificate` that hands the FQDN list + listener ARN to
-# Ravion's API. The api-go reconciler then:
-#   1. requests an ACM cert covering every FQDN
-#   2. persists the required validation CNAMEs and exposes them in the
-#      Domains tab (the user adds them to their DNS provider)
-#   3. polls until ISSUED, then attaches the cert as an SNI cert on the
-#      cluster's HTTPS listener — no `aws_lb_listener_certificate` plumbing
-#      in user TF, no apply blocked on customer DNS
-#   4. records the cert in the DB; ON DELETE the api detaches from the
-#      listener and deletes the ACM cert
-# Pair with cluster module's `use_ravion_managed_domains = true` so the
-# listener has a default cert (cluster wildcard) that SNI can layer onto.
+# When `cluster_parent_domain_id` is set, this module declares a
+# `ravion_domain` resource that nests under the cluster's parent domain.
+# The cluster's wildcard cert covers it via SNI — no per-service ACM cert
+# is issued. A host_header listener rule on the cluster HTTPS listener
+# routes requests to this service's target group.
+#
+# The expected setup: opt the parent `ecs_cluster` module into Ravion
+# managed domains (`use_ravion_managed_domains = true`) and pipe its
+# outputs into each service:
+#
+#   module "service" {
+#     source                     = ".../compute/ecs_service"
+#     cluster_parent_domain_id   = module.cluster.ravion_cluster_domain_id
+#     cluster_https_listener_arn = module.cluster.public_alb_https_listener_arn
+#   }
+#
+# The cluster module owns the wildcard cert + the listener default-cert
+# binding; this module just adds the child domain + host_header rule.
 
-variable "domains" {
-  type        = list(string)
-  description = "Custom FQDNs to attach to this service. Empty = service only reachable via the cluster auto-domain."
-  default     = []
-
-  validation {
-    condition = alltrue([
-      for d in var.domains : can(regex("^(?!\\*\\.)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", d))
-    ])
-    error_message = "Each domain must be a valid FQDN with no wildcard prefix (wildcards are auto-issued via the cluster cert)."
-  }
+variable "cluster_parent_domain_id" {
+  type        = string
+  description = "Id of the cluster's `ravion_domain` (the one with `certificate.wildcard = true`). When set, this service allocates a child domain under it. Leave null to skip Ravion domain wiring entirely."
+  default     = null
 }
 
-variable "ravion_listener_arn" {
+variable "cluster_https_listener_arn" {
   type        = string
-  description = "ALB HTTPS listener ARN to attach Ravion-issued per-service certs to as SNI. Required when var.domains is non-empty. Typically passed from the cluster module's `public_alb_https_listener_arn` output."
+  description = "ARN of the cluster ALB's HTTPS listener. The host_header rule that routes the service's child FQDN at its target group is installed here. Required when cluster_parent_domain_id is set."
   default     = null
 
   validation {
-    condition     = try(var.ravion_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_listener_arn)), true)
-    error_message = "The ravion_listener_arn must be a valid ELBv2 listener ARN."
+    condition     = try(var.cluster_https_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.cluster_https_listener_arn)), true)
+    error_message = "cluster_https_listener_arn must be a valid ELBv2 listener ARN."
   }
+}
+
+variable "ravion_listener_rule_priority" {
+  type        = number
+  description = "Listener rule priority (1-50000) for the service's host_header rule. Default 50000 so user-declared listener_rules take precedence. Bump per service to avoid collisions within the same cluster."
+  default     = 50000
+  validation {
+    condition     = var.ravion_listener_rule_priority >= 1 && var.ravion_listener_rule_priority <= 50000
+    error_message = "priority must be between 1 and 50000."
+  }
+}
+
+variable "domains" {
+  type        = list(string)
+  description = "Customer-owned FQDNs to expose this service at (e.g. [\"api.example.com\"]). Setting this opts Mode B: a service-specific ACM cert is issued covering ONLY these domains (max 10), attached to the cluster's HTTPS listener as an SNI extra, and the host_header rule matches the customer's FQDNs instead of the auto-allocated one. The Ravion auto-FQDN is NOT created. Customer adds the ACM validation CNAMEs + the traffic CNAMEs at their own DNS provider — surfaced in the Ravion Domains tab. Empty (default) means Mode A: the service rides the cluster wildcard at the auto-allocated FQDN."
+  default     = []
+
+  validation {
+    condition     = length(var.domains) <= 10
+    error_message = "domains is capped at 10 (ACM default SAN limit; raise per-account via AWS support and bump this if needed)."
+  }
+}
+
+variable "cluster_alb_dns_name" {
+  type        = string
+  description = "Cluster ALB's DNS name (module.cluster.public_alb_dns_name). Required when `domains` is non-empty (Mode B) — used as the target for the service cert + as the recommended CNAME target in the Domains tab."
+  default     = null
+}
+
+variable "cluster_alb_zone_id" {
+  type        = string
+  description = "Cluster ALB's hosted-zone id (module.cluster.public_alb_zone_id) — the AWS-provided zone for the ALB, NOT a Route53 zone you manage. Required when `domains` is non-empty (Mode B)."
+  default     = null
 }
 
 variable "ravion_aws_account_id" {
   type        = string
-  description = "Ravion AwsAccount id (aws_xxx) that owns the per-service cert. Required when var.domains is non-empty."
+  description = "Ravion `AwsAccount` row id (e.g. `aws_abc123`) — the AWS account the service cert is issued in. Required when `domains` is non-empty (Mode B). Pipe from module.cluster.ravion_aws_account_id."
   default     = null
 
   validation {
-    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id)), true)
-    error_message = "The ravion_aws_account_id must be a Ravion AWS account id (e.g. aws_abc123)."
+    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_", var.ravion_aws_account_id)), true)
+    error_message = "ravion_aws_account_id must be a Ravion AwsAccount row id (starts with 'aws_')."
   }
 }
 
 variable "ravion_aws_region" {
   type        = string
-  description = "AWS region the Ravion provider should use for cert issuance. Defaults to var.region when null."
+  description = "AWS region the service cert lives in. Defaults to the cluster's region. Required (or defaultable) when `domains` is non-empty (Mode B)."
   default     = null
-}
-
-variable "ravion_parent_app_domain_id" {
-  type        = string
-  description = "Opaque app_domain id of the cluster ALB's auto allocation (cluster output `ravion_public_alb_default_app_domain_id`). When set AND var.domains is empty, this module allocates a child auto-domain `<svc>-<hash>.<cluster-fqdn>`, points it at the cluster ALB, and adds a host-routed listener rule to this service's target group. The cluster's wildcard cert covers it — no per-service ACM. Auto-retires the moment var.domains becomes non-empty."
-  default     = null
-}
-
-variable "ravion_auto_domain_listener_arn" {
-  type        = string
-  description = "ALB HTTPS listener ARN where the auto-domain's host-routing listener rule should be installed. Typically passed from the cluster module's `public_alb_https_listener_arn`. Required when ravion_parent_app_domain_id is set."
-  default     = null
-
-  validation {
-    condition     = try(var.ravion_auto_domain_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.ravion_auto_domain_listener_arn)), true)
-    error_message = "The ravion_auto_domain_listener_arn must be a valid ELBv2 listener ARN."
-  }
-}
-
-variable "ravion_auto_domain_alb_dns_name" {
-  type        = string
-  description = "ALB DNS name (aws_lb.X.dns_name from the cluster ALB) used as the CNAME target for the auto-domain. Required when ravion_parent_app_domain_id is set."
-  default     = null
-}
-
-variable "ravion_auto_domain_alb_zone_id" {
-  type        = string
-  description = "ALB hosted-zone id (aws_lb.X.zone_id from the cluster ALB) used as the ALIAS target's hosted-zone for the auto-domain. Required when ravion_parent_app_domain_id is set — server-side DNS record validation rejects ALIAS values without zone_id."
-  default     = null
-}
-
-variable "ravion_auto_domain_listener_rule_priority" {
-  type        = number
-  description = "Listener rule priority (1-50000) for the auto-domain host-routing rule. Default 50000 so user listener_rules take precedence."
-  default     = 50000
-  validation {
-    condition     = var.ravion_auto_domain_listener_rule_priority >= 1 && var.ravion_auto_domain_listener_rule_priority <= 50000
-    error_message = "priority must be between 1 and 50000."
-  }
 }
