@@ -325,7 +325,50 @@ variable "region" {
   default     = null
 }
 
-# Ravion domain wiring lives in callers (e.g. ecs_service) — they declare
-# `ravion_domain` resources and attach the resulting cert ARNs to this
-# ALB's https listener via `aws_lb_listener_certificate`. The ALB module
-# does not own any Ravion-side state.
+################################################################################
+# Ravion-managed domains (optional)
+################################################################################
+# Opt-in plug-and-play HTTPS. When enabled, this module declares a
+# `domains_alb_attachment` resource that:
+#   - allocates an FQDN under the platform apex (auto-domain)
+#   - issues the cluster wildcard ACM cert in the customer AWS account
+#   - writes the A-ALIAS pointing the auto-domain at this ALB
+#   - wires the cert as the listener's default — `var.certificate_arns` is
+#     ignored when this is true
+# Per-service certs for custom domains are added later via the ECS service
+# module's `domains` input (or any other caller of `domains_module_certificate`).
+
+variable "use_ravion_managed_domains" {
+  type        = bool
+  description = "When true, provision the listener's default cert + DNS via Ravion's domain control plane instead of supplying your own ACM ARNs. Implies enable_https_listener = true."
+  default     = false
+}
+
+variable "ravion_aws_account_id" {
+  type        = string
+  description = "Ravion AwsAccount id (aws_xxx) that owns the ACM cert + Route53 records. Required when use_ravion_managed_domains is true."
+  default     = null
+
+  validation {
+    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_[a-z0-9]+$", var.ravion_aws_account_id)), true)
+    error_message = "The ravion_aws_account_id must be a Ravion AWS account id (e.g. aws_abc123)."
+  }
+}
+
+variable "ravion_aws_region" {
+  type        = string
+  description = "AWS region the Ravion provider should use for ACM + Route53. Defaults to var.region when null."
+  default     = null
+}
+
+variable "ravion_slot" {
+  type        = string
+  description = "Slot label passed to `domains_app_domain` — disambiguates multiple ALBs allocated under the same module instance. Re-applying with the same slot returns the existing allocation."
+  default     = "public_alb"
+}
+
+variable "ravion_custom_domains" {
+  type        = list(string)
+  description = "Optional FQDNs to issue per-domain ACM certs for during the alb_attachment apply. Empty by default — most callers attach per-service certs through the ECS service module's `domains` input instead."
+  default     = []
+}

@@ -308,8 +308,39 @@ input:
         default: []
         show_when:
           ec2_instance_type: "!="
-    # Ravion domain wiring lives on each ecs_service module instance now —
-    # the cluster module is pure-AWS and owns no Ravion state.
+    # Ravion-managed domains
+    - divider:
+        type: divider
+        label: "Ravion-Managed Domains"
+    - use_ravion_managed_domains:
+        type: boolean
+        label: "Use Ravion-managed domains"
+        description: "Provision the public + private ALB default certs and the auto-domain (https://<random>.ravion.app) via Ravion's domain control plane. When on, you don't supply ACM cert ARNs — Ravion issues + attaches a cluster wildcard cert. Per-service custom domains are wired separately on the ECS service module."
+        default: false
+    - ravion_aws_account_id:
+        type: string
+        label: "Ravion AWS Account ID"
+        description: "Ravion AwsAccount id (aws_xxx) that owns the cluster cert + Route53 records."
+        show_when:
+          use_ravion_managed_domains: true
+        validation:
+          required: true
+          patterns:
+            - pattern: "^aws_[a-z0-9]+$"
+              message: "Must be a Ravion AWS account id (e.g. aws_abc123)"
+    - ravion_aws_region:
+        type: string
+        label: "Ravion AWS Region"
+        description: "AWS region the Ravion provider should use. Leave blank to default to the cluster's region."
+        show_when:
+          use_ravion_managed_domains: true
+    - ravion_custom_domains:
+        type: list
+        label: "Cluster-level custom domains (optional)"
+        description: "FQDNs issued at apply time. Most callers leave this empty and use the ECS service module's `domains` input instead — that path is non-blocking on customer DNS."
+        default: []
+        show_when:
+          use_ravion_managed_domains: true
     # Public ALB
     - divider:
         type: divider
@@ -334,6 +365,7 @@ input:
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
+          use_ravion_managed_domains: false
         validation:
           required: true
           min_length: 1
@@ -429,6 +461,7 @@ input:
         show_when:
           enable_private_alb: true
           private_alb_enable_https: true
+          use_ravion_managed_domains: false
         validation:
           required: true
           min_length: 1

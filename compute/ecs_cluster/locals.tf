@@ -57,9 +57,6 @@ locals {
     [var.ec2_instance_type],
     var.ec2_spot_instance_types
   ) : []
-
-  # Ravion-managed cluster domain requires the public ALB (target + listener).
-  enable_ravion_domain = var.use_ravion_managed_domains && var.enable_public_alb
 }
 
 
