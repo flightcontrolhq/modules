@@ -33,10 +33,19 @@ locals {
   ravion_has_listener = var.cluster_https_listener_arn != null && var.cluster_https_listener_arn != ""
   ravion_mode_b       = local.ravion_managed && length(var.domains) > 0
 
-  # Listener rule matches BOTH the auto-FQDN AND each customer FQDN so
-  # the auto-FQDN keeps working until the customer's DNS is verified.
+  # Cutover signal from Ravion. Defaults to false (auto-FQDN stays) for
+  # every state EXCEPT "allocation released AND at least one sibling
+  # custom-domain routing record is MATCHED". Once it flips true, the
+  # auto resource's count goes to 0 and TF plans a clean destroy on the
+  # next apply.
+  ravion_auto_retired = local.ravion_managed ? try(data.ravion_auto_domain_status.auto[0].retired, false) : false
+
+  # Listener rule matches the auto-FQDN (when not yet retired) plus
+  # every customer FQDN. Two-step cutover at the TF layer:
+  #   1) Add `domains` → host_header = [auto, customer]
+  #   2) Customer DNS resolves → Ravion retires → host_header = [customer]
   ravion_host_header_values = concat(
-    local.ravion_managed ? [ravion_domain.auto[0].fqdn] : [],
+    [for r in ravion_domain.auto : r.fqdn],
     local.ravion_mode_b ? var.domains : [],
   )
 
@@ -47,10 +56,19 @@ locals {
   )
 }
 
-# Mode A — always allocated when the cluster domain is wired. Rides the
-# cluster wildcard cert via SNI; no new ACM cert.
-resource "ravion_domain" "auto" {
+# Read cutover status from Ravion every plan. Independent of the auto
+# resource's own state — avoids the count-depends-on-self chicken-and-egg.
+data "ravion_auto_domain_status" "auto" {
   count = local.ravion_managed ? 1 : 0
+
+  parent_domain_id = var.cluster_parent_domain_id
+  name             = var.name
+}
+
+# Mode A — allocated when the cluster domain is wired AND Ravion hasn't
+# retired this slot. After cutover, count → 0 → TF destroys naturally.
+resource "ravion_domain" "auto" {
+  count = local.ravion_managed && !local.ravion_auto_retired ? 1 : 0
 
   name      = var.name
   parent_id = var.cluster_parent_domain_id
