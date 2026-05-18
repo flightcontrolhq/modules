@@ -37,8 +37,8 @@ resource "aws_lb" "this" {
 
   lifecycle {
     precondition {
-      condition     = !var.enable_https_listener || var.use_ravion_managed_domains || length(var.certificate_arns) > 0
-      error_message = "At least one entry in certificate_arns is required when enable_https_listener is true (unless use_ravion_managed_domains = true, in which case Ravion supplies the default cert)."
+      condition     = !var.enable_https_listener || length(var.certificate_arns) > 0
+      error_message = "At least one entry in certificate_arns is required when enable_https_listener is true."
     }
   }
 }
