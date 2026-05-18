@@ -964,4 +964,72 @@ The module automatically creates a security group for EC2 instances that:
 - ALBs require at least 2 subnets in different availability zones
 - The `name` variable is limited to 28 characters to ensure ALB names don't exceed AWS limits
 - EBS volumes on EC2 instances are encrypted by default
+
+## Ravion-managed cluster domain (optional)
+
+Opt the cluster into a Ravion-allocated wildcard hostname + ACM cert by
+setting `use_ravion_managed_domains = true`. The module:
+
+1. Allocates a `ravion_domain` for the cluster
+   (`<ravion_cluster_name>-<hash>.<platform-apex>`).
+2. Issues a wildcard ACM cert (`*.<cluster-fqdn>` + `<cluster-fqdn>`) in
+   the AWS account identified by `ravion_aws_account_id`.
+3. Binds that cert to the public ALB HTTPS listener as an **SNI extra**
+   (the listener's default cert remains whatever `public_alb_certificate_arns`
+   provides — safe to opt in).
+4. Exposes outputs so each `ecs_service` can nest under the cluster
+   (default Mode A) and/or declare its own custom-domain cert (Mode B).
+
+The cluster cert covers only the wildcard pair. **Customer-owned FQDNs
+are declared per-service** via `ecs_service.domains` — each service that
+adds custom domains gets its OWN ACM cert covering only those FQDNs,
+attached to the cluster listener as an SNI extra. See the ecs_service
+module README for the per-service flow.
+
+```hcl
+module "cluster" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+
+  name              = "elysia"
+  vpc_id            = var.vpc_id
+  private_subnet_ids = var.private_subnet_ids
+  public_subnet_ids  = var.public_subnet_ids
+
+  enable_public_alb       = true
+  public_alb_enable_https = true
+
+  # Ravion-managed domain
+  use_ravion_managed_domains = true
+  ravion_aws_account_id      = "aws_abc123"          # Ravion AwsAccount row id
+}
+
+# Mode A: rides cluster wildcard (no custom domains).
+module "api" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+
+  name = "api"
+  # ...
+  cluster_parent_domain_id   = module.cluster.ravion_cluster_domain_id
+  cluster_https_listener_arn = module.cluster.public_alb_https_listener_arn
+}
+
+# Mode B: own cert covering customer-owned FQDNs.
+module "checkout" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+
+  name = "checkout"
+  # ...
+  cluster_parent_domain_id   = module.cluster.ravion_cluster_domain_id
+  cluster_https_listener_arn = module.cluster.public_alb_https_listener_arn
+  cluster_alb_dns_name       = module.cluster.public_alb_dns_name
+  cluster_alb_zone_id        = module.cluster.public_alb_zone_id
+  ravion_aws_account_id      = module.cluster.ravion_aws_account_id
+  ravion_aws_region          = module.cluster.ravion_aws_region
+  domains                    = ["checkout.example.com"]
+}
+```
+
+After apply:
+- `module.api` → reachable at `https://api-<hash>.<cluster-fqdn>` (rides cluster wildcard).
+- `module.checkout` → reachable at `https://checkout.example.com` once the customer adds DNS records (own cert; auto-FQDN NOT allocated).
 - Managed termination protection prevents ECS from terminating instances with running tasks

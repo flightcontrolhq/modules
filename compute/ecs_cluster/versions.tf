@@ -12,13 +12,11 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
-    # Forwarded to the networking/alb child module. Only actually evaluated
-    # at apply time when var.use_ravion_managed_domains = true.
-    domains = {
+    # Ravion domains provider. Only evaluated when
+    # var.use_ravion_managed_domains = true — see ravion_domains.tf.
+    ravion = {
       source  = "ravion.com/ravion/domains"
-      version = "~> 0.1"
+      version = "= 0.1.99"
     }
   }
 }
-
-

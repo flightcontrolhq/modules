@@ -121,7 +121,7 @@ output "public_alb_http_listener_arn" {
 
 output "public_alb_https_listener_arn" {
   description = "The ARN of the public ALB HTTPS listener (null if HTTPS disabled)."
-  value       = var.enable_public_alb && (var.public_alb_enable_https || var.use_ravion_managed_domains) ? module.public_alb[0].https_listener_arn : null
+  value       = var.enable_public_alb && var.public_alb_enable_https ? module.public_alb[0].https_listener_arn : null
 }
 
 ################################################################################
@@ -165,7 +165,7 @@ output "private_alb_http_listener_arn" {
 
 output "private_alb_https_listener_arn" {
   description = "The ARN of the private ALB HTTPS listener (null if HTTPS disabled)."
-  value       = var.enable_private_alb && (var.private_alb_enable_https || var.use_ravion_managed_domains) ? module.private_alb[0].https_listener_arn : null
+  value       = var.enable_private_alb && var.private_alb_enable_https ? module.private_alb[0].https_listener_arn : null
 }
 
 ################################################################################
@@ -242,52 +242,45 @@ output "region" {
 }
 
 ################################################################################
-# Ravion-managed domains (null when use_ravion_managed_domains = false)
+# Ravion-managed cluster domain
 ################################################################################
+# These are null unless var.use_ravion_managed_domains = true.
 
-output "ravion_managed_domains_enabled" {
-  description = "Whether the public + private ALBs have Ravion-managed default certs."
-  value       = var.use_ravion_managed_domains
+output "ravion_cluster_domain_id" {
+  description = "Id of the cluster's `ravion_domain` (the wildcard parent). Pass to `ecs_service.cluster_parent_domain_id` so services nest as children and ride this wildcard cert. Null when Ravion-managed domains are disabled."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].id : null
 }
 
-# Public ALB
-output "ravion_public_alb_default_url" {
-  description = "Auto-provisioned https URL for the public ALB (null if disabled)."
-  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_url, null) : null
+output "ravion_cluster_domain_fqdn" {
+  description = "The cluster's Ravion-allocated FQDN (e.g. `prod-xyz.ravion.app`). Children get `<name>-<hash>.<this>`. Null when disabled."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].fqdn : null
 }
 
-output "ravion_public_alb_default_fqdn" {
-  description = "Auto-provisioned FQDN for the public ALB (null if disabled)."
-  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_fqdn, null) : null
+output "ravion_cluster_domain_url" {
+  description = "`https://<ravion_cluster_domain_fqdn>` — the cluster apex URL. Null when disabled."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].url : null
 }
 
-output "ravion_public_alb_default_cert_arn" {
-  description = "ARN of the Ravion-issued cluster cert wired as the public ALB listener default."
-  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_cert_arn, null) : null
+output "ravion_cluster_cert_arn" {
+  description = "ACM ARN of the cluster wildcard cert. Already bound to the public ALB HTTPS listener as an SNI extra by this module — exposed for callers that want to wire it elsewhere (e.g. a CloudFront distribution). Null when disabled."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].cert_arn : null
 }
 
-output "ravion_public_alb_default_app_domain_id" {
-  description = "App-domain id of the public ALB's auto allocation. Pass to ecs_service `ravion_parent_app_domain_id` so per-service auto-domains live under the cluster's cert."
-  value       = var.enable_public_alb ? try(module.public_alb[0].ravion_default_app_domain_id, null) : null
+output "ravion_cluster_cert_status" {
+  description = "Cluster wildcard cert status: ISSUED, PENDING_VALIDATION, FAILED, EXPIRED, or REVOKED. Validated against Ravion's own zone — typically ISSUED in 30s–2min. Null when disabled."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].cert_status : null
 }
 
-# Private ALB
-output "ravion_private_alb_default_url" {
-  description = "Auto-provisioned https URL for the private ALB (null if disabled)."
-  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_url, null) : null
+# Pass-throughs so service modules can issue per-service Mode B certs in
+# the same AwsAccount/region without the customer plumbing those inputs
+# twice. Null when Ravion-managed domains are disabled.
+
+output "ravion_aws_account_id" {
+  description = "The Ravion AwsAccount row id this cluster issues certs in. Pipe into `ecs_service.ravion_aws_account_id` for service Mode B (custom domains)."
+  value       = local.enable_ravion_domain ? var.ravion_aws_account_id : null
 }
 
-output "ravion_private_alb_default_fqdn" {
-  description = "Auto-provisioned FQDN for the private ALB (null if disabled)."
-  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_fqdn, null) : null
-}
-
-output "ravion_private_alb_default_cert_arn" {
-  description = "ARN of the Ravion-issued cluster cert wired as the private ALB listener default."
-  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_cert_arn, null) : null
-}
-
-output "ravion_private_alb_default_app_domain_id" {
-  description = "App-domain id of the private ALB's auto allocation. Pass to ecs_service `ravion_parent_app_domain_id` for private-routed services."
-  value       = var.enable_private_alb ? try(module.private_alb[0].ravion_default_app_domain_id, null) : null
+output "ravion_aws_region" {
+  description = "AWS region the cluster wildcard cert lives in. Pipe into `ecs_service.ravion_aws_region` for service Mode B (custom domains)."
+  value       = local.enable_ravion_domain ? coalesce(var.ravion_aws_region, local.region) : null
 }
