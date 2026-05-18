@@ -252,19 +252,35 @@ output "region" {
 # Ravion-managed service domain (null when cluster_parent_domain_id is unset)
 ################################################################################
 
+# Auto-FQDN — present until the Ravion control plane retires it (then
+# `ravion_domain.auto` count drops to 0). Mode-B-only deployments will
+# still have this populated during the cutover window, then null after.
+
 output "ravion_domain_id" {
-  description = "Opaque id of the ravion_domain row. Null when Ravion domain wiring is off."
-  value       = length(ravion_domain.this) > 0 ? ravion_domain.this[0].id : null
+  description = "Opaque id of the auto-FQDN ravion_domain row. Null when Ravion wiring is off OR after cutover to a custom domain has completed."
+  value       = length(ravion_domain.auto) > 0 ? ravion_domain.auto[0].id : null
 }
 
 output "ravion_domain_fqdn" {
-  description = "Allocated FQDN under the cluster's apex (<service-name>-<hash>.<cluster-fqdn>). Null when Ravion domain wiring is off."
-  value       = length(ravion_domain.this) > 0 ? ravion_domain.this[0].fqdn : null
+  description = "Allocated FQDN under the cluster's apex (<service-name>-<hash>.<cluster-fqdn>). Null when Ravion wiring is off OR after cutover."
+  value       = length(ravion_domain.auto) > 0 ? ravion_domain.auto[0].fqdn : null
 }
 
 output "ravion_domain_url" {
-  description = "Convenience https URL for the service. Null when Ravion domain wiring is off."
-  value       = length(ravion_domain.this) > 0 ? ravion_domain.this[0].url : null
+  description = "Convenience https URL for the auto-FQDN. Null when Ravion wiring is off OR after cutover."
+  value       = length(ravion_domain.auto) > 0 ? ravion_domain.auto[0].url : null
+}
+
+# Mode B — service cert covering only customer FQDNs. Null in Mode A.
+
+output "ravion_custom_domain_id" {
+  description = "Opaque id of the Mode B ravion_domain row (cert covering only var.domains). Null when var.domains is empty."
+  value       = length(ravion_domain.custom) > 0 ? ravion_domain.custom[0].id : null
+}
+
+output "ravion_custom_domain_cert_arn" {
+  description = "ACM cert ARN for the Mode B service cert. Null when var.domains is empty."
+  value       = length(ravion_domain.custom) > 0 ? ravion_domain.custom[0].cert_arn : null
 }
 
 
