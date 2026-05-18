@@ -16,7 +16,7 @@ terraform {
     # var.use_ravion_managed_domains = true — see ravion_domains.tf.
     ravion = {
       source  = "ravion.com/ravion/domains"
-      version = "= 0.1.99"
+      version = "= 0.4.3"
     }
   }
 }
