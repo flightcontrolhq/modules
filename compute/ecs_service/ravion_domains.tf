@@ -38,7 +38,13 @@ locals {
   # custom-domain routing record is MATCHED". Once it flips true, the
   # auto resource's count goes to 0 and TF plans a clean destroy on the
   # next apply.
-  ravion_auto_retired = local.ravion_managed ? try(data.ravion_auto_domain_status.auto[0].retired, false) : false
+  #
+  # Honoured ONLY while there's a Mode B custom-domain successor. When
+  # the user removes all custom domains (Mode B → Mode A), we IGNORE
+  # retirement and re-create the auto-FQDN — otherwise the listener
+  # rule below would have zero host_header values and AWS would reject
+  # the apply.
+  ravion_auto_retired = local.ravion_managed && local.ravion_mode_b ? try(data.ravion_auto_domain_status.auto[0].retired, false) : false
 
   # Listener rule matches the auto-FQDN (when not yet retired) plus
   # every customer FQDN. Two-step cutover at the TF layer:
@@ -115,7 +121,12 @@ resource "ravion_domain" "custom" {
 }
 
 resource "aws_lb_listener_rule" "ravion" {
-  count = local.ravion_managed && local.ravion_has_listener ? 1 : 0
+  # Defensive: never declare the listener rule when there are zero
+  # host_header values — AWS ALB requires ≥ 1. Both `ravion_managed`
+  # and `ravion_host_header_values` should be non-empty under normal
+  # config flow; this guard catches transient TF states (e.g. the
+  # auto-FQDN was retired AND custom domains haven't been added yet).
+  count = local.ravion_managed && local.ravion_has_listener && length(local.ravion_host_header_values) > 0 ? 1 : 0
 
   listener_arn = var.cluster_https_listener_arn
   priority     = var.ravion_listener_rule_priority
