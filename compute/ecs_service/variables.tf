@@ -201,7 +201,7 @@ variable "execution_role_arn" {
   default     = null
 
   validation {
-    condition     = try(var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn)), true)
+    condition     = var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn))
     error_message = "The execution_role_arn must be a valid IAM role ARN."
   }
 }
@@ -212,7 +212,7 @@ variable "task_role_arn" {
   default     = null
 
   validation {
-    condition     = try(var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn)), true)
+    condition     = var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn))
     error_message = "The task_role_arn must be a valid IAM role ARN."
   }
 }
@@ -376,7 +376,7 @@ variable "load_balancer_security_group_id" {
   default     = null
 
   validation {
-    condition     = try(var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id)), true)
+    condition     = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
     error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
   }
 }
@@ -585,7 +585,7 @@ variable "cluster_https_listener_arn" {
   default     = null
 
   validation {
-    condition     = try(var.cluster_https_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.cluster_https_listener_arn)), true)
+    condition     = var.cluster_https_listener_arn == null || can(regex("^arn:aws:elasticloadbalancing:", var.cluster_https_listener_arn))
     error_message = "cluster_https_listener_arn must be a valid ELBv2 listener ARN."
   }
 }
@@ -629,7 +629,7 @@ variable "ravion_aws_account_id" {
   default     = null
 
   validation {
-    condition     = try(var.ravion_aws_account_id == null || can(regex("^aws_", var.ravion_aws_account_id)), true)
+    condition     = var.ravion_aws_account_id == null || can(regex("^aws_", var.ravion_aws_account_id))
     error_message = "ravion_aws_account_id must be a Ravion AwsAccount row id (starts with 'aws_')."
   }
 }

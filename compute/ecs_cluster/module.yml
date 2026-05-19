@@ -329,7 +329,7 @@ input:
     - public_alb_certificate_arns:
         type: list
         label: "ACM Certificate ARNs"
-        description: "ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. Ignored (index 0) when use_ravion_managed_domains is on — Ravion provides the default cert."
+        description: "ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. Optional when use_ravion_managed_domains is on — if left empty, the Ravion wildcard cert is used as the listener default; if non-empty, the first entry is the default and the Ravion cert is attached as an SNI extra."
         default: []
         show_when:
           enable_public_alb: true
@@ -503,7 +503,7 @@ readme: |
   - Public ALB is the most common attach point for ECS services — set `enable_public_alb = true` and either supply ACM cert ARNs or flip `use_ravion_managed_domains = true` to have Ravion issue + attach a wildcard cluster cert.
 
   ### Ravion-managed domains
-  When `use_ravion_managed_domains = true`, Ravion provisions a `*.<random>.ravion.app` wildcard cert + DNS apex and wires it as the listener default cert on both ALBs. Per-service domains live on the ECS Service module and ride on the cluster's parent app-domain via the `ravion_public_alb_default_app_domain_id` output.
+  When `use_ravion_managed_domains = true`, Ravion provisions a `*.<random>.ravion.app` wildcard cert + DNS apex and attaches the wildcard cert as an SNI extra on the public ALB's HTTPS listener. Per-service domains live on the ECS Service module and ride on the cluster's parent domain via the `ravion_cluster_domain_id` output.
 
   ### Dashboard
   Metrics on this dashboard query ALB request volume + latency and ECS Container Insights CPU/Memory utilization. They are only meaningful when the corresponding feature (Public ALB / Container Insights) is enabled AND a Ravion AWS account id is configured (the same id used by `use_ravion_managed_domains`).
@@ -619,12 +619,27 @@ output:
   private_alb_security_group_id: string
   private_alb_http_listener_arn: string
   private_alb_https_listener_arn: string
-  # Ravion-managed domains (null when use_ravion_managed_domains = false)
-  ravion_managed_domains_enabled: boolean
-  ravion_public_alb_default_url: string
-  ravion_public_alb_default_fqdn: string
-  ravion_public_alb_default_cert_arn: string
-  ravion_private_alb_default_url: string
-  ravion_private_alb_default_fqdn: string
-  ravion_private_alb_default_cert_arn: string
+  # Public NLB
+  public_nlb_arn: string
+  public_nlb_id: string
+  public_nlb_dns_name: string
+  public_nlb_zone_id: string
+  public_nlb_arn_suffix: string
+  # Private NLB
+  private_nlb_arn: string
+  private_nlb_id: string
+  private_nlb_dns_name: string
+  private_nlb_zone_id: string
+  private_nlb_arn_suffix: string
+  # Account & Region
+  aws_account_id: string
+  region: string
+  # Ravion-managed cluster domain (null when use_ravion_managed_domains = false)
+  ravion_cluster_domain_id: string
+  ravion_cluster_domain_fqdn: string
+  ravion_cluster_domain_url: string
+  ravion_cluster_cert_arn: string
+  ravion_cluster_cert_status: string
+  ravion_aws_account_id: string
+  ravion_aws_region: string
 

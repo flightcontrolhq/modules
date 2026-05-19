@@ -81,15 +81,46 @@ inputs:
   - divider:
       type: divider
       label: "Ravion-Managed Domains"
+  - cluster_parent_domain_id:
+      type: string
+      label: "Cluster Parent Domain ID"
+      description: "Id of the cluster's `ravion_domain` (the wildcard parent). Pipe from the cluster module's `ravion_cluster_domain_id` output. When set, this service allocates a child domain under it. Leave blank to skip Ravion wiring entirely."
+  - cluster_https_listener_arn:
+      type: string
+      label: "Cluster HTTPS Listener ARN"
+      description: "ARN of the cluster ALB's HTTPS listener. Pipe from the cluster module's `public_alb_https_listener_arn` output. Required when `cluster_parent_domain_id` is set — used for both Mode A (auto-FQDN host_header rule) and Mode B (per-service cert SNI attach)."
+      validation:
+        patterns:
+          - pattern: "^(arn:aws:elasticloadbalancing:.+)?$"
+            message: "Must be a valid ELBv2 listener ARN"
+  - ravion_listener_rule_priority:
+      type: number
+      label: "Listener Rule Priority"
+      description: "Listener rule priority (1–50000) for the service's host_header rule on the cluster's shared HTTPS listener. 0 = auto-derive from sha256(name)."
+      default: 0
+      min: 0
+      max: 50000
   - domains:
       type: list
       label: "Custom domains (FQDNs)"
-      description: "FQDNs the per-service Ravion ACM cert should cover. Leaving this empty falls back to the per-service auto-domain (<svc>-<hash>.<cluster-fqdn>) covered by the cluster wildcard cert."
+      description: "Customer-owned FQDNs to expose this service at (Mode B). Empty = Mode A (ride cluster wildcard at auto-FQDN). Max 10."
       default: []
+  - cluster_alb_dns_name:
+      type: string
+      label: "Cluster ALB DNS Name"
+      description: "Cluster ALB's DNS name (pipe from the cluster module's `public_alb_dns_name` output). Required for Mode B (`domains` non-empty)."
+      show_when:
+        domains: "!="
+  - cluster_alb_zone_id:
+      type: string
+      label: "Cluster ALB Hosted Zone ID"
+      description: "Cluster ALB's hosted-zone id (pipe from the cluster module's `public_alb_zone_id` output). Required for Mode B (`domains` non-empty)."
+      show_when:
+        domains: "!="
   - ravion_aws_account_id:
       type: string
       label: "Ravion AWS Account ID"
-      description: "Ravion AwsAccount id (aws_xxx). Required for any Ravion domain feature (custom cert OR auto-domain) AND to query CloudWatch for the dashboard metrics."
+      description: "Ravion AwsAccount id (aws_xxx). Required for Mode B (`domains` non-empty) AND to query CloudWatch for the dashboard metrics. Pipe from the cluster module's `ravion_aws_account_id` output."
       validation:
         patterns:
           - pattern: "^(aws_[a-z0-9]+)?$"
@@ -98,40 +129,6 @@ inputs:
       type: string
       label: "Ravion AWS Region"
       description: "AWS region the Ravion provider should use. Leave blank to default to the service's region."
-  - ravion_listener_arn:
-      type: string
-      label: "Custom-Domain Listener ARN"
-      description: "HTTPS listener ARN the per-service Ravion cert is bound to as an additional SNI cert. Required when `domains` is non-empty. Wire from the cluster's `public_alb_https_listener_arn` output."
-      show_when:
-        domains: "!="
-
-  # Per-service auto-domain (covered by cluster wildcard cert)
-  - divider:
-      type: divider
-      label: "Per-Service Auto-Domain"
-  - ravion_parent_app_domain_id:
-      type: string
-      label: "Parent App Domain ID"
-      description: "Pass the cluster's ravion_public_alb_default_app_domain_id (or private). When set AND `domains` is empty, allocates `<svc>-<hash>.<cluster-fqdn>` covered by the cluster wildcard cert."
-  - ravion_auto_domain_listener_arn:
-      type: string
-      label: "Auto-Domain Listener ARN"
-      description: "Cluster HTTPS listener ARN where the host_header rule for the auto-domain is installed."
-  - ravion_auto_domain_alb_dns_name:
-      type: string
-      label: "Auto-Domain ALB DNS Name"
-      description: "DNS name of the cluster ALB the auto-domain ALIAS record should point at."
-  - ravion_auto_domain_alb_zone_id:
-      type: string
-      label: "Auto-Domain ALB Hosted Zone ID"
-      description: "Hosted-zone id of the cluster ALB. Required to build the ALIAS record value alongside dns_name."
-  - ravion_auto_domain_listener_rule_priority:
-      type: number
-      label: "Auto-Domain Listener Rule Priority"
-      description: "Listener rule priority for the auto-domain host_header rule. Bump per service to avoid collisions."
-      default: 1000
-      min: 1
-      max: 50000
 
 readme: |
   ## ECS Service
@@ -141,8 +138,8 @@ readme: |
   ### Typical wiring
   - `cluster_arn`, `load_balancer_attachment_json.listener_rules[].listener_arn` — come from the upstream ECS Cluster outputs.
   - `vpc_id`, `subnet_ids_json` — from the upstream VPC module.
-  - Set `domains` to an FQDN list to provision a per-service ACM cert via Ravion. Leave it empty to fall back to the auto-domain path.
-  - The auto-domain path requires `ravion_parent_app_domain_id`, `ravion_auto_domain_listener_arn`, and `ravion_auto_domain_alb_dns_name`, all sourced from the cluster module's `ravion_public_alb_default_*` outputs.
+  - Set `domains` to an FQDN list to provision a per-service ACM cert via Ravion (Mode B). Leave it empty to fall back to the auto-FQDN path (Mode A) covered by the cluster wildcard.
+  - Both modes require `cluster_parent_domain_id` and `cluster_https_listener_arn`, sourced from the cluster module's `ravion_cluster_domain_id` and `public_alb_https_listener_arn` outputs. Mode B additionally requires `cluster_alb_dns_name`, `cluster_alb_zone_id`, and `ravion_aws_account_id`.
 
   ### Lifecycle notes
   - Editing `domains` is a Requires Replace on the ACM cert (ACM does not allow SAN edits).
@@ -249,12 +246,11 @@ output:
   # Account & region
   aws_account_id: string
   region: string
-  # Ravion domains
-  ravion_domains:
-    - string
-  ravion_cert_id: string
-  ravion_cert_arn: string
-  ravion_cert_status: string
-  ravion_auto_domain_enabled: boolean
-  ravion_auto_domain_fqdn: string
-  ravion_auto_domain_url: string
+  # Ravion-managed service domain (null when cluster_parent_domain_id is unset)
+  # Auto-FQDN (Mode A) — null after cutover to a custom domain.
+  ravion_domain_id: string
+  ravion_domain_fqdn: string
+  ravion_domain_url: string
+  # Mode B — per-service cert covering only var.domains. Null in Mode A.
+  ravion_custom_domain_id: string
+  ravion_custom_domain_cert_arn: string

@@ -1,24 +1,24 @@
 ################################################################################
 # Ravion-managed cluster domain (opt-in)
 ################################################################################
-# When var.use_ravion_managed_domains is true, this module allocates one
-# `ravion_domain` for the cluster:
+# When var.use_ravion_managed_domains is true, this module:
 #
-#   - Root domain (no parent) named `var.ravion_cluster_name` — falls back
-#     to `var.name`.
-#   - Target = public ALB (so the cluster apex itself resolves to the ALB
-#     and any child service that doesn't have its own host_header rule
-#     falls through to the ALB's default action).
-#   - Wildcard cert covering `*.<cluster-fqdn>` + `<cluster-fqdn>` — every
-#     `ecs_service` instance allocates a child under this domain and rides
-#     this cert via SNI, so adding services costs zero ACM work.
-#   - Optional `custom_domains` — SAN-added to the same cert so the
-#     customer can also serve traffic via their own FQDNs. See the README
-#     for the validation flow.
+#   - allocates one `ravion_domain` for the cluster (root, no parent,
+#     name = ravion_cluster_name or var.name; target = public ALB; wildcard
+#     cert covering `*.<cluster-fqdn>` + `<cluster-fqdn>`),
+#   - creates the public ALB's HTTPS listener directly here with the
+#     freshly-issued wildcard cert as the listener's DEFAULT cert,
+#   - SNI-attaches any customer-supplied `public_alb_certificate_arns`
+#     as extras alongside the Ravion default.
 #
-# The wildcard cert is attached as an SNI extra on the cluster ALB's HTTPS
-# listener (NOT the default cert — the listener's default cert is set by
-# `var.public_alb_certificate_arns` so existing customers aren't disturbed).
+# Why this module owns the listener instead of the alb module:
+# AWS requires a default cert at listener-create time, and the Ravion-issued
+# cert is what we want there. Feeding ravion_domain.cluster.cert_arn into
+# `module.public_alb`'s `certificate_arns` input would form a cycle
+# (ravion_domain.cluster.target uses the alb's dns_name output). By keeping
+# the listener inside this module — where ravion_domain.cluster is already
+# in scope as a resource — the planner sees a DAG instead of a cycle:
+# aws_lb.this → ravion_domain.cluster → aws_lb_listener.ravion_https.
 #
 # Pass the outputs to each `ecs_service` instance:
 #
@@ -59,13 +59,40 @@ resource "ravion_domain" "cluster" {
   }
 }
 
-# Attach the wildcard cert as an SNI extra on the cluster ALB's HTTPS
-# listener. We do NOT replace the listener's default cert — that's still
-# governed by var.public_alb_certificate_arns so opting in is safe for
-# clusters that already have a default cert.
-resource "aws_lb_listener_certificate" "ravion_cluster" {
+# HTTPS listener owned by this module when Ravion mode is on. The alb
+# module skips creating its own (load_balancers.tf flips
+# enable_https_listener off in that case).
+resource "aws_lb_listener" "ravion_https" {
   count = local.enable_ravion_domain && var.public_alb_enable_https ? 1 : 0
 
-  listener_arn    = module.public_alb[0].https_listener_arn
-  certificate_arn = ravion_domain.cluster[0].cert_arn
+  load_balancer_arn = module.public_alb[0].alb_arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = var.public_alb_ssl_policy
+  certificate_arn   = ravion_domain.cluster[0].cert_arn
+
+  # Mirrors the alb module's default action — fall through to a fixed
+  # 404 when no per-service listener rule matches. Services attach
+  # their own rules via aws_lb_listener_rule against this listener.
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Not found"
+      status_code  = "404"
+    }
+  }
+
+  tags = merge(local.tags, {
+    Name = "${var.name}-pub-https"
+  })
+}
+
+# Customer-supplied certs attach as SNI extras on the Ravion-owned
+# listener (the Ravion wildcard already serves as the default cert).
+resource "aws_lb_listener_certificate" "ravion_public_alb_extras" {
+  for_each = local.enable_ravion_domain && var.public_alb_enable_https ? toset(var.public_alb_certificate_arns) : toset([])
+
+  listener_arn    = aws_lb_listener.ravion_https[0].arn
+  certificate_arn = each.value
 }

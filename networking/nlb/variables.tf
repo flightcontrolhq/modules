@@ -130,7 +130,7 @@ variable "dns_record_client_routing_policy" {
   default     = null
 
   validation {
-    condition     = try(contains(["any_availability_zone", "availability_zone_affinity", "partial_availability_zone_affinity"], var.dns_record_client_routing_policy), true)
+    condition     = contains(["any_availability_zone", "availability_zone_affinity", "partial_availability_zone_affinity"], var.dns_record_client_routing_policy)
     error_message = "The dns_record_client_routing_policy must be 'any_availability_zone', 'availability_zone_affinity', or 'partial_availability_zone_affinity'."
   }
 }
@@ -141,7 +141,7 @@ variable "enforce_security_group_inbound_rules_on_private_link_traffic" {
   default     = null
 
   validation {
-    condition     = try(contains(["on", "off"], var.enforce_security_group_inbound_rules_on_private_link_traffic), true)
+    condition     = contains(["on", "off"], var.enforce_security_group_inbound_rules_on_private_link_traffic)
     error_message = "The enforce_security_group_inbound_rules_on_private_link_traffic must be 'on' or 'off'."
   }
 }
@@ -183,7 +183,7 @@ variable "access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = try(var.access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.access_logs_bucket_arn)), true)
+    condition     = var.access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.access_logs_bucket_arn))
     error_message = "The access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -211,7 +211,7 @@ variable "access_logs_kms_key_id" {
   default     = null
 
   validation {
-    condition     = try(var.access_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.access_logs_kms_key_id)), true)
+    condition     = var.access_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.access_logs_kms_key_id))
     error_message = "The access_logs_kms_key_id must be a valid KMS key ARN or alias."
   }
 }

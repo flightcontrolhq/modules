@@ -14,13 +14,21 @@ module "public_alb" {
   subnet_ids = var.public_subnet_ids
   internal   = false
 
-  # Listener configuration
+  # Listener configuration. When Ravion mode is on the HTTPS listener is
+  # owned by this module directly (ravion_domains.tf) so its default cert
+  # can be the freshly-issued ravion_domain.cluster wildcard. Letting the
+  # ALB module create it would force a cycle — the alb's certificate_arns
+  # input would depend on ravion_domain.cluster.cert_arn, which depends on
+  # the alb's alb_dns_name output. Skipping HTTPS in the alb module and
+  # reissuing it in ravion_domains.tf (where ravion_domain.cluster is in
+  # scope) breaks the cycle cleanly.
   enable_http_listener   = true
-  enable_https_listener  = var.public_alb_enable_https
+  enable_https_listener  = var.public_alb_enable_https && !local.enable_ravion_domain
   http_to_https_redirect = var.public_alb_enable_https
 
-  # SSL/TLS
-  certificate_arns = var.public_alb_certificate_arns
+  # When Ravion owns the listener, customer-supplied SNI extras are
+  # attached over in ravion_domains.tf alongside the Ravion default.
+  certificate_arns = local.enable_ravion_domain ? [] : var.public_alb_certificate_arns
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings
