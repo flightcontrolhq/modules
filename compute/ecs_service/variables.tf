@@ -201,7 +201,7 @@ variable "execution_role_arn" {
   default     = null
 
   validation {
-    condition     = var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn))
+    condition     = try(var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn)), true)
     error_message = "The execution_role_arn must be a valid IAM role ARN."
   }
 }
@@ -212,7 +212,7 @@ variable "task_role_arn" {
   default     = null
 
   validation {
-    condition     = var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn))
+    condition     = try(var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn)), true)
     error_message = "The task_role_arn must be a valid IAM role ARN."
   }
 }
@@ -376,7 +376,7 @@ variable "load_balancer_security_group_id" {
   default     = null
 
   validation {
-    condition     = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
+    condition     = try(var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id)), true)
     error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
   }
 }
