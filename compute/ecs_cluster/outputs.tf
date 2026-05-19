@@ -240,3 +240,30 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
+
+################################################################################
+# Ravion domain control plane outputs
+#
+# Consumed by sibling ecs_service modules to allocate child FQDNs that
+# inherit the cluster's wildcard cert via SNI.
+################################################################################
+
+output "ravion_cluster_domain_allocation_id" {
+  description = "DomainAllocation id of the cluster's wildcard. Pass to ecs_service.ravion_parent_domain_allocation_id so service FQDNs sit under the wildcard."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].id : null
+}
+
+output "ravion_cluster_managed_domain_id" {
+  description = "ManagedDomain id of the cluster's wildcard. The UI links the cluster cert to this."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].managed_domain_id : null
+}
+
+output "ravion_cluster_fqdn" {
+  description = "Cluster wildcard FQDN, e.g. `*.cluster-abc.ravion.app`."
+  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].fqdn : null
+}
+
+output "ravion_cluster_certificate_arn" {
+  description = "ACM ARN of the cluster's wildcard cert. Use as the listener's default cert or as an extra cert via aws_lb_listener_certificate."
+  value       = local.enable_ravion_domain ? aws_acm_certificate_validation.cluster[0].certificate_arn : null
+}

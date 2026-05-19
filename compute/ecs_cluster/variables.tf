@@ -629,3 +629,19 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Ravion domain control plane
+################################################################################
+
+variable "ravion_dns_zone_id" {
+  type        = string
+  description = "Ravion DnsZone id (dzn_*) the cluster's wildcard allocation lives under. Typically the platform-owned Ravion apex zone, looked up via the Ravion API or injected by tower-go. When null/empty, the Ravion-domain plumbing is skipped entirely."
+  default     = null
+}
+
+variable "ravion_cluster_slug" {
+  type        = string
+  description = "Human-readable slug used to derive the cluster's FQDN (`<slug>-<hash>.ravion.app`). Defaults to var.name when null."
+  default     = null
+}

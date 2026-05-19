@@ -599,3 +599,54 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Ravion domain control plane
+#
+# When the parent cluster module is configured with ravion_dns_zone_id,
+# pass its outputs into the service module via these variables to
+# allocate a child FQDN that inherits the cluster's wildcard cert via
+# SNI. Set ravion_parent_domain_allocation_id = null/empty to opt out.
+################################################################################
+
+variable "ravion_dns_zone_id" {
+  type        = string
+  description = "Ravion DnsZone id (dzn_*) the allocation lives under. Same value as the cluster's ravion_dns_zone_id."
+  default     = null
+}
+
+variable "ravion_parent_domain_allocation_id" {
+  type        = string
+  description = "Cluster's DomainAllocation id, from `module.ecs_cluster.ravion_cluster_domain_allocation_id`. When null/empty, no Ravion FQDN is allocated."
+  default     = null
+}
+
+variable "ravion_cluster_alb_dns_name" {
+  type        = string
+  description = "Cluster ALB DNS name, from `module.ecs_cluster.public_alb_dns_name`. Required when ravion_parent_domain_allocation_id is set."
+  default     = null
+}
+
+variable "ravion_cluster_alb_zone_id" {
+  type        = string
+  description = "Cluster ALB hosted-zone id, from `module.ecs_cluster.public_alb_zone_id`. Required when ravion_parent_domain_allocation_id is set."
+  default     = null
+}
+
+variable "ravion_cluster_https_listener_arn" {
+  type        = string
+  description = "Cluster HTTPS listener ARN, from `module.ecs_cluster.public_alb_https_listener_arn`. Required when ravion_parent_domain_allocation_id is set so the host-header rule can be created."
+  default     = null
+}
+
+variable "ravion_service_slug" {
+  type        = string
+  description = "Human-readable slug used to derive the service FQDN under the cluster wildcard. Defaults to var.name."
+  default     = null
+}
+
+variable "ravion_listener_rule_priority" {
+  type        = number
+  description = "Explicit listener-rule priority. 0 → derived deterministically from var.name (sha256-based) so two services in the same cluster don't collide."
+  default     = 0
+}

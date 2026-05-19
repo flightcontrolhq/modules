@@ -12,7 +12,9 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    ravion = {
+      source  = "ravion.com/ravion/domains"
+      version = ">= 1.0.0"
+    }
   }
 }
-
-
