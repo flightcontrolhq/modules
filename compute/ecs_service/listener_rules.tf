@@ -4,7 +4,14 @@
 ################################################################################
 
 resource "aws_lb_listener_rule" "alb" {
-  for_each = local.enable_load_balancer ? {
+  # When Ravion is managing the cluster's HTTPS listener (cluster_parent_domain_id
+  # is set), the `aws_lb_listener_rule.ravion` resource owns ALB routing for this
+  # service — scoped by host_header to the service's auto-FQDN + custom domains.
+  # Caller-supplied listener_rules from the control plane are redundant in that
+  # mode and actively harmful: they collide on priorities across services on the
+  # shared listener, and any path-only rule catches traffic destined for sibling
+  # services. We short-circuit them entirely.
+  for_each = local.enable_load_balancer && !local.ravion_managed ? {
     for idx, rule in local.load_balancer_attachment.listener_rules : idx => rule
   } : {}
 

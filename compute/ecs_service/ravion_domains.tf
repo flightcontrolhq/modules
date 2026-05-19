@@ -154,4 +154,11 @@ resource "aws_lb_listener_rule" "ravion" {
   tags = merge(local.tags, {
     Name = "${var.name}-ravion"
   })
+
+  # Blue/green deploy controllers flip the rule's action to swap target groups
+  # behind the scenes. Without this, every TF apply would reset the action back
+  # to tg_1 and undo the swap. No-op for rolling deployments.
+  lifecycle {
+    ignore_changes = [action]
+  }
 }
