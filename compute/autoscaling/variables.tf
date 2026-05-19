@@ -50,7 +50,7 @@ variable "desired_capacity" {
   default     = null
 
   validation {
-    condition     = var.desired_capacity == null || var.desired_capacity >= 0
+    condition     = try(var.desired_capacity == null || var.desired_capacity >= 0, true)
     error_message = "The desired_capacity must be null or 0 or greater."
   }
 }
@@ -91,7 +91,7 @@ variable "default_instance_warmup" {
   default     = null
 
   validation {
-    condition     = var.default_instance_warmup == null || var.default_instance_warmup >= 0
+    condition     = try(var.default_instance_warmup == null || var.default_instance_warmup >= 0, true)
     error_message = "The default_instance_warmup must be null or 0 or greater."
   }
 }
@@ -118,7 +118,7 @@ variable "max_instance_lifetime" {
   default     = null
 
   validation {
-    condition     = var.max_instance_lifetime == null || var.max_instance_lifetime == 0 || (var.max_instance_lifetime >= 86400 && var.max_instance_lifetime <= 31536000)
+    condition     = try(var.max_instance_lifetime == null || var.max_instance_lifetime == 0 || (var.max_instance_lifetime >= 86400 && var.max_instance_lifetime <= 31536000), true)
     error_message = "The max_instance_lifetime must be null, 0, or between 86400 (1 day) and 31536000 (365 days)."
   }
 }
@@ -238,7 +238,7 @@ variable "service_linked_role_arn" {
   default     = null
 
   validation {
-    condition     = var.service_linked_role_arn == null || can(regex("^arn:aws:iam::", var.service_linked_role_arn))
+    condition     = try(var.service_linked_role_arn == null || can(regex("^arn:aws:iam::", var.service_linked_role_arn)), true)
     error_message = "The service_linked_role_arn must be null or a valid IAM role ARN starting with 'arn:aws:iam::'."
   }
 }
@@ -297,7 +297,7 @@ variable "launch_template_id" {
   default     = null
 
   validation {
-    condition     = var.launch_template_id == null || can(regex("^lt-", var.launch_template_id))
+    condition     = try(var.launch_template_id == null || can(regex("^lt-", var.launch_template_id)), true)
     error_message = "The launch_template_id must be null or a valid launch template ID starting with 'lt-'."
   }
 }
@@ -594,36 +594,44 @@ variable "mixed_instances_policy" {
   default     = null
 
   validation {
-    condition = var.mixed_instances_policy == null || (
+    condition = try(
+var.mixed_instances_policy == null || (
       var.mixed_instances_policy.instances_distribution == null ||
       contains(["prioritized", "lowest-price"], coalesce(var.mixed_instances_policy.instances_distribution.on_demand_allocation_strategy, "prioritized"))
     )
+    , true)
     error_message = "The on_demand_allocation_strategy must be 'prioritized' or 'lowest-price'."
   }
 
   validation {
-    condition = var.mixed_instances_policy == null || (
+    condition = try(
+var.mixed_instances_policy == null || (
       var.mixed_instances_policy.instances_distribution == null ||
       contains(["capacity-optimized", "capacity-optimized-prioritized", "lowest-price", "price-capacity-optimized"], coalesce(var.mixed_instances_policy.instances_distribution.spot_allocation_strategy, "capacity-optimized"))
     )
+    , true)
     error_message = "The spot_allocation_strategy must be 'capacity-optimized', 'capacity-optimized-prioritized', 'lowest-price', or 'price-capacity-optimized'."
   }
 
   validation {
-    condition = var.mixed_instances_policy == null || (
+    condition = try(
+var.mixed_instances_policy == null || (
       var.mixed_instances_policy.instances_distribution == null || (
         coalesce(var.mixed_instances_policy.instances_distribution.on_demand_percentage_above_base_capacity, 100) >= 0 &&
         coalesce(var.mixed_instances_policy.instances_distribution.on_demand_percentage_above_base_capacity, 100) <= 100
       )
     )
+    , true)
     error_message = "The on_demand_percentage_above_base_capacity must be between 0 and 100."
   }
 
   validation {
-    condition = var.mixed_instances_policy == null || (
+    condition = try(
+var.mixed_instances_policy == null || (
       var.mixed_instances_policy.instances_distribution == null ||
       coalesce(var.mixed_instances_policy.instances_distribution.on_demand_base_capacity, 0) >= 0
     )
+    , true)
     error_message = "The on_demand_base_capacity must be 0 or greater."
   }
 }
@@ -678,47 +686,59 @@ variable "instance_refresh" {
   default     = null
 
   validation {
-    condition = var.instance_refresh == null || (
+    condition = try(
+var.instance_refresh == null || (
       contains(["Rolling"], coalesce(var.instance_refresh.strategy, "Rolling"))
     )
+    , true)
     error_message = "The instance_refresh strategy must be 'Rolling'."
   }
 
   validation {
-    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+    condition = try(
+var.instance_refresh == null || var.instance_refresh.preferences == null || (
       coalesce(var.instance_refresh.preferences.min_healthy_percentage, 90) >= 0 &&
       coalesce(var.instance_refresh.preferences.min_healthy_percentage, 90) <= 100
     )
+    , true)
     error_message = "The min_healthy_percentage must be between 0 and 100."
   }
 
   validation {
-    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+    condition = try(
+var.instance_refresh == null || var.instance_refresh.preferences == null || (
       coalesce(var.instance_refresh.preferences.max_healthy_percentage, 100) >= 100 &&
       coalesce(var.instance_refresh.preferences.max_healthy_percentage, 100) <= 200
     )
+    , true)
     error_message = "The max_healthy_percentage must be between 100 and 200."
   }
 
   validation {
-    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+    condition = try(
+var.instance_refresh == null || var.instance_refresh.preferences == null || (
       contains(["Refresh", "Ignore", "Wait"], coalesce(var.instance_refresh.preferences.scale_in_protected_instances, "Ignore"))
     )
+    , true)
     error_message = "The scale_in_protected_instances must be 'Refresh', 'Ignore', or 'Wait'."
   }
 
   validation {
-    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+    condition = try(
+var.instance_refresh == null || var.instance_refresh.preferences == null || (
       contains(["Terminate", "Ignore", "Wait"], coalesce(var.instance_refresh.preferences.standby_instances, "Ignore"))
     )
+    , true)
     error_message = "The standby_instances must be 'Terminate', 'Ignore', or 'Wait'."
   }
 
   validation {
-    condition = var.instance_refresh == null || var.instance_refresh.preferences == null || (
+    condition = try(
+var.instance_refresh == null || var.instance_refresh.preferences == null || (
       var.instance_refresh.preferences.checkpoint_percentages == null ||
       alltrue([for p in var.instance_refresh.preferences.checkpoint_percentages : p >= 0 && p <= 100])
     )
+    , true)
     error_message = "All checkpoint_percentages must be between 0 and 100."
   }
 }
@@ -752,24 +772,30 @@ variable "warm_pool" {
   default     = null
 
   validation {
-    condition = var.warm_pool == null || (
+    condition = try(
+var.warm_pool == null || (
       contains(["Stopped", "Running", "Hibernated"], coalesce(var.warm_pool.pool_state, "Stopped"))
     )
+    , true)
     error_message = "The pool_state must be 'Stopped', 'Running', or 'Hibernated'."
   }
 
   validation {
-    condition = var.warm_pool == null || (
+    condition = try(
+var.warm_pool == null || (
       coalesce(var.warm_pool.min_size, 0) >= 0
     )
+    , true)
     error_message = "The warm_pool min_size must be 0 or greater."
   }
 
   validation {
-    condition = var.warm_pool == null || (
+    condition = try(
+var.warm_pool == null || (
       var.warm_pool.max_group_prepared_capacity == null ||
       var.warm_pool.max_group_prepared_capacity >= 0
     )
+    , true)
     error_message = "The max_group_prepared_capacity must be null or 0 or greater."
   }
 }
@@ -834,18 +860,22 @@ variable "lifecycle_hooks" {
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for hook in var.lifecycle_hooks :
       hook.notification_target_arn == null || can(regex("^arn:aws:(sns|sqs):", hook.notification_target_arn))
     ])
+    , true)
     error_message = "Each notification_target_arn must be null or a valid SNS topic or SQS queue ARN."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for hook in var.lifecycle_hooks :
       hook.role_arn == null || can(regex("^arn:aws:iam::", hook.role_arn))
     ])
+    , true)
     error_message = "Each role_arn must be null or a valid IAM role ARN."
   }
 }
@@ -1087,23 +1117,28 @@ variable "scaling_policies" {
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.adjustment_type == null || contains(["ChangeInCapacity", "ExactCapacity", "PercentChangeInCapacity"], policy.adjustment_type)
     ])
+    , true)
     error_message = "Each adjustment_type must be 'ChangeInCapacity', 'ExactCapacity', or 'PercentChangeInCapacity'."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.metric_aggregation_type == null || contains(["Minimum", "Maximum", "Average"], policy.metric_aggregation_type)
     ])
+    , true)
     error_message = "Each metric_aggregation_type must be 'Minimum', 'Maximum', or 'Average'."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.target_tracking_configuration == null ||
       policy.target_tracking_configuration.predefined_metric_specification == null ||
@@ -1112,44 +1147,53 @@ variable "scaling_policies" {
         policy.target_tracking_configuration.predefined_metric_specification.predefined_metric_type
       )
     ])
+    , true)
     error_message = "Each predefined_metric_type for target tracking must be 'ASGAverageCPUUtilization', 'ASGAverageNetworkIn', 'ASGAverageNetworkOut', or 'ALBRequestCountPerTarget'."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.predictive_scaling_configuration == null ||
       contains(["ForecastAndScale", "ForecastOnly"], coalesce(policy.predictive_scaling_configuration.mode, "ForecastOnly"))
     ])
+    , true)
     error_message = "Each predictive scaling mode must be 'ForecastAndScale' or 'ForecastOnly'."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.predictive_scaling_configuration == null ||
       contains(["IncreaseMaxCapacity", "HonorMaxCapacity"], coalesce(policy.predictive_scaling_configuration.max_capacity_breach_behavior, "HonorMaxCapacity"))
     ])
+    , true)
     error_message = "Each max_capacity_breach_behavior must be 'IncreaseMaxCapacity' or 'HonorMaxCapacity'."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.predictive_scaling_configuration == null ||
       policy.predictive_scaling_configuration.scheduling_buffer_time == null ||
       (policy.predictive_scaling_configuration.scheduling_buffer_time >= 0 && policy.predictive_scaling_configuration.scheduling_buffer_time <= 3600)
     ])
+    , true)
     error_message = "Each scheduling_buffer_time must be between 0 and 3600 seconds."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for policy in var.scaling_policies :
       policy.predictive_scaling_configuration == null ||
       policy.predictive_scaling_configuration.max_capacity_buffer == null ||
       (policy.predictive_scaling_configuration.max_capacity_buffer >= 0 && policy.predictive_scaling_configuration.max_capacity_buffer <= 100)
     ])
+    , true)
     error_message = "Each max_capacity_buffer must be between 0 and 100."
   }
 }
@@ -1181,14 +1225,17 @@ variable "notifications" {
   default     = null
 
   validation {
-    condition = var.notifications == null || (
+    condition = try(
+var.notifications == null || (
       can(regex("^arn:aws:sns:", var.notifications.topic_arn))
     )
+    , true)
     error_message = "The topic_arn must be a valid SNS topic ARN starting with 'arn:aws:sns:'."
   }
 
   validation {
-    condition = var.notifications == null || (
+    condition = try(
+var.notifications == null || (
       alltrue([
         for notification in coalesce(var.notifications.notifications, []) :
         contains([
@@ -1200,6 +1247,7 @@ variable "notifications" {
         ], notification)
       ])
     )
+    , true)
     error_message = "Each notification must be one of: 'autoscaling:EC2_INSTANCE_LAUNCH', 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR', 'autoscaling:EC2_INSTANCE_TERMINATE', 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR', 'autoscaling:TEST_NOTIFICATION'."
   }
 }
@@ -1294,26 +1342,32 @@ variable "schedules" {
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for schedule in var.schedules :
       schedule.min_size == null || schedule.min_size >= 0
     ])
+    , true)
     error_message = "Each schedule min_size must be null or 0 or greater."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for schedule in var.schedules :
       schedule.max_size == null || schedule.max_size >= 1
     ])
+    , true)
     error_message = "Each schedule max_size must be null or at least 1."
   }
 
   validation {
-    condition = alltrue([
+    condition = try(
+alltrue([
       for schedule in var.schedules :
       schedule.desired_capacity == null || schedule.desired_capacity >= 0
     ])
+    , true)
     error_message = "Each schedule desired_capacity must be null or 0 or greater."
   }
 }
@@ -1336,17 +1390,19 @@ variable "instance_maintenance_policy" {
   default     = null
 
   validation {
-    condition = var.instance_maintenance_policy == null || (
+    condition = try(
       coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) >= 0 &&
-      coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) <= 100
+      coalesce(var.instance_maintenance_policy.min_healthy_percentage, 90) <= 100,
+      true
     )
     error_message = "The min_healthy_percentage must be between 0 and 100."
   }
 
   validation {
-    condition = var.instance_maintenance_policy == null || (
+    condition = try(
       coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) >= 100 &&
-      coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) <= 200
+      coalesce(var.instance_maintenance_policy.max_healthy_percentage, 120) <= 200,
+      true
     )
     error_message = "The max_healthy_percentage must be between 100 and 200."
   }
