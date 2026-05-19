@@ -96,3 +96,37 @@ resource "aws_lb_listener" "ravion_https" {
 # customer flips to Ravion mode. If you ever need additional certs
 # bound to this listener, add them via a dedicated input on this
 # module (not by piggybacking on public_alb_certificate_arns).
+
+# Port 443 ingress on the public ALB's security group. The alb
+# sub-module's security_group adds an HTTPS ingress rule ONLY when it
+# owns the HTTPS listener (gated on its local.create_https_listener).
+# With Ravion mode that flag is false (see load_balancers.tf), so
+# without these resources packets to 443 reach the SG and get dropped
+# before they ever touch the Ravion-owned listener — `dig` resolves,
+# TLS connect times out. Mirrors the rules the alb module would have
+# emitted: one per IPv4 cidr, one per IPv6 cidr.
+resource "aws_vpc_security_group_ingress_rule" "ravion_https_ipv4" {
+  for_each = local.enable_ravion_domain && var.public_alb_enable_https ? toset(var.public_alb_ingress_cidr_blocks) : toset([])
+
+  security_group_id = module.public_alb[0].security_group_id
+  description       = "Allow HTTPS traffic from ${each.value} (Ravion-owned listener)"
+  cidr_ipv4         = each.value
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+
+  tags = local.tags
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ravion_https_ipv6" {
+  for_each = local.enable_ravion_domain && var.public_alb_enable_https ? toset(["::/0"]) : toset([])
+
+  security_group_id = module.public_alb[0].security_group_id
+  description       = "Allow HTTPS traffic from ${each.value} (Ravion-owned listener)"
+  cidr_ipv6         = each.value
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+
+  tags = local.tags
+}
