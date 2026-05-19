@@ -592,11 +592,11 @@ variable "cluster_https_listener_arn" {
 
 variable "ravion_listener_rule_priority" {
   type        = number
-  description = "Listener rule priority (1-50000) for the service's host_header rule. Default 50000 so user-declared listener_rules take precedence. Bump per service to avoid collisions within the same cluster."
-  default     = 50000
+  description = "Listener rule priority (1-50000) for the service's host_header rule on the cluster's shared HTTPS listener. Default 0 = auto-derive a stable priority from sha256(var.name), giving every service in a cluster a unique slot without anyone hand-picking. Override with an explicit 1-50000 value when a specific slot matters."
+  default     = 0
   validation {
-    condition     = var.ravion_listener_rule_priority >= 1 && var.ravion_listener_rule_priority <= 50000
-    error_message = "priority must be between 1 and 50000."
+    condition     = var.ravion_listener_rule_priority >= 0 && var.ravion_listener_rule_priority <= 50000
+    error_message = "priority must be 0 (auto-derive) or between 1 and 50000."
   }
 }
 

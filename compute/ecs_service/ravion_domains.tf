@@ -33,6 +33,15 @@ locals {
   ravion_has_listener = var.cluster_https_listener_arn != null && var.cluster_https_listener_arn != ""
   ravion_mode_b       = local.ravion_managed && length(var.domains) > 0
 
+  # Hash-derived priority slot in [1000, 49999]. All services in the
+  # same cluster share one HTTPS listener, and AWS rejects rule
+  # priority collisions. Deriving from `var.name` gives every service
+  # a deterministic, unique slot without anyone hand-picking numbers.
+  # `var.ravion_listener_rule_priority` overrides this when set
+  # explicitly (sentinel default is 0).
+  ravion_priority_auto = (parseint(substr(sha256(var.name), 0, 4), 16) % 49000) + 1000
+  ravion_priority      = var.ravion_listener_rule_priority > 0 ? var.ravion_listener_rule_priority : local.ravion_priority_auto
+
   # Cutover signal from Ravion. Defaults to false (auto-FQDN stays) for
   # every state EXCEPT "allocation released AND at least one sibling
   # custom-domain routing record is MATCHED". Once it flips true, the
@@ -129,7 +138,7 @@ resource "aws_lb_listener_rule" "ravion" {
   count = local.ravion_managed && local.ravion_has_listener && length(local.ravion_host_header_values) > 0 ? 1 : 0
 
   listener_arn = var.cluster_https_listener_arn
-  priority     = var.ravion_listener_rule_priority
+  priority     = local.ravion_priority
 
   condition {
     host_header {

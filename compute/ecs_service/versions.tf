@@ -16,7 +16,7 @@ terraform {
     # is set — see ravion_domains.tf.
     ravion = {
       source  = "ravion.com/ravion/domains"
-      version = "= 0.4.5"
+      version = "= 0.5.0"
     }
   }
 }
