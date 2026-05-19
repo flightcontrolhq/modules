@@ -88,11 +88,11 @@ resource "aws_lb_listener" "ravion_https" {
   })
 }
 
-# Customer-supplied certs attach as SNI extras on the Ravion-owned
-# listener (the Ravion wildcard already serves as the default cert).
-resource "aws_lb_listener_certificate" "ravion_public_alb_extras" {
-  for_each = local.enable_ravion_domain && var.public_alb_enable_https ? toset(var.public_alb_certificate_arns) : toset([])
-
-  listener_arn    = aws_lb_listener.ravion_https[0].arn
-  certificate_arn = each.value
-}
+# When Ravion mode is on, the Ravion wildcard cert IS the listener's
+# default cert. We intentionally do NOT SNI-attach the customer's
+# `public_alb_certificate_arns` here — that input is a pre-Ravion
+# concept (the cert ARN the customer pre-provisioned for the old
+# alb-module listener), and the ARNs are frequently stale once the
+# customer flips to Ravion mode. If you ever need additional certs
+# bound to this listener, add them via a dedicated input on this
+# module (not by piggybacking on public_alb_certificate_arns).
