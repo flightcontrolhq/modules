@@ -458,19 +458,19 @@ variable "load_balancer_attachment" {
   default     = null
 
   validation {
-    condition = var.load_balancer_attachment == null || contains(
+    condition = try(contains(
       ["HTTP", "HTTPS", "TCP", "UDP", "TLS", "TCP_UDP", "GENEVE"],
       var.load_balancer_attachment.target_group.protocol
-    )
+    ), true)
     error_message = "The protocol must be one of: HTTP, HTTPS (for ALB), or TCP, UDP, TLS, TCP_UDP, GENEVE (for NLB/GWLB)."
   }
 
   validation {
-    condition = var.load_balancer_attachment == null || var.load_balancer_attachment.target_group.stickiness == null || (
+    condition = try(var.load_balancer_attachment.target_group.stickiness == null || (
       contains(["HTTP", "HTTPS"], var.load_balancer_attachment.target_group.protocol)
       ? contains(["lb_cookie", "app_cookie"], var.load_balancer_attachment.target_group.stickiness.type)
       : var.load_balancer_attachment.target_group.stickiness.type == "source_ip"
-    )
+    ), true)
     error_message = "Stickiness type must be 'lb_cookie' or 'app_cookie' for ALB (HTTP/HTTPS), or 'source_ip' for NLB (TCP/UDP/TLS)."
   }
 }
