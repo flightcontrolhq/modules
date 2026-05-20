@@ -332,6 +332,14 @@ input:
           enable_public_alb: true
           public_alb_enable_https: true
         values: "$values:ravion/dns-providers"
+    - ravion_dns_provider_given_id:
+        type: string
+        label: "DNS Provider (by stable id)"
+        description: "Per-org stable identifier — same dual-lookup as ravion_dns_provider_id. Use this when module definitions are shared across orgs that reference the same provider by name."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          ravion_dns_provider_id: ""
     - ravion_cluster_slug:
         type: string
         label: "FQDN Slug"
