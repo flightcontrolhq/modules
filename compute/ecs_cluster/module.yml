@@ -324,6 +324,38 @@ input:
         default: false
         show_when:
           enable_public_alb: true
+    - public_alb_cert_source:
+        type: string
+        label: "Certificate Source"
+        description: "Where the HTTPS listener's default certificate comes from. \"Ravion managed\" allocates a wildcard FQDN under your selected DNS zone and issues a wildcard ACM cert covering services in this cluster. \"Bring your own\" expects you to supply ACM ARNs directly."
+        default: "ravion_managed"
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+        values:
+          - value: "ravion_managed"
+            label: "Ravion managed (wildcard cert + FQDN auto-allocated)"
+          - value: "byo"
+            label: "Bring your own ACM cert"
+    - ravion_dns_zone_id:
+        type: string
+        label: "DNS Zone"
+        description: "Ravion DnsZone the cluster's wildcard FQDN lives under. Choose the platform-managed Ravion apex (default) or a customer-owned zone registered on the DNS Zones settings page."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          public_alb_cert_source: "ravion_managed"
+        validation:
+          required: true
+        values: "$values:ravion/dns-zones"
+    - ravion_cluster_slug:
+        type: string
+        label: "FQDN Slug"
+        description: "Human-readable slug used to derive the cluster's FQDN (<slug>-<hash>.<apex>). Defaults to the cluster name when empty."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          public_alb_cert_source: "ravion_managed"
     - public_alb_certificate_arns:
         type: list
         label: "ACM Certificate ARNs"
@@ -331,6 +363,7 @@ input:
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
+          public_alb_cert_source: "byo"
         validation:
           required: true
           min_length: 1
@@ -515,6 +548,13 @@ output:
   public_alb_security_group_id: string
   public_alb_http_listener_arn: string
   public_alb_https_listener_arn: string
+  # Ravion managed domains
+  ravion_managed_domains_enabled: boolean
+  ravion_cluster_domain_allocation_id: string
+  ravion_cluster_managed_domain_id: string
+  ravion_cluster_fqdn: string
+  ravion_cluster_certificate_arn: string
+  ravion_dns_zone_id: string
   # Private ALB
   private_alb_arn: string
   private_alb_id: string

@@ -248,6 +248,16 @@ output "region" {
 # inherit the cluster's wildcard cert via SNI.
 ################################################################################
 
+output "ravion_managed_domains_enabled" {
+  description = "True when this cluster's HTTPS listener uses a Ravion-managed wildcard cert. Service modules under the cluster use this to decide whether to allocate child FQDNs + create host-header listener rules."
+  value       = local.enable_ravion_domain
+}
+
+output "ravion_dns_zone_id" {
+  description = "DnsZone id the cluster's wildcard lives under. Passes through to service modules so they allocate under the same zone."
+  value       = local.enable_ravion_domain ? var.ravion_dns_zone_id : null
+}
+
 output "ravion_cluster_domain_allocation_id" {
   description = "DomainAllocation id of the cluster's wildcard. Pass to ecs_service.ravion_parent_domain_allocation_id so service FQDNs sit under the wildcard."
   value       = local.enable_ravion_domain ? ravion_domain.cluster[0].id : null

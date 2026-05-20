@@ -19,8 +19,10 @@ module "public_alb" {
   enable_https_listener  = var.public_alb_enable_https
   http_to_https_redirect = var.public_alb_enable_https
 
-  # SSL/TLS
-  certificate_arns = var.public_alb_certificate_arns
+  # SSL/TLS — when the cluster manages domains via Ravion, the wildcard
+  # cert issued in ravion_domains.tf is wired in as the default; the
+  # BYO list is appended for SNI on customer-supplied domains.
+  certificate_arns = local.public_alb_effective_certificate_arns
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings

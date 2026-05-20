@@ -22,11 +22,9 @@
 # runner with their IAM. Ravion never holds customer credentials.
 ################################################################################
 
-locals {
-  enable_ravion_domain = var.ravion_dns_zone_id != null && var.ravion_dns_zone_id != ""
-}
-
 # 1. Allocate the cluster's wildcard FQDN.
+#    The local.enable_ravion_domain gate lives in locals.tf next to the
+#    ALB-cert-source toggle since both branches need to agree.
 resource "ravion_domain" "cluster" {
   count       = local.enable_ravion_domain ? 1 : 0
   dns_zone_id = var.ravion_dns_zone_id

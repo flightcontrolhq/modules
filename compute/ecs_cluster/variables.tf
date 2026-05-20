@@ -634,14 +634,25 @@ variable "region" {
 # Ravion domain control plane
 ################################################################################
 
+variable "public_alb_cert_source" {
+  type        = string
+  description = "Where the public ALB's default HTTPS certificate comes from. `ravion_managed` allocates a wildcard FQDN under ravion_dns_zone_id and issues a wildcard ACM cert that the listener uses as its default; service modules under this cluster inherit the wildcard via SNI. `byo` expects public_alb_certificate_arns instead."
+  default     = "ravion_managed"
+
+  validation {
+    condition     = contains(["ravion_managed", "byo"], var.public_alb_cert_source)
+    error_message = "public_alb_cert_source must be one of: ravion_managed, byo."
+  }
+}
+
 variable "ravion_dns_zone_id" {
   type        = string
-  description = "Ravion DnsZone id (dzn_*) the cluster's wildcard allocation lives under. Typically the platform-owned Ravion apex zone, looked up via the Ravion API or injected by tower-go. When null/empty, the Ravion-domain plumbing is skipped entirely."
+  description = "Ravion DnsZone id (dzn_*) the cluster's wildcard allocation lives under. Required when public_alb_cert_source = \"ravion_managed\". Pick the platform-owned Ravion apex zone or a customer-owned zone registered on the DNS Zones settings page."
   default     = null
 }
 
 variable "ravion_cluster_slug" {
   type        = string
-  description = "Human-readable slug used to derive the cluster's FQDN (`<slug>-<hash>.ravion.app`). Defaults to var.name when null."
+  description = "Human-readable slug used to derive the cluster's FQDN (`<slug>-<hash>.<apex>`). Defaults to var.name when null."
   default     = null
 }

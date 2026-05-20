@@ -641,12 +641,23 @@ variable "ravion_cluster_https_listener_arn" {
 
 variable "ravion_service_slug" {
   type        = string
-  description = "Human-readable slug used to derive the service FQDN under the cluster wildcard. Defaults to var.name."
+  description = "Human-readable slug used to derive the service FQDN under the cluster wildcard. Defaults to var.name. Applied to every domain in ravion_domains (each gets its own `<slug>-<hash>.<cluster-fqdn>` allocation)."
   default     = null
 }
 
-variable "ravion_listener_rule_priority" {
+variable "ravion_domains" {
+  type        = list(string)
+  description = "Domain slugs to allocate under the cluster wildcard. Each entry becomes a child DomainAllocation, a routing record (FQDN → cluster ALB), and a host-header listener rule. Empty list (default) means the service is reachable only via the cluster's apex wildcard; no per-service FQDN is allocated. Each entry is a slug — Ravion derives `<slug>-<hash>.<cluster-fqdn>` deterministically so re-applies converge."
+  default     = []
+
+  validation {
+    condition     = alltrue([for d in var.ravion_domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63])
+    error_message = "Each ravion_domains entry must be a DNS-safe slug ([a-z0-9-], up to 63 chars)."
+  }
+}
+
+variable "ravion_listener_rule_priority_base" {
   type        = number
-  description = "Explicit listener-rule priority. 0 → derived deterministically from var.name (sha256-based) so two services in the same cluster don't collide."
+  description = "Base for the per-domain listener-rule priority. 0 → derived deterministically from (var.name, domain-slug) via sha256 so two services in the same cluster don't collide. Non-zero values are used as-is for the first domain; subsequent domains increment by 1."
   default     = 0
 }
