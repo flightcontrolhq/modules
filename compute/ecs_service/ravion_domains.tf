@@ -50,6 +50,27 @@ locals {
   }
 }
 
+# 0. Auto-mode allocation (zero-config). One URL per service when
+#    ravion_auto_subdomain is on AND the parent cluster wildcard is
+#    wired. Slug = service's given_id → server derives
+#    `<given-id>-<random>.<cluster-fqdn>`. No customer typing.
+locals {
+  ravion_auto_enabled = (
+    local.ravion_managed &&
+    var.ravion_auto_subdomain &&
+    var.service_given_id != null &&
+    var.service_given_id != ""
+  )
+}
+
+resource "ravion_domain" "auto" {
+  count = local.ravion_auto_enabled ? 1 : 0
+
+  dns_provider_id             = var.ravion_dns_provider_id
+  slug                        = var.service_given_id
+  parent_domain_allocation_id = var.ravion_parent_domain_allocation_id
+}
+
 # 1. Allocate one child FQDN per entry in var.ravion_domains.
 resource "ravion_domain" "this" {
   for_each = local.ravion_domain_set
@@ -500,4 +521,108 @@ resource "aws_lb_listener_rule" "group" {
   tags = merge(var.tags, {
     "ravion:cert_group" = each.value.group_name
   })
+}
+
+################################################################################
+# Auto-mode routing records + listener rule (zero-config URL)
+#
+# Same per-variant dispatch as the per-domain blocks above, but for
+# the single auto-allocation. Count gating is 1 when auto-mode is on
+# AND the matching provider variant resolves; 0 otherwise.
+################################################################################
+
+# Auto: ROUTE53_RAVION routing — Ravion's Route53 ALIAS, inline write.
+resource "ravion_dns_records" "auto_ravion" {
+  count = local.ravion_auto_enabled && local.is_route53_ravion ? 1 : 0
+
+  managed_domain_id = ravion_domain.auto[0].id
+  records = [{
+    name = ravion_domain.auto[0].fqdn
+    type = "ALIAS"
+    value = jsonencode({
+      dns_name = var.ravion_cluster_alb_dns_name
+      zone_id  = var.ravion_cluster_alb_zone_id
+    })
+  }]
+}
+
+# Auto: ROUTE53 (customer) routing — customer AWS write + Ravion metadata.
+resource "aws_route53_record" "auto_r53" {
+  count = local.ravion_auto_enabled && local.is_route53 ? 1 : 0
+
+  zone_id = local.dns_provider.route53.hosted_zone_id
+  name    = ravion_domain.auto[0].fqdn
+  type    = "A"
+
+  alias {
+    name                   = var.ravion_cluster_alb_dns_name
+    zone_id                = var.ravion_cluster_alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "ravion_dns_records" "auto_metadata_r53" {
+  count = local.ravion_auto_enabled && local.is_route53 ? 1 : 0
+
+  managed_domain_id = ravion_domain.auto[0].id
+  records = [{
+    name = ravion_domain.auto[0].fqdn
+    type = "ALIAS"
+    value = jsonencode({
+      dns_name = var.ravion_cluster_alb_dns_name
+      zone_id  = var.ravion_cluster_alb_zone_id
+    })
+  }]
+  depends_on = [aws_route53_record.auto_r53]
+}
+
+# Auto: CLOUDFLARE routing — customer CF write + Ravion metadata.
+resource "cloudflare_dns_record" "auto_cf" {
+  count = local.ravion_auto_enabled && local.is_cloudflare ? 1 : 0
+
+  zone_id = local.dns_provider.cloudflare.zone_id
+  name    = ravion_domain.auto[0].fqdn
+  type    = "CNAME"
+  content = var.ravion_cluster_alb_dns_name
+  ttl     = 60
+  proxied = false
+}
+
+resource "ravion_dns_records" "auto_metadata_cf" {
+  count = local.ravion_auto_enabled && local.is_cloudflare ? 1 : 0
+
+  managed_domain_id = ravion_domain.auto[0].id
+  records = [{
+    name  = ravion_domain.auto[0].fqdn
+    type  = "CNAME"
+    value = var.ravion_cluster_alb_dns_name
+    ttl   = 60
+  }]
+  depends_on = [cloudflare_dns_record.auto_cf]
+}
+
+# Auto: host-header listener rule. Same priority space as the per-
+# domain rules; seeded with "auto:" to avoid collision.
+resource "aws_lb_listener_rule" "auto" {
+  count = local.ravion_auto_enabled && local.ravion_has_listener ? 1 : 0
+
+  listener_arn = var.ravion_cluster_https_listener_arn
+  priority     = (parseint(substr(sha256("auto:${var.name}"), 0, 4), 16) % 49000) + 1000
+
+  condition {
+    host_header {
+      values = [ravion_domain.auto[0].fqdn]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.this[0].arn
+  }
+
+  lifecycle {
+    ignore_changes = [action]
+  }
+
+  tags = var.tags
 }

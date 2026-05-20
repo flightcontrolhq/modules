@@ -624,6 +624,18 @@ variable "ravion_dns_provider_given_id" {
   default     = null
 }
 
+variable "ravion_auto_subdomain" {
+  type        = bool
+  description = "Auto-mode: when true (and inherit_cluster_certificate is set on the caller's wiring), allocate one URL automatically with format `<service-given-id>-<random>.<cluster-fqdn>` — zero typing. When false, the caller's ravion_domains list (full FQDNs OR leaf labels under the cluster wildcard) is used instead."
+  default     = true
+}
+
+variable "service_given_id" {
+  type        = string
+  description = "The service module-instance's given_id. Used by auto-mode as the slug for the auto-allocated URL. Injected by the Ravion runner when present; safe to leave null in standalone use."
+  default     = null
+}
+
 variable "ravion_parent_domain_allocation_id" {
   type        = string
   description = "Cluster's DomainAllocation id, from `module.ecs_cluster.ravion_cluster_domain_allocation_id`. When null/empty, no Ravion FQDN is allocated."

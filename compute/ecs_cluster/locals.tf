@@ -1,29 +1,54 @@
 locals {
   region = coalesce(var.region, data.aws_region.current.id)
 
-  # Either input form (id or given_id) drives the lookup. The data
-  # source's count is gated on this string being non-empty.
-  dns_provider_lookup_key = coalesce(
-    var.ravion_dns_provider_id,
-    var.ravion_dns_provider_given_id,
-    "",
+  # Auto-mode resolution. When use_ravion_subdomain is on, the data
+  # source ignores customer-supplied provider inputs and looks up the
+  # platform apex by its stable givenId (seeded at api-go boot). When
+  # off, the customer's provider id/given_id is used.
+  auto_provider_id = (
+    var.use_ravion_subdomain
+    ? null
+    : (var.ravion_dns_provider_id != null && var.ravion_dns_provider_id != "" ? var.ravion_dns_provider_id : null)
+  )
+  auto_provider_given_id = (
+    var.use_ravion_subdomain
+    ? "ravion-platform-apex"
+    : (var.ravion_dns_provider_given_id != null && var.ravion_dns_provider_given_id != "" ? var.ravion_dns_provider_given_id : null)
+  )
+
+  # The data source's count is gated on having SOMETHING to look up.
+  # Auto-mode always has the platform given_id; customer mode requires
+  # one of the two caller inputs.
+  enable_dns_provider_lookup = (
+    var.use_ravion_subdomain ||
+    local.auto_provider_id != null ||
+    local.auto_provider_given_id != null
   )
 
   # The resolved DnsProvider row (only present when the data source's
   # count == 1). Per-variant attribute groups (`route53_ravion`,
   # `route53`, `cloudflare`, `external`) are how the ravion_domains.tf
   # blocks dispatch — exactly one is non-null per row.
-  dns_provider = local.dns_provider_lookup_key != "" ? data.ravion_dns_provider.this[0] : null
+  dns_provider = local.enable_dns_provider_lookup ? data.ravion_dns_provider.this[0] : null
 
   # Ravion-managed domains gate. When true the cluster allocates a
   # wildcard FQDN + issues a wildcard ACM cert in ravion_domains.tf;
   # service modules under this cluster inherit the wildcard via SNI.
-  # Implicit: setting either provider input + enabling HTTPS implies
-  # "use Ravion-managed cert"; nothing else picks the path.
   enable_ravion_domain = (
     var.enable_public_alb &&
     var.public_alb_enable_https &&
     local.dns_provider != null
+  )
+
+  # Auto-mode fqdnOverride: literal `<module-instance-id>.<apex>`. The
+  # cluster's wildcard cert covers `*.<module-instance-id>.<apex>` so
+  # services under it inherit via SNI. Falls back to a placeholder
+  # when module_instance_id is null (standalone use) — in that case
+  # auto-mode is effectively disabled and slug-mode kicks in.
+  cluster_auto_fqdn = (
+    var.use_ravion_subdomain && var.module_instance_id != null && var.module_instance_id != ""
+    ? format("%s.%s", var.module_instance_id, local.dns_provider != null ? local.dns_provider.domain_name : "")
+    : null
   )
 
   # Per-variant flags — count gating on these decides which writer

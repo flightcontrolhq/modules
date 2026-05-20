@@ -324,14 +324,23 @@ input:
         default: false
         show_when:
           enable_public_alb: true
-    - ravion_dns_provider_id:
-        type: string
-        label: "DNS Provider"
-        description: "Ravion DnsProvider the cluster's wildcard FQDN lives under. Register providers (Route53, Cloudflare, or other) on the DNS Providers settings page; the variant (cert source, validation path) is implicit in the provider's type. Leave empty to use BYO certificate ARNs instead."
+    - use_ravion_subdomain:
+        type: boolean
+        label: "Use a Ravion-generated subdomain"
+        description: "Skip DNS setup — Ravion allocates *.<module-instance-id>.ravion.app and issues the wildcard cert. Turn off to bring your own zone (Cloudflare, Route53, etc.)."
+        default: true
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
-        values: "$values:ravion/dns-providers"
+    - ravion_dns_provider_id:
+        type: string
+        label: "DNS Provider"
+        description: "Ravion DnsProvider the cluster's wildcard FQDN lives under. Register providers (Route53, Cloudflare, or other) on the DNS Providers settings page. Only consulted when use_ravion_subdomain is off."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          use_ravion_subdomain: false
+        values: "$values:ravion/dns-providers-customer"
     - ravion_dns_provider_given_id:
         type: string
         label: "DNS Provider (by stable id)"
@@ -339,15 +348,16 @@ input:
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
+          use_ravion_subdomain: false
           ravion_dns_provider_id: ""
     - ravion_cluster_slug:
         type: string
         label: "FQDN Slug"
-        description: "Human-readable slug used to derive the cluster's FQDN (<slug>-<hash>.<apex>). Defaults to the cluster name when empty."
+        description: "Human-readable slug used to derive the cluster's FQDN (<slug>-<hash>.<apex>). Defaults to the cluster name when empty. Ignored in auto-mode (uses the module-instance id as the literal label)."
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
-          ravion_dns_provider_id: "!="
+          use_ravion_subdomain: false
     - public_alb_certificate_arns:
         type: list
         label: "ACM Certificate ARNs (BYO)"

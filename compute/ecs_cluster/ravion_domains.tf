@@ -30,8 +30,13 @@
 resource "ravion_domain" "cluster" {
   count           = local.enable_ravion_domain ? 1 : 0
   dns_provider_id = local.dns_provider.id
-  slug            = coalesce(var.ravion_cluster_slug, var.name)
-  wildcard        = true
+  # Auto-mode (use_ravion_subdomain + module_instance_id known) posts
+  # the literal `<module-instance-id>.<apex>` so the wildcard cert
+  # covers `*.<module-instance-id>.<apex>`. Slug mode falls back to
+  # the legacy `<slug>-<hash>.<apex>` derivation.
+  slug          = local.cluster_auto_fqdn == null ? coalesce(var.ravion_cluster_slug, var.name) : null
+  fqdn_override = local.cluster_auto_fqdn
+  wildcard      = true
 }
 
 # ---- 2. ACM wildcard cert (skipped for EXTERNAL) ---------------------------

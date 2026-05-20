@@ -15,18 +15,26 @@ data "aws_region" "current" {}
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# Resolve the registered Ravion DnsProvider that the cluster's
-# wildcard FQDN + cert hang off. Accepts an opaque id
-# (`ravion_dns_provider_id = "dnsprov_..."`) OR a per-org stable
-# `given_id` — the api-go handler does a dual lookup. Exactly one of
-# the per-variant attribute groups (`route53_ravion`, `route53`,
-# `cloudflare`, `external`) is non-null on the returned row; the count
-# gating in ravion_domains.tf dispatches on those.
+# Resolve the cluster's DnsProvider:
 #
-# The count = 0 branch (no provider configured) is the BYO-cert path —
-# `var.public_alb_certificate_arns` is consumed directly.
+#   - Auto-mode (use_ravion_subdomain = true): look up the
+#     platform-managed apex by its stable givenId. The api-go boot
+#     seeds this row with `givenId = "ravion-platform-apex"` so any
+#     Ravion deployment can reference it without knowing the opaque
+#     dnsprov_* id.
+#
+#   - Customer mode (use_ravion_subdomain = false + caller-supplied
+#     ravion_dns_provider_id / given_id): standard dual-lookup, same
+#     as the V2 service modules.
+#
+# count = 0 path is the BYO-cert escape hatch (no provider configured;
+# var.public_alb_certificate_arns is consumed directly).
 data "ravion_dns_provider" "this" {
-  count    = local.dns_provider_lookup_key == "" ? 0 : 1
-  id       = var.ravion_dns_provider_id != null && var.ravion_dns_provider_id != "" ? var.ravion_dns_provider_id : null
-  given_id = var.ravion_dns_provider_given_id != null && var.ravion_dns_provider_given_id != "" ? var.ravion_dns_provider_given_id : null
+  count = local.enable_dns_provider_lookup ? 1 : 0
+  id    = local.auto_provider_id
+  given_id = (
+    local.auto_provider_id == null
+    ? local.auto_provider_given_id
+    : null
+  )
 }

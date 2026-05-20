@@ -646,9 +646,15 @@ variable "region" {
 # take. Enum strings never appear in this module's HCL.
 ################################################################################
 
+variable "use_ravion_subdomain" {
+  type        = bool
+  description = "Auto-mode: allocate the cluster wildcard under Ravion's platform apex (no DNS setup required). When true, the module looks up the platform DnsProvider via given_id = \"ravion-platform-apex\" and posts a literal FQDN of `<module-instance-id>.<ravion-apex>` (so the cert covers `*.<module-instance-id>.<ravion-apex>`). When false, the caller's ravion_dns_provider_id / given_id is used."
+  default     = true
+}
+
 variable "ravion_dns_provider_id" {
   type        = string
-  description = "Opaque Ravion DnsProvider id (`dnsprov_*`) the cluster's wildcard allocation lives under. Provide EITHER this or ravion_dns_provider_given_id; if both are set, this wins. Leave both null to opt out of Ravion-managed certs and supply public_alb_certificate_arns directly."
+  description = "Opaque Ravion DnsProvider id (`dnsprov_*`) the cluster's wildcard allocation lives under. Only consulted when use_ravion_subdomain is false. Provide EITHER this or ravion_dns_provider_given_id; if both are set, this wins."
   default     = null
 }
 
@@ -660,6 +666,12 @@ variable "ravion_dns_provider_given_id" {
 
 variable "ravion_cluster_slug" {
   type        = string
-  description = "Human-readable slug used to derive the cluster's FQDN (`<slug>-<hash>.<apex>`). Defaults to var.name when null."
+  description = "Human-readable slug used to derive the cluster's FQDN (`<slug>-<hash>.<apex>`). Defaults to var.name when null. Ignored in use_ravion_subdomain mode (auto-mode uses the literal module-instance id instead)."
+  default     = null
+}
+
+variable "module_instance_id" {
+  type        = string
+  description = "The cluster module-instance id this module is running for. Used by use_ravion_subdomain auto-mode to construct the wildcard FQDN. Injected by the Ravion runner via the workspace name when present; safe to leave null in standalone use."
   default     = null
 }
