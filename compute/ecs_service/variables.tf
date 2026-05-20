@@ -670,3 +670,49 @@ variable "ravion_listener_rule_priority_base" {
   description = "Base for the per-domain listener-rule priority. 0 → derived deterministically from (var.name, domain-slug) via sha256 so two services in the same cluster don't collide. Non-zero values are used as-is for the first domain; subsequent domains increment by 1."
   default     = 0
 }
+
+variable "ravion_certificate_groups" {
+  type = list(object({
+    # Group name — used as a stable identifier in TF state keys
+    # (ravion_domain.group[\"<name>/<slug>\"]) and as a tag on AWS
+    # resources. Pick something short + url-safe per group; never
+    # reuse across groups in the same service.
+    name = string
+
+    # Per-group DnsProvider override. Either id or given_id wins
+    # (id first if both set). Leave both null to inherit from the
+    # service's top-level ravion_dns_provider_* vars.
+    dns_provider_id       = optional(string)
+    dns_provider_given_id = optional(string)
+
+    # Domain slugs to cover with this cert. Each becomes a child
+    # ravion_domain allocation under the group's provider apex (FQDN
+    # derived as <slug>-<hash>.<apex>). Capped at 10 to match ACM's
+    # default cert SAN limit — increase only after raising the AWS
+    # account quota.
+    domains = list(string)
+  }))
+  description = "Per-service certificate groups. Each group issues ONE ACM cert covering up to 10 domains, validated via the group's DnsProvider variant, and attached as an SNI cert to the cluster's HTTPS listener. Use when service FQDNs need their own cert (multi-zone setups, non-wildcard apexes) instead of inheriting the cluster's wildcard. Groups are additive — ungrouped ravion_domains keep inheriting the cluster wildcard."
+  default     = []
+
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : length(g.domains) <= 10])
+    error_message = "Each certificate group can contain at most 10 domains (ACM default SAN limit)."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : length(g.domains) >= 1])
+    error_message = "Each certificate group must contain at least 1 domain."
+  }
+  validation {
+    condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)
+    error_message = "Certificate group names must be unique within a service."
+  }
+  validation {
+    condition = alltrue([
+      for g in var.ravion_certificate_groups : alltrue([
+        for d in g.domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63
+      ])
+    ])
+    error_message = "Each domain slug must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ and be <= 63 chars."
+  }
+}

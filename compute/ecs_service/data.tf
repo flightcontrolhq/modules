@@ -26,4 +26,27 @@ data "ravion_dns_provider" "this" {
   given_id = var.ravion_dns_provider_given_id != null && var.ravion_dns_provider_given_id != "" ? var.ravion_dns_provider_given_id : null
 }
 
+# Per-cert-group DnsProvider lookups. Each group can target a different
+# provider than the service's top-level one (multi-zone setups, e.g.
+# acme.com on Cloudflare + app.acme.com on Route53). Falls back to the
+# service-level provider when the group doesn't specify its own.
+data "ravion_dns_provider" "groups" {
+  for_each = { for g in var.ravion_certificate_groups : g.name => g }
+
+  id = coalesce(
+    each.value.dns_provider_id,
+    var.ravion_dns_provider_id,
+    "",
+  ) != "" ? coalesce(each.value.dns_provider_id, var.ravion_dns_provider_id) : null
+
+  given_id = coalesce(
+    each.value.dns_provider_id,
+    var.ravion_dns_provider_id,
+    "",
+    ) != "" ? null : coalesce(
+    each.value.dns_provider_given_id,
+    var.ravion_dns_provider_given_id,
+  )
+}
+
 
