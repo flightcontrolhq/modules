@@ -630,7 +630,7 @@ variable "ravion_auto_subdomain" {
   default     = true
 }
 
-variable "service_given_id" {
+variable "module_instance_given_id" {
   type        = string
   description = "The service module-instance's given_id. Used by auto-mode as the slug for the auto-allocated URL. Injected by the Ravion runner when present; safe to leave null in standalone use."
   default     = null
@@ -691,17 +691,19 @@ variable "ravion_certificate_groups" {
     # reuse across groups in the same service.
     name = string
 
-    # Per-group DnsProvider override. Either id or given_id wins
-    # (id first if both set). Leave both null to inherit from the
-    # service's top-level ravion_dns_provider_* vars.
+    # DnsProvider the group's domains live under. Required — each
+    # group MUST specify its own customer-owned provider (no fallback
+    # to the service's top-level provider). Either id or given_id
+    # wins (id first if both set).
     dns_provider_id       = optional(string)
     dns_provider_given_id = optional(string)
 
-    # Domain slugs to cover with this cert. Each becomes a child
-    # ravion_domain allocation under the group's provider apex (FQDN
-    # derived as <slug>-<hash>.<apex>). Capped at 10 to match ACM's
-    # default cert SAN limit — increase only after raising the AWS
-    # account quota.
+    # Full FQDNs to cover with this cert. Each becomes a
+    # ravion_domain allocation posted with fqdn_override (used
+    # verbatim) under the group's provider apex. Each entry must
+    # end with the chosen provider's apex (validated server-side
+    # via PROVIDER_FQDN_NOT_UNDER_APEX). Capped at 10 to match
+    # ACM's default cert SAN limit.
     domains = list(string)
   }))
   description = "Per-service certificate groups. Each group issues ONE ACM cert covering up to 10 domains, validated via the group's DnsProvider variant, and attached as an SNI cert to the cluster's HTTPS listener. Use when service FQDNs need their own cert (multi-zone setups, non-wildcard apexes) instead of inheriting the cluster's wildcard. Groups are additive — ungrouped ravion_domains keep inheriting the cluster wildcard."

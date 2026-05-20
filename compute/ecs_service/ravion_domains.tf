@@ -58,8 +58,8 @@ locals {
   ravion_auto_enabled = (
     local.ravion_managed &&
     var.ravion_auto_subdomain &&
-    var.service_given_id != null &&
-    var.service_given_id != ""
+    var.module_instance_given_id != null &&
+    var.module_instance_given_id != ""
   )
 }
 
@@ -67,7 +67,7 @@ resource "ravion_domain" "auto" {
   count = local.ravion_auto_enabled ? 1 : 0
 
   dns_provider_id             = var.ravion_dns_provider_id
-  slug                        = var.service_given_id
+  slug                        = var.module_instance_given_id
   parent_domain_allocation_id = var.ravion_parent_domain_allocation_id
 }
 
@@ -206,13 +206,15 @@ resource "aws_lb_listener_rule" "ravion" {
 
 locals {
   # Flatten (group, domain) into a single map for nested for_each
-  # against per-domain resources. The key is "<group>/<slug>" so two
-  # groups can use the same slug without collision.
+  # against per-domain resources. The key is "<group>/<fqdn>" so two
+  # groups can list the same fqdn without TF state collision.
   group_domain_pairs = merge([
     for g in var.ravion_certificate_groups : {
       for d in g.domains : "${g.name}/${d}" => {
         group_name = g.name
-        slug       = d
+        # Slug field name kept for backwards-compat with the per-row
+        # resource that consumed it; value is the full FQDN now.
+        slug = d
       }
     }
   ]...)
@@ -235,12 +237,14 @@ locals {
   }
 }
 
-# 1. Per-domain allocations under the group's provider.
+# 1. Per-domain allocations under the group's provider. Each entry
+#    is a FULL FQDN posted via fqdn_override — api-go validates it
+#    lives under the resolved DnsProvider's apex.
 resource "ravion_domain" "group" {
   for_each = local.group_domain_pairs
 
   dns_provider_id = local.group_providers[each.value.group_name].id
-  slug            = each.value.slug
+  fqdn_override   = each.value.slug
 }
 
 # 2. ONE ACM cert per group (primary + SANs). Customer's AWS account,

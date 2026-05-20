@@ -42,12 +42,18 @@ locals {
 
   # Auto-mode fqdnOverride: literal `<module-instance-id>.<apex>`. The
   # cluster's wildcard cert covers `*.<module-instance-id>.<apex>` so
-  # services under it inherit via SNI. Falls back to a placeholder
-  # when module_instance_id is null (standalone use) — in that case
-  # auto-mode is effectively disabled and slug-mode kicks in.
+  # services under it inherit via SNI. Falls back to null when
+  # module_instance_id is unset (standalone use) — in that case auto-
+  # mode is effectively disabled and slug-mode kicks in.
+  #
+  # Apex trim — the DnsProvider's domain_name MAY arrive with a
+  # trailing dot (depends on how the row was seeded). Trim it so the
+  # resulting FQDN is canonical (no `<id>.example.com..`) and the
+  # api-go under-apex check passes without depending on its
+  # forgiving-trailing-dot logic.
   cluster_auto_fqdn = (
     var.use_ravion_subdomain && var.module_instance_id != null && var.module_instance_id != ""
-    ? format("%s.%s", var.module_instance_id, local.dns_provider != null ? local.dns_provider.domain_name : "")
+    ? format("%s.%s", var.module_instance_id, local.dns_provider != null ? trimsuffix(local.dns_provider.domain_name, ".") : "")
     : null
   )
 
