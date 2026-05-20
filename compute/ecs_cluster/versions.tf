@@ -24,10 +24,7 @@ terraform {
     # is CLOUDFLARE — the customer's TF writes acme validation +
     # apex routing records via `cloudflare_record`, and Ravion
     # records them after-the-fact via `ravion_dns_records` for the
-    # UI. Provider config below reads `data.ravion_dns_provider`'s
-    # cloudflare attribute group; api_token is sourced from
-    # WorkOS Vault server-side and returned to the runner as a
-    # sensitive computed attribute.
+    # UI. 
     cloudflare = {
       source  = "cloudflare/cloudflare"
       version = ">= 4.0"

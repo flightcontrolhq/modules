@@ -15,9 +15,8 @@
 #                    persists metadata via `ravion_dns_records` after-
 #                    the-fact (depends_on).
 #   CLOUDFLARE     → Customer's Cloudflare zone. `cloudflare_dns_record`
-#                    writes the record using the api_token sourced
-#                    from WorkOS Vault via the data source; Ravion
-#                    metadata after-the-fact.
+#                    writes the record using the api_token 
+
 #   EXTERNAL       → Skipped — module assumes BYO cert in this mode.
 #
 # All AWS / Cloudflare resources live in the customer's accounts,
@@ -100,7 +99,7 @@ resource "ravion_dns_records" "cluster_validation_metadata_r53" {
 
 # ---- 3c. CLOUDFLARE validation records -------------------------------------
 # Customer's Cloudflare zone. The cloudflare provider's api_token is
-# resolved from WorkOS Vault by data.ravion_dns_provider — see
+# resolved by data.ravion_dns_provider — see
 # provider.tf for the provider block.
 resource "cloudflare_dns_record" "cluster_validation_cf" {
   for_each = local.is_cloudflare ? {
