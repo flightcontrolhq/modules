@@ -603,15 +603,24 @@ variable "region" {
 ################################################################################
 # Ravion domain control plane
 #
-# When the parent cluster module is configured with ravion_dns_zone_id,
-# pass its outputs into the service module via these variables to
-# allocate a child FQDN that inherits the cluster's wildcard cert via
-# SNI. Set ravion_parent_domain_allocation_id = null/empty to opt out.
+# V2: pass the parent cluster's outputs in via ravion_dns_provider_id
+# (`module.ecs_cluster.ravion_dns_provider_id`) and the existing
+# ravion_parent_domain_allocation_id, ravion_cluster_alb_*, and
+# ravion_cluster_https_listener_arn knobs. The data source in data.tf
+# resolves the provider's discriminated config so the routing-record
+# write path (Route53 vs Cloudflare vs metadata-only) picks the right
+# variant.
 ################################################################################
 
-variable "ravion_dns_zone_id" {
+variable "ravion_dns_provider_id" {
   type        = string
-  description = "Ravion DnsZone id (dzn_*) the allocation lives under. Same value as the cluster's ravion_dns_zone_id."
+  description = "Opaque Ravion DnsProvider id (`dnsprov_*`) the service's child allocation lives under. Same value as the cluster's `ravion_dns_provider_id` output. Provide EITHER this or ravion_dns_provider_given_id; if both are set, this wins."
+  default     = null
+}
+
+variable "ravion_dns_provider_given_id" {
+  type        = string
+  description = "Per-org stable identifier for the Ravion DnsProvider — same dual-lookup as ravion_dns_provider_id. Use this when modules reference providers by stable name across orgs."
   default     = null
 }
 

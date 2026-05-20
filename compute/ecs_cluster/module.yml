@@ -324,30 +324,14 @@ input:
         default: false
         show_when:
           enable_public_alb: true
-    - public_alb_cert_source:
+    - ravion_dns_provider_id:
         type: string
-        label: "Certificate Source"
-        description: "Where the HTTPS listener's default certificate comes from. \"Ravion managed\" allocates a wildcard FQDN under your selected DNS zone and issues a wildcard ACM cert covering services in this cluster. \"Bring your own\" expects you to supply ACM ARNs directly."
-        default: "ravion_managed"
+        label: "DNS Provider"
+        description: "Ravion DnsProvider the cluster's wildcard FQDN lives under. Register providers (Route53, Cloudflare, or other) on the DNS Providers settings page; the variant (cert source, validation path) is implicit in the provider's type. Leave empty to use BYO certificate ARNs instead."
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
-        values:
-          - value: "ravion_managed"
-            label: "Ravion managed (wildcard cert + FQDN auto-allocated)"
-          - value: "byo"
-            label: "Bring your own ACM cert"
-    - ravion_dns_zone_id:
-        type: string
-        label: "DNS Zone"
-        description: "Ravion DnsZone the cluster's wildcard FQDN lives under. Choose the platform-managed Ravion apex (default) or a customer-owned zone registered on the DNS Zones settings page."
-        show_when:
-          enable_public_alb: true
-          public_alb_enable_https: true
-          public_alb_cert_source: "ravion_managed"
-        validation:
-          required: true
-        values: "$values:ravion/dns-zones"
+        values: "$values:ravion/dns-providers"
     - ravion_cluster_slug:
         type: string
         label: "FQDN Slug"
@@ -355,18 +339,16 @@ input:
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
-          public_alb_cert_source: "ravion_managed"
+          ravion_dns_provider_id: "!="
     - public_alb_certificate_arns:
         type: list
-        label: "ACM Certificate ARNs"
-        description: "ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI"
+        label: "ACM Certificate ARNs (BYO)"
+        description: "ACM certificate ARNs for HTTPS. Used directly when no DNS provider is selected, or appended after the Ravion-managed wildcard cert as additional SNI certificates. The first ARN is the listener's default in BYO mode."
+        default: []
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
-          public_alb_cert_source: "byo"
         validation:
-          required: true
-          min_length: 1
           patterns:
             - pattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-z0-9-]+$"
               message: "Must be a valid ACM certificate ARN"

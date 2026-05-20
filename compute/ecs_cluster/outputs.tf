@@ -253,9 +253,9 @@ output "ravion_managed_domains_enabled" {
   value       = local.enable_ravion_domain
 }
 
-output "ravion_dns_zone_id" {
-  description = "DnsZone id the cluster's wildcard lives under. Passes through to service modules so they allocate under the same zone."
-  value       = local.enable_ravion_domain ? var.ravion_dns_zone_id : null
+output "ravion_dns_provider_id" {
+  description = "DnsProvider id the cluster's wildcard lives under. Passes through to service modules so they allocate under the same provider — preserves the same dns_provider for all FQDNs in the cluster regardless of which variant (Route53/Cloudflare/etc.) is in use."
+  value       = local.enable_ravion_domain ? local.dns_provider.id : null
 }
 
 output "ravion_cluster_domain_allocation_id" {
@@ -269,11 +269,11 @@ output "ravion_cluster_managed_domain_id" {
 }
 
 output "ravion_cluster_fqdn" {
-  description = "Cluster wildcard FQDN, e.g. `*.cluster-abc.ravion.app`."
+  description = "Cluster wildcard FQDN, e.g. `*.cluster-abc.acme.com`."
   value       = local.enable_ravion_domain ? ravion_domain.cluster[0].fqdn : null
 }
 
 output "ravion_cluster_certificate_arn" {
-  description = "ACM ARN of the cluster's wildcard cert. Use as the listener's default cert or as an extra cert via aws_lb_listener_certificate."
-  value       = local.enable_ravion_domain ? aws_acm_certificate_validation.cluster[0].certificate_arn : null
+  description = "ACM ARN of the cluster's wildcard cert. Use as the listener's default cert or as an extra cert via aws_lb_listener_certificate. Null when the cluster's DnsProvider is EXTERNAL (no Ravion-managed cert)."
+  value       = local.enable_acm_cert ? aws_acm_certificate_validation.cluster[0].certificate_arn : null
 }

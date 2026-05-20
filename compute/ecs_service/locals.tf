@@ -1,5 +1,24 @@
 locals {
   region = coalesce(var.region, data.aws_region.current.id)
+
+  # Either input form (id or given_id) drives the lookup. The data
+  # source's count is gated on this string being non-empty.
+  dns_provider_lookup_key = coalesce(
+    var.ravion_dns_provider_id,
+    var.ravion_dns_provider_given_id,
+    "",
+  )
+
+  # The resolved DnsProvider row (only present when the data source's
+  # count == 1). Per-variant attribute groups (`route53_ravion`,
+  # `route53`, `cloudflare`, `external`) drive the routing-record
+  # write path dispatch in ravion_domains.tf.
+  dns_provider = local.dns_provider_lookup_key != "" ? data.ravion_dns_provider.this[0] : null
+
+  # Per-variant flags. Mutually exclusive when set.
+  is_route53_ravion = local.dns_provider != null && local.dns_provider.route53_ravion != null
+  is_route53        = local.dns_provider != null && local.dns_provider.route53 != null
+  is_cloudflare     = local.dns_provider != null && local.dns_provider.cloudflare != null
 }
 
 ################################################################################

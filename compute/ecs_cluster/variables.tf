@@ -632,22 +632,29 @@ variable "region" {
 
 ################################################################################
 # Ravion domain control plane
+#
+# V2: cert source is implicit — when EITHER ravion_dns_provider_id OR
+# ravion_dns_provider_given_id is set AND the public ALB has HTTPS
+# enabled, the module allocates a wildcard FQDN under that provider
+# and issues a wildcard ACM cert. Otherwise BYO mode kicks in and
+# var.public_alb_certificate_arns is consumed directly.
+#
+# Variant dispatch happens in ravion_domains.tf via the
+# `data.ravion_dns_provider` data source — per-variant attribute
+# groups (`route53_ravion`, `route53`, `cloudflare`, `external`)
+# decide which writer path the validation + apex routing records
+# take. Enum strings never appear in this module's HCL.
 ################################################################################
 
-variable "public_alb_cert_source" {
+variable "ravion_dns_provider_id" {
   type        = string
-  description = "Where the public ALB's default HTTPS certificate comes from. `ravion_managed` allocates a wildcard FQDN under ravion_dns_zone_id and issues a wildcard ACM cert that the listener uses as its default; service modules under this cluster inherit the wildcard via SNI. `byo` expects public_alb_certificate_arns instead."
-  default     = "ravion_managed"
-
-  validation {
-    condition     = contains(["ravion_managed", "byo"], var.public_alb_cert_source)
-    error_message = "public_alb_cert_source must be one of: ravion_managed, byo."
-  }
+  description = "Opaque Ravion DnsProvider id (`dnsprov_*`) the cluster's wildcard allocation lives under. Provide EITHER this or ravion_dns_provider_given_id; if both are set, this wins. Leave both null to opt out of Ravion-managed certs and supply public_alb_certificate_arns directly."
+  default     = null
 }
 
-variable "ravion_dns_zone_id" {
+variable "ravion_dns_provider_given_id" {
   type        = string
-  description = "Ravion DnsZone id (dzn_*) the cluster's wildcard allocation lives under. Required when public_alb_cert_source = \"ravion_managed\". Pick the platform-owned Ravion apex zone or a customer-owned zone registered on the DNS Zones settings page."
+  description = "Per-org stable identifier for the Ravion DnsProvider — same dual-lookup as ravion_dns_provider_id. Module HCL prefers this form so cluster definitions stay portable across orgs that share the same provider naming."
   default     = null
 }
 
