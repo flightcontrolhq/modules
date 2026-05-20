@@ -44,8 +44,6 @@ module "site" {
     }
   }
 
-  long_cache_paths = ["/_astro/*", "/assets/*"]
-
   # Pin staging to a specific version while production tracks 'active'.
   kvs_initial_data = {
     "staging.example.com" = "v_staging"
