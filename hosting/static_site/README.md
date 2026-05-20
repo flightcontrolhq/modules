@@ -37,7 +37,7 @@ Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> v
                      | viewer-request
                      v
          +-----------+------------+        +-----+
-         | CloudFront Function    |<------>| KVS |
+         | rewriter (CFF)         |<------>| KVS |
          |   1. host -> version   |        +-----+
          |   2. rewrite URI:      |
          |      /foo -> /<v>/...  |
@@ -47,6 +47,14 @@ Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> v
          +-----------+------------+
          | S3 Hosting Bucket      |
          | (private, OAC SigV4)   |
+         +-----------+------------+
+                     | response
+                     v
+         +-----------+------------+
+         | cache-control (CFF)    |
+         |   viewer-response      |
+         |   sets Cache-Control   |
+         |   from rewritten URI   |
          +------------------------+
 ```
 
@@ -66,10 +74,10 @@ module "site" {
       acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
     }
   }
-
-  long_cache_paths = ["/assets/*"]
 }
 ```
+
+The viewer-response function automatically classifies every response as HTML or asset by the rewritten URI extension — no `long_cache_paths`, no per-project asset directory list. Hashed assets like `/_astro/foo.abc123.js` or `/main.def456.css` get `immutable, max-age=1y`; SPA routes like `/dashboard`, root files like `/favicon.ico`, and `*.html` documents get `s-maxage=5, stale-while-revalidate=31536000`.
 
 ### Filesystem (Astro/Hugo/MkDocs)
 
@@ -195,23 +203,108 @@ Only the default `aws` provider is required. ACM certificates for CloudFront ali
 
 ## Cache strategy
 
-CloudFront cache policy (CDN side):
+Two CloudFront Functions split responsibilities cleanly:
+
+| Function | Event | Job |
+|---|---|---|
+| rewriter | viewer-request | Looks up the active version in the KVS and prepends `/<version>/` to the URI so each promotion produces a fresh cache key. |
+| cache-control | viewer-response | Writes `Cache-Control` on every response based on the rewritten URI shape. HTML responses get a short s-maxage + long `stale-while-revalidate`; hashed assets get the immutable 1-year browser cache. |
+
+**CDN-side cache policy** (defaults to AWS-managed `CachingOptimized`, 1y TTL, no headers/cookies/QS — overridable via `cache_policy_id`):
 
 | Path pattern | Cache policy | Why |
 |---|---|---|
-| (default) | AWS-managed `CachingOptimized` (1y TTL, no headers/cookies/QS) | Hashed assets are immutable; HTML files at `/<v>/index.html` are unique per version. |
-| `long_cache_paths` | Same `CachingOptimized` | Explicit echo for documentation/clarity (e.g. `/_astro/*`, `/assets/*`). |
-| `*.html` | Same `CachingOptimized` | Versioned paths make each HTML response a unique cache key; the response headers policy below is what gives the browser-side semantics. |
+| (default) | `CachingOptimized` | The rewriter pins every URL to `/<version>/...`, so each response has a version-unique cache key — safe to cache at the edge for a year regardless of HTML vs asset. |
 | `no_cache_paths` | AWS-managed `CachingDisabled` | Optional escape hatch — versioning makes per-path cache busting unnecessary in most cases. |
 
-Default response headers policy (browser side, attached automatically when `manage_response_headers_policies = true`, the default):
+**Browser-side `Cache-Control`** (written by the viewer-response function when `manage_cache_control = true`, the default):
 
-| Path pattern | `Cache-Control` header | Origin override | Why |
-|---|---|---|---|
-| (default) | `public, max-age=31536000, immutable` | yes | Browsers cache hashed assets for a year and skip even the conditional `If-None-Match` revalidation. |
-| `*.html` | `s-maxage=5, stale-while-revalidate=31536000` | yes | CDN edge holds HTML for 5s fresh then serves stale while it revalidates against S3 in the background — flips of `active` propagate within ~5s without ever blocking on a cache miss. |
+| Rewritten URI shape | `Cache-Control` | Why |
+|---|---|---|
+| URI in `html_path_overrides` (`/service-worker.js`, `/sw.js`, `/manifest.json`, `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`) | `s-maxage=5, stale-while-revalidate=31536000` | Stable, non-hashed root files. Caching them as `immutable` is dangerous — a wedged service worker can brick a site until users clear site data. Override the list per-project with `html_path_overrides`. |
+| Contains a dotted segment (e.g. `/.well-known/openid-configuration`) | `s-maxage=5, stale-while-revalidate=31536000` | RFC 8615 well-known URIs and dot-prefixed config directories are served verbatim and are not content-hashed. |
+| No file extension or ends in `.html` / `.htm` | `s-maxage=5, stale-while-revalidate=31536000` | Catches SPA routes (`/dashboard`) after the rewriter sent them to `/<v>/index.html`, filesystem routes (`/about/`) sent to `/<v>/about/index.html`, and explicit `.html` requests. CDN edge holds HTML for 5s fresh then serves stale while it revalidates against S3 in the background, so flips of `active` propagate within ~5s without ever blocking on a cache miss — and browsers never store HTML as immutable. |
+| Any other extension (`.js`, `.css`, `.png`, `.woff2`, …) | `public, max-age=31536000, immutable` | Every asset URL is pinned to `/<version>/...` by the rewriter, so the bytes at a given URL never change between deploys. Browsers can cache these for a year and skip even conditional revalidation. |
 
-Tune individual values with `html_cache_control`, `assets_cache_control`, `html_cache_control_override`, `assets_cache_control_override`, or `html_path_pattern`. Set `manage_response_headers_policies = false` to disable the feature entirely (no `*.html` ordered behavior, no module-managed headers policies). Override the CDN cache policy via `cache_policy_id`, `origin_request_policy_id`, and `response_headers_policy_id`; a caller-supplied `response_headers_policy_id` always wins on the default behavior.
+Tune the headers via `html_cache_control` and `assets_cache_control`. Add or remove always-revalidate root files via `html_path_overrides` (pass `[]` to opt out of the defaults). Set `manage_cache_control = false` to skip the function entirely and delegate `Cache-Control` to S3 object metadata or to a caller-supplied `response_headers_policy_id`. The `response_headers_policy_id` variable is for orthogonal headers (HSTS, CSP, COOP/COEP, etc.) — it coexists with the cache-control function and shouldn't carry `Cache-Control` itself.
+
+> **Why the function lives in viewer-response, not viewer-request:** CloudFront resolves which cache behavior (and therefore which response-headers policy) to use from the **original viewer URI**, before any viewer-request function runs. SPA routes like `/dashboard` have no extension, so a static `*.html` ordered behavior cannot match them; the default behavior's response-headers policy is the only thing that ever gets attached. That's how [ENG-4785](https://linear.app/flightcontrol/issue/ENG-4785/) happened — the immutable assets policy on the default behavior leaked onto every HTML response. Setting `Cache-Control` in viewer-response sidesteps cache-behavior matching entirely and keys off the rewritten URI shape, where HTML vs asset is unambiguous from the file extension.
+
+## Custom response headers (security, CORS, etc.)
+
+For everything *other than* `Cache-Control` — HSTS, CSP, X-Frame-Options, Referrer-Policy, X-Content-Type-Options, CORS, custom headers, header stripping — there are two paths, choose whichever fits your operating model.
+
+### Module-managed (declarative): `response_headers_policy`
+
+```hcl
+module "site" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+
+  name = "my-app"
+
+  distributions = {
+    main = {
+      aliases             = ["app.example.com"]
+      acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+    }
+  }
+
+  response_headers_policy = {
+    security_headers_config = {
+      strict_transport_security = {
+        access_control_max_age_sec = 63072000 # 2 years
+        include_subdomains         = true
+        preload                    = true
+      }
+      content_security_policy = {
+        content_security_policy = "default-src 'self'; script-src 'self' https://plausible.io; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://plausible.io"
+      }
+      content_type_options = {}
+      frame_options = {
+        frame_option = "DENY"
+      }
+      referrer_policy = {
+        referrer_policy = "strict-origin-when-cross-origin"
+      }
+    }
+
+    custom_headers = [
+      {
+        header = "Permissions-Policy"
+        value  = "camera=(), microphone=(), geolocation=()"
+      },
+      {
+        header = "Cross-Origin-Opener-Policy"
+        value  = "same-origin"
+      },
+    ]
+
+    remove_headers = ["Server", "X-Powered-By"]
+  }
+}
+```
+
+The module creates an `aws_cloudfront_response_headers_policy` from this configuration and attaches it to the default cache behavior alongside the cache-control function.
+
+### Caller-supplied: `response_headers_policy_id`
+
+For org-wide CSP/security baselines managed centrally, pass the existing policy id directly:
+
+```hcl
+module "site" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+
+  name = "my-app"
+
+  distributions = { main = { ... } }
+
+  response_headers_policy_id = data.aws_cloudfront_response_headers_policy.org_security.id
+}
+```
+
+`response_headers_policy_id` and `response_headers_policy` can both be set — the caller-supplied id wins on the default behavior, but the module-managed policy is still created and exposed via `module_response_headers_policy_id` so you can attach it elsewhere.
+
+> **Don't put `Cache-Control` in `custom_headers` with `override = true`** unless you intentionally want to overwrite what the cache-control function set. Response-headers policies apply *after* CloudFront Functions, so a policy-set value with override beats the function. The whole point of the function is to discriminate HTML from assets at the URI level, which a static policy can't do.
 
 ## Requirements
 
@@ -272,16 +365,14 @@ No external apply-time tools required.
 |---|---|---|---|
 | cache_policy_id | Default cache policy ID. | `string` | AWS-managed CachingOptimized |
 | origin_request_policy_id | Origin request policy ID. | `string` | AWS-managed CORS-S3Origin |
-| response_headers_policy_id | Response headers policy ID. | `string` | `null` |
+| response_headers_policy_id | Externally-managed response-headers policy ID (e.g. an org-wide CSP). Wins over `response_headers_policy` when both are set. | `string` | `null` |
+| response_headers_policy | Declarative module-managed response-headers policy: HSTS, CSP, X-Frame-Options, Referrer-Policy, CORS, custom headers, removed headers. See README for the full shape and an example. | `object(...)` | `null` |
 | no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
-| long_cache_paths | Path patterns explicitly served with the default long-cache policy. | `list(string)` | `[]` |
 | default_root_object | Object name for `/` requests. | `string` | `"index.html"` |
-| manage_response_headers_policies | Create the default Cache-Control response headers policies and the `*.html` ordered behavior. | `bool` | `true` |
-| html_cache_control | Cache-Control value for `*.html` responses. | `string` | `"s-maxage=5, stale-while-revalidate=31536000"` |
-| html_cache_control_override | Whether the html policy overrides Cache-Control coming from the origin. | `bool` | `true` |
-| assets_cache_control | Cache-Control value for the default behavior (everything other than `*.html`). | `string` | `"public, max-age=31536000, immutable"` |
-| assets_cache_control_override | Whether the assets policy overrides Cache-Control coming from the origin. | `bool` | `true` |
-| html_path_pattern | Path pattern for the HTML ordered behavior. | `string` | `"*.html"` |
+| manage_cache_control | Attach the viewer-response Cache-Control function. | `bool` | `true` |
+| html_cache_control | Cache-Control value for HTML responses (no extension, `.html`/`.htm`, dotted segments, or `html_path_overrides`). | `string` | `"s-maxage=5, stale-while-revalidate=31536000"` |
+| assets_cache_control | Cache-Control value for hashed asset responses (any non-html file extension not in `html_path_overrides`). | `string` | `"public, max-age=31536000, immutable"` |
+| html_path_overrides | Exact-match viewer URIs that always get `html_cache_control` regardless of extension. Defaults cover service-worker/PWA/SEO files. | `list(string)` | `["/service-worker.js", "/sw.js", "/manifest.json", "/manifest.webmanifest", "/favicon.ico", "/robots.txt", "/sitemap.xml"]` |
 
 ### KeyValueStore
 
@@ -321,6 +412,9 @@ No external apply-time tools required.
 | distribution_domain_names | Map of distribution key -> CloudFront domain name. |
 | distribution_hosted_zone_ids | Map of distribution key -> Route53 zone ID for alias records. |
 | cloudfront_function_arn | ARN of the viewer-request rewriter function. |
+| cache_control_function_arn | ARN of the viewer-response Cache-Control writer function. Null when `manage_cache_control = false`. |
+| response_headers_policy_id | ID of the response-headers policy attached to the default behavior (caller-supplied id when set, otherwise the module-managed one, otherwise null). |
+| module_response_headers_policy_id | ID of the module-managed response-headers policy. Null when `var.response_headers_policy` is null. |
 | cloudfront_keyvaluestore_arn | ARN of the KeyValueStore. |
 | key_value_store_id | ID of the KeyValueStore. |
 | default_version | Apply-time fallback version (also seeded into `active`). |
@@ -328,8 +422,6 @@ No external apply-time tools required.
 | deploy_role_name | Name of the deploy role. |
 | set_active_version_command | Bash snippet that flips the `active` KVS key to `$VERSION`. |
 | invalidation_commands | Map of distribution key -> ready-to-run `aws cloudfront create-invalidation`. Rarely needed. |
-| html_response_headers_policy_id | ID of the module-managed response headers policy attached to `*.html`. Null when disabled. |
-| assets_response_headers_policy_id | ID of the module-managed response headers policy attached to the default behavior. Null when disabled. |
 
 ## Security Considerations
 

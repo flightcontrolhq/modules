@@ -8,6 +8,12 @@
 # The viewer-request CloudFront Function rewrites every URI to /<version>/...
 # before the cache lookup, so each promoted version produces a fresh cache key
 # automatically — no CreateInvalidation, no custom_error_responses needed.
+#
+# The viewer-response CloudFront Function (created when manage_cache_control =
+# true, the default) sets Cache-Control on every response based on the
+# rewritten URI shape: HTML responses get a short s-maxage + long
+# stale-while-revalidate, hashed assets get the immutable 1-year browser
+# cache. See functions/cache_control.js for the classification rules.
 ################################################################################
 
 module "cdn" {
@@ -42,7 +48,7 @@ module "cdn" {
     compress                     = true
     cache_policy_id              = var.cache_policy_id
     origin_request_policy_id     = var.origin_request_policy_id
-    response_headers_policy_id   = local.effective_default_response_headers_policy_id
+    response_headers_policy_id   = local.effective_response_headers_policy_id
     function_associations        = local.cff_associations
     lambda_function_associations = []
   }

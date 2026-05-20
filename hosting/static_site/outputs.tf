@@ -57,7 +57,22 @@ output "distribution_hosted_zone_ids" {
 
 output "cloudfront_function_arn" {
   description = "ARN of the viewer-request rewriter function."
-  value       = aws_cloudfront_function.this.arn
+  value       = aws_cloudfront_function.rewrite.arn
+}
+
+output "cache_control_function_arn" {
+  description = "ARN of the viewer-response Cache-Control writer function. Null when manage_cache_control = false."
+  value       = try(aws_cloudfront_function.cache_control[0].arn, null)
+}
+
+output "response_headers_policy_id" {
+  description = "ID of the response-headers policy attached to the default cache behavior. Caller-supplied `response_headers_policy_id` when set, otherwise the module-managed policy created from `response_headers_policy`, otherwise null."
+  value       = local.effective_response_headers_policy_id
+}
+
+output "module_response_headers_policy_id" {
+  description = "ID of the module-managed response-headers policy created from `var.response_headers_policy`. Null when that variable is null. Useful for attaching the same policy to other distributions or behaviors outside this module."
+  value       = local.module_response_headers_policy_id
 }
 
 output "cloudfront_keyvaluestore_arn" {
@@ -73,20 +88,6 @@ output "key_value_store_id" {
 output "default_version" {
   description = "Version prefix the function falls back to when KVS has no host or active entry. The 'active' KVS key is seeded to this on first apply."
   value       = var.default_version
-}
-
-################################################################################
-# Response Headers Policies
-################################################################################
-
-output "html_response_headers_policy_id" {
-  description = "ID of the module-managed response headers policy attached to the `*.html` ordered behavior. Null when manage_response_headers_policies = false."
-  value       = local.html_response_headers_policy_id
-}
-
-output "assets_response_headers_policy_id" {
-  description = "ID of the module-managed response headers policy attached to the default cache behavior. Null when manage_response_headers_policies = false. Note: this is the policy the module created; the policy actually attached to the default behavior is var.response_headers_policy_id when set, otherwise this one."
-  value       = local.assets_response_headers_policy_id
 }
 
 ################################################################################
