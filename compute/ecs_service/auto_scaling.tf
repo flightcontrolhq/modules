@@ -71,7 +71,7 @@ resource "aws_appautoscaling_policy" "target_tracking" {
 ################################################################################
 
 resource "aws_appautoscaling_scheduled_action" "this" {
-  for_each = local.enable_auto_scaling && var.auto_scaling.scheduled != null ? {
+  for_each = local.enable_auto_scaling && try(var.auto_scaling.scheduled, null) != null ? {
     for action in var.auto_scaling.scheduled : action.name => action
   } : {}
 

@@ -1,5 +1,17 @@
 locals {
   region = coalesce(var.region, data.aws_region.current.id)
+
+  # Listener cert list: BYO ARNs first (user's choice as default cert),
+  # then every cert-group's wildcard cert as SNI extras. When BYO is
+  # empty, the first cert-group cert becomes default. Both empty =
+  # ALB module errors (HTTPS without a cert is invalid).
+  cert_group_arns = [
+    for _name, g in module.ravion_cert_groups.parent_groups : g.cert_arn
+  ]
+  public_alb_effective_certificate_arns = concat(
+    var.public_alb_certificate_arns,
+    local.cert_group_arns,
+  )
 }
 
 ################################################################################

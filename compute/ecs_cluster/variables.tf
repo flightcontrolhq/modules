@@ -169,7 +169,7 @@ variable "ec2_ami_id" {
   default     = null
 
   validation {
-    condition     = var.ec2_ami_id == null || can(regex("^ami-", var.ec2_ami_id))
+    condition = var.ec2_ami_id == null || can(regex("^ami-", var.ec2_ami_id))
     error_message = "The ec2_ami_id must be a valid AMI ID starting with 'ami-'."
   }
 }
@@ -414,7 +414,7 @@ variable "public_alb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.public_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_alb_access_logs_bucket_arn))
+    condition = var.public_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_alb_access_logs_bucket_arn))
     error_message = "The public_alb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -425,7 +425,7 @@ variable "public_alb_web_acl_arn" {
   default     = null
 
   validation {
-    condition     = var.public_alb_web_acl_arn == null || can(regex("^arn:aws:wafv2:", var.public_alb_web_acl_arn))
+    condition = var.public_alb_web_acl_arn == null || can(regex("^arn:aws:wafv2:", var.public_alb_web_acl_arn))
     error_message = "The public_alb_web_acl_arn must be a valid WAFv2 Web ACL ARN."
   }
 }
@@ -497,7 +497,7 @@ variable "private_alb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.private_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_alb_access_logs_bucket_arn))
+    condition = var.private_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_alb_access_logs_bucket_arn))
     error_message = "The private_alb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -541,7 +541,7 @@ variable "public_nlb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.public_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_nlb_access_logs_bucket_arn))
+    condition = var.public_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_nlb_access_logs_bucket_arn))
     error_message = "The public_nlb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -602,7 +602,7 @@ variable "private_nlb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.private_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_nlb_access_logs_bucket_arn))
+    condition = var.private_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_nlb_access_logs_bucket_arn))
     error_message = "The private_nlb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -627,5 +627,59 @@ variable "private_nlb_elastic_ip_allocation_ids" {
 variable "region" {
   type        = string
   description = "AWS region. When null, the provider's configured region is used."
+  default     = null
+}
+
+################################################################################
+# Ravion domain control plane — cluster wildcard cert groups
+#
+# Each row in var.ravion_certificate_groups creates ONE wildcard ACM
+# cert covering `*.<wildcard_fqdn>` and attaches it as an SNI cert on
+# the cluster's HTTPS listener. Services nest leaf FQDNs under any of
+# these wildcards via their own cert groups (kind = inherit,
+# parent_group_name = "<this group's name>"). Three kinds:
+#
+#   ravion_auto — Ravion-managed apex. Wildcard FQDN is auto-derived as
+#                 `<module-instance-id>.<platform-apex>`. Zero typing.
+#   customer    — Operator's own DnsProvider on the row + wildcard_fqdn
+#                 typed by the operator. Wildcard cert covers
+#                 `*.<wildcard_fqdn>`.
+#   external    — (commit 86) external DNS the operator manages by hand;
+#                 cert + records are surfaced for the user to add.
+################################################################################
+
+variable "ravion_certificate_groups" {
+  type = list(object({
+    name                  = string
+    kind                  = string
+    dns_provider_id       = optional(string)
+    dns_provider_given_id = optional(string)
+    wildcard_fqdn         = optional(string)
+    domains               = optional(list(string), [])
+  }))
+  description = "Cluster-level wildcard cert groups. Services nest under one of these via their own cert groups."
+  default     = []
+
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["ravion_auto", "customer", "external"], g.kind)])
+    error_message = "Each group's `kind` must be one of: ravion_auto, customer, external."
+  }
+  validation {
+    condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)
+    error_message = "Cert group names must be unique."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind == "ravion_auto" || (g.wildcard_fqdn != null && g.wildcard_fqdn != "")])
+    error_message = "customer/external groups must set wildcard_fqdn."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || g.dns_provider_id != null || g.dns_provider_given_id != null])
+    error_message = "customer groups must set dns_provider_id or dns_provider_given_id."
+  }
+}
+
+variable "module_instance_id" {
+  type        = string
+  description = "Cluster module-instance id, injected by the Ravion runner. Used by ravion_auto cert groups to derive the wildcard FQDN slug."
   default     = null
 }

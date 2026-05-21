@@ -19,10 +19,10 @@ locals {
   deployment_controller_type = var.deployment_type == "blue_green" ? "CODE_DEPLOY" : "ECS"
 
   # Determine if load balancer is configured
-  enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled
+  enable_load_balancer = try(var.load_balancer_attachment.enabled, false)
 
   # Determine if NLB listener should be created (vs ALB listener rules)
-  enable_nlb_listener = local.enable_load_balancer && var.load_balancer_attachment.nlb_listener != null
+  enable_nlb_listener = local.enable_load_balancer && try(var.load_balancer_attachment.nlb_listener, null) != null
 
   # Placeholder container name and port
   placeholder_container_name = "app"
@@ -105,7 +105,7 @@ locals {
   ])
 
   # Auto scaling settings
-  enable_auto_scaling = var.auto_scaling != null && var.auto_scaling.enabled
+  enable_auto_scaling = try(var.auto_scaling.enabled, false)
 
   # Service discovery settings
   enable_service_discovery = var.service_discovery != null

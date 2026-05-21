@@ -201,7 +201,7 @@ variable "execution_role_arn" {
   default     = null
 
   validation {
-    condition     = var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn))
+    condition = var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn))
     error_message = "The execution_role_arn must be a valid IAM role ARN."
   }
 }
@@ -212,7 +212,7 @@ variable "task_role_arn" {
   default     = null
 
   validation {
-    condition     = var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn))
+    condition = var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn))
     error_message = "The task_role_arn must be a valid IAM role ARN."
   }
 }
@@ -376,7 +376,7 @@ variable "load_balancer_security_group_id" {
   default     = null
 
   validation {
-    condition     = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
+    condition = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
     error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
   }
 }
@@ -458,19 +458,19 @@ variable "load_balancer_attachment" {
   default     = null
 
   validation {
-    condition = var.load_balancer_attachment == null || contains(
+    condition = try(contains(
       ["HTTP", "HTTPS", "TCP", "UDP", "TLS", "TCP_UDP", "GENEVE"],
       var.load_balancer_attachment.target_group.protocol
-    )
+    ), true)
     error_message = "The protocol must be one of: HTTP, HTTPS (for ALB), or TCP, UDP, TLS, TCP_UDP, GENEVE (for NLB/GWLB)."
   }
 
   validation {
-    condition = var.load_balancer_attachment == null || var.load_balancer_attachment.target_group.stickiness == null || (
+    condition = try(var.load_balancer_attachment.target_group.stickiness == null || (
       contains(["HTTP", "HTTPS"], var.load_balancer_attachment.target_group.protocol)
       ? contains(["lb_cookie", "app_cookie"], var.load_balancer_attachment.target_group.stickiness.type)
       : var.load_balancer_attachment.target_group.stickiness.type == "source_ip"
-    )
+    ), true)
     error_message = "Stickiness type must be 'lb_cookie' or 'app_cookie' for ALB (HTTP/HTTPS), or 'source_ip' for NLB (TCP/UDP/TLS)."
   }
 }
@@ -598,4 +598,127 @@ variable "region" {
   type        = string
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
+}
+
+################################################################################
+# Ravion domain control plane
+#
+# V2: pass the parent cluster's outputs in via ravion_dns_provider_id
+# (`module.ecs_cluster.ravion_dns_provider_id`) and the existing
+# ravion_parent_domain_allocation_id, ravion_cluster_alb_*, and
+# ravion_cluster_https_listener_arn knobs. The data source in data.tf
+# resolves the provider's discriminated config so the routing-record
+# write path (Route53 vs Cloudflare vs metadata-only) picks the right
+# variant.
+################################################################################
+
+variable "ravion_parent_certificate_groups" {
+  type = map(object({
+    parent_allocation_id = string
+    managed_domain_id    = string
+    wildcard_fqdn        = string
+    cert_arn             = string
+    dns_provider_id      = string
+  }))
+  description = "Cluster's `ravion_certificate_groups` output. Auto-wired from `module.ecs_cluster.ravion_certificate_groups`. Service `inherit` cert groups look up their parent here by `parent_group_name`."
+  default     = {}
+}
+
+variable "module_instance_given_id" {
+  type        = string
+  description = "The service module-instance's given_id. Used by `inherit` cert groups with empty `domains` as the slug for the auto-allocated URL. Injected by the Ravion runner."
+  default     = null
+}
+
+variable "ravion_cluster_alb_dns_name" {
+  type        = string
+  description = "Cluster ALB DNS name, from `module.ecs_cluster.public_alb_dns_name`. Used as the routing target for customer cert-group records."
+  default     = null
+}
+
+variable "ravion_cluster_alb_zone_id" {
+  type        = string
+  description = "Cluster ALB hosted-zone id, from `module.ecs_cluster.public_alb_zone_id`. Used by Route53 ALIAS routing records on customer cert groups."
+  default     = null
+}
+
+variable "ravion_cluster_https_listener_arn" {
+  type        = string
+  description = "Cluster HTTPS listener ARN, from `module.ecs_cluster.public_alb_https_listener_arn`. Required for all cert-group kinds so host-header rules + customer-group SNI cert attachments can be created."
+  default     = null
+}
+
+variable "ravion_certificate_groups" {
+  type = list(object({
+    # Stable per-service identifier used in TF state keys + AWS tags.
+    name = string
+
+    # Source kind:
+    #   inherit — Inherit a cluster wildcard cert. Pick the
+    #     cluster group via `parent_group_name`. `domains` = optional
+    #     list of DNS-safe leaf labels.
+    #   customer — Operator's own DnsProvider (`dns_provider_id`) +
+    #     full FQDNs in `domains`. Issues own ACM cert.
+    #   external — External DNS the operator manages by hand. We
+    #     issue the cert + surface the validation + routing records
+    #     via the Domains page. Apply fails fast (5m) when records
+    #     aren't live; user adds records, re-runs apply.
+    kind = string
+
+    # Required when kind == "inherit". Name of the cluster's
+    # cert group to inherit from. Must exist as a key in
+    # var.ravion_parent_certificate_groups.
+    parent_group_name = optional(string)
+
+    # Required when kind == "customer". Either id or given_id wins.
+    dns_provider_id       = optional(string)
+    dns_provider_given_id = optional(string)
+
+    # Domain entries. Semantics depend on kind (see above).
+    domains = list(string)
+  }))
+  description = "Per-service certificate groups. Two kinds: `inherit` (inherit a chosen cluster wildcard cert) or `customer` (own DNS provider + own ACM cert, up to 10 FQDNs)."
+  default     = []
+
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["inherit", "customer", "external"], g.kind)])
+    error_message = "Each group's `kind` must be one of: inherit, customer, external."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "external" || length(g.domains) >= 1])
+    error_message = "external cert groups must contain at least 1 domain (full FQDN)."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "external" || length(g.domains) <= 10])
+    error_message = "external cert groups can contain at most 10 domains (ACM default SAN limit)."
+  }
+  validation {
+    condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)
+    error_message = "Certificate group names must be unique within a service."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "inherit" || (g.parent_group_name != null && g.parent_group_name != "")])
+    error_message = "inherit groups must set parent_group_name."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || length(g.domains) <= 10])
+    error_message = "Customer cert groups can contain at most 10 domains (ACM default SAN limit)."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || length(g.domains) >= 1])
+    error_message = "Customer cert groups must contain at least 1 domain."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || g.dns_provider_id != null || g.dns_provider_given_id != null])
+    error_message = "Customer cert groups must set dns_provider_id (or dns_provider_given_id)."
+  }
+  validation {
+    condition = alltrue([
+      for g in var.ravion_certificate_groups :
+      g.kind != "inherit" || alltrue([
+        for d in g.domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63
+      ])
+    ])
+    error_message = "inherit group `domains` entries must be DNS-safe leaf labels matching ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (<=63 chars)."
+  }
 }

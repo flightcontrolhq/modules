@@ -15,4 +15,5 @@ data "aws_region" "current" {}
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
-
+# DnsProvider lookups for cert groups live inside the shared
+# `ravion_cert_groups` child module (per-group + platform-apex).

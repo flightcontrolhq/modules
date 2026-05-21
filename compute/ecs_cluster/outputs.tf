@@ -240,3 +240,15 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
+
+################################################################################
+# Ravion domain control plane outputs
+#
+# Consumed by sibling ecs_service modules to allocate child FQDNs that
+# inherit the cluster's wildcard cert via SNI.
+################################################################################
+
+output "ravion_certificate_groups" {
+  description = "Map of cluster cert-group name → {parent_allocation_id, wildcard_fqdn, cert_arn, managed_domain_id}. Service modules consume this via their cert groups (kind = inherit, parent_group_name = \"<name>\")."
+  value       = module.ravion_cert_groups.parent_groups
+}

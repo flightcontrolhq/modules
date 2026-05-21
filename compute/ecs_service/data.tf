@@ -12,4 +12,6 @@ data "aws_vpc" "this" {
   id = var.vpc_id
 }
 
+# DnsProvider lookups (per cert-group + platform apex) live inside the
+# shared ravion_cert_groups child module.
 

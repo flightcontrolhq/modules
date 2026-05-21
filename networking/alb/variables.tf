@@ -259,7 +259,7 @@ variable "access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.access_logs_bucket_arn))
+    condition = var.access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.access_logs_bucket_arn))
     error_message = "The access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -287,7 +287,7 @@ variable "access_logs_kms_key_id" {
   default     = null
 
   validation {
-    condition     = var.access_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.access_logs_kms_key_id))
+    condition = var.access_logs_kms_key_id == null || can(regex("^(arn:aws:kms:|alias/)", var.access_logs_kms_key_id))
     error_message = "The access_logs_kms_key_id must be a valid KMS key ARN or alias."
   }
 }
@@ -314,7 +314,7 @@ variable "web_acl_arn" {
   default     = null
 
   validation {
-    condition     = var.web_acl_arn == null || can(regex("^arn:aws:wafv2:", var.web_acl_arn))
+    condition = var.web_acl_arn == null || can(regex("^arn:aws:wafv2:", var.web_acl_arn))
     error_message = "The web_acl_arn must be a valid WAFv2 Web ACL ARN."
   }
 }

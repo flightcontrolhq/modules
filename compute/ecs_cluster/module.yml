@@ -324,16 +324,49 @@ input:
         default: false
         show_when:
           enable_public_alb: true
+    - use_ravion_subdomain:
+        type: boolean
+        label: "Use a Ravion-generated subdomain"
+        description: "Skip DNS setup — Ravion allocates *.<module-instance-id>.ravion.app and issues the wildcard cert. Turn off to bring your own zone (Cloudflare, Route53, etc.)."
+        default: true
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+    - ravion_dns_provider_id:
+        type: string
+        label: "DNS Provider"
+        description: "Ravion DnsProvider the cluster's wildcard FQDN lives under. Register providers (Route53, Cloudflare, or other) on the DNS Providers settings page. Only consulted when use_ravion_subdomain is off."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          use_ravion_subdomain: false
+        values: "$values:ravion/dns-providers-customer"
+    - ravion_dns_provider_given_id:
+        type: string
+        label: "DNS Provider (by stable id)"
+        description: "Per-org stable identifier — same dual-lookup as ravion_dns_provider_id. Use this when module definitions are shared across orgs that reference the same provider by name."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          use_ravion_subdomain: false
+          ravion_dns_provider_id: ""
+    - ravion_cluster_slug:
+        type: string
+        label: "FQDN Slug"
+        description: "Human-readable slug used to derive the cluster's FQDN (<slug>-<hash>.<apex>). Defaults to the cluster name when empty. Ignored in auto-mode (uses the module-instance id as the literal label)."
+        show_when:
+          enable_public_alb: true
+          public_alb_enable_https: true
+          use_ravion_subdomain: false
     - public_alb_certificate_arns:
         type: list
-        label: "ACM Certificate ARNs"
-        description: "ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI"
+        label: "ACM Certificate ARNs (BYO)"
+        description: "ACM certificate ARNs for HTTPS. Used directly when no DNS provider is selected, or appended after the Ravion-managed wildcard cert as additional SNI certificates. The first ARN is the listener's default in BYO mode."
+        default: []
         show_when:
           enable_public_alb: true
           public_alb_enable_https: true
         validation:
-          required: true
-          min_length: 1
           patterns:
             - pattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-z0-9-]+$"
               message: "Must be a valid ACM certificate ARN"
@@ -515,6 +548,13 @@ output:
   public_alb_security_group_id: string
   public_alb_http_listener_arn: string
   public_alb_https_listener_arn: string
+  # Ravion managed domains
+  ravion_managed_domains_enabled: boolean
+  ravion_cluster_domain_allocation_id: string
+  ravion_cluster_managed_domain_id: string
+  ravion_cluster_fqdn: string
+  ravion_cluster_certificate_arn: string
+  ravion_dns_provider_id: string
   # Private ALB
   private_alb_arn: string
   private_alb_id: string

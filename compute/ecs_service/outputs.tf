@@ -249,3 +249,17 @@ output "region" {
 }
 
 
+
+################################################################################
+# Ravion domain control plane outputs
+################################################################################
+
+output "ravion_domain_fqdns" {
+  description = "Map of `<group>/<slug>` → FQDN for every cert-group allocation."
+  value       = module.ravion_cert_groups.domain_fqdns
+}
+
+output "ravion_domain_allocation_ids" {
+  description = "Map of `<group>/<slug>` → DomainAllocation id."
+  value       = module.ravion_cert_groups.domain_allocation_ids
+}
