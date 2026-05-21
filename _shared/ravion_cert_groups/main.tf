@@ -102,7 +102,7 @@ resource "ravion_domain" "cluster_wildcard_auto" {
 }
 
 resource "aws_lb_listener_rule" "cluster_wildcard_label" {
-  for_each = local.has_listener && local.has_target_group ? local.cluster_wildcard_label_pairs : {}
+  for_each = local.cluster_wildcard_label_pairs
 
   listener_arn = var.listener_arn
   priority     = local.cw_label_priority[each.key]
@@ -129,7 +129,7 @@ resource "aws_lb_listener_rule" "cluster_wildcard_label" {
 }
 
 resource "aws_lb_listener_rule" "cluster_wildcard_auto" {
-  for_each = local.has_listener && local.has_target_group ? local.cluster_wildcard_auto_groups : {}
+  for_each = local.cluster_wildcard_auto_groups
 
   listener_arn = var.listener_arn
   priority     = local.cw_auto_priority[each.key]
@@ -331,7 +331,7 @@ resource "ravion_managed_certificate" "customer" {
 }
 
 resource "aws_lb_listener_certificate" "customer" {
-  for_each = local.has_listener ? local.customer_groups : {}
+  for_each = local.customer_groups
 
   listener_arn    = var.listener_arn
   certificate_arn = aws_acm_certificate_validation.customer[each.key].certificate_arn
@@ -420,7 +420,7 @@ resource "ravion_dns_records" "customer_routing_metadata_cf" {
 }
 
 resource "aws_lb_listener_rule" "customer" {
-  for_each = local.has_listener && local.has_target_group ? local.customer_pairs : {}
+  for_each = local.customer_pairs
 
   listener_arn = var.listener_arn
   priority     = local.customer_priority_for_pair[each.key]
