@@ -554,7 +554,7 @@ output:
   ravion_cluster_managed_domain_id: string
   ravion_cluster_fqdn: string
   ravion_cluster_certificate_arn: string
-  ravion_dns_zone_id: string
+  ravion_dns_provider_id: string
   # Private ALB
   private_alb_arn: string
   private_alb_id: string
