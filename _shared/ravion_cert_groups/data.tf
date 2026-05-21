@@ -8,17 +8,20 @@
 # dispatch (route53_ravion / route53 / cloudflare).
 ################################################################################
 
+# Only iterates over groups that need their OWN DnsProvider row.
+# `ravion_auto` skips this lookup — it uses data.platform_apex below.
+# `cluster_wildcard` (leaf-mode) skips too — its provider comes from
+# var.cluster_groups[group.cluster_group_name].dns_provider_id.
+# `external` skips entirely — no provider row by definition.
 data "ravion_dns_provider" "groups" {
-  for_each = { for g in var.cert_groups : g.name => g }
+  for_each = {
+    for g in var.cert_groups : g.name => g
+    if g.kind == "customer"
+  }
 
-  id = (
-    each.value.kind == "customer"
-    ? coalesce(each.value.dns_provider_id, "") != "" ? each.value.dns_provider_id : null
-    : var.ravion_dns_provider_id
-  )
-
+  id = coalesce(each.value.dns_provider_id, "") != "" ? each.value.dns_provider_id : null
   given_id = (
-    each.value.kind == "customer" && coalesce(each.value.dns_provider_id, "") == ""
+    coalesce(each.value.dns_provider_id, "") == ""
     ? each.value.dns_provider_given_id
     : null
   )
