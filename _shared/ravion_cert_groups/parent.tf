@@ -151,19 +151,9 @@ resource "ravion_dns_records" "parent_validation_metadata_r53" {
   depends_on = [aws_route53_record.parent_validation_r53]
 }
 
-# 4c. CLOUDFLARE validation.
-resource "cloudflare_dns_record" "parent_validation_cf" {
-  for_each = local.parent_groups_cloudflare
-
-  zone_id = each.value.provider.cloudflare.zone_id
-  name    = trimsuffix(tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name, ".")
-  type    = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
-  content = trimsuffix(tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value, ".")
-  ttl     = 60
-  proxied = false
-}
-
-resource "ravion_dns_records" "parent_validation_metadata_cf" {
+# 4c. CLOUDFLARE validation — single SDK-backed write via the api-go
+# CloudflareWriter (cloudflare-go/v6, token from vault per call).
+resource "ravion_dns_records" "parent_validation_cf" {
   for_each = local.parent_groups_cloudflare
 
   managed_domain_id = each.value.id
@@ -173,7 +163,6 @@ resource "ravion_dns_records" "parent_validation_metadata_cf" {
     value = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value
     ttl   = 60
   }]
-  depends_on = [cloudflare_dns_record.parent_validation_cf]
 }
 
 # 5. Cert validation — waits for the right writer per variant.
@@ -184,7 +173,7 @@ resource "aws_acm_certificate_validation" "parent" {
   validation_record_fqdns = concat(
     contains(keys(local.parent_groups_route53_ravion), each.key) ? [ravion_dns_records.parent_validation_ravion[each.key].fqdns[0]] : [],
     contains(keys(local.parent_groups_route53), each.key) ? [ravion_dns_records.parent_validation_metadata_r53[each.key].fqdns[0]] : [],
-    contains(keys(local.parent_groups_cloudflare), each.key) ? [ravion_dns_records.parent_validation_metadata_cf[each.key].fqdns[0]] : [],
+    contains(keys(local.parent_groups_cloudflare), each.key) ? [ravion_dns_records.parent_validation_cf[each.key].fqdns[0]] : [],
   )
 }
 
@@ -194,7 +183,7 @@ resource "ravion_managed_certificate" "parent" {
 
   cert_arn           = aws_acm_certificate_validation.parent[each.key].certificate_arn
   status             = "ISSUED"
-  scope              = "CLUSTER"
+  scope              = "CLUSTER_WILDCARD"
   managed_domain_ids = [each.value.managed_domain_id]
   issued_at          = aws_acm_certificate.parent[each.key].not_before
   expires_at         = aws_acm_certificate.parent[each.key].not_after

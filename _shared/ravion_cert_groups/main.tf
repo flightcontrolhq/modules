@@ -272,18 +272,10 @@ resource "ravion_dns_records" "customer_validation_metadata_r53" {
   depends_on = [aws_route53_record.customer_validation_r53]
 }
 
-resource "cloudflare_dns_record" "customer_validation_cf" {
-  for_each = local.customer_validation_pairs_cloudflare
-
-  zone_id = each.value.provider.cloudflare.zone_id
-  name    = trimsuffix(each.value.opt.resource_record_name, ".")
-  type    = each.value.opt.resource_record_type
-  content = trimsuffix(each.value.opt.resource_record_value, ".")
-  ttl     = 60
-  proxied = false
-}
-
-resource "ravion_dns_records" "customer_validation_metadata_cf" {
+# Cloudflare validation records — single SDK-backed write. The
+# api-go CloudflareWriter resolves the customer's api_token from
+# vault and calls cloudflare-go's DNS API directly.
+resource "ravion_dns_records" "customer_validation_cf" {
   for_each = local.customer_validation_pairs_cloudflare
 
   managed_domain_id = ravion_domain.customer[each.value.domain_key].id
@@ -293,7 +285,6 @@ resource "ravion_dns_records" "customer_validation_metadata_cf" {
     value = each.value.opt.resource_record_value
     ttl   = 60
   }]
-  depends_on = [cloudflare_dns_record.customer_validation_cf]
 }
 
 resource "aws_acm_certificate_validation" "customer" {
@@ -310,7 +301,7 @@ resource "aws_acm_certificate_validation" "customer" {
       if v.group_name == each.key
     ],
     [
-      for k, v in local.customer_validation_pairs_cloudflare : ravion_dns_records.customer_validation_metadata_cf[k].fqdns[0]
+      for k, v in local.customer_validation_pairs_cloudflare : ravion_dns_records.customer_validation_cf[k].fqdns[0]
       if v.group_name == each.key
     ],
   )
@@ -389,21 +380,7 @@ resource "ravion_dns_records" "customer_routing_metadata_r53" {
   depends_on = [aws_route53_record.customer_routing_r53]
 }
 
-resource "cloudflare_dns_record" "customer_routing_cf" {
-  for_each = {
-    for k, v in local.customer_pairs : k => v
-    if local.customer_providers[v.group_name].cloudflare != null
-  }
-
-  zone_id = local.customer_providers[each.value.group_name].cloudflare.zone_id
-  name    = ravion_domain.customer[each.key].fqdn
-  type    = "CNAME"
-  content = var.routing_target_dns_name
-  ttl     = 60
-  proxied = false
-}
-
-resource "ravion_dns_records" "customer_routing_metadata_cf" {
+resource "ravion_dns_records" "customer_routing_cf" {
   for_each = {
     for k, v in local.customer_pairs : k => v
     if local.customer_providers[v.group_name].cloudflare != null
@@ -416,7 +393,6 @@ resource "ravion_dns_records" "customer_routing_metadata_cf" {
     value = var.routing_target_dns_name
     ttl   = 60
   }]
-  depends_on = [cloudflare_dns_record.customer_routing_cf]
 }
 
 resource "aws_lb_listener_rule" "customer" {
