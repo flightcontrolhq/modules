@@ -118,7 +118,7 @@ locals {
 resource "ravion_dns_records" "parent_validation_ravion" {
   for_each = local.parent_groups_route53_ravion
 
-  managed_domain_id = each.value.managed_domain_id
+  managed_domain_id = each.value.id
   records = [{
     name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
     type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
@@ -141,7 +141,7 @@ resource "aws_route53_record" "parent_validation_r53" {
 resource "ravion_dns_records" "parent_validation_metadata_r53" {
   for_each = local.parent_groups_route53
 
-  managed_domain_id = each.value.managed_domain_id
+  managed_domain_id = each.value.id
   records = [{
     name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
     type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
@@ -166,7 +166,7 @@ resource "cloudflare_dns_record" "parent_validation_cf" {
 resource "ravion_dns_records" "parent_validation_metadata_cf" {
   for_each = local.parent_groups_cloudflare
 
-  managed_domain_id = each.value.managed_domain_id
+  managed_domain_id = each.value.id
   records = [{
     name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
     type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
