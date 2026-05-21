@@ -94,66 +94,58 @@ resource "aws_acm_certificate" "parent" {
   })
 }
 
-# 3. Validation pairs, flattened per provider variant.
+# 3. Per-group variant subsets. Keys are group names (KNOWN at plan
+# time); values include the cert (needed for domain_validation_options
+# which is only known after apply). Iterating these maps means TF can
+# plan the resource set without resolving the cert's validation list.
 locals {
-  parent_validation_pairs = merge([
-    for name, _alloc in local.parent_allocations : {
-      for opt in aws_acm_certificate.parent[name].domain_validation_options :
-      "${name}/${opt.domain_name}" => {
-        group_name = name
-        opt        = opt
-        provider   = local.parent_allocations[name].provider
-        domain_key = name
-      }
-    }
-  ]...)
-
-  parent_validation_pairs_route53_ravion = {
-    for k, v in local.parent_validation_pairs : k => v
-    if v.provider.route53_ravion != null
+  parent_groups_route53_ravion = {
+    for name, alloc in local.parent_allocations : name => alloc
+    if alloc.provider.route53_ravion != null
   }
-  parent_validation_pairs_route53 = {
-    for k, v in local.parent_validation_pairs : k => v
-    if v.provider.route53 != null
+  parent_groups_route53 = {
+    for name, alloc in local.parent_allocations : name => alloc
+    if alloc.provider.route53 != null
   }
-  parent_validation_pairs_cloudflare = {
-    for k, v in local.parent_validation_pairs : k => v
-    if v.provider.cloudflare != null
+  parent_groups_cloudflare = {
+    for name, alloc in local.parent_allocations : name => alloc
+    if alloc.provider.cloudflare != null
   }
 }
 
 # 4a. ROUTE53_RAVION validation — Ravion writes the record inline.
+# Wildcard parent certs have one validation per cert; we grab [0].
 resource "ravion_dns_records" "parent_validation_ravion" {
-  for_each = local.parent_validation_pairs_route53_ravion
+  for_each = local.parent_groups_route53_ravion
 
-  managed_domain_id = local.parent_allocations[each.value.group_name].managed_domain_id
+  managed_domain_id = each.value.managed_domain_id
   records = [{
-    name  = each.value.opt.resource_record_name
-    type  = each.value.opt.resource_record_type
-    value = each.value.opt.resource_record_value
+    name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
+    type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
+    value = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value
     ttl   = 60
   }]
 }
 
 # 4b. ROUTE53 customer validation.
 resource "aws_route53_record" "parent_validation_r53" {
-  for_each = local.parent_validation_pairs_route53
+  for_each = local.parent_groups_route53
 
   zone_id = each.value.provider.route53.hosted_zone_id
-  name    = each.value.opt.resource_record_name
-  type    = each.value.opt.resource_record_type
-  records = [each.value.opt.resource_record_value]
+  name    = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
+  type    = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
+  records = [tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value]
   ttl     = 60
 }
 
 resource "ravion_dns_records" "parent_validation_metadata_r53" {
-  for_each = local.parent_validation_pairs_route53
+  for_each = local.parent_groups_route53
 
-  managed_domain_id = local.parent_allocations[each.value.group_name].managed_domain_id
+  managed_domain_id = each.value.managed_domain_id
   records = [{
-    name  = each.value.opt.resource_record_name
-    type  = each.value.opt.resource_record_type
-    value = each.value.opt.resource_record_value
+    name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
+    type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
+    value = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value
     ttl   = 60
   }]
   depends_on = [aws_route53_record.parent_validation_r53]
@@ -161,24 +153,24 @@ resource "ravion_dns_records" "parent_validation_metadata_r53" {
 
 # 4c. CLOUDFLARE validation.
 resource "cloudflare_dns_record" "parent_validation_cf" {
-  for_each = local.parent_validation_pairs_cloudflare
+  for_each = local.parent_groups_cloudflare
 
   zone_id = each.value.provider.cloudflare.zone_id
-  name    = trimsuffix(each.value.opt.resource_record_name, ".")
-  type    = each.value.opt.resource_record_type
-  content = trimsuffix(each.value.opt.resource_record_value, ".")
+  name    = trimsuffix(tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name, ".")
+  type    = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
+  content = trimsuffix(tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value, ".")
   ttl     = 60
   proxied = false
 }
 
 resource "ravion_dns_records" "parent_validation_metadata_cf" {
-  for_each = local.parent_validation_pairs_cloudflare
+  for_each = local.parent_groups_cloudflare
 
-  managed_domain_id = local.parent_allocations[each.value.group_name].managed_domain_id
+  managed_domain_id = each.value.managed_domain_id
   records = [{
-    name  = each.value.opt.resource_record_name
-    type  = each.value.opt.resource_record_type
-    value = each.value.opt.resource_record_value
+    name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
+    type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
+    value = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_value
     ttl   = 60
   }]
   depends_on = [cloudflare_dns_record.parent_validation_cf]
@@ -190,9 +182,9 @@ resource "aws_acm_certificate_validation" "parent" {
 
   certificate_arn = aws_acm_certificate.parent[each.key].arn
   validation_record_fqdns = concat(
-    [for k, v in local.parent_validation_pairs_route53_ravion : ravion_dns_records.parent_validation_ravion[k].fqdns[0] if v.group_name == each.key],
-    [for k, v in local.parent_validation_pairs_route53 : ravion_dns_records.parent_validation_metadata_r53[k].fqdns[0] if v.group_name == each.key],
-    [for k, v in local.parent_validation_pairs_cloudflare : ravion_dns_records.parent_validation_metadata_cf[k].fqdns[0] if v.group_name == each.key],
+    contains(keys(local.parent_groups_route53_ravion), each.key) ? [ravion_dns_records.parent_validation_ravion[each.key].fqdns[0]] : [],
+    contains(keys(local.parent_groups_route53), each.key) ? [ravion_dns_records.parent_validation_metadata_r53[each.key].fqdns[0]] : [],
+    contains(keys(local.parent_groups_cloudflare), each.key) ? [ravion_dns_records.parent_validation_metadata_cf[each.key].fqdns[0]] : [],
   )
 }
 
