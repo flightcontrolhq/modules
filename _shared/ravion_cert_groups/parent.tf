@@ -34,8 +34,6 @@ resource "ravion_domain" "parent_ravion_auto" {
 
   dns_provider_id = data.ravion_dns_provider.platform_apex[0].id
   slug            = var.module_instance_id
-  cert_group_name = each.key
-  cert_group_kind = "ravion_auto"
 
   lifecycle {
     precondition {
@@ -51,8 +49,6 @@ resource "ravion_domain" "parent_customer" {
 
   dns_provider_id = data.ravion_dns_provider.groups[each.key].id
   fqdn_override   = each.value.wildcard_fqdn
-  cert_group_name = each.key
-  cert_group_kind = "customer"
 
   lifecycle {
     precondition {
@@ -71,12 +67,14 @@ locals {
       managed_domain_id = alloc.managed_domain_id
       fqdn              = alloc.fqdn
       provider          = data.ravion_dns_provider.platform_apex[0]
+      kind              = "ravion_auto"
     } },
     { for name, alloc in ravion_domain.parent_customer : name => {
       id                = alloc.id
       managed_domain_id = alloc.managed_domain_id
       fqdn              = alloc.fqdn
       provider          = data.ravion_dns_provider.groups[name]
+      kind              = "customer"
     } },
   )
 }
@@ -188,6 +186,8 @@ resource "ravion_managed_certificate" "parent" {
   cert_arn           = aws_acm_certificate_validation.parent[each.key].certificate_arn
   status             = "ISSUED"
   scope              = "WILDCARD"
+  name               = each.key
+  kind               = each.value.kind
   managed_domain_ids = [each.value.managed_domain_id]
   issued_at          = aws_acm_certificate.parent[each.key].not_before
   expires_at         = aws_acm_certificate.parent[each.key].not_after

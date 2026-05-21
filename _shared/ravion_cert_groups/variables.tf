@@ -108,3 +108,9 @@ variable "module_instance_id" {
   description = "Parent module-instance id. Used in parent mode to derive a stable random suffix for the auto-generated wildcard FQDN slug."
   default     = null
 }
+
+variable "external_dns_provider_given_id" {
+  type        = string
+  description = "Per-org stable identifier of the singleton EXTERNAL DnsProvider used by `external` cert groups. The customer creates this once per org via POST /v1/dns-providers with providerType=EXTERNAL. Default `external` matches the seed identifier."
+  default     = "external"
+}

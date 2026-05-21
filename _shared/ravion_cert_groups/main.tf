@@ -14,6 +14,14 @@
 #     SNI-attaches the cert to var.listener_arn, and adds host-header
 #     rules.
 #
+#   external — Customer owns BOTH DNS and TLS material end-to-end.
+#     Ravion records the FQDN (so it shows on the Domains tab) and
+#     wires a host-header listener rule, but writes ZERO DNS records
+#     and provisions ZERO ACM cert. Customer's reverse-proxy / Cloudflare
+#     Tunnel / etc. is responsible for terminating TLS and pointing at
+#     var.routing_target_dns_name. Resolves the synthetic per-org
+#     EXTERNAL DnsProvider (looked up via data source by provider_type).
+#
 # Listener-rule priorities use a 32-bit sha256-derived bucket index
 # modulo 49000 (ALB priority range 1000..50000). Per-kind seed prefix
 # prevents collisions across kinds within the same listener.
@@ -24,17 +32,6 @@ locals {
   has_target_group = var.target_group_arn != null && var.target_group_arn != ""
   cluster_managed  = var.ravion_parent_domain_allocation_id != null && var.ravion_parent_domain_allocation_id != ""
   leaf_mode        = var.mode == "leaf"
-}
-
-# external kind is accepted by validation so the form schema is stable,
-# but TF dispatch is not implemented yet (requires Ravion TF provider
-# to gain `is_external = true` on ravion_domain so dns_provider_id can
-# be omitted). Plan fails with a clear message when external is used.
-check "external_kind_not_yet_supported" {
-  assert {
-    condition     = length([for g in var.cert_groups : g if g.kind == "external"]) == 0
-    error_message = "cert group kind `external` is scaffolded but TF dispatch is not implemented yet. See ravion_cert_groups/README — requires Ravion TF provider extension."
-  }
 }
 
 ################################################################################
@@ -90,8 +87,6 @@ resource "ravion_domain" "inherit_label" {
   dns_provider_id             = var.cluster_groups[each.value.parent_group_name].dns_provider_id
   slug                        = each.value.slug
   parent_domain_allocation_id = var.cluster_groups[each.value.parent_group_name].parent_allocation_id
-  cert_group_name             = each.value.group_name
-  cert_group_kind             = "inherit"
 }
 
 # 1b. Zero-typing auto allocation per group when `domains` is empty.
@@ -101,8 +96,6 @@ resource "ravion_domain" "inherit_auto" {
   dns_provider_id             = var.cluster_groups[each.value.parent_group_name].dns_provider_id
   slug                        = var.module_instance_given_id
   parent_domain_allocation_id = var.cluster_groups[each.value.parent_group_name].parent_allocation_id
-  cert_group_name             = each.key
-  cert_group_kind             = "inherit"
 }
 
 resource "aws_lb_listener_rule" "inherit_label" {
@@ -192,8 +185,6 @@ resource "ravion_domain" "customer" {
 
   dns_provider_id = local.customer_providers[each.value.group_name].id
   fqdn_override   = each.value.slug
-  cert_group_name = each.value.group_name
-  cert_group_kind = "customer"
 }
 
 resource "aws_acm_certificate" "customer" {
@@ -319,6 +310,8 @@ resource "ravion_managed_certificate" "customer" {
   cert_arn = aws_acm_certificate_validation.customer[each.key].certificate_arn
   status   = "ISSUED"
   scope    = "LEAF"
+  name     = each.key
+  kind     = "customer"
   managed_domain_ids = [
     for d in each.value.domains :
     ravion_domain.customer["${each.key}/${d}"].managed_domain_id
@@ -426,4 +419,124 @@ resource "aws_lb_listener_rule" "customer" {
     "ravion:cert_group" = each.value.group_name
     "ravion:kind"       = "customer"
   })
+}
+
+################################################################################
+# 3. external groups — customer owns DNS + TLS end-to-end.
+#
+# Metadata-only: emit a ravion_domain row (so the FQDN appears on the
+# Domains tab) and add a host-header listener rule so the ALB routes
+# matching traffic to the target group. Ravion writes ZERO DNS records
+# and provisions ZERO ACM cert — the customer is expected to either
+# bring a wildcard already attached to the listener, terminate TLS in
+# front of the ALB themselves, or accept HTTPS errors until they
+# attach their own cert out-of-band.
+################################################################################
+
+locals {
+  external_groups = local.leaf_mode ? { for g in var.cert_groups : g.name => g if g.kind == "external" } : {}
+
+  external_pairs = local.leaf_mode ? merge([
+    for g in var.cert_groups : {
+      for d in g.domains : "${g.name}/${d}" => {
+        group_name = g.name
+        slug       = d
+      }
+    }
+    if g.kind == "external"
+  ]...) : {}
+
+  external_priority_for_pair = {
+    for k, _v in local.external_pairs :
+    k => (parseint(substr(sha256("ext:${var.name}:${k}"), 0, 8), 16) % 49000) + 1000
+  }
+
+  has_external = length(local.external_pairs) > 0
+}
+
+data "ravion_dns_provider" "external" {
+  count    = local.has_external ? 1 : 0
+  given_id = var.external_dns_provider_given_id
+}
+
+resource "ravion_domain" "external" {
+  for_each = local.external_pairs
+
+  dns_provider_id = data.ravion_dns_provider.external[0].id
+  fqdn_override   = each.value.slug
+}
+
+resource "aws_lb_listener_rule" "external" {
+  for_each = local.external_pairs
+
+  listener_arn = var.listener_arn
+  priority     = local.external_priority_for_pair[each.key]
+
+  condition {
+    host_header {
+      values = [ravion_domain.external[each.key].fqdn]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = var.target_group_arn
+  }
+
+  lifecycle {
+    ignore_changes = [action]
+  }
+
+  tags = merge(var.tags, {
+    "ravion:cert_group" = each.value.group_name
+    "ravion:kind"       = "external"
+  })
+}
+
+# Placeholder ravion_managed_certificate per external group — anchors
+# the cert-group identity for the Domains-tab projector (one MCert
+# row IS one cert group). Ravion provisions NO ACM cert here; the
+# synthetic `external:` ARN gives the unique key its uniqueness and
+# the status stays PENDING for the row's lifetime.
+resource "ravion_managed_certificate" "external" {
+  for_each = local.external_groups
+
+  cert_arn = "external:${var.name}:${each.key}"
+  status   = "PENDING"
+  scope    = "CUSTOM_DOMAIN"
+  name     = each.key
+  kind     = "external"
+  managed_domain_ids = [
+    for d in each.value.domains :
+    ravion_domain.external["${each.key}/${d}"].managed_domain_id
+  ]
+}
+
+################################################################################
+# 4. inherit-group placeholder certs.
+#
+# Inherit groups SNI-share the parent cluster's wildcard cert via the
+# parent_allocation chain — they don't issue their own. To anchor the
+# cert-group identity on the Domains tab (one ManagedCertificate IS
+# one cert group), we emit a placeholder ravion_managed_certificate
+# per group with a synthetic `inherit:` ARN.
+################################################################################
+
+resource "ravion_managed_certificate" "inherit" {
+  for_each = local.inherit_groups
+
+  cert_arn = "inherit:${var.name}:${each.key}"
+  status   = "ISSUED"
+  scope    = "WILDCARD"
+  name     = each.key
+  kind     = "inherit"
+  managed_domain_ids = concat(
+    [
+      for d in each.value.domains :
+      ravion_domain.inherit_label["${each.key}/${d}"].managed_domain_id
+    ],
+    contains(keys(local.inherit_auto_groups), each.key)
+      ? [ravion_domain.inherit_auto[each.key].managed_domain_id]
+      : [],
+  )
 }
