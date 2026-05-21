@@ -255,11 +255,11 @@ output "region" {
 ################################################################################
 
 output "ravion_domain_fqdns" {
-  description = "Map of (domain slug → resolved FQDN) for every allocation made under the cluster wildcard. Empty when ravion_managed = false or var.ravion_domains is empty."
-  value       = { for slug, alloc in ravion_domain.this : slug => alloc.fqdn }
+  description = "Map of `<group>/<slug>` → FQDN for every cert-group allocation."
+  value       = module.ravion_cert_groups.domain_fqdns
 }
 
 output "ravion_domain_allocation_ids" {
-  description = "Map of (domain slug → DomainAllocation id) so downstream resources (e.g. a ravion_managed_certificate for a SAN cert) can reference each allocation."
-  value       = { for slug, alloc in ravion_domain.this : slug => alloc.id }
+  description = "Map of `<group>/<slug>` → DomainAllocation id."
+  value       = module.ravion_cert_groups.domain_allocation_ids
 }
