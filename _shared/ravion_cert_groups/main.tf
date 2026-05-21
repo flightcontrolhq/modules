@@ -26,6 +26,17 @@ locals {
   leaf_mode        = var.mode == "leaf"
 }
 
+# external kind is accepted by validation so the form schema is stable,
+# but TF dispatch is not implemented yet (requires Ravion TF provider
+# to gain `is_external = true` on ravion_domain so dns_provider_id can
+# be omitted). Plan fails with a clear message when external is used.
+check "external_kind_not_yet_supported" {
+  assert {
+    condition     = length([for g in var.cert_groups : g if g.kind == "external"]) == 0
+    error_message = "cert group kind `external` is scaffolded but TF dispatch is not implemented yet. See ravion_cert_groups/README — requires Ravion TF provider extension."
+  }
+}
+
 ################################################################################
 # 1. cluster_wildcard groups — leaf labels under a chosen cluster
 #    parent group (issued by the upstream cluster's parent-mode block).

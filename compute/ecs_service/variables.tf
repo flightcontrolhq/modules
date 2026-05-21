@@ -656,14 +656,13 @@ variable "ravion_certificate_groups" {
     # Source kind:
     #   cluster_wildcard — Inherit a cluster wildcard cert. Pick the
     #     cluster group via `cluster_group_name`. `domains` = optional
-    #     list of DNS-safe leaf labels (each becomes
-    #     `<label>-<hash>.<cluster-wildcard-fqdn>`). Empty `domains` →
-    #     ONE zero-typing allocation `<svc-given-id>-<random>.<cluster-wildcard-fqdn>`.
-    #     No own ACM cert; no DNS records (cluster wildcard covers).
+    #     list of DNS-safe leaf labels.
     #   customer — Operator's own DnsProvider (`dns_provider_id`) +
-    #     full FQDNs in `domains` (1..10). Issues own ACM cert,
-    #     writes validation + routing records, SNI-attaches to the
-    #     cluster's HTTPS listener.
+    #     full FQDNs in `domains`. Issues own ACM cert.
+    #   external — External DNS the operator manages by hand. We
+    #     issue the cert + surface the validation + routing records
+    #     via the Domains page. Apply fails fast (5m) when records
+    #     aren't live; user adds records, re-runs apply.
     kind = string
 
     # Required when kind == "cluster_wildcard". Name of the cluster's
@@ -682,8 +681,16 @@ variable "ravion_certificate_groups" {
   default     = []
 
   validation {
-    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["cluster_wildcard", "customer"], g.kind)])
-    error_message = "Each group's `kind` must be one of: cluster_wildcard, customer."
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["cluster_wildcard", "customer", "external"], g.kind)])
+    error_message = "Each group's `kind` must be one of: cluster_wildcard, customer, external."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "external" || length(g.domains) >= 1])
+    error_message = "external cert groups must contain at least 1 domain (full FQDN)."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "external" || length(g.domains) <= 10])
+    error_message = "external cert groups can contain at most 10 domains (ACM default SAN limit)."
   }
   validation {
     condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)

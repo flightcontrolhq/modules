@@ -31,7 +31,7 @@ output "cloudflare_api_token" {
 }
 
 output "parent_groups" {
-  description = "Parent-mode output: map of group name → wildcard parent allocation + cert. Empty when mode = leaf. Service modules' cluster_wildcard kind looks up entries here via cluster_group_name."
+  description = "Parent-mode output: map of group name → wildcard parent allocation + cert. Service modules' cluster_wildcard kind looks up entries here via cluster_group_name."
   value = {
     for name, alloc in local.parent_allocations : name => {
       parent_allocation_id = alloc.id
