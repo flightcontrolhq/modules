@@ -90,6 +90,8 @@ resource "ravion_domain" "inherit_label" {
   dns_provider_id             = var.cluster_groups[each.value.parent_group_name].dns_provider_id
   slug                        = each.value.slug
   parent_domain_allocation_id = var.cluster_groups[each.value.parent_group_name].parent_allocation_id
+  cert_group_name             = each.value.group_name
+  cert_group_kind             = "inherit"
 }
 
 # 1b. Zero-typing auto allocation per group when `domains` is empty.
@@ -99,6 +101,8 @@ resource "ravion_domain" "inherit_auto" {
   dns_provider_id             = var.cluster_groups[each.value.parent_group_name].dns_provider_id
   slug                        = var.module_instance_given_id
   parent_domain_allocation_id = var.cluster_groups[each.value.parent_group_name].parent_allocation_id
+  cert_group_name             = each.key
+  cert_group_kind             = "inherit"
 }
 
 resource "aws_lb_listener_rule" "inherit_label" {
@@ -188,6 +192,8 @@ resource "ravion_domain" "customer" {
 
   dns_provider_id = local.customer_providers[each.value.group_name].id
   fqdn_override   = each.value.slug
+  cert_group_name = each.value.group_name
+  cert_group_kind = "customer"
 }
 
 resource "aws_acm_certificate" "customer" {

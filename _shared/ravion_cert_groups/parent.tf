@@ -34,6 +34,8 @@ resource "ravion_domain" "parent_ravion_auto" {
 
   dns_provider_id = data.ravion_dns_provider.platform_apex[0].id
   slug            = var.module_instance_id
+  cert_group_name = each.key
+  cert_group_kind = "ravion_auto"
 
   lifecycle {
     precondition {
@@ -49,6 +51,8 @@ resource "ravion_domain" "parent_customer" {
 
   dns_provider_id = data.ravion_dns_provider.groups[each.key].id
   fqdn_override   = each.value.wildcard_fqdn
+  cert_group_name = each.key
+  cert_group_kind = "customer"
 
   lifecycle {
     precondition {
