@@ -174,6 +174,22 @@ locals {
     name => data.ravion_dns_provider.groups[name]
   }
 
+  # Non-sensitive provider kind dispatch. data.ravion_dns_provider's
+  # cloudflare.api_token is marked Sensitive; ANY value derived from
+  # the provider attribute group inherits sensitivity, which Terraform
+  # then refuses inside for_each keys + filter conditions. nonsensitive()
+  # is safe here because the string result encodes only the discriminator
+  # (no secret payload).
+  customer_provider_kind = {
+    for name, _g in local.customer_groups :
+    name => nonsensitive(
+      data.ravion_dns_provider.groups[name].route53_ravion != null ? "route53_ravion" :
+      data.ravion_dns_provider.groups[name].route53 != null ? "route53" :
+      data.ravion_dns_provider.groups[name].cloudflare != null ? "cloudflare" :
+      "external"
+    )
+  }
+
   customer_priority_for_pair = {
     for k, _v in local.customer_pairs :
     k => (parseint(substr(sha256("cust:${var.name}:${k}"), 0, 8), 16) % 49000) + 1000
@@ -208,29 +224,25 @@ resource "aws_acm_certificate" "customer" {
 }
 
 locals {
-  customer_validation_pairs = merge([
-    for g_name, g in local.customer_groups : {
-      for opt in aws_acm_certificate.customer[g_name].domain_validation_options :
-      "${g_name}/${opt.domain_name}" => {
-        group_name = g_name
-        domain_key = "${g_name}/${opt.domain_name}"
-        opt        = opt
-        provider   = local.customer_providers[g_name]
-      }
-    }
-  ]...)
+  # Static (group, domain) keys — known at plan, identical to
+  # customer_pairs. The per-domain validation option is resolved
+  # inside each resource body via a list-filter on
+  # `aws_acm_certificate.customer[cert_key].domain_validation_options`
+  # so the for_each keys stay statically determinable even though the
+  # validation values land only post-cert-issuance.
+  customer_validation_pairs = local.customer_pairs
 
   customer_validation_pairs_route53_ravion = {
     for k, v in local.customer_validation_pairs : k => v
-    if v.provider.route53_ravion != null
+    if local.customer_provider_kind[v.group_name] == "route53_ravion"
   }
   customer_validation_pairs_route53 = {
     for k, v in local.customer_validation_pairs : k => v
-    if v.provider.route53 != null
+    if local.customer_provider_kind[v.group_name] == "route53"
   }
   customer_validation_pairs_cloudflare = {
     for k, v in local.customer_validation_pairs : k => v
-    if v.provider.cloudflare != null
+    if local.customer_provider_kind[v.group_name] == "cloudflare"
   }
 }
 
@@ -238,34 +250,52 @@ resource "ravion_dns_records" "customer_validation_ravion" {
   for_each = local.customer_validation_pairs_route53_ravion
 
   managed_domain_id = ravion_domain.customer[each.value.domain_key].id
-  records = [{
-    name  = each.value.opt.resource_record_name
-    type  = each.value.opt.resource_record_type
-    value = each.value.opt.resource_record_value
-    ttl   = 60
-  }]
+  records = [
+    for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
+      name  = opt.resource_record_name
+      type  = opt.resource_record_type
+      value = opt.resource_record_value
+      ttl   = 60
+    }
+    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+  ]
 }
 
 resource "aws_route53_record" "customer_validation_r53" {
   for_each = local.customer_validation_pairs_route53
 
-  zone_id = each.value.provider.route53.hosted_zone_id
-  name    = each.value.opt.resource_record_name
-  type    = each.value.opt.resource_record_type
-  records = [each.value.opt.resource_record_value]
-  ttl     = 60
+  zone_id = local.customer_providers[each.value.group_name].route53.hosted_zone_id
+  name    = [
+    for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
+    opt.resource_record_name
+    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+  ][0]
+  type    = [
+    for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
+    opt.resource_record_type
+    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+  ][0]
+  records = [
+    for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
+    opt.resource_record_value
+    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+  ]
+  ttl = 60
 }
 
 resource "ravion_dns_records" "customer_validation_metadata_r53" {
   for_each = local.customer_validation_pairs_route53
 
   managed_domain_id = ravion_domain.customer[each.value.domain_key].id
-  records = [{
-    name  = each.value.opt.resource_record_name
-    type  = each.value.opt.resource_record_type
-    value = each.value.opt.resource_record_value
-    ttl   = 60
-  }]
+  records = [
+    for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
+      name  = opt.resource_record_name
+      type  = opt.resource_record_type
+      value = opt.resource_record_value
+      ttl   = 60
+    }
+    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+  ]
   depends_on = [aws_route53_record.customer_validation_r53]
 }
 
@@ -276,12 +306,15 @@ resource "ravion_dns_records" "customer_validation_cf" {
   for_each = local.customer_validation_pairs_cloudflare
 
   managed_domain_id = ravion_domain.customer[each.value.domain_key].id
-  records = [{
-    name  = each.value.opt.resource_record_name
-    type  = each.value.opt.resource_record_type
-    value = each.value.opt.resource_record_value
-    ttl   = 60
-  }]
+  records = [
+    for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
+      name  = opt.resource_record_name
+      type  = opt.resource_record_type
+      value = opt.resource_record_value
+      ttl   = 60
+    }
+    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+  ]
 }
 
 resource "aws_acm_certificate_validation" "customer" {
@@ -330,7 +363,7 @@ resource "aws_lb_listener_certificate" "customer" {
 resource "ravion_dns_records" "customer_routing_ravion" {
   for_each = {
     for k, v in local.customer_pairs : k => v
-    if local.customer_providers[v.group_name].route53_ravion != null
+    if local.customer_provider_kind[v.group_name] == "route53_ravion"
   }
 
   managed_domain_id = ravion_domain.customer[each.key].id
@@ -347,7 +380,7 @@ resource "ravion_dns_records" "customer_routing_ravion" {
 resource "aws_route53_record" "customer_routing_r53" {
   for_each = {
     for k, v in local.customer_pairs : k => v
-    if local.customer_providers[v.group_name].route53 != null
+    if local.customer_provider_kind[v.group_name] == "route53"
   }
 
   zone_id = local.customer_providers[each.value.group_name].route53.hosted_zone_id
@@ -364,7 +397,7 @@ resource "aws_route53_record" "customer_routing_r53" {
 resource "ravion_dns_records" "customer_routing_metadata_r53" {
   for_each = {
     for k, v in local.customer_pairs : k => v
-    if local.customer_providers[v.group_name].route53 != null
+    if local.customer_provider_kind[v.group_name] == "route53"
   }
 
   managed_domain_id = ravion_domain.customer[each.key].id
@@ -382,7 +415,7 @@ resource "ravion_dns_records" "customer_routing_metadata_r53" {
 resource "ravion_dns_records" "customer_routing_cf" {
   for_each = {
     for k, v in local.customer_pairs : k => v
-    if local.customer_providers[v.group_name].cloudflare != null
+    if local.customer_provider_kind[v.group_name] == "cloudflare"
   }
 
   managed_domain_id = ravion_domain.customer[each.key].id

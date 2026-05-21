@@ -101,17 +101,30 @@ resource "aws_acm_certificate" "parent" {
 # which is only known after apply). Iterating these maps means TF can
 # plan the resource set without resolving the cert's validation list.
 locals {
+  # Non-sensitive kind dispatch — see customer_provider_kind in main.tf
+  # for the rationale (data.ravion_dns_provider.cloudflare.api_token is
+  # marked Sensitive and would taint for_each filters).
+  parent_provider_kind = {
+    for name, alloc in local.parent_allocations :
+    name => nonsensitive(
+      alloc.provider.route53_ravion != null ? "route53_ravion" :
+      alloc.provider.route53 != null ? "route53" :
+      alloc.provider.cloudflare != null ? "cloudflare" :
+      "external"
+    )
+  }
+
   parent_groups_route53_ravion = {
     for name, alloc in local.parent_allocations : name => alloc
-    if alloc.provider.route53_ravion != null
+    if local.parent_provider_kind[name] == "route53_ravion"
   }
   parent_groups_route53 = {
     for name, alloc in local.parent_allocations : name => alloc
-    if alloc.provider.route53 != null
+    if local.parent_provider_kind[name] == "route53"
   }
   parent_groups_cloudflare = {
     for name, alloc in local.parent_allocations : name => alloc
-    if alloc.provider.cloudflare != null
+    if local.parent_provider_kind[name] == "cloudflare"
   }
 }
 
