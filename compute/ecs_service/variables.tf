@@ -612,7 +612,7 @@ variable "region" {
 # variant.
 ################################################################################
 
-variable "ravion_cluster_certificate_groups" {
+variable "ravion_parent_certificate_groups" {
   type = map(object({
     parent_allocation_id = string
     managed_domain_id    = string
@@ -620,13 +620,13 @@ variable "ravion_cluster_certificate_groups" {
     cert_arn             = string
     dns_provider_id      = string
   }))
-  description = "Cluster's `ravion_certificate_groups` output. Auto-wired from `module.ecs_cluster.ravion_certificate_groups`. Service `cluster_wildcard` cert groups look up their parent here by `cluster_group_name`."
+  description = "Cluster's `ravion_certificate_groups` output. Auto-wired from `module.ecs_cluster.ravion_certificate_groups`. Service `inherit` cert groups look up their parent here by `parent_group_name`."
   default     = {}
 }
 
 variable "module_instance_given_id" {
   type        = string
-  description = "The service module-instance's given_id. Used by `cluster_wildcard` cert groups with empty `domains` as the slug for the auto-allocated URL. Injected by the Ravion runner."
+  description = "The service module-instance's given_id. Used by `inherit` cert groups with empty `domains` as the slug for the auto-allocated URL. Injected by the Ravion runner."
   default     = null
 }
 
@@ -654,8 +654,8 @@ variable "ravion_certificate_groups" {
     name = string
 
     # Source kind:
-    #   cluster_wildcard — Inherit a cluster wildcard cert. Pick the
-    #     cluster group via `cluster_group_name`. `domains` = optional
+    #   inherit — Inherit a cluster wildcard cert. Pick the
+    #     cluster group via `parent_group_name`. `domains` = optional
     #     list of DNS-safe leaf labels.
     #   customer — Operator's own DnsProvider (`dns_provider_id`) +
     #     full FQDNs in `domains`. Issues own ACM cert.
@@ -665,10 +665,10 @@ variable "ravion_certificate_groups" {
     #     aren't live; user adds records, re-runs apply.
     kind = string
 
-    # Required when kind == "cluster_wildcard". Name of the cluster's
+    # Required when kind == "inherit". Name of the cluster's
     # cert group to inherit from. Must exist as a key in
-    # var.ravion_cluster_certificate_groups.
-    cluster_group_name = optional(string)
+    # var.ravion_parent_certificate_groups.
+    parent_group_name = optional(string)
 
     # Required when kind == "customer". Either id or given_id wins.
     dns_provider_id       = optional(string)
@@ -677,12 +677,12 @@ variable "ravion_certificate_groups" {
     # Domain entries. Semantics depend on kind (see above).
     domains = list(string)
   }))
-  description = "Per-service certificate groups. Two kinds: `cluster_wildcard` (inherit a chosen cluster wildcard cert) or `customer` (own DNS provider + own ACM cert, up to 10 FQDNs)."
+  description = "Per-service certificate groups. Two kinds: `inherit` (inherit a chosen cluster wildcard cert) or `customer` (own DNS provider + own ACM cert, up to 10 FQDNs)."
   default     = []
 
   validation {
-    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["cluster_wildcard", "customer", "external"], g.kind)])
-    error_message = "Each group's `kind` must be one of: cluster_wildcard, customer, external."
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["inherit", "customer", "external"], g.kind)])
+    error_message = "Each group's `kind` must be one of: inherit, customer, external."
   }
   validation {
     condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "external" || length(g.domains) >= 1])
@@ -697,8 +697,8 @@ variable "ravion_certificate_groups" {
     error_message = "Certificate group names must be unique within a service."
   }
   validation {
-    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "cluster_wildcard" || (g.cluster_group_name != null && g.cluster_group_name != "")])
-    error_message = "cluster_wildcard groups must set cluster_group_name."
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "inherit" || (g.parent_group_name != null && g.parent_group_name != "")])
+    error_message = "inherit groups must set parent_group_name."
   }
   validation {
     condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || length(g.domains) <= 10])
@@ -715,10 +715,10 @@ variable "ravion_certificate_groups" {
   validation {
     condition = alltrue([
       for g in var.ravion_certificate_groups :
-      g.kind != "cluster_wildcard" || alltrue([
+      g.kind != "inherit" || alltrue([
         for d in g.domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63
       ])
     ])
-    error_message = "cluster_wildcard group `domains` entries must be DNS-safe leaf labels matching ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (<=63 chars)."
+    error_message = "inherit group `domains` entries must be DNS-safe leaf labels matching ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (<=63 chars)."
   }
 }

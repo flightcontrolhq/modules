@@ -13,7 +13,7 @@ module "ravion_cert_groups" {
 
   name                     = var.name
   cert_groups              = var.ravion_certificate_groups
-  cluster_groups           = var.ravion_cluster_certificate_groups
+  cluster_groups           = var.ravion_parent_certificate_groups
   module_instance_given_id = var.module_instance_given_id
   routing_target_dns_name  = var.ravion_cluster_alb_dns_name
   routing_target_zone_id   = var.ravion_cluster_alb_zone_id

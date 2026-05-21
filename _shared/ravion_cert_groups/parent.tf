@@ -183,7 +183,7 @@ resource "ravion_managed_certificate" "parent" {
 
   cert_arn           = aws_acm_certificate_validation.parent[each.key].certificate_arn
   status             = "ISSUED"
-  scope              = "CLUSTER_WILDCARD"
+  scope              = "WILDCARD"
   managed_domain_ids = [each.value.managed_domain_id]
   issued_at          = aws_acm_certificate.parent[each.key].not_before
   expires_at         = aws_acm_certificate.parent[each.key].not_after

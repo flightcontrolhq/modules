@@ -10,8 +10,8 @@
 
 # Only iterates over groups that need their OWN DnsProvider row.
 # `ravion_auto` skips this lookup — it uses data.platform_apex below.
-# `cluster_wildcard` (leaf-mode) skips too — its provider comes from
-# var.cluster_groups[group.cluster_group_name].dns_provider_id.
+# `inherit` (leaf-mode) skips too — its provider comes from
+# var.cluster_groups[group.parent_group_name].dns_provider_id.
 # `external` skips entirely — no provider row by definition.
 data "ravion_dns_provider" "groups" {
   for_each = {

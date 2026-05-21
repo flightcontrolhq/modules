@@ -31,9 +31,9 @@ variable "cert_groups" {
     dns_provider_given_id = optional(string)
     domains               = list(string)
     wildcard_fqdn         = optional(string)
-    cluster_group_name    = optional(string)
+    parent_group_name    = optional(string)
   }))
-  description = "Operator-facing cert-group rows. Field semantics depend on `var.mode`. Leaf mode kinds: `cluster_wildcard` (leaf labels nested under a chosen cluster parent group), `customer` (per-FQDN cert under row's DnsProvider). Parent mode kinds: `ravion_auto` (auto-derived wildcard under platform apex), `customer` (wildcard at row's wildcard_fqdn)."
+  description = "Operator-facing cert-group rows. Field semantics depend on `var.mode`. Leaf mode kinds: `inherit` (leaf labels nested under a chosen cluster parent group), `customer` (per-FQDN cert under row's DnsProvider). Parent mode kinds: `ravion_auto` (auto-derived wildcard under platform apex), `customer` (wildcard at row's wildcard_fqdn)."
   default     = []
 }
 
@@ -45,7 +45,7 @@ variable "cluster_groups" {
     cert_arn             = string
     dns_provider_id      = string
   }))
-  description = "Upstream cluster's parent-mode output (`module.ravion_cert_groups.parent_groups` from the cluster). Leaf-mode `cluster_wildcard` cert groups look up their parent here via cluster_group_name. Empty for cluster-only callers."
+  description = "Upstream cluster's parent-mode output (`module.ravion_cert_groups.parent_groups` from the cluster). Leaf-mode `inherit` cert groups look up their parent here via parent_group_name. Empty for cluster-only callers."
   default     = {}
 }
 

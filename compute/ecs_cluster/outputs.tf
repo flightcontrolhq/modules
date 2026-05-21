@@ -249,6 +249,6 @@ output "region" {
 ################################################################################
 
 output "ravion_certificate_groups" {
-  description = "Map of cluster cert-group name → {parent_allocation_id, wildcard_fqdn, cert_arn, managed_domain_id}. Service modules consume this via their cert groups (kind = cluster_wildcard, cluster_group_name = \"<name>\")."
+  description = "Map of cluster cert-group name → {parent_allocation_id, wildcard_fqdn, cert_arn, managed_domain_id}. Service modules consume this via their cert groups (kind = inherit, parent_group_name = \"<name>\")."
   value       = module.ravion_cert_groups.parent_groups
 }

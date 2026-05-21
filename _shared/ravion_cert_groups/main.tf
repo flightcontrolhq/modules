@@ -38,7 +38,7 @@ check "external_kind_not_yet_supported" {
 }
 
 ################################################################################
-# 1. cluster_wildcard groups — leaf labels under a chosen cluster
+# 1. inherit groups — leaf labels under a chosen cluster
 #    parent group (issued by the upstream cluster's parent-mode block).
 #    No own cert; inherits the cluster wildcard via SNI.
 #
@@ -50,23 +50,23 @@ check "external_kind_not_yet_supported" {
 ################################################################################
 
 locals {
-  cluster_wildcard_groups = local.leaf_mode ? {
+  inherit_groups = local.leaf_mode ? {
     for g in var.cert_groups :
-    g.name => g if g.kind == "cluster_wildcard" && contains(keys(var.cluster_groups), coalesce(g.cluster_group_name, ""))
+    g.name => g if g.kind == "inherit" && contains(keys(var.cluster_groups), coalesce(g.parent_group_name, ""))
   } : {}
 
-  cluster_wildcard_label_pairs = merge([
-    for g_name, g in local.cluster_wildcard_groups : {
+  inherit_label_pairs = merge([
+    for g_name, g in local.inherit_groups : {
       for d in g.domains : "${g_name}/${d}" => {
         group_name         = g_name
         slug               = d
-        cluster_group_name = g.cluster_group_name
+        parent_group_name = g.parent_group_name
       }
     }
   ]...)
 
-  cluster_wildcard_auto_groups = {
-    for g_name, g in local.cluster_wildcard_groups :
+  inherit_auto_groups = {
+    for g_name, g in local.inherit_groups :
     g_name => g
     if length(g.domains) == 0
     && var.module_instance_given_id != null
@@ -74,42 +74,42 @@ locals {
   }
 
   cw_label_priority = {
-    for k, _v in local.cluster_wildcard_label_pairs :
+    for k, _v in local.inherit_label_pairs :
     k => (parseint(substr(sha256("cw:${var.name}:${k}"), 0, 8), 16) % 49000) + 1000
   }
   cw_auto_priority = {
-    for g_name, _v in local.cluster_wildcard_auto_groups :
+    for g_name, _v in local.inherit_auto_groups :
     g_name => (parseint(substr(sha256("cw:auto:${var.name}:${g_name}"), 0, 8), 16) % 49000) + 1000
   }
 }
 
 # 1a. Per-leaf allocation, nested under the chosen cluster parent group.
-resource "ravion_domain" "cluster_wildcard_label" {
-  for_each = local.cluster_wildcard_label_pairs
+resource "ravion_domain" "inherit_label" {
+  for_each = local.inherit_label_pairs
 
-  dns_provider_id             = var.cluster_groups[each.value.cluster_group_name].dns_provider_id
+  dns_provider_id             = var.cluster_groups[each.value.parent_group_name].dns_provider_id
   slug                        = each.value.slug
-  parent_domain_allocation_id = var.cluster_groups[each.value.cluster_group_name].parent_allocation_id
+  parent_domain_allocation_id = var.cluster_groups[each.value.parent_group_name].parent_allocation_id
 }
 
 # 1b. Zero-typing auto allocation per group when `domains` is empty.
-resource "ravion_domain" "cluster_wildcard_auto" {
-  for_each = local.cluster_wildcard_auto_groups
+resource "ravion_domain" "inherit_auto" {
+  for_each = local.inherit_auto_groups
 
-  dns_provider_id             = var.cluster_groups[each.value.cluster_group_name].dns_provider_id
+  dns_provider_id             = var.cluster_groups[each.value.parent_group_name].dns_provider_id
   slug                        = var.module_instance_given_id
-  parent_domain_allocation_id = var.cluster_groups[each.value.cluster_group_name].parent_allocation_id
+  parent_domain_allocation_id = var.cluster_groups[each.value.parent_group_name].parent_allocation_id
 }
 
-resource "aws_lb_listener_rule" "cluster_wildcard_label" {
-  for_each = local.cluster_wildcard_label_pairs
+resource "aws_lb_listener_rule" "inherit_label" {
+  for_each = local.inherit_label_pairs
 
   listener_arn = var.listener_arn
   priority     = local.cw_label_priority[each.key]
 
   condition {
     host_header {
-      values = [ravion_domain.cluster_wildcard_label[each.key].fqdn]
+      values = [ravion_domain.inherit_label[each.key].fqdn]
     }
   }
 
@@ -124,19 +124,19 @@ resource "aws_lb_listener_rule" "cluster_wildcard_label" {
 
   tags = merge(var.tags, {
     "ravion:cert_group" = each.value.group_name
-    "ravion:kind"       = "cluster_wildcard"
+    "ravion:kind"       = "inherit"
   })
 }
 
-resource "aws_lb_listener_rule" "cluster_wildcard_auto" {
-  for_each = local.cluster_wildcard_auto_groups
+resource "aws_lb_listener_rule" "inherit_auto" {
+  for_each = local.inherit_auto_groups
 
   listener_arn = var.listener_arn
   priority     = local.cw_auto_priority[each.key]
 
   condition {
     host_header {
-      values = [ravion_domain.cluster_wildcard_auto[each.key].fqdn]
+      values = [ravion_domain.inherit_auto[each.key].fqdn]
     }
   }
 
@@ -151,7 +151,7 @@ resource "aws_lb_listener_rule" "cluster_wildcard_auto" {
 
   tags = merge(var.tags, {
     "ravion:cert_group" = each.key
-    "ravion:kind"       = "cluster_wildcard"
+    "ravion:kind"       = "inherit"
   })
 }
 
@@ -312,7 +312,7 @@ resource "ravion_managed_certificate" "customer" {
 
   cert_arn = aws_acm_certificate_validation.customer[each.key].certificate_arn
   status   = "ISSUED"
-  scope    = "SERVICE"
+  scope    = "LEAF"
   managed_domain_ids = [
     for d in each.value.domains :
     ravion_domain.customer["${each.key}/${d}"].managed_domain_id

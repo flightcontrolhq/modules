@@ -636,8 +636,8 @@ variable "region" {
 # Each row in var.ravion_certificate_groups creates ONE wildcard ACM
 # cert covering `*.<wildcard_fqdn>` and attaches it as an SNI cert on
 # the cluster's HTTPS listener. Services nest leaf FQDNs under any of
-# these wildcards via their own cert groups (kind = cluster_wildcard,
-# cluster_group_name = "<this group's name>"). Three kinds:
+# these wildcards via their own cert groups (kind = inherit,
+# parent_group_name = "<this group's name>"). Three kinds:
 #
 #   ravion_auto — Ravion-managed apex. Wildcard FQDN is auto-derived as
 #                 `<module-instance-id>.<platform-apex>`. Zero typing.
