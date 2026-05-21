@@ -192,7 +192,7 @@ resource "cloudflare_dns_record" "cluster_routing_cf" {
   name    = ravion_domain.cluster[0].fqdn
   type    = "CNAME"
   content = module.public_alb[0].alb_dns_name
-  ttl     = 1 # 1 == automatic, required when proxied = true; ALB doesn't accept CF proxying for arbitrary L7 so leave proxied false + ttl=60.
+  ttl     = 60
   proxied = false
 }
 
