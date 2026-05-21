@@ -12,16 +12,6 @@ data "aws_vpc" "this" {
   id = var.vpc_id
 }
 
-# Resolve the registered Ravion DnsProvider — same shape as the
-# cluster module's data block. Per-variant attribute groups
-# (`route53_ravion`, `route53`, `cloudflare`, `external`) drive the
-# count gating in ravion_domains.tf. Skipped (count = 0) when no
-# provider is configured at the service level, which is the common
-# case — services typically inherit the cluster's wildcard via the
-# parent_domain_allocation_id link and don't need to dispatch on
-# variant themselves except for the routing CNAME write path.
-data "ravion_dns_provider" "this" {
-  count = local.dns_provider_lookup_key == "" ? 0 : 1
-  id    = var.ravion_dns_provider_id
-}
+# DnsProvider lookups (per cert-group + platform apex) live inside the
+# shared ravion_cert_groups child module.
 

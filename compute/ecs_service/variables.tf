@@ -612,86 +612,86 @@ variable "region" {
 # variant.
 ################################################################################
 
-variable "ravion_dns_provider_id" {
-  type        = string
-  description = "Cluster's DnsProvider id (`dnsprov_*`) — auto-wired from `module.ecs_cluster.ravion_dns_provider_id`. Used by every cert group with kind == `cluster_wildcard` or `ravion_auto`."
-  default     = null
+variable "ravion_cluster_certificate_groups" {
+  type = map(object({
+    parent_allocation_id = string
+    managed_domain_id    = string
+    wildcard_fqdn        = string
+    cert_arn             = string
+    dns_provider_id      = string
+  }))
+  description = "Cluster's `ravion_certificate_groups` output. Auto-wired from `module.ecs_cluster.ravion_certificate_groups`. Service `cluster_wildcard` cert groups look up their parent here by `cluster_group_name`."
+  default     = {}
 }
 
 variable "module_instance_given_id" {
   type        = string
-  description = "The service module-instance's given_id. Used by `ravion_auto` cert groups as the slug for the auto-allocated URL. Injected by the Ravion runner when present; safe to leave null in standalone use."
-  default     = null
-}
-
-variable "ravion_parent_domain_allocation_id" {
-  type        = string
-  description = "Cluster's DomainAllocation id, from `module.ecs_cluster.ravion_cluster_domain_allocation_id`. Every `cluster_wildcard` and `ravion_auto` cert group nests its allocations under this. When null/empty, those group kinds are skipped."
+  description = "The service module-instance's given_id. Used by `cluster_wildcard` cert groups with empty `domains` as the slug for the auto-allocated URL. Injected by the Ravion runner."
   default     = null
 }
 
 variable "ravion_cluster_alb_dns_name" {
   type        = string
-  description = "Cluster ALB DNS name, from `module.ecs_cluster.public_alb_dns_name`. Required when any cluster_wildcard or ravion_auto group is configured."
+  description = "Cluster ALB DNS name, from `module.ecs_cluster.public_alb_dns_name`. Used as the routing target for customer cert-group records."
   default     = null
 }
 
 variable "ravion_cluster_alb_zone_id" {
   type        = string
-  description = "Cluster ALB hosted-zone id, from `module.ecs_cluster.public_alb_zone_id`. Required when any cluster_wildcard or ravion_auto group is configured."
+  description = "Cluster ALB hosted-zone id, from `module.ecs_cluster.public_alb_zone_id`. Used by Route53 ALIAS routing records on customer cert groups."
   default     = null
 }
 
 variable "ravion_cluster_https_listener_arn" {
   type        = string
-  description = "Cluster HTTPS listener ARN, from `module.ecs_cluster.public_alb_https_listener_arn`. Required for ALL cert-group kinds so host-header rules (and per-group SNI cert attachments) can be created."
+  description = "Cluster HTTPS listener ARN, from `module.ecs_cluster.public_alb_https_listener_arn`. Required for all cert-group kinds so host-header rules + customer-group SNI cert attachments can be created."
   default     = null
 }
 
 variable "ravion_certificate_groups" {
   type = list(object({
-    # Group name — used as a stable identifier in TF state keys
-    # (ravion_domain.group[\"<name>/<slug>\"]) and as a tag on AWS
-    # resources. Pick something short + url-safe per group; never
-    # reuse across groups in the same service.
+    # Stable per-service identifier used in TF state keys + AWS tags.
     name = string
 
-    # Source kind. Two modes:
-    #   ravion_auto — Inherit cluster wildcard cert. `domains` is an
-    #     optional list of DNS-safe leaf labels (e.g. `api`); each
-    #     becomes a `<label>-<hash>.<cluster-fqdn>` allocation. Empty
-    #     list → ONE auto-allocation `<svc-given-id>-<random>.<cluster-fqdn>`
-    #     (zero typing). No own ACM cert; no own DNS records.
-    #   customer — Operator's own DnsProvider on the row (dns_provider_id).
-    #     Each `domains` entry is a full FQDN ending in the provider's
-    #     apex (server-validated, capped at 10 for the ACM SAN limit).
-    #     The group issues its own ACM cert, writes validation +
-    #     routing records via the provider variant, and SNI-attaches
-    #     the cert to the cluster's HTTPS listener.
+    # Source kind:
+    #   cluster_wildcard — Inherit a cluster wildcard cert. Pick the
+    #     cluster group via `cluster_group_name`. `domains` = optional
+    #     list of DNS-safe leaf labels (each becomes
+    #     `<label>-<hash>.<cluster-wildcard-fqdn>`). Empty `domains` →
+    #     ONE zero-typing allocation `<svc-given-id>-<random>.<cluster-wildcard-fqdn>`.
+    #     No own ACM cert; no DNS records (cluster wildcard covers).
+    #   customer — Operator's own DnsProvider (`dns_provider_id`) +
+    #     full FQDNs in `domains` (1..10). Issues own ACM cert,
+    #     writes validation + routing records, SNI-attaches to the
+    #     cluster's HTTPS listener.
     kind = string
 
-    # Required only when kind == "customer". Either id or given_id
-    # (id wins if both set).
+    # Required when kind == "cluster_wildcard". Name of the cluster's
+    # cert group to inherit from. Must exist as a key in
+    # var.ravion_cluster_certificate_groups.
+    cluster_group_name = optional(string)
+
+    # Required when kind == "customer". Either id or given_id wins.
     dns_provider_id       = optional(string)
     dns_provider_given_id = optional(string)
 
-    # Domain entries. Semantics depend on `kind`:
-    #   ravion_auto — list of leaf labels (no dots) OR empty for the
-    #                 zero-typing auto-allocation.
-    #   customer    — list of full FQDNs under the provider's apex
-    #                 (1..10 entries).
+    # Domain entries. Semantics depend on kind (see above).
     domains = list(string)
   }))
-  description = "Per-service certificate groups. Each group dispatches on `kind`: `ravion_auto` (inherit cluster wildcard cert, optional leaf labels) or `customer` (own DNS provider + own ACM cert, up to 10 FQDNs)."
+  description = "Per-service certificate groups. Two kinds: `cluster_wildcard` (inherit a chosen cluster wildcard cert) or `customer` (own DNS provider + own ACM cert, up to 10 FQDNs)."
   default     = []
 
   validation {
-    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["ravion_auto", "customer"], g.kind)])
-    error_message = "Each group's `kind` must be one of: ravion_auto, customer."
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["cluster_wildcard", "customer"], g.kind)])
+    error_message = "Each group's `kind` must be one of: cluster_wildcard, customer."
   }
   validation {
     condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)
     error_message = "Certificate group names must be unique within a service."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "cluster_wildcard" || (g.cluster_group_name != null && g.cluster_group_name != "")])
+    error_message = "cluster_wildcard groups must set cluster_group_name."
   }
   validation {
     condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || length(g.domains) <= 10])
@@ -708,10 +708,10 @@ variable "ravion_certificate_groups" {
   validation {
     condition = alltrue([
       for g in var.ravion_certificate_groups :
-      g.kind != "ravion_auto" || alltrue([
+      g.kind != "cluster_wildcard" || alltrue([
         for d in g.domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63
       ])
     ])
-    error_message = "ravion_auto group `domains` entries must be DNS-safe leaf labels matching ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (<=63 chars)."
+    error_message = "cluster_wildcard group `domains` entries must be DNS-safe leaf labels matching ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (<=63 chars)."
   }
 }

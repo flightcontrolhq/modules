@@ -2,9 +2,8 @@ provider "aws" {
   region = var.region
 }
 
-# Cloudflare provider — used only when the parent cluster's
-# DnsProvider is CLOUDFLARE (count gating on
-# `data.ravion_dns_provider.this[0].cloudflare` in ravion_domains.tf).
+# Cloudflare token sourced from any customer cert-group whose provider
+# is Cloudflare. Null when none — provider stays inert.
 provider "cloudflare" {
-  api_token = try(data.ravion_dns_provider.this[0].cloudflare.api_token, null)
+  api_token = module.ravion_cert_groups.cloudflare_api_token
 }

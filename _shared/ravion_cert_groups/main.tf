@@ -27,82 +27,78 @@ locals {
 }
 
 ################################################################################
-# 1. ravion_auto groups
+# 1. cluster_wildcard groups — leaf labels under a chosen cluster
+#    parent group (issued by the upstream cluster's parent-mode block).
+#    No own cert; inherits the cluster wildcard via SNI.
+#
+# Domain semantics:
+#   non-empty `domains` — each entry is a leaf label; allocation is
+#                         `<label>-<hash>.<cluster.wildcard_fqdn>`.
+#   empty `domains`     — ONE zero-typing auto-allocation using
+#                         module_instance_given_id as the slug.
 ################################################################################
 
 locals {
-  ravion_auto_groups = local.leaf_mode ? {
+  cluster_wildcard_groups = local.leaf_mode ? {
     for g in var.cert_groups :
-    g.name => g if g.kind == "ravion_auto"
+    g.name => g if g.kind == "cluster_wildcard" && contains(keys(var.cluster_groups), coalesce(g.cluster_group_name, ""))
   } : {}
 
-  ravion_auto_label_pairs = local.cluster_managed ? merge([
-    for g_name, g in local.ravion_auto_groups : {
+  cluster_wildcard_label_pairs = merge([
+    for g_name, g in local.cluster_wildcard_groups : {
       for d in g.domains : "${g_name}/${d}" => {
-        group_name = g_name
-        slug       = d
+        group_name         = g_name
+        slug               = d
+        cluster_group_name = g.cluster_group_name
       }
     }
-  ]...) : {}
+  ]...)
 
-  ravion_auto_auto_groups = {
-    for g_name, g in local.ravion_auto_groups :
+  cluster_wildcard_auto_groups = {
+    for g_name, g in local.cluster_wildcard_groups :
     g_name => g
-    if local.cluster_managed
-    && length(g.domains) == 0
+    if length(g.domains) == 0
     && var.module_instance_given_id != null
     && var.module_instance_given_id != ""
   }
 
-  auto_label_priority = {
-    for k, _v in local.ravion_auto_label_pairs :
-    k => (parseint(substr(sha256("auto:${var.name}:${k}"), 0, 8), 16) % 49000) + 1000
+  cw_label_priority = {
+    for k, _v in local.cluster_wildcard_label_pairs :
+    k => (parseint(substr(sha256("cw:${var.name}:${k}"), 0, 8), 16) % 49000) + 1000
   }
-  auto_auto_priority = {
-    for g_name, _v in local.ravion_auto_auto_groups :
-    g_name => (parseint(substr(sha256("auto:auto:${var.name}:${g_name}"), 0, 8), 16) % 49000) + 1000
+  cw_auto_priority = {
+    for g_name, _v in local.cluster_wildcard_auto_groups :
+    g_name => (parseint(substr(sha256("cw:auto:${var.name}:${g_name}"), 0, 8), 16) % 49000) + 1000
   }
 }
 
-resource "ravion_domain" "ravion_auto_label" {
-  for_each = local.ravion_auto_label_pairs
+# 1a. Per-leaf allocation, nested under the chosen cluster parent group.
+resource "ravion_domain" "cluster_wildcard_label" {
+  for_each = local.cluster_wildcard_label_pairs
 
-  dns_provider_id             = var.ravion_dns_provider_id
+  dns_provider_id             = var.cluster_groups[each.value.cluster_group_name].dns_provider_id
   slug                        = each.value.slug
-  parent_domain_allocation_id = var.ravion_parent_domain_allocation_id
-
-  lifecycle {
-    precondition {
-      condition     = var.ravion_dns_provider_id != null && var.ravion_dns_provider_id != ""
-      error_message = "ravion_dns_provider_id must be set when using ravion_auto certificate groups."
-    }
-  }
+  parent_domain_allocation_id = var.cluster_groups[each.value.cluster_group_name].parent_allocation_id
 }
 
-resource "ravion_domain" "ravion_auto_auto" {
-  for_each = local.ravion_auto_auto_groups
+# 1b. Zero-typing auto allocation per group when `domains` is empty.
+resource "ravion_domain" "cluster_wildcard_auto" {
+  for_each = local.cluster_wildcard_auto_groups
 
-  dns_provider_id             = var.ravion_dns_provider_id
+  dns_provider_id             = var.cluster_groups[each.value.cluster_group_name].dns_provider_id
   slug                        = var.module_instance_given_id
-  parent_domain_allocation_id = var.ravion_parent_domain_allocation_id
-
-  lifecycle {
-    precondition {
-      condition     = var.ravion_dns_provider_id != null && var.ravion_dns_provider_id != ""
-      error_message = "ravion_dns_provider_id must be set when using ravion_auto certificate groups."
-    }
-  }
+  parent_domain_allocation_id = var.cluster_groups[each.value.cluster_group_name].parent_allocation_id
 }
 
-resource "aws_lb_listener_rule" "ravion_auto_label" {
-  for_each = local.has_listener && local.has_target_group ? local.ravion_auto_label_pairs : {}
+resource "aws_lb_listener_rule" "cluster_wildcard_label" {
+  for_each = local.has_listener && local.has_target_group ? local.cluster_wildcard_label_pairs : {}
 
   listener_arn = var.listener_arn
-  priority     = local.auto_label_priority[each.key]
+  priority     = local.cw_label_priority[each.key]
 
   condition {
     host_header {
-      values = [ravion_domain.ravion_auto_label[each.key].fqdn]
+      values = [ravion_domain.cluster_wildcard_label[each.key].fqdn]
     }
   }
 
@@ -117,19 +113,19 @@ resource "aws_lb_listener_rule" "ravion_auto_label" {
 
   tags = merge(var.tags, {
     "ravion:cert_group" = each.value.group_name
-    "ravion:kind"       = "ravion_auto"
+    "ravion:kind"       = "cluster_wildcard"
   })
 }
 
-resource "aws_lb_listener_rule" "ravion_auto_auto" {
-  for_each = local.has_listener && local.has_target_group ? local.ravion_auto_auto_groups : {}
+resource "aws_lb_listener_rule" "cluster_wildcard_auto" {
+  for_each = local.has_listener && local.has_target_group ? local.cluster_wildcard_auto_groups : {}
 
   listener_arn = var.listener_arn
-  priority     = local.auto_auto_priority[each.key]
+  priority     = local.cw_auto_priority[each.key]
 
   condition {
     host_header {
-      values = [ravion_domain.ravion_auto_auto[each.key].fqdn]
+      values = [ravion_domain.cluster_wildcard_auto[each.key].fqdn]
     }
   }
 
@@ -144,7 +140,7 @@ resource "aws_lb_listener_rule" "ravion_auto_auto" {
 
   tags = merge(var.tags, {
     "ravion:cert_group" = each.key
-    "ravion:kind"       = "ravion_auto"
+    "ravion:kind"       = "cluster_wildcard"
   })
 }
 
