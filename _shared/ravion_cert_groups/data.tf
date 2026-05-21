@@ -23,3 +23,11 @@ data "ravion_dns_provider" "groups" {
     : null
   )
 }
+
+# Parent mode + kind=ravion_auto looks up the platform-apex DnsProvider
+# so the wildcard is allocated under the right zone. Count-gated so
+# leaf-mode + non-ravion_auto parent groups don't pay the lookup.
+data "ravion_dns_provider" "platform_apex" {
+  count    = var.mode == "parent" && length([for g in var.cert_groups : g if g.kind == "ravion_auto"]) > 0 ? 1 : 0
+  given_id = var.platform_apex_provider_given_id
+}

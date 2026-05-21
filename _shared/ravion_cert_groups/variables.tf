@@ -12,6 +12,17 @@ variable "name" {
   description = "Stable prefix used in tags and listener-rule priority hashing. Pass the parent module's `var.name` so two parents in the same cluster don't collide."
 }
 
+variable "mode" {
+  type        = string
+  description = "Dispatch mode. `leaf` (default) = per-FQDN allocations under a parent (used by ecs_service). `parent` = ONE wildcard cert + parent allocation per group (used by ecs_cluster) for services to nest under."
+  default     = "leaf"
+
+  validation {
+    condition     = contains(["leaf", "parent"], var.mode)
+    error_message = "mode must be `leaf` or `parent`."
+  }
+}
+
 variable "cert_groups" {
   type = list(object({
     name                  = string
@@ -19,8 +30,9 @@ variable "cert_groups" {
     dns_provider_id       = optional(string)
     dns_provider_given_id = optional(string)
     domains               = list(string)
+    wildcard_fqdn         = optional(string)
   }))
-  description = "Operator-facing cert-group rows. Kind dispatch: `ravion_auto` nests under a cluster wildcard (no own cert); `customer` issues its own ACM cert under the row's DnsProvider."
+  description = "Operator-facing cert-group rows. Field semantics depend on `var.mode`. Leaf mode kinds: `ravion_auto` (leaf labels under cluster wildcard), `customer` (per-FQDN cert under row's DnsProvider). Parent mode kinds: `ravion_auto` (auto-derived wildcard under platform apex), `customer` (wildcard at row's wildcard_fqdn)."
   default     = []
 }
 
@@ -70,4 +82,16 @@ variable "tags" {
   type        = map(string)
   description = "Extra tags merged onto every taggable resource the module creates."
   default     = {}
+}
+
+variable "platform_apex_provider_given_id" {
+  type        = string
+  description = "DnsProvider given_id of the Ravion-managed platform apex. Used by parent mode + `ravion_auto` kind to look up the apex zone the cluster wildcard is allocated under."
+  default     = "ravion-platform-apex"
+}
+
+variable "module_instance_id" {
+  type        = string
+  description = "Parent module-instance id. Used in parent mode to derive a stable random suffix for the auto-generated wildcard FQDN slug."
+  default     = null
 }

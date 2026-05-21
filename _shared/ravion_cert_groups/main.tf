@@ -23,6 +23,7 @@ locals {
   has_listener     = var.listener_arn != null && var.listener_arn != ""
   has_target_group = var.target_group_arn != null && var.target_group_arn != ""
   cluster_managed  = var.ravion_parent_domain_allocation_id != null && var.ravion_parent_domain_allocation_id != ""
+  leaf_mode        = var.mode == "leaf"
 }
 
 ################################################################################
@@ -30,10 +31,10 @@ locals {
 ################################################################################
 
 locals {
-  ravion_auto_groups = {
+  ravion_auto_groups = local.leaf_mode ? {
     for g in var.cert_groups :
     g.name => g if g.kind == "ravion_auto"
-  }
+  } : {}
 
   ravion_auto_label_pairs = local.cluster_managed ? merge([
     for g_name, g in local.ravion_auto_groups : {
@@ -152,9 +153,9 @@ resource "aws_lb_listener_rule" "ravion_auto_auto" {
 ################################################################################
 
 locals {
-  customer_groups = { for g in var.cert_groups : g.name => g if g.kind == "customer" }
+  customer_groups = local.leaf_mode ? { for g in var.cert_groups : g.name => g if g.kind == "customer" } : {}
 
-  customer_pairs = merge([
+  customer_pairs = local.leaf_mode ? merge([
     for g in var.cert_groups : {
       for d in g.domains : "${g.name}/${d}" => {
         group_name = g.name
@@ -162,7 +163,7 @@ locals {
       }
     }
     if g.kind == "customer"
-  ]...)
+  ]...) : {}
 
   customer_providers = {
     for name, _g in local.customer_groups :

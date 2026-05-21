@@ -248,32 +248,7 @@ output "region" {
 # inherit the cluster's wildcard cert via SNI.
 ################################################################################
 
-output "ravion_managed_domains_enabled" {
-  description = "True when this cluster's HTTPS listener uses a Ravion-managed wildcard cert. Service modules under the cluster use this to decide whether to allocate child FQDNs + create host-header listener rules."
-  value       = local.enable_ravion_domain
-}
-
-output "ravion_dns_provider_id" {
-  description = "DnsProvider id the cluster's wildcard lives under. Passes through to service modules so they allocate under the same provider — preserves the same dns_provider for all FQDNs in the cluster regardless of which variant (Route53/Cloudflare/etc.) is in use."
-  value       = local.enable_ravion_domain ? local.dns_provider.id : null
-}
-
-output "ravion_cluster_domain_allocation_id" {
-  description = "DomainAllocation id of the cluster's wildcard. Pass to ecs_service.ravion_parent_domain_allocation_id so service FQDNs sit under the wildcard."
-  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].id : null
-}
-
-output "ravion_cluster_managed_domain_id" {
-  description = "ManagedDomain id of the cluster's wildcard. The UI links the cluster cert to this."
-  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].managed_domain_id : null
-}
-
-output "ravion_cluster_fqdn" {
-  description = "Cluster wildcard FQDN, e.g. `*.cluster-abc.acme.com`."
-  value       = local.enable_ravion_domain ? ravion_domain.cluster[0].fqdn : null
-}
-
-output "ravion_cluster_certificate_arn" {
-  description = "ACM ARN of the cluster's wildcard cert. Use as the listener's default cert or as an extra cert via aws_lb_listener_certificate. Null when the cluster's DnsProvider is EXTERNAL (no Ravion-managed cert)."
-  value       = local.enable_acm_cert ? aws_acm_certificate_validation.cluster[0].certificate_arn : null
+output "ravion_certificate_groups" {
+  description = "Map of cluster cert-group name → {parent_allocation_id, wildcard_fqdn, cert_arn, managed_domain_id}. Service modules consume this via their cert groups (kind = cluster_wildcard, cluster_group_name = \"<name>\")."
+  value       = module.ravion_cert_groups.parent_groups
 }

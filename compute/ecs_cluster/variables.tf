@@ -631,47 +631,55 @@ variable "region" {
 }
 
 ################################################################################
-# Ravion domain control plane
+# Ravion domain control plane — cluster wildcard cert groups
 #
-# V2: cert source is implicit — when EITHER ravion_dns_provider_id OR
-# ravion_dns_provider_given_id is set AND the public ALB has HTTPS
-# enabled, the module allocates a wildcard FQDN under that provider
-# and issues a wildcard ACM cert. Otherwise BYO mode kicks in and
-# var.public_alb_certificate_arns is consumed directly.
+# Each row in var.ravion_certificate_groups creates ONE wildcard ACM
+# cert covering `*.<wildcard_fqdn>` and attaches it as an SNI cert on
+# the cluster's HTTPS listener. Services nest leaf FQDNs under any of
+# these wildcards via their own cert groups (kind = cluster_wildcard,
+# cluster_group_name = "<this group's name>"). Three kinds:
 #
-# Variant dispatch happens in ravion_domains.tf via the
-# `data.ravion_dns_provider` data source — per-variant attribute
-# groups (`route53_ravion`, `route53`, `cloudflare`, `external`)
-# decide which writer path the validation + apex routing records
-# take. Enum strings never appear in this module's HCL.
+#   ravion_auto — Ravion-managed apex. Wildcard FQDN is auto-derived as
+#                 `<module-instance-id>.<platform-apex>`. Zero typing.
+#   customer    — Operator's own DnsProvider on the row + wildcard_fqdn
+#                 typed by the operator. Wildcard cert covers
+#                 `*.<wildcard_fqdn>`.
+#   external    — (commit 86) external DNS the operator manages by hand;
+#                 cert + records are surfaced for the user to add.
 ################################################################################
 
-variable "use_ravion_subdomain" {
-  type        = bool
-  description = "Auto-mode: allocate the cluster wildcard under Ravion's platform apex (no DNS setup required). When true, the module looks up the platform DnsProvider via given_id = \"ravion-platform-apex\" and posts a literal FQDN of `<module-instance-id>.<ravion-apex>` (so the cert covers `*.<module-instance-id>.<ravion-apex>`). When false, the caller's ravion_dns_provider_id / given_id is used."
-  default     = true
-}
+variable "ravion_certificate_groups" {
+  type = list(object({
+    name                  = string
+    kind                  = string
+    dns_provider_id       = optional(string)
+    dns_provider_given_id = optional(string)
+    wildcard_fqdn         = optional(string)
+    domains               = optional(list(string), [])
+  }))
+  description = "Cluster-level wildcard cert groups. Services nest under one of these via their own cert groups."
+  default     = []
 
-variable "ravion_dns_provider_id" {
-  type        = string
-  description = "Opaque Ravion DnsProvider id (`dnsprov_*`) the cluster's wildcard allocation lives under. Only consulted when use_ravion_subdomain is false. Provide EITHER this or ravion_dns_provider_given_id; if both are set, this wins."
-  default     = null
-}
-
-variable "ravion_dns_provider_given_id" {
-  type        = string
-  description = "Per-org stable identifier for the Ravion DnsProvider — same dual-lookup as ravion_dns_provider_id. Module HCL prefers this form so cluster definitions stay portable across orgs that share the same provider naming."
-  default     = null
-}
-
-variable "ravion_cluster_slug" {
-  type        = string
-  description = "Human-readable slug used to derive the cluster's FQDN (`<slug>-<hash>.<apex>`). Defaults to var.name when null. Ignored in use_ravion_subdomain mode (auto-mode uses the literal module-instance id instead)."
-  default     = null
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["ravion_auto", "customer", "external"], g.kind)])
+    error_message = "Each group's `kind` must be one of: ravion_auto, customer, external."
+  }
+  validation {
+    condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)
+    error_message = "Cert group names must be unique."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind == "ravion_auto" || (g.wildcard_fqdn != null && g.wildcard_fqdn != "")])
+    error_message = "customer/external groups must set wildcard_fqdn."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || g.dns_provider_id != null || g.dns_provider_given_id != null])
+    error_message = "customer groups must set dns_provider_id or dns_provider_given_id."
+  }
 }
 
 variable "module_instance_id" {
   type        = string
-  description = "The cluster module-instance id this module is running for. Used by use_ravion_subdomain auto-mode to construct the wildcard FQDN. Injected by the Ravion runner via the workspace name when present; safe to leave null in standalone use."
+  description = "Cluster module-instance id, injected by the Ravion runner. Used by ravion_auto cert groups to derive the wildcard FQDN slug."
   default     = null
 }
