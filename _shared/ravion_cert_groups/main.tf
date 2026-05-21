@@ -249,7 +249,7 @@ locals {
 resource "ravion_dns_records" "customer_validation_ravion" {
   for_each = local.customer_validation_pairs_route53_ravion
 
-  managed_domain_id = ravion_domain.customer[each.value.domain_key].id
+  managed_domain_id = ravion_domain.customer[each.key].id
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
       name  = opt.resource_record_name
@@ -257,7 +257,7 @@ resource "ravion_dns_records" "customer_validation_ravion" {
       value = opt.resource_record_value
       ttl   = 60
     }
-    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+    if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ]
 }
 
@@ -268,17 +268,17 @@ resource "aws_route53_record" "customer_validation_r53" {
   name    = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
     opt.resource_record_name
-    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+    if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ][0]
   type    = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
     opt.resource_record_type
-    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+    if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ][0]
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
     opt.resource_record_value
-    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+    if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ]
   ttl = 60
 }
@@ -286,7 +286,7 @@ resource "aws_route53_record" "customer_validation_r53" {
 resource "ravion_dns_records" "customer_validation_metadata_r53" {
   for_each = local.customer_validation_pairs_route53
 
-  managed_domain_id = ravion_domain.customer[each.value.domain_key].id
+  managed_domain_id = ravion_domain.customer[each.key].id
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
       name  = opt.resource_record_name
@@ -294,7 +294,7 @@ resource "ravion_dns_records" "customer_validation_metadata_r53" {
       value = opt.resource_record_value
       ttl   = 60
     }
-    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+    if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ]
   depends_on = [aws_route53_record.customer_validation_r53]
 }
@@ -305,7 +305,7 @@ resource "ravion_dns_records" "customer_validation_metadata_r53" {
 resource "ravion_dns_records" "customer_validation_cf" {
   for_each = local.customer_validation_pairs_cloudflare
 
-  managed_domain_id = ravion_domain.customer[each.value.domain_key].id
+  managed_domain_id = ravion_domain.customer[each.key].id
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
       name  = opt.resource_record_name
@@ -313,7 +313,7 @@ resource "ravion_dns_records" "customer_validation_cf" {
       value = opt.resource_record_value
       ttl   = 60
     }
-    if opt.domain_name == ravion_domain.customer[each.value.domain_key].fqdn
+    if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ]
 }
 
