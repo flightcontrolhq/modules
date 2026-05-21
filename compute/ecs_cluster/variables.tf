@@ -169,7 +169,7 @@ variable "ec2_ami_id" {
   default     = null
 
   validation {
-    condition     = try(var.ec2_ami_id == null || can(regex("^ami-", var.ec2_ami_id)), true)
+    condition = var.ec2_ami_id == null || can(regex("^ami-", var.ec2_ami_id))
     error_message = "The ec2_ami_id must be a valid AMI ID starting with 'ami-'."
   }
 }
@@ -414,7 +414,7 @@ variable "public_alb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = try(var.public_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_alb_access_logs_bucket_arn)), true)
+    condition = var.public_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_alb_access_logs_bucket_arn))
     error_message = "The public_alb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -425,7 +425,7 @@ variable "public_alb_web_acl_arn" {
   default     = null
 
   validation {
-    condition     = try(var.public_alb_web_acl_arn == null || can(regex("^arn:aws:wafv2:", var.public_alb_web_acl_arn)), true)
+    condition = var.public_alb_web_acl_arn == null || can(regex("^arn:aws:wafv2:", var.public_alb_web_acl_arn))
     error_message = "The public_alb_web_acl_arn must be a valid WAFv2 Web ACL ARN."
   }
 }
@@ -497,7 +497,7 @@ variable "private_alb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = try(var.private_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_alb_access_logs_bucket_arn)), true)
+    condition = var.private_alb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_alb_access_logs_bucket_arn))
     error_message = "The private_alb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -541,7 +541,7 @@ variable "public_nlb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = try(var.public_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_nlb_access_logs_bucket_arn)), true)
+    condition = var.public_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.public_nlb_access_logs_bucket_arn))
     error_message = "The public_nlb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }
@@ -602,7 +602,7 @@ variable "private_nlb_access_logs_bucket_arn" {
   default     = null
 
   validation {
-    condition     = try(var.private_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_nlb_access_logs_bucket_arn)), true)
+    condition = var.private_nlb_access_logs_bucket_arn == null || can(regex("^arn:aws:s3:::", var.private_nlb_access_logs_bucket_arn))
     error_message = "The private_nlb_access_logs_bucket_arn must be a valid S3 bucket ARN."
   }
 }

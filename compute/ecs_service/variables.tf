@@ -201,7 +201,7 @@ variable "execution_role_arn" {
   default     = null
 
   validation {
-    condition     = try(var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn)), true)
+    condition = var.execution_role_arn == null || can(regex("^arn:aws:iam::", var.execution_role_arn))
     error_message = "The execution_role_arn must be a valid IAM role ARN."
   }
 }
@@ -212,7 +212,7 @@ variable "task_role_arn" {
   default     = null
 
   validation {
-    condition     = try(var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn)), true)
+    condition = var.task_role_arn == null || can(regex("^arn:aws:iam::", var.task_role_arn))
     error_message = "The task_role_arn must be a valid IAM role ARN."
   }
 }
@@ -376,7 +376,7 @@ variable "load_balancer_security_group_id" {
   default     = null
 
   validation {
-    condition     = try(var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id)), true)
+    condition = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
     error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
   }
 }
@@ -614,73 +614,38 @@ variable "region" {
 
 variable "ravion_dns_provider_id" {
   type        = string
-  description = "Opaque Ravion DnsProvider id (`dnsprov_*`) the service's child allocation lives under. Same value as the cluster's `ravion_dns_provider_id` output. Provide EITHER this or ravion_dns_provider_given_id; if both are set, this wins."
+  description = "Cluster's DnsProvider id (`dnsprov_*`) — auto-wired from `module.ecs_cluster.ravion_dns_provider_id`. Used by every cert group with kind == `cluster_wildcard` or `ravion_auto`."
   default     = null
-}
-
-variable "ravion_dns_provider_given_id" {
-  type        = string
-  description = "Per-org stable identifier for the Ravion DnsProvider — same dual-lookup as ravion_dns_provider_id. Use this when modules reference providers by stable name across orgs."
-  default     = null
-}
-
-variable "ravion_auto_subdomain" {
-  type        = bool
-  description = "Auto-mode: when true (and inherit_cluster_certificate is set on the caller's wiring), allocate one URL automatically with format `<service-given-id>-<random>.<cluster-fqdn>` — zero typing. When false, the caller's ravion_domains list (full FQDNs OR leaf labels under the cluster wildcard) is used instead."
-  default     = true
 }
 
 variable "module_instance_given_id" {
   type        = string
-  description = "The service module-instance's given_id. Used by auto-mode as the slug for the auto-allocated URL. Injected by the Ravion runner when present; safe to leave null in standalone use."
+  description = "The service module-instance's given_id. Used by `ravion_auto` cert groups as the slug for the auto-allocated URL. Injected by the Ravion runner when present; safe to leave null in standalone use."
   default     = null
 }
 
 variable "ravion_parent_domain_allocation_id" {
   type        = string
-  description = "Cluster's DomainAllocation id, from `module.ecs_cluster.ravion_cluster_domain_allocation_id`. When null/empty, no Ravion FQDN is allocated."
+  description = "Cluster's DomainAllocation id, from `module.ecs_cluster.ravion_cluster_domain_allocation_id`. Every `cluster_wildcard` and `ravion_auto` cert group nests its allocations under this. When null/empty, those group kinds are skipped."
   default     = null
 }
 
 variable "ravion_cluster_alb_dns_name" {
   type        = string
-  description = "Cluster ALB DNS name, from `module.ecs_cluster.public_alb_dns_name`. Required when ravion_parent_domain_allocation_id is set."
+  description = "Cluster ALB DNS name, from `module.ecs_cluster.public_alb_dns_name`. Required when any cluster_wildcard or ravion_auto group is configured."
   default     = null
 }
 
 variable "ravion_cluster_alb_zone_id" {
   type        = string
-  description = "Cluster ALB hosted-zone id, from `module.ecs_cluster.public_alb_zone_id`. Required when ravion_parent_domain_allocation_id is set."
+  description = "Cluster ALB hosted-zone id, from `module.ecs_cluster.public_alb_zone_id`. Required when any cluster_wildcard or ravion_auto group is configured."
   default     = null
 }
 
 variable "ravion_cluster_https_listener_arn" {
   type        = string
-  description = "Cluster HTTPS listener ARN, from `module.ecs_cluster.public_alb_https_listener_arn`. Required when ravion_parent_domain_allocation_id is set so the host-header rule can be created."
+  description = "Cluster HTTPS listener ARN, from `module.ecs_cluster.public_alb_https_listener_arn`. Required for ALL cert-group kinds so host-header rules (and per-group SNI cert attachments) can be created."
   default     = null
-}
-
-variable "ravion_service_slug" {
-  type        = string
-  description = "Human-readable slug used to derive the service FQDN under the cluster wildcard. Defaults to var.name. Applied to every domain in ravion_domains (each gets its own `<slug>-<hash>.<cluster-fqdn>` allocation)."
-  default     = null
-}
-
-variable "ravion_domains" {
-  type        = list(string)
-  description = "Domain slugs to allocate under the cluster wildcard. Each entry becomes a child DomainAllocation, a routing record (FQDN → cluster ALB), and a host-header listener rule. Empty list (default) means the service is reachable only via the cluster's apex wildcard; no per-service FQDN is allocated. Each entry is a slug — Ravion derives `<slug>-<hash>.<cluster-fqdn>` deterministically so re-applies converge."
-  default     = []
-
-  validation {
-    condition     = alltrue([for d in var.ravion_domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63])
-    error_message = "Each ravion_domains entry must be a DNS-safe slug ([a-z0-9-], up to 63 chars)."
-  }
-}
-
-variable "ravion_listener_rule_priority_base" {
-  type        = number
-  description = "Base for the per-domain listener-rule priority. 0 → derived deterministically from (var.name, domain-slug) via sha256 so two services in the same cluster don't collide. Non-zero values are used as-is for the first domain; subsequent domains increment by 1."
-  default     = 0
 }
 
 variable "ravion_certificate_groups" {
@@ -691,42 +656,62 @@ variable "ravion_certificate_groups" {
     # reuse across groups in the same service.
     name = string
 
-    # DnsProvider the group's domains live under. Required — each
-    # group MUST specify its own customer-owned provider (no fallback
-    # to the service's top-level provider). Either id or given_id
-    # wins (id first if both set).
+    # Source kind. Two modes:
+    #   ravion_auto — Inherit cluster wildcard cert. `domains` is an
+    #     optional list of DNS-safe leaf labels (e.g. `api`); each
+    #     becomes a `<label>-<hash>.<cluster-fqdn>` allocation. Empty
+    #     list → ONE auto-allocation `<svc-given-id>-<random>.<cluster-fqdn>`
+    #     (zero typing). No own ACM cert; no own DNS records.
+    #   customer — Operator's own DnsProvider on the row (dns_provider_id).
+    #     Each `domains` entry is a full FQDN ending in the provider's
+    #     apex (server-validated, capped at 10 for the ACM SAN limit).
+    #     The group issues its own ACM cert, writes validation +
+    #     routing records via the provider variant, and SNI-attaches
+    #     the cert to the cluster's HTTPS listener.
+    kind = string
+
+    # Required only when kind == "customer". Either id or given_id
+    # (id wins if both set).
     dns_provider_id       = optional(string)
     dns_provider_given_id = optional(string)
 
-    # Full FQDNs to cover with this cert. Each becomes a
-    # ravion_domain allocation posted with fqdn_override (used
-    # verbatim) under the group's provider apex. Each entry must
-    # end with the chosen provider's apex (validated server-side
-    # via PROVIDER_FQDN_NOT_UNDER_APEX). Capped at 10 to match
-    # ACM's default cert SAN limit.
+    # Domain entries. Semantics depend on `kind`:
+    #   ravion_auto — list of leaf labels (no dots) OR empty for the
+    #                 zero-typing auto-allocation.
+    #   customer    — list of full FQDNs under the provider's apex
+    #                 (1..10 entries).
     domains = list(string)
   }))
-  description = "Per-service certificate groups. Each group issues ONE ACM cert covering up to 10 domains, validated via the group's DnsProvider variant, and attached as an SNI cert to the cluster's HTTPS listener. Use when service FQDNs need their own cert (multi-zone setups, non-wildcard apexes) instead of inheriting the cluster's wildcard. Groups are additive — ungrouped ravion_domains keep inheriting the cluster wildcard."
+  description = "Per-service certificate groups. Each group dispatches on `kind`: `ravion_auto` (inherit cluster wildcard cert, optional leaf labels) or `customer` (own DNS provider + own ACM cert, up to 10 FQDNs)."
   default     = []
 
   validation {
-    condition     = alltrue([for g in var.ravion_certificate_groups : length(g.domains) <= 10])
-    error_message = "Each certificate group can contain at most 10 domains (ACM default SAN limit)."
-  }
-  validation {
-    condition     = alltrue([for g in var.ravion_certificate_groups : length(g.domains) >= 1])
-    error_message = "Each certificate group must contain at least 1 domain."
+    condition     = alltrue([for g in var.ravion_certificate_groups : contains(["ravion_auto", "customer"], g.kind)])
+    error_message = "Each group's `kind` must be one of: ravion_auto, customer."
   }
   validation {
     condition     = length(distinct([for g in var.ravion_certificate_groups : g.name])) == length(var.ravion_certificate_groups)
     error_message = "Certificate group names must be unique within a service."
   }
   validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || length(g.domains) <= 10])
+    error_message = "Customer cert groups can contain at most 10 domains (ACM default SAN limit)."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || length(g.domains) >= 1])
+    error_message = "Customer cert groups must contain at least 1 domain."
+  }
+  validation {
+    condition     = alltrue([for g in var.ravion_certificate_groups : g.kind != "customer" || g.dns_provider_id != null || g.dns_provider_given_id != null])
+    error_message = "Customer cert groups must set dns_provider_id (or dns_provider_given_id)."
+  }
+  validation {
     condition = alltrue([
-      for g in var.ravion_certificate_groups : alltrue([
+      for g in var.ravion_certificate_groups :
+      g.kind != "ravion_auto" || alltrue([
         for d in g.domains : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", d)) && length(d) <= 63
       ])
     ])
-    error_message = "Each domain slug must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ and be <= 63 chars."
+    error_message = "ravion_auto group `domains` entries must be DNS-safe leaf labels matching ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (<=63 chars)."
   }
 }

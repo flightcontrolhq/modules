@@ -50,7 +50,7 @@ variable "desired_capacity" {
   default     = null
 
   validation {
-    condition     = try(var.desired_capacity == null || var.desired_capacity >= 0, true)
+    condition = var.desired_capacity == null || var.desired_capacity >= 0
     error_message = "The desired_capacity must be null or 0 or greater."
   }
 }
@@ -91,7 +91,7 @@ variable "default_instance_warmup" {
   default     = null
 
   validation {
-    condition     = try(var.default_instance_warmup == null || var.default_instance_warmup >= 0, true)
+    condition = var.default_instance_warmup == null || var.default_instance_warmup >= 0
     error_message = "The default_instance_warmup must be null or 0 or greater."
   }
 }
@@ -118,7 +118,7 @@ variable "max_instance_lifetime" {
   default     = null
 
   validation {
-    condition     = try(var.max_instance_lifetime == null || var.max_instance_lifetime == 0 || (var.max_instance_lifetime >= 86400 && var.max_instance_lifetime <= 31536000), true)
+    condition = var.max_instance_lifetime == null || var.max_instance_lifetime == 0 || (var.max_instance_lifetime >= 86400 && var.max_instance_lifetime <= 31536000)
     error_message = "The max_instance_lifetime must be null, 0, or between 86400 (1 day) and 31536000 (365 days)."
   }
 }
@@ -238,7 +238,7 @@ variable "service_linked_role_arn" {
   default     = null
 
   validation {
-    condition     = try(var.service_linked_role_arn == null || can(regex("^arn:aws:iam::", var.service_linked_role_arn)), true)
+    condition = var.service_linked_role_arn == null || can(regex("^arn:aws:iam::", var.service_linked_role_arn))
     error_message = "The service_linked_role_arn must be null or a valid IAM role ARN starting with 'arn:aws:iam::'."
   }
 }
@@ -297,7 +297,7 @@ variable "launch_template_id" {
   default     = null
 
   validation {
-    condition     = try(var.launch_template_id == null || can(regex("^lt-", var.launch_template_id)), true)
+    condition = var.launch_template_id == null || can(regex("^lt-", var.launch_template_id))
     error_message = "The launch_template_id must be null or a valid launch template ID starting with 'lt-'."
   }
 }
