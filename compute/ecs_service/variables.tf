@@ -619,6 +619,10 @@ variable "ravion_parent_certificate_groups" {
     wildcard_fqdn        = string
     cert_arn             = string
     dns_provider_id      = string
+    # `PLATFORM` | `CUSTOMER` — mirror of the parent cert's ownership
+    # so service-level `inherit` cert groups can stamp the same value
+    # on their placeholder ManagedCertificate row.
+    ownership = string
   }))
   description = "Cluster's `ravion_certificate_groups` output. Auto-wired from `module.ecs_cluster.ravion_certificate_groups`. Service `inherit` cert groups look up their parent here by `parent_group_name`."
   default     = {}

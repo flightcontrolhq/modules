@@ -30,6 +30,11 @@ output "parent_groups" {
       wildcard_fqdn        = alloc.fqdn
       cert_arn             = aws_acm_certificate_validation.parent[name].certificate_arn
       dns_provider_id      = alloc.provider.id
+      # Mirror of the parent cert's ownership (PLATFORM = Ravion apex,
+      # CUSTOMER = customer-owned zone). Leaf-mode `inherit` certs reuse
+      # this so the placeholder ManagedCertificate row has the same
+      # ownership as the cert it rides via SNI.
+      ownership = contains(keys(local.parent_groups_route53_ravion), name) ? "PLATFORM" : "CUSTOMER"
     }
   }
 }

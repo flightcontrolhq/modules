@@ -134,6 +134,7 @@ resource "ravion_dns_records" "parent_validation_ravion" {
   for_each = local.parent_groups_route53_ravion
 
   managed_domain_id = each.value.id
+  purpose           = "acm_validation"
   records = [{
     name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
     type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
@@ -157,6 +158,7 @@ resource "ravion_dns_records" "parent_validation_metadata_r53" {
   for_each = local.parent_groups_route53
 
   managed_domain_id = each.value.id
+  purpose           = "acm_validation"
   records = [{
     name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
     type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
@@ -172,6 +174,7 @@ resource "ravion_dns_records" "parent_validation_cf" {
   for_each = local.parent_groups_cloudflare
 
   managed_domain_id = each.value.id
+  purpose           = "acm_validation"
   records = [{
     name  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_name
     type  = tolist(aws_acm_certificate.parent[each.key].domain_validation_options)[0].resource_record_type
@@ -198,7 +201,8 @@ resource "ravion_managed_certificate" "parent" {
 
   cert_arn           = aws_acm_certificate_validation.parent[each.key].certificate_arn
   status             = "ISSUED"
-  scope              = "WILDCARD"
+  pattern            = "WILDCARD"
+  ownership          = contains(keys(local.parent_groups_route53_ravion), each.key) ? "PLATFORM" : "CUSTOMER"
   name               = each.key
   kind               = each.value.kind
   managed_domain_ids = [each.value.managed_domain_id]

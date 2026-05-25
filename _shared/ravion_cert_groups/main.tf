@@ -55,8 +55,8 @@ locals {
   inherit_label_pairs = merge([
     for g_name, g in local.inherit_groups : {
       for d in g.domains : "${g_name}/${d}" => {
-        group_name         = g_name
-        slug               = d
+        group_name        = g_name
+        slug              = d
         parent_group_name = g.parent_group_name
       }
     }
@@ -250,6 +250,7 @@ resource "ravion_dns_records" "customer_validation_ravion" {
   for_each = local.customer_validation_pairs_route53_ravion
 
   managed_domain_id = ravion_domain.customer[each.key].id
+  purpose           = "acm_validation"
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
       name  = opt.resource_record_name
@@ -265,12 +266,12 @@ resource "aws_route53_record" "customer_validation_r53" {
   for_each = local.customer_validation_pairs_route53
 
   zone_id = local.customer_providers[each.value.group_name].route53.hosted_zone_id
-  name    = [
+  name = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
     opt.resource_record_name
     if opt.domain_name == ravion_domain.customer[each.key].fqdn
   ][0]
-  type    = [
+  type = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options :
     opt.resource_record_type
     if opt.domain_name == ravion_domain.customer[each.key].fqdn
@@ -287,6 +288,7 @@ resource "ravion_dns_records" "customer_validation_metadata_r53" {
   for_each = local.customer_validation_pairs_route53
 
   managed_domain_id = ravion_domain.customer[each.key].id
+  purpose           = "acm_validation"
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
       name  = opt.resource_record_name
@@ -306,6 +308,7 @@ resource "ravion_dns_records" "customer_validation_cf" {
   for_each = local.customer_validation_pairs_cloudflare
 
   managed_domain_id = ravion_domain.customer[each.key].id
+  purpose           = "acm_validation"
   records = [
     for opt in aws_acm_certificate.customer[each.value.group_name].domain_validation_options : {
       name  = opt.resource_record_name
@@ -340,11 +343,12 @@ resource "aws_acm_certificate_validation" "customer" {
 resource "ravion_managed_certificate" "customer" {
   for_each = local.customer_groups
 
-  cert_arn = aws_acm_certificate_validation.customer[each.key].certificate_arn
-  status   = "ISSUED"
-  scope    = "LEAF"
-  name     = each.key
-  kind     = "customer"
+  cert_arn  = aws_acm_certificate_validation.customer[each.key].certificate_arn
+  status    = "ISSUED"
+  pattern   = "EXACT"
+  ownership = local.customer_provider_kind[each.key] == "route53_ravion" ? "PLATFORM" : "CUSTOMER"
+  name      = each.key
+  kind      = "customer"
   managed_domain_ids = [
     for d in each.value.domains :
     ravion_domain.customer["${each.key}/${d}"].managed_domain_id
@@ -367,6 +371,7 @@ resource "ravion_dns_records" "customer_routing_ravion" {
   }
 
   managed_domain_id = ravion_domain.customer[each.key].id
+  purpose           = "routing"
   records = [{
     name = ravion_domain.customer[each.key].fqdn
     type = "ALIAS"
@@ -401,6 +406,7 @@ resource "ravion_dns_records" "customer_routing_metadata_r53" {
   }
 
   managed_domain_id = ravion_domain.customer[each.key].id
+  purpose           = "routing"
   records = [{
     name = ravion_domain.customer[each.key].fqdn
     type = "ALIAS"
@@ -419,6 +425,7 @@ resource "ravion_dns_records" "customer_routing_cf" {
   }
 
   managed_domain_id = ravion_domain.customer[each.key].id
+  purpose           = "routing"
   records = [{
     name  = ravion_domain.customer[each.key].fqdn
     type  = "CNAME"
@@ -534,11 +541,12 @@ resource "aws_lb_listener_rule" "external" {
 resource "ravion_managed_certificate" "external" {
   for_each = local.external_groups
 
-  cert_arn = "external:${var.name}:${each.key}"
-  status   = "PENDING"
-  scope    = "CUSTOM_DOMAIN"
-  name     = each.key
-  kind     = "external"
+  cert_arn  = "external:${var.name}:${each.key}"
+  status    = "PENDING"
+  pattern   = "EXACT"
+  ownership = "CUSTOMER"
+  name      = each.key
+  kind      = "external"
   managed_domain_ids = [
     for d in each.value.domains :
     ravion_domain.external["${each.key}/${d}"].managed_domain_id
@@ -558,18 +566,22 @@ resource "ravion_managed_certificate" "external" {
 resource "ravion_managed_certificate" "inherit" {
   for_each = local.inherit_groups
 
-  cert_arn = "inherit:${var.name}:${each.key}"
-  status   = "ISSUED"
-  scope    = "WILDCARD"
-  name     = each.key
-  kind     = "inherit"
+  cert_arn  = "inherit:${var.name}:${each.key}"
+  status    = "ISSUED"
+  pattern   = "WILDCARD"
+  # Inherit certs ride the parent's wildcard via SNI — mirror its
+  # ownership so the placeholder row in the Domains tab matches the
+  # real underlying cert.
+  ownership = var.cluster_groups[each.value.parent_group_name].ownership
+  name      = each.key
+  kind      = "inherit"
   managed_domain_ids = concat(
     [
       for d in each.value.domains :
       ravion_domain.inherit_label["${each.key}/${d}"].managed_domain_id
     ],
     contains(keys(local.inherit_auto_groups), each.key)
-      ? [ravion_domain.inherit_auto[each.key].managed_domain_id]
-      : [],
+    ? [ravion_domain.inherit_auto[each.key].managed_domain_id]
+    : [],
   )
 }
