@@ -4,7 +4,7 @@
 
 variable "name" {
   type        = string
-  description = "Name prefix for all resources created by this module. Also used as the hosting bucket name (must be globally unique and a valid S3 bucket name)."
+  description = "Name prefix for all resources created by this module. Also used as the hosting bucket name (must be globally unique and a valid S3 bucket name) UNLESS the existing-bucket override is in use."
 
   validation {
     condition     = length(var.name) >= 3 && length(var.name) <= 63
@@ -15,6 +15,79 @@ variable "name" {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.name))
     error_message = "The name must be a valid S3 bucket name: lowercase letters, numbers, hyphens, periods; must start and end with a letter or number."
   }
+}
+
+################################################################################
+# Composed bucket override
+#
+# When all four `existing_bucket_*` inputs are set, static_site SKIPS its
+# internal `storage/s3` module and uses the supplied bucket as the
+# CloudFront origin. The module STILL manages an `aws_s3_bucket_policy`
+# on the foreign bucket so the OAC grant for these distributions lands —
+# supply a bucket whose owning stack does NOT attach its own policy.
+#
+# Leave all four null (default) to provision the bucket in-module.
+################################################################################
+
+variable "existing_bucket_id" {
+  type        = string
+  description = "Override: use this S3 bucket as the CloudFront origin instead of letting static_site create one. Pair with the other `existing_bucket_*` inputs."
+  default     = null
+}
+
+variable "existing_bucket_arn" {
+  type        = string
+  description = "ARN of the existing bucket. Required when `existing_bucket_id` is set."
+  default     = null
+}
+
+variable "existing_bucket_region" {
+  type        = string
+  description = "Region of the existing bucket. Required when `existing_bucket_id` is set."
+  default     = null
+}
+
+variable "existing_bucket_regional_domain_name" {
+  type        = string
+  description = "Regional domain name of the existing bucket (e.g. `my-bucket.s3.us-east-1.amazonaws.com`). Required when `existing_bucket_id` is set."
+  default     = null
+}
+
+################################################################################
+# Ravion-domain auto-allocation
+#
+# When `ravion_dns_provider_id` is set, the module allocates an FQDN
+# under that provider, issues an ACM cert in us-east-1, publishes
+# validation + routing records via Ravion, registers the cert in the
+# Ravion domain control plane, and attaches the cert as the SNI alias
+# on `distributions[var.ravion_attach_distribution_key]`.
+#
+# Leave `ravion_dns_provider_id` null to skip — distributions take
+# their `aliases`/`acm_certificate_arn` from `var.distributions` only.
+################################################################################
+
+variable "ravion_dns_provider_id" {
+  type        = string
+  description = "DnsProvider id to allocate the FQDN under. Set this to enable Ravion-domain auto-allocation + ACM cert + CloudFront alias attachment."
+  default     = null
+}
+
+variable "ravion_domain_slug" {
+  type        = string
+  description = "Slug for the auto-allocated FQDN. Defaults to `var.name` when null."
+  default     = null
+}
+
+variable "ravion_attach_distribution_key" {
+  type        = string
+  description = "Distribution key (into `var.distributions`) to attach the auto-issued cert + alias to. Defaults to `main`."
+  default     = "main"
+}
+
+variable "ravion_cert_group_name" {
+  type        = string
+  description = "Optional cert-group name surfaced on the Ravion Domains tab. Defaults to `var.name`."
+  default     = null
 }
 
 variable "tags" {

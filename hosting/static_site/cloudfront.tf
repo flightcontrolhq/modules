@@ -19,12 +19,12 @@ module "cdn" {
 
   name = var.name
 
-  distributions = var.distributions
+  distributions = local.effective_distributions
 
   origins = [
     {
       origin_id      = local.origin_id
-      domain_name    = module.hosting.bucket_regional_domain_name
+      domain_name    = local.hosting_bucket_regional_domain_name
       s3_origin      = true
       custom_headers = var.additional_origin_headers
       origin_shield = var.origin_shield_region == null ? null : {

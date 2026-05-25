@@ -3,23 +3,23 @@
 ################################################################################
 
 output "hosting_bucket_id" {
-  description = "Name of the S3 hosting bucket."
-  value       = module.hosting.bucket_id
+  description = "Name of the S3 hosting bucket. Sourced from the in-module bucket or the caller-supplied `existing_bucket_id` override."
+  value       = local.hosting_bucket_id
 }
 
 output "hosting_bucket_arn" {
   description = "ARN of the S3 hosting bucket."
-  value       = module.hosting.bucket_arn
+  value       = local.hosting_bucket_arn
 }
 
 output "hosting_bucket_regional_domain_name" {
   description = "Regional domain name of the S3 hosting bucket (used as CloudFront origin)."
-  value       = module.hosting.bucket_regional_domain_name
+  value       = local.hosting_bucket_regional_domain_name
 }
 
 output "hosting_bucket_region" {
   description = "AWS region where the hosting bucket lives."
-  value       = module.hosting.bucket_region
+  value       = local.hosting_bucket_region
 }
 
 ################################################################################

@@ -13,6 +13,7 @@
 
 module "hosting" {
   source = "../../storage/s3"
+  count  = local.use_existing_bucket ? 0 : 1
 
   name               = var.name
   region             = var.region
@@ -25,4 +26,17 @@ module "hosting" {
   create_bucket_policy = true
 
   tags = local.tags
+}
+
+# When using a caller-supplied bucket (`existing_bucket_*` set), the
+# bucket lives in another stack and that stack doesn't know our
+# distribution ARNs. We still need the OAC grant for CloudFront, so
+# attach the same policy here directly. The owning stack must NOT manage
+# `aws_s3_bucket_policy` on this bucket — only one policy may exist per
+# bucket at a time.
+resource "aws_s3_bucket_policy" "existing" {
+  count = local.use_existing_bucket ? 1 : 0
+
+  bucket = var.existing_bucket_id
+  policy = data.aws_iam_policy_document.hosting_bucket_policy.json
 }
