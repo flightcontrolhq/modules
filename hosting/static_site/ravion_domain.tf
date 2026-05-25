@@ -50,7 +50,9 @@ resource "ravion_dns_records" "ravion_validation" {
   count = local.use_ravion_domain ? 1 : 0
 
   managed_domain_id = ravion_domain.this[0].id
-  purpose           = "acm_validation"
+  # NOTE: `purpose` is unsupported on the currently-published v2.4.0
+  # provider — re-add once the mirror serves a build that includes the
+  # field on `ravion_dns_records`.
 
   records = [
     for o in aws_acm_certificate.ravion[0].domain_validation_options : {
@@ -78,7 +80,7 @@ resource "ravion_dns_records" "ravion_routing" {
   count = local.use_ravion_domain ? 1 : 0
 
   managed_domain_id = ravion_domain.this[0].id
-  purpose           = "routing"
+  # See note above on `purpose` — re-add when the published provider supports it.
 
   records = [{
     name = ravion_domain.this[0].fqdn
