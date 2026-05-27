@@ -599,3 +599,55 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Ravion-managed domains (optional)
+################################################################################
+
+variable "cluster_parent_fqdn" {
+  type        = string
+  description = "Cluster wildcard apex FQDN (pipe from ecs_cluster.ravion_cluster_domain_fqdn). Set to enable Ravion-managed domains for this service."
+  default     = null
+}
+
+variable "cluster_https_listener_arn" {
+  type        = string
+  description = "Cluster ALB HTTPS listener ARN (pipe from ecs_cluster.public_alb_https_listener_arn). Required when cluster_parent_fqdn is set."
+  default     = null
+}
+
+variable "ravion_listener_rule_priority" {
+  type        = number
+  description = "Listener rule priority (1-50000). 0 = auto-derive from sha256(name)."
+  default     = 0
+}
+
+variable "domains" {
+  type        = list(string)
+  description = "Customer FQDNs (Mode B). Empty = Mode A (auto-FQDN under the cluster wildcard). Max 10."
+  default     = []
+}
+
+variable "cluster_alb_dns_name" {
+  type        = string
+  description = "Cluster ALB DNS name (required for Mode B routing records)."
+  default     = null
+}
+
+variable "cluster_alb_zone_id" {
+  type        = string
+  description = "Cluster ALB hosted zone id (required for Mode B routing records)."
+  default     = null
+}
+
+variable "ravion_aws_account_id" {
+  type        = string
+  description = "Ravion AwsAccount row id (aws_*). Required for Mode B."
+  default     = null
+}
+
+variable "ravion_aws_region" {
+  type        = string
+  description = "AWS region the per-service cert lives in. Defaults to the module region."
+  default     = null
+}

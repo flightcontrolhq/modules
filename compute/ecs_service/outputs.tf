@@ -249,3 +249,22 @@ output "region" {
 }
 
 
+
+################################################################################
+# Ravion-managed domains
+################################################################################
+
+output "ravion_domain_fqdn" {
+  description = "Auto-FQDN under the cluster wildcard (null in Mode B after cutover)."
+  value       = local.ravion_auto_live ? ravion_domain.auto[0].fqdn : null
+}
+
+output "ravion_domain_url" {
+  description = "https URL for the auto-FQDN."
+  value       = local.ravion_auto_live ? ravion_domain.auto[0].url : null
+}
+
+output "ravion_custom_cert_arn" {
+  description = "ACM ARN of the per-service custom cert (Mode B only)."
+  value       = local.ravion_mode_b ? ravion_certificate.svc[0].cert_arn : null
+}
