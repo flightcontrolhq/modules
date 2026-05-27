@@ -33,14 +33,14 @@ data "ravion_auto_domain_status" "auto" {
   count = local.ravion_managed ? 1 : 0
 
   parent_domain_id = var.cluster_parent_fqdn
-  name             = var.name
+  name             = coalesce(var.module_instance_given_id, var.name)
 }
 
 # Mode A auto-FQDN under the cluster wildcard (no per-service cert).
 resource "ravion_domain" "auto" {
   count = local.ravion_auto_live ? 1 : 0
 
-  name        = var.name
+  name        = coalesce(var.module_instance_given_id, var.name)
   parent_fqdn = var.cluster_parent_fqdn
 }
 

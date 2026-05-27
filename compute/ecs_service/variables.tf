@@ -646,6 +646,12 @@ variable "ravion_aws_account_id" {
   default     = null
 }
 
+variable "module_instance_given_id" {
+  type        = string
+  description = "The module instance's user-facing given id (injected by the runner as TF_VAR_module_instance_given_id). Used as the auto-FQDN leaf under the cluster wildcard."
+  default     = null
+}
+
 variable "ravion_aws_region" {
   type        = string
   description = "AWS region the per-service cert lives in. Defaults to the module region."
