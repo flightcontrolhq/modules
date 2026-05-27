@@ -642,7 +642,13 @@ variable "use_ravion_managed_domains" {
 
 variable "ravion_cluster_name" {
   type        = string
-  description = "Free-form name leaf for the cluster's Ravion wildcard domain (becomes <name>-<hash>.<ravion-apex>). Defaults to var.name."
+  description = "Free-form name leaf for the cluster's Ravion wildcard domain (becomes <name>-<hash>.<ravion-apex>). Defaults to the module instance given id."
+  default     = null
+}
+
+variable "module_instance_given_id" {
+  type        = string
+  description = "The module instance's user-facing given id (injected by the runner as TF_VAR_module_instance_given_id). Used as the default leaf for the Ravion wildcard domain."
   default     = null
 }
 

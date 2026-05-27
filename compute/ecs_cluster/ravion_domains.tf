@@ -26,7 +26,7 @@ resource "ravion_certificate" "cluster" {
 
   role           = "shared_wildcard"
   wildcard       = true
-  name           = coalesce(var.ravion_cluster_name, var.name)
+  name           = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
   aws_account_id = var.ravion_aws_account_id
   aws_region     = coalesce(var.ravion_aws_region, local.region)
 
