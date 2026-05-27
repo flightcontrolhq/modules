@@ -30,6 +30,13 @@ resource "ravion_certificate" "cluster" {
   aws_account_id = var.ravion_aws_account_id
   aws_region     = coalesce(var.ravion_aws_region, local.region)
 
+  # Ravion publishes a *.<apex> ALIAS to this ALB so service auto-FQDNs
+  # (<svc>.<apex>) resolve under the cluster wildcard. Public ALB if present,
+  # else private. (A single wildcard record serves one ALB; mixed public+private
+  # clusters route to the public one.)
+  target_dns_name = var.enable_public_alb ? module.public_alb[0].alb_dns_name : (var.enable_private_alb ? module.private_alb[0].alb_dns_name : null)
+  target_zone_id  = var.enable_public_alb ? module.public_alb[0].alb_zone_id : (var.enable_private_alb ? module.private_alb[0].alb_zone_id : null)
+
   lifecycle {
     precondition {
       condition     = !var.use_ravion_managed_domains || var.enable_public_alb || var.enable_private_alb
