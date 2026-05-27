@@ -14,13 +14,15 @@ module "public_alb" {
   subnet_ids = var.public_subnet_ids
   internal   = false
 
-  # Listener configuration
+  # Listener configuration. In Ravion-managed mode this module owns the HTTPS
+  # listener (ravion_domains.tf) with the Ravion wildcard cert as default, so
+  # the alb submodule skips its own HTTPS listener + customer cert ARNs.
   enable_http_listener   = true
-  enable_https_listener  = var.public_alb_enable_https
+  enable_https_listener  = var.public_alb_enable_https && !local.enable_ravion_domain
   http_to_https_redirect = var.public_alb_enable_https
 
   # SSL/TLS
-  certificate_arns = var.public_alb_certificate_arns
+  certificate_arns = local.enable_ravion_domain ? [] : var.public_alb_certificate_arns
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings

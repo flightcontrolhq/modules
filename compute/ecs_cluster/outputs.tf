@@ -120,8 +120,10 @@ output "public_alb_http_listener_arn" {
 }
 
 output "public_alb_https_listener_arn" {
-  description = "The ARN of the public ALB HTTPS listener (null if HTTPS disabled)."
-  value       = var.enable_public_alb && var.public_alb_enable_https ? module.public_alb[0].https_listener_arn : null
+  description = "The ARN of the public ALB HTTPS listener (Ravion-owned when use_ravion_managed_domains; null if HTTPS disabled)."
+  value = (var.enable_public_alb && var.public_alb_enable_https) ? (
+    local.enable_ravion_domain ? aws_lb_listener.ravion_https[0].arn : module.public_alb[0].https_listener_arn
+  ) : null
 }
 
 ################################################################################
@@ -239,4 +241,33 @@ output "aws_account_id" {
 output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
+}
+
+################################################################################
+# Ravion-managed domains
+################################################################################
+
+output "ravion_cluster_certificate_id" {
+  description = "Ravion managed-certificate id for the cluster wildcard (null unless use_ravion_managed_domains)."
+  value       = local.enable_ravion_domain ? ravion_certificate.cluster[0].id : null
+}
+
+output "ravion_cluster_domain_fqdn" {
+  description = "Cluster wildcard apex FQDN. Pass to ecs_service as cluster_parent_fqdn."
+  value       = local.enable_ravion_domain ? ravion_certificate.cluster[0].fqdn : null
+}
+
+output "ravion_cluster_cert_arn" {
+  description = "ACM ARN of the cluster wildcard cert."
+  value       = local.enable_ravion_domain ? ravion_certificate.cluster[0].cert_arn : null
+}
+
+output "ravion_aws_account_id" {
+  description = "Pass-through Ravion AwsAccount row id for ecs_service Mode B."
+  value       = var.ravion_aws_account_id
+}
+
+output "ravion_aws_region" {
+  description = "Pass-through Ravion cert region for ecs_service Mode B."
+  value       = local.enable_ravion_domain ? coalesce(var.ravion_aws_region, local.region) : null
 }
