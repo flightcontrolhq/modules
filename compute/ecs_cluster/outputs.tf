@@ -122,7 +122,7 @@ output "public_alb_http_listener_arn" {
 output "public_alb_https_listener_arn" {
   description = "The ARN of the public ALB HTTPS listener (Ravion-owned when use_ravion_managed_domains; null if HTTPS disabled)."
   value = (var.enable_public_alb && var.public_alb_enable_https) ? (
-    local.enable_ravion_domain ? aws_lb_listener.ravion_https[0].arn : module.public_alb[0].https_listener_arn
+    length(aws_lb_listener.ravion_https) > 0 ? aws_lb_listener.ravion_https[0].arn : module.public_alb[0].https_listener_arn
   ) : null
 }
 
@@ -166,8 +166,10 @@ output "private_alb_http_listener_arn" {
 }
 
 output "private_alb_https_listener_arn" {
-  description = "The ARN of the private ALB HTTPS listener (null if HTTPS disabled)."
-  value       = var.enable_private_alb && var.private_alb_enable_https ? module.private_alb[0].https_listener_arn : null
+  description = "The ARN of the private ALB HTTPS listener (Ravion-owned when use_ravion_managed_domains; null if HTTPS disabled)."
+  value = (var.enable_private_alb && var.private_alb_enable_https) ? (
+    length(aws_lb_listener.ravion_https_private) > 0 ? aws_lb_listener.ravion_https_private[0].arn : module.private_alb[0].https_listener_arn
+  ) : null
 }
 
 ################################################################################

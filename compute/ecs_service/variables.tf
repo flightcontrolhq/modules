@@ -612,7 +612,7 @@ variable "cluster_parent_fqdn" {
 
 variable "cluster_https_listener_arn" {
   type        = string
-  description = "Cluster ALB HTTPS listener ARN (pipe from ecs_cluster.public_alb_https_listener_arn). Required when cluster_parent_fqdn is set."
+  description = "Cluster ALB HTTPS listener ARN this service attaches to. Pipe ecs_cluster.public_alb_https_listener_arn for a public service, or private_alb_https_listener_arn for a private one. Required when cluster_parent_fqdn is set."
   default     = null
 }
 
@@ -630,13 +630,13 @@ variable "domains" {
 
 variable "cluster_alb_dns_name" {
   type        = string
-  description = "Cluster ALB DNS name (required for Mode B routing records)."
+  description = "Cluster ALB DNS name for Mode B routing records — public_alb_dns_name for a public service, private_alb_dns_name for a private one. Must match the ALB whose listener is in cluster_https_listener_arn."
   default     = null
 }
 
 variable "cluster_alb_zone_id" {
   type        = string
-  description = "Cluster ALB hosted zone id (required for Mode B routing records)."
+  description = "Cluster ALB hosted zone id for Mode B routing records — public_alb_zone_id for a public service, private_alb_zone_id for a private one. Must match the ALB whose listener is in cluster_https_listener_arn."
   default     = null
 }
 
