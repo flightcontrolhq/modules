@@ -430,3 +430,25 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Ravion-managed domains (optional)
+################################################################################
+
+variable "use_ravion_managed_domains" {
+  type        = bool
+  description = "Have Ravion own the CloudFront viewer cert + aliases (attached server-side). Configure var.distributions without aliases/ACM cert in this mode."
+  default     = false
+}
+
+variable "domains" {
+  type        = list(string)
+  description = "Customer FQDNs for the site. Empty = a Ravion auto-FQDN. Max 10. Only used when use_ravion_managed_domains = true."
+  default     = []
+}
+
+variable "ravion_aws_account_id" {
+  type        = string
+  description = "Ravion AwsAccount row id (aws_*). Required when use_ravion_managed_domains = true."
+  default     = null
+}
