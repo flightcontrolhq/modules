@@ -206,8 +206,13 @@ output "container_port" {
 ################################################################################
 
 output "log_group_name" {
-  description = "The name of the CloudWatch log group used by the task (auto-created by ECS)."
-  value       = "/ecs/${var.name}"
+  description = "The name of the CloudWatch log group used by the task."
+  value       = aws_cloudwatch_log_group.this.name
+}
+
+output "log_group_arn" {
+  description = "The ARN of the CloudWatch log group used by the task."
+  value       = aws_cloudwatch_log_group.this.arn
 }
 
 output "log_stream_prefix" {

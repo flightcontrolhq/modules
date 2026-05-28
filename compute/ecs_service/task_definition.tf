@@ -249,6 +249,8 @@ resource "aws_ecs_task_definition" "this" {
     Name = var.name
   })
 
+  depends_on = [aws_cloudwatch_log_group.this]
+
   lifecycle {
     ignore_changes = all
   }
