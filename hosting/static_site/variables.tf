@@ -25,12 +25,12 @@ variable "tags" {
 
 variable "routing" {
   type        = string
-  description = "URI rewriting style applied at the edge before the version prefix is added. 'spa' rewrites every non-asset path to /<version>/index.html so a client-side router takes over. 'filesystem' rewrites /foo and /foo/ to /<version>/foo/index.html and serves /foo.js etc. as-is. Both styles are versioned identically."
+  description = "URI rewriting style applied at the edge before the version prefix is added. 'spa' rewrites every non-asset path to /<version>/index.html so a client-side router takes over. 'filesystem' rewrites /foo and /foo/ to /<version>/foo/index.html and serves /foo.js etc. as-is. 'raw' is a 1:1 viewer-URI -> /<version>/<URI> mapping with NO /index.html appending — use it for object sites that serve specific extensionless paths verbatim (terraform provider registries, S3-like content APIs). All three styles are versioned identically through KVS."
   default     = "spa"
 
   validation {
-    condition     = contains(["spa", "filesystem"], var.routing)
-    error_message = "The routing must be 'spa' or 'filesystem'."
+    condition     = contains(["spa", "filesystem", "raw"], var.routing)
+    error_message = "The routing must be 'spa', 'filesystem', or 'raw'."
   }
 }
 

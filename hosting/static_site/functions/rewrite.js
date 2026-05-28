@@ -26,6 +26,15 @@
 //     /.well-known/foo
 //                   -> /<v>/.well-known/foo       (dotted seg)
 //     /foo[/]       -> /<v>/foo/<index>           (clean URLs)
+//   raw routing:
+//     /             -> /<v>/                       (pass through verbatim)
+//     /foo          -> /<v>/foo
+//     /foo.js       -> /<v>/foo.js
+//     /v1/providers/<ns>/<type>/versions
+//                   -> /<v>/v1/providers/<ns>/<type>/versions
+//   Use raw for object sites serving extensionless paths literally (e.g. a
+//   terraform provider registry where the URL is the S3 key). KVS-based
+//   versioning still applies — only the /index.html appending is skipped.
 //
 // Tokens substituted at apply time via templatefile():
 //   ${kvs_id}, ${default_version}, ${index_document}, ${routing}
@@ -69,7 +78,14 @@ async function handler(event) {
     // canonical case.
     var hasDottedSegment = uri.indexOf('/.') >= 0;
 
-    if (uri === '/') {
+    if (ROUTING === 'raw') {
+        // 1:1 URI → /<v>/<URI> with no /index.html appending. Object sites
+        // (a terraform provider registry is the motivating case) MUST serve
+        // /v1/providers/<ns>/<type>/versions as the literal file at that
+        // key, not as /<...>/versions/index.html. KVS-driven version
+        // selection still happens through the /<v>/ prefix.
+        request.uri = '/' + version + uri;
+    } else if (uri === '/') {
         request.uri = '/' + version + '/' + INDEX_DOCUMENT;
     } else if (hasExtension || hasDottedSegment) {
         request.uri = '/' + version + uri;
