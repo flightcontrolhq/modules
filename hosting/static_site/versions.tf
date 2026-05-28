@@ -9,7 +9,7 @@ terraform {
       version = ">= 6.0"
     }
     ravion = {
-      source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"
+      source  = "providers.siddharthsuresh.dev/ravion/ravion"
       version = ">= 0.1.0"
     }
   }

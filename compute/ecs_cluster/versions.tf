@@ -15,7 +15,7 @@ terraform {
     # Ravion domains provider — only exercised when
     # var.use_ravion_managed_domains = true (see ravion_domains.tf).
     ravion = {
-      source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"
+      source  = "providers.siddharthsuresh.dev/ravion/ravion"
       version = ">= 0.1.0"
     }
   }
