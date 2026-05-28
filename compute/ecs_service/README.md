@@ -293,6 +293,13 @@ module "worker_service" {
 | runtime_platform | Runtime platform configuration (OS family, CPU architecture) | `object` | `{}` | no |
 | volumes | List of volume definitions (EFS or Docker) | `list(object)` | `[]` | no |
 
+### CloudWatch Logs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| log_retention_days | Days to retain CloudWatch logs (0 = retain indefinitely) | `number` | `30` | no |
+| log_kms_key_id | KMS key ARN for encrypting the log group (null = default encryption) | `string` | `null` | no |
+
 ### IAM
 
 | Name | Description | Type | Default | Required |
@@ -442,6 +449,14 @@ The `service_discovery` object includes:
 |------|-------------|
 | container_name | The name of the primary container |
 | container_port | The port of the primary container |
+
+### CloudWatch Logs
+
+| Name | Description |
+|------|-------------|
+| log_group_name | The name of the CloudWatch log group used by the task |
+| log_group_arn | The ARN of the CloudWatch log group used by the task |
+| log_stream_prefix | The awslogs stream prefix for the primary container |
 
 ## Architecture
 
