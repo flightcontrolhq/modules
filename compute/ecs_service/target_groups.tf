@@ -5,7 +5,7 @@
 resource "aws_lb_target_group" "this" {
   count = local.enable_load_balancer && var.deployment_type == "rolling" ? 1 : 0
 
-  name        = "${substr(var.name, 0, min(length(var.name), 28))}-tg"
+  name_prefix = substr(var.name, 0, 6)
   port        = var.load_balancer_attachment.target_group.port
   protocol    = var.load_balancer_attachment.target_group.protocol
   vpc_id      = var.vpc_id
