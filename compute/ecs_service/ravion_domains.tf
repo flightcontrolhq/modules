@@ -20,23 +20,31 @@
 
 locals {
   ravion_managed = var.cluster_parent_fqdn != null && var.cluster_parent_fqdn != ""
-  apex           = local.ravion_managed ? var.cluster_parent_fqdn : ""
+  apex           = local.ravion_managed ? lower(var.cluster_parent_fqdn) : ""
 
   # Auto-FQDN used when the domains list is empty (matches the frontend default).
   auto_fqdn = local.ravion_managed ? "${coalesce(var.module_instance_given_id, var.name)}.${local.apex}" : ""
 
-  # The effective list: the user's domains, or the auto-FQDN when empty.
-  effective_domains = local.ravion_managed ? (length(var.domains) > 0 ? var.domains : [local.auto_fqdn]) : []
+  # The effective list: the user's domains (or the auto-FQDN when empty),
+  # normalized — lowercased, trailing dot + surrounding whitespace stripped,
+  # empties dropped. Keeps classification consistent with DNS case-insensitivity
+  # and the backend's lowercase sanitizeLabel.
+  effective_domains = local.ravion_managed ? [
+    for d in(length(var.domains) > 0 ? var.domains : [local.auto_fqdn]) :
+    lower(trimsuffix(trimspace(d), ".")) if trimspace(d) != ""
+  ] : []
 
-  # Per-entry classification. wildcard-covered = "<leaf>.<apex>" with exactly one
-  # label below the apex (the only shape the `*.<apex>` cert + ALIAS cover).
+  # Per-entry classification. wildcard-covered = "<leaf>.<apex>" with a non-empty
+  # single label below the apex (the only shape the `*.<apex>` cert + ALIAS
+  # cover). The non-empty-leaf guard keeps a malformed ".<apex>" out of the
+  # wildcard bucket (an empty leaf would produce an invalid ALB host header).
   wildcard_covered = [
     for d in local.effective_domains : d
-    if endswith(d, ".${local.apex}") && !strcontains(trimsuffix(d, ".${local.apex}"), ".")
+    if endswith(d, ".${local.apex}") && length(trimsuffix(d, ".${local.apex}")) > 0 && !strcontains(trimsuffix(d, ".${local.apex}"), ".")
   ]
   custom_domains = [
     for d in local.effective_domains : d
-    if !(endswith(d, ".${local.apex}") && !strcontains(trimsuffix(d, ".${local.apex}"), "."))
+    if !(endswith(d, ".${local.apex}") && length(trimsuffix(d, ".${local.apex}")) > 0 && !strcontains(trimsuffix(d, ".${local.apex}"), "."))
   ]
 
   # All of this service's hostnames route to its target group via one rule.
