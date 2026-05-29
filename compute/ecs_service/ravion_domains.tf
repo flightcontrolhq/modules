@@ -47,6 +47,19 @@ locals {
     if !(endswith(d, ".${local.apex}") && length(trimsuffix(d, ".${local.apex}")) > 0 && !strcontains(trimsuffix(d, ".${local.apex}"), "."))
   ]
 
+  # Domains under the cluster apex that are NOT a single-label `<leaf>.<apex>`:
+  # the bare apex itself, or a name more than one label deep. The `*.<apex>`
+  # wildcard cert covers exactly one label, and the customer cannot add records
+  # to the Ravion-managed zone, so these can never be satisfied — they fall into
+  # custom_domains today and would silently emit a per-service cert + an
+  # unwritable routing record. Fail the plan instead (the server-side
+  # RejectCustomDomainUnderApex is the same backstop for direct-API callers).
+  invalid_apex_domains = [
+    for d in local.custom_domains : d
+    if d == local.apex || endswith(d, ".${local.apex}")
+  ]
+  invalid_apex_domains_msg = join(", ", local.invalid_apex_domains)
+
   # All of this service's hostnames route to its target group via one rule.
   ravion_host_headers = local.effective_domains
 
@@ -80,6 +93,10 @@ resource "ravion_certificate" "svc" {
   target_arn     = var.cluster_https_listener_arn
 
   lifecycle {
+    precondition {
+      condition     = length(local.invalid_apex_domains) == 0
+      error_message = "Domains under the cluster apex must be a single label that rides the cluster wildcard, like checkout.${local.apex}. These entries are the bare apex or more than one label deep, so the wildcard certificate does not cover them and their routing record would have to live in the Ravion-managed zone (which you cannot edit): ${local.invalid_apex_domains_msg}. Use a single-label name under the apex, or a domain in a DNS zone you control."
+    }
     precondition {
       condition     = length(local.custom_domains) == 0 || (var.ravion_aws_account_id != null && var.ravion_aws_account_id != "")
       error_message = "ravion_aws_account_id is required when the domains list includes a custom (non-wildcard) domain."
