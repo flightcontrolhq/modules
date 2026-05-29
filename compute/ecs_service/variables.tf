@@ -624,7 +624,7 @@ variable "ravion_listener_rule_priority" {
 
 variable "domains" {
   type        = list(string)
-  description = "Customer FQDNs (Mode B). Empty = Mode A (auto-FQDN under the cluster wildcard). Max 10."
+  description = "Service FQDNs. Each entry that is one label under the cluster apex (<leaf>.<apex>) rides the cluster wildcard cert; any other (custom/external) entry is covered by a per-service instance cert (max 10 custom). Empty = an auto-FQDN <given-id>.<apex> under the cluster wildcard."
   default     = []
 }
 
