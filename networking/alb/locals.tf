@@ -23,6 +23,12 @@ locals {
   # Listener configuration
   create_http_listener  = var.enable_http_listener
   create_https_listener = var.enable_https_listener
+
+  # The HTTP listener redirects to HTTPS when redirect is requested and either
+  # this module owns the HTTPS listener OR a parent module owns 443
+  # (force_http_to_https_redirect). Otherwise the HTTP listener returns the
+  # fixed response.
+  redirect_http_to_https = var.http_to_https_redirect && (local.create_https_listener || var.force_http_to_https_redirect)
 }
 
 

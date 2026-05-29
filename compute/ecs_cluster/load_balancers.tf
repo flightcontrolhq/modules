@@ -14,15 +14,19 @@ module "public_alb" {
   subnet_ids = var.public_subnet_ids
   internal   = false
 
-  # Listener configuration. In Ravion-managed mode this module owns the HTTPS
-  # listener (ravion_domains.tf) with the Ravion wildcard cert as default, so
-  # the alb submodule skips its own HTTPS listener + customer cert ARNs.
-  enable_http_listener   = true
-  enable_https_listener  = var.public_alb_enable_https && !local.enable_ravion_domain
-  http_to_https_redirect = var.public_alb_enable_https
+  # Listener configuration. ecs_cluster ALWAYS owns the HTTPS listener (in
+  # ravion_domains.tf) so toggling use_ravion_managed_domains is an in-place
+  # cert swap rather than a destroy+create across TF addresses. The alb
+  # submodule therefore never creates its own HTTPS listener nor holds cert
+  # ARNs; force_http_to_https_redirect keeps the HTTP listener redirecting to
+  # the parent-owned 443 listener.
+  enable_http_listener         = true
+  enable_https_listener        = false
+  http_to_https_redirect       = var.public_alb_enable_https
+  force_http_to_https_redirect = var.public_alb_enable_https
 
   # SSL/TLS
-  certificate_arns = local.enable_ravion_domain ? [] : var.public_alb_certificate_arns
+  certificate_arns = []
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings
@@ -56,15 +60,19 @@ module "private_alb" {
   subnet_ids = var.private_subnet_ids
   internal   = true
 
-  # Listener configuration. In Ravion-managed mode this module owns the HTTPS
-  # listener (ravion_domains.tf) with the Ravion wildcard cert as default, so
-  # the alb submodule skips its own HTTPS listener + customer cert ARNs.
-  enable_http_listener   = true
-  enable_https_listener  = var.private_alb_enable_https && !local.enable_ravion_domain
-  http_to_https_redirect = var.private_alb_enable_https
+  # Listener configuration. ecs_cluster ALWAYS owns the HTTPS listener (in
+  # ravion_domains.tf) so toggling use_ravion_managed_domains is an in-place
+  # cert swap rather than a destroy+create across TF addresses. The alb
+  # submodule therefore never creates its own HTTPS listener nor holds cert
+  # ARNs; force_http_to_https_redirect keeps the HTTP listener redirecting to
+  # the parent-owned 443 listener.
+  enable_http_listener         = true
+  enable_https_listener        = false
+  http_to_https_redirect       = var.private_alb_enable_https
+  force_http_to_https_redirect = var.private_alb_enable_https
 
   # SSL/TLS
-  certificate_arns = local.enable_ravion_domain ? [] : var.private_alb_certificate_arns
+  certificate_arns = []
   ssl_policy       = var.private_alb_ssl_policy
 
   # ALB settings

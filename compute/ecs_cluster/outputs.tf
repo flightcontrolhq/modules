@@ -120,10 +120,8 @@ output "public_alb_http_listener_arn" {
 }
 
 output "public_alb_https_listener_arn" {
-  description = "The ARN of the public ALB HTTPS listener (Ravion-owned when use_ravion_managed_domains; null if HTTPS disabled)."
-  value = (var.enable_public_alb && var.public_alb_enable_https) ? (
-    length(aws_lb_listener.ravion_https) > 0 ? aws_lb_listener.ravion_https[0].arn : module.public_alb[0].https_listener_arn
-  ) : null
+  description = "The ARN of the public ALB HTTPS listener (ecs_cluster-owned; null if HTTPS disabled)."
+  value       = (var.enable_public_alb && var.public_alb_enable_https) ? aws_lb_listener.public_https[0].arn : null
 }
 
 ################################################################################
@@ -166,10 +164,8 @@ output "private_alb_http_listener_arn" {
 }
 
 output "private_alb_https_listener_arn" {
-  description = "The ARN of the private ALB HTTPS listener (Ravion-owned when use_ravion_managed_domains; null if HTTPS disabled)."
-  value = (var.enable_private_alb && var.private_alb_enable_https) ? (
-    length(aws_lb_listener.ravion_https_private) > 0 ? aws_lb_listener.ravion_https_private[0].arn : module.private_alb[0].https_listener_arn
-  ) : null
+  description = "The ARN of the private ALB HTTPS listener (ecs_cluster-owned; null if HTTPS disabled)."
+  value       = (var.enable_private_alb && var.private_alb_enable_https) ? aws_lb_listener.private_https[0].arn : null
 }
 
 ################################################################################
@@ -272,4 +268,9 @@ output "ravion_aws_account_id" {
 output "ravion_aws_region" {
   description = "Pass-through Ravion cert region for ecs_service Mode B."
   value       = local.enable_ravion_domain ? coalesce(var.ravion_aws_region, local.region) : null
+}
+
+output "ravion_managed_domains_enabled" {
+  description = "True when the cluster owns a Ravion wildcard cert + HTTPS listener (use_ravion_managed_domains AND at least one ALB). Services read this to show/hide managed-domain fields."
+  value       = local.enable_ravion_domain
 }

@@ -164,6 +164,12 @@ variable "http_to_https_redirect" {
   default     = true
 }
 
+variable "force_http_to_https_redirect" {
+  type        = bool
+  description = "Redirect HTTP->HTTPS even when this module does not own the HTTPS listener (used when the parent owns it)."
+  default     = false
+}
+
 ################################################################################
 # SSL/TLS
 ################################################################################

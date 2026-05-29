@@ -9,10 +9,11 @@ resource "aws_lb_listener" "http" {
   port              = var.http_listener_port
   protocol          = "HTTP"
 
-  # If HTTPS is enabled and redirect is enabled, redirect to HTTPS
-  # Otherwise, return a fixed response
+  # Redirect to HTTPS when local.redirect_http_to_https (this module owns the
+  # HTTPS listener, or a parent owns 443 via force_http_to_https_redirect);
+  # otherwise return a fixed response.
   dynamic "default_action" {
-    for_each = var.http_to_https_redirect && local.create_https_listener ? [1] : []
+    for_each = local.redirect_http_to_https ? [1] : []
     content {
       type = "redirect"
       redirect {
@@ -24,7 +25,7 @@ resource "aws_lb_listener" "http" {
   }
 
   dynamic "default_action" {
-    for_each = !var.http_to_https_redirect || !local.create_https_listener ? [1] : []
+    for_each = local.redirect_http_to_https ? [] : [1]
     content {
       type = "fixed-response"
       fixed_response {
