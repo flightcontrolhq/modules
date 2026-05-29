@@ -5,7 +5,16 @@
 resource "aws_lb_target_group" "this" {
   count = local.enable_load_balancer && var.deployment_type == "rolling" ? 1 : 0
 
-  name_prefix = substr(var.name, 0, 6)
+  # Stable name (the EXACT pre-branch expression) rather than name_prefix: the
+  # ECS service ignores load_balancer changes and the listener rules ignore
+  # action, so neither will repoint to a replacement TG. A name_prefix forces a
+  # one-time ForceNew on existing rolling services, and the old TG can never be
+  # released ("in use by listener rule"/ECS service) -> apply deadlock. Keeping
+  # the original stable name means no replacement at all. The substr/28 cap is
+  # load-bearing: it both matches the currently-deployed name (so no ForceNew)
+  # and keeps the TG name within ALB's 32-char limit. (Blue/green tg_1/tg_2 are
+  # already stably named and are flipped, never replaced.)
+  name        = "${substr(var.name, 0, min(length(var.name), 28))}-tg"
   port        = var.load_balancer_attachment.target_group.port
   protocol    = var.load_balancer_attachment.target_group.protocol
   vpc_id      = var.vpc_id

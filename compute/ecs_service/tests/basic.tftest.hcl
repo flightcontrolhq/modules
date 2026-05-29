@@ -5,6 +5,12 @@
 # Mock provider for testing
 mock_provider "aws" {}
 
+# These runs leave cluster_parent_fqdn unset, so ravion_domains.tf creates no
+# ravion resources. Terraform still configures the ravion provider because the
+# module declares it, so an empty mock prevents its real Configure (which
+# requires RAVION_API_KEY) from failing the plan.
+mock_provider "ravion" {}
+
 ################################################################################
 # Variables for Tests
 ################################################################################

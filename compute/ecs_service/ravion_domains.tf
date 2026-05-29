@@ -60,10 +60,21 @@ locals {
   ]
   invalid_apex_domains_msg = join(", ", local.invalid_apex_domains)
 
-  # All of this service's hostnames route to its target group via one rule.
-  ravion_host_headers = local.effective_domains
+  # All of this service's hostnames route to its target group. AWS ALB allows at
+  # most 5 values in a single rule condition, so the host headers are split into
+  # chunks of <=5 — one aws_lb_listener_rule per chunk (see below), each with its
+  # own derived priority. (chunklist([], 5) == [], handled by the rule's guard.)
+  ravion_host_headers       = local.effective_domains
+  ravion_host_header_chunks = chunklist(local.ravion_host_headers, 5)
 
-  ravion_priority = var.ravion_listener_rule_priority > 0 ? var.ravion_listener_rule_priority : ((parseint(substr(sha256(var.name), 0, 4), 16) % 49000) + 1000)
+  # Base listener-rule priority. When ravion_listener_rule_priority is 0 (the
+  # default) it is derived from sha256(name) using 12 hex chars (~48 bits) so the
+  # collision probability stays low across many services sharing the cluster
+  # listener; mod 48000 (instead of 49000) leaves headroom below the ALB max of
+  # 50000 for the per-chunk offset (priority = base + chunk index). On a residual
+  # collision ("priority already in use") set ravion_listener_rule_priority
+  # explicitly to a free value.
+  ravion_priority = var.ravion_listener_rule_priority > 0 ? var.ravion_listener_rule_priority : ((parseint(substr(sha256(var.name), 0, 12), 16) % 48000) + 1000)
 
   ravion_target_group_arn = (
     length(aws_lb_target_group.this) > 0 ? aws_lb_target_group.this[0].arn : (
@@ -121,17 +132,21 @@ resource "ravion_domain" "custom" {
   target_zone_id  = var.cluster_alb_zone_id
 }
 
-# Single listener rule routing all of this service's hostnames to its target
-# group. Blue/green controllers flip the action externally.
+# One listener rule per chunk of <=5 host headers (AWS ALB's per-condition value
+# quota), together routing all of this service's hostnames to its target group.
+# Each chunk gets its own priority (base + chunk index). Blue/green controllers
+# flip the action externally.
 resource "aws_lb_listener_rule" "ravion" {
-  count = local.ravion_managed && var.cluster_https_listener_arn != null && length(local.ravion_host_headers) > 0 ? 1 : 0
+  for_each = local.ravion_managed && var.cluster_https_listener_arn != null && length(local.ravion_host_headers) > 0 ? {
+    for idx, chunk in local.ravion_host_header_chunks : idx => chunk
+  } : {}
 
   listener_arn = var.cluster_https_listener_arn
-  priority     = local.ravion_priority
+  priority     = local.ravion_priority + tonumber(each.key)
 
   condition {
     host_header {
-      values = local.ravion_host_headers
+      values = each.value
     }
   }
 
@@ -141,6 +156,21 @@ resource "aws_lb_listener_rule" "ravion" {
   }
 
   lifecycle {
+    # A Ravion-managed service forwards its hostnames to its own target group, so
+    # it must have a load balancer attachment. Without one ravion_target_group_arn
+    # is null, which would otherwise surface as a cryptic provider-side
+    # "target_group_arn must not be empty" at apply.
+    precondition {
+      condition     = !local.ravion_managed || local.enable_load_balancer
+      error_message = "A Ravion-managed service (cluster_parent_fqdn set) requires an enabled load_balancer_attachment so its hostnames have a target group to forward to."
+    }
     ignore_changes = [action]
   }
+}
+
+# Earlier revisions created a single count-based rule; migrate that instance to
+# the first for_each chunk so adopting the chunked layout is not a destroy+create.
+moved {
+  from = aws_lb_listener_rule.ravion[0]
+  to   = aws_lb_listener_rule.ravion["0"]
 }
