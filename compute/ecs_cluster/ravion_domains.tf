@@ -31,6 +31,14 @@ resource "ravion_certificate" "cluster" {
   target_zone_id  = var.enable_public_alb ? module.public_alb[0].alb_zone_id : (var.enable_private_alb ? module.private_alb[0].alb_zone_id : null)
 
   lifecycle {
+    # Rotating the cluster wildcard cert (any RequiresReplace change, e.g. a
+    # renamed apex) must issue the new cert and swap it onto the HTTPS
+    # listener(s) BEFORE the old one is torn down. Without this, terraform
+    # destroys the old cert first while it is still the listener's default —
+    # ACM returns ResourceInUse and the rotation deadlocks. create_before_destroy
+    # makes it new -> listener in-place swap -> delete old (now detached).
+    create_before_destroy = true
+
     precondition {
       condition     = !var.use_ravion_managed_domains || var.enable_public_alb || var.enable_private_alb
       error_message = "use_ravion_managed_domains requires at least one ALB (enable_public_alb or enable_private_alb)."
