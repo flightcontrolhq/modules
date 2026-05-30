@@ -14,6 +14,16 @@ locals {
   enable_ravion_domain = var.use_ravion_managed_domains && (var.enable_public_alb || var.enable_private_alb)
 }
 
+# Plan-time guard against two clusters claiming the same wildcard apex. The
+# backend resolves the bare name leaf to the managed wildcard (*.<name>.<apex>)
+# and reports collides=true ONLY when a DIFFERENT module instance already owns
+# that domain — a re-apply of THIS cluster does not collide with itself. The
+# allocator enforces the same rule server-side as an apply-time backstop.
+data "ravion_dns_collision_check" "cluster" {
+  count = local.enable_ravion_domain ? 1 : 0
+  fqdn  = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
+}
+
 resource "ravion_certificate" "cluster" {
   count = local.enable_ravion_domain ? 1 : 0
 
@@ -46,6 +56,10 @@ resource "ravion_certificate" "cluster" {
     precondition {
       condition     = !var.use_ravion_managed_domains || (var.ravion_aws_account_id != null && var.ravion_aws_account_id != "")
       error_message = "ravion_aws_account_id (aws_*) is required when use_ravion_managed_domains = true."
+    }
+    precondition {
+      condition     = !coalesce(one(data.ravion_dns_collision_check.cluster[*].collides), false)
+      error_message = "Cluster wildcard apex is already claimed by another cluster: a managed *.<ravion_cluster_name>.<apex> domain owned by a different module instance already exists. Pick a unique ravion_cluster_name."
     }
   }
 }
