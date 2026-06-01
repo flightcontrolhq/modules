@@ -99,8 +99,9 @@ data "ravion_parent_apex_check" "cluster" {
 resource "ravion_domain" "wildcard" {
   for_each = toset(local.wildcard_covered)
 
-  name        = trimsuffix(each.value, ".${local.apex}")
-  parent_fqdn = local.apex
+  name               = trimsuffix(each.value, ".${local.apex}")
+  module_instance_id = var.module_instance_id
+  parent_fqdn        = local.apex
 
   lifecycle {
     precondition {
@@ -118,11 +119,12 @@ resource "ravion_domain" "wildcard" {
 resource "ravion_certificate" "svc" {
   count = length(local.custom_domains) > 0 ? 1 : 0
 
-  role           = "instance"
-  domains        = local.custom_domains
-  aws_account_id = var.ravion_aws_account_id
-  aws_region     = coalesce(var.ravion_aws_region, local.region)
-  target_arn     = var.cluster_https_listener_arn
+  role               = "instance"
+  domains            = local.custom_domains
+  module_instance_id = var.module_instance_id
+  aws_account_id     = var.ravion_aws_account_id
+  aws_region         = coalesce(var.ravion_aws_region, local.region)
+  target_arn         = var.cluster_https_listener_arn
 
   lifecycle {
     precondition {
@@ -148,9 +150,10 @@ resource "ravion_certificate" "svc" {
 resource "ravion_domain" "custom" {
   for_each = toset(local.custom_domains)
 
-  name            = each.value
-  target_dns_name = var.cluster_alb_dns_name
-  target_zone_id  = var.cluster_alb_zone_id
+  name               = each.value
+  module_instance_id = var.module_instance_id
+  target_dns_name    = var.cluster_alb_dns_name
+  target_zone_id     = var.cluster_alb_zone_id
 }
 
 # One listener rule per chunk of <=5 host headers (AWS ALB's per-condition value

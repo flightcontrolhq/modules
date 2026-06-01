@@ -27,11 +27,12 @@ data "ravion_dns_collision_check" "cluster" {
 resource "ravion_certificate" "cluster" {
   count = local.enable_ravion_domain ? 1 : 0
 
-  role           = "shared_wildcard"
-  wildcard       = true
-  name           = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
-  aws_account_id = var.ravion_aws_account_id
-  aws_region     = coalesce(var.ravion_aws_region, local.region)
+  role               = "shared_wildcard"
+  wildcard           = true
+  name               = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
+  module_instance_id = var.module_instance_id
+  aws_account_id     = var.ravion_aws_account_id
+  aws_region         = coalesce(var.ravion_aws_region, local.region)
 
   # Ravion publishes a *.<apex> ALIAS to this ALB so service auto-FQDNs
   # (<svc>.<apex>) resolve under the cluster wildcard. Public ALB if present,

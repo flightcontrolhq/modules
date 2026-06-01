@@ -652,6 +652,12 @@ variable "module_instance_given_id" {
   default     = null
 }
 
+variable "module_instance_id" {
+  type        = string
+  description = "The Ravion module instance id (minst_*) that owns this service's Ravion-managed domains/certificate. Injected by the runner as TF_VAR_module_instance_id inside a stack run; set it explicitly for external/API-key runs. Required when use_ravion_managed_domains = true."
+  default     = null
+}
+
 variable "ravion_aws_region" {
   type        = string
   description = "AWS region the per-service cert lives in. Defaults to the module region."
