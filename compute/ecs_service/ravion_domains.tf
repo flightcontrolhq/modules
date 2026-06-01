@@ -83,6 +83,16 @@ locals {
   )
 }
 
+# Plan-time authorization guard: a service may only nest its auto-domains under
+# a cluster wildcard apex it is entitled to (its own cluster's wildcard, in the
+# same environment). Fails the plan with a clear message if cluster_parent_fqdn
+# was pointed at another cluster's apex. The control plane enforces the same rule
+# at apply (Dns:PARENT_APEX_UNAUTHORIZED), so this only moves the failure earlier.
+data "ravion_parent_apex_check" "cluster" {
+  count       = local.ravion_managed && length(local.wildcard_covered) > 0 ? 1 : 0
+  parent_fqdn = local.apex
+}
+
 # Wildcard-covered domains (incl. the auto-FQDN): nest under the cluster
 # wildcard. No per-service cert; the cluster `*.<apex>` ALIAS routes them.
 resource "ravion_domain" "wildcard" {
@@ -90,6 +100,16 @@ resource "ravion_domain" "wildcard" {
 
   name        = trimsuffix(each.value, ".${local.apex}")
   parent_fqdn = local.apex
+
+  lifecycle {
+    precondition {
+      # try(...) allows when the check is skipped (count 0) or the apex isn't yet
+      # resolvable (first apply before the cluster exists) — the apply-time guard
+      # takes over there.
+      condition     = try(one(data.ravion_parent_apex_check.cluster[*].authorized), true)
+      error_message = "This service may not nest ${each.value} under ${local.apex}: it is not a live cluster wildcard in this environment. Ensure cluster_parent_fqdn points at your own cluster's wildcard apex."
+    }
+  }
 }
 
 # Per-service certificate covering the custom (non-wildcard) domains (<=10 SANs),
