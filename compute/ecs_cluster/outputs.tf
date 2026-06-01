@@ -274,3 +274,8 @@ output "ravion_managed_domains_enabled" {
   description = "True when the cluster owns a Ravion wildcard cert + HTTPS listener (use_ravion_managed_domains AND at least one ALB). Services read this to show/hide managed-domain fields."
   value       = local.enable_ravion_domain
 }
+
+output "ravion_cluster_dependent_domains" {
+  description = "Live service domains nested under the cluster wildcard apex (they ride its cert/ALIAS). Tearing the cluster down while these exist is refused by the control plane (Dns:CERT_APEX_IN_USE)."
+  value       = local.enable_ravion_domain ? one(data.ravion_apex_dependents.cluster[*].dependents) : []
+}

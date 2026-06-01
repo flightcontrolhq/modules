@@ -63,3 +63,15 @@ resource "ravion_certificate" "cluster" {
     }
   }
 }
+
+# Live service domains nested under this cluster's wildcard apex (they ride its
+# cert + `*.<apex>` ALIAS). Surfaced via the ravion_cluster_dependent_domains
+# output for the UI / safe-teardown orchestration. NOT used as a precondition:
+# a cluster legitimately has dependents during normal operation and Terraform
+# can't scope a precondition to destroy-time, so it would block every apply.
+# The control plane already refuses a teardown while dependents exist
+# (Dns:CERT_APEX_IN_USE), which is the real backstop.
+data "ravion_apex_dependents" "cluster" {
+  count = local.enable_ravion_domain ? 1 : 0
+  apex  = ravion_certificate.cluster[0].fqdn
+}
