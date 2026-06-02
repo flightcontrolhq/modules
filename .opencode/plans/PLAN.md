@@ -453,7 +453,7 @@ For each compiled module definition:
     compiled config.
   - Secrets for Ravion API publishing are used only in the main-branch workflow.
 
-- [ ] 9. Add developer documentation.
+- [x] 9. Add developer documentation.
 
   Tests:
   - Documentation examples should be compiled by tests or included as fixtures where practical.

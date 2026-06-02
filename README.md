@@ -96,6 +96,150 @@ Each module in this repository follows a consistent structure:
 
 ## Contributing
 
+## Module Definitions
+
+Flightcontrol/Ravion module definitions are authored in this repository beside the Terraform
+module they publish. Each definition source file is named `definition.yml` and lives in an
+existing module directory, for example `networking/vpc/definition.yml`.
+
+The `definition.yml` file has three top-level sections:
+
+```yaml
+definition:
+  type: ravion-aws-vpc
+  name: AWS VPC
+  description: AWS VPC and subnets
+
+release:
+  version: 1.2.0
+  description: |
+    Add VPC flow log options and support S3 flow log destinations.
+
+module:
+  inputs:
+    - id: region
+      type: string
+      label: AWS Region
+      required: true
+  stack:
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+```
+
+`definition` contains repo-owned module identity and display metadata. `release` contains the
+next module version to publish and the curated changelog description for that version. `module`
+contains the canonical Flightcontrol module config that is compiled, validated, and published.
+
+### Authoring Rules
+
+- Create module definitions only as colocated `definition.yml` files beside existing Terraform modules.
+- Keep `definition.type` stable once published. It is the module identity used for versioning.
+- Set `release.version` to a valid semantic version whenever a new module version should publish.
+- Write `release.description` as the human-readable changelog entry for that published version.
+- Keep Ravion runtime templates such as `<< module.given_id >>` inside `module`; they pass through unchanged.
+- Use `$local.module_tag` only where the compiled definition should reference this module release tag.
+
+### Composition Directives
+
+Definitions support explicit composition at the exact insertion point. Shared fragments should live
+under `partials/` when reuse is useful, but use the directive where the content should appear rather
+than relying on inheritance.
+
+| Directive | Where it is used | Behavior |
+| --------- | ---------------- | -------- |
+| `$include` in an array item | `inputs`, arrays, ordered blocks | Splices the included array or single item into that position. |
+| `$include` as a map value | Object properties or config values | Replaces that value with the included file content. |
+| `$merge` in a map | Stack, deploy, settings, or object maps | Merges one or more maps into the current map. Later keys override earlier keys. |
+| `$template` in an array item or map value | Parameterized repeated fragments | Loads a fragment and renders it with values from `with`. |
+| `$local.module_tag` as a scalar | Source refs | Resolves to `<definition.type>@<release.version>`. |
+
+Directive paths are resolved relative to the file that contains the directive. Cycles fail during
+compile, and compiled output must not contain repo-only metadata, composition directives, or
+unresolved `$local.*` tokens.
+
+Example directive usage:
+
+```yaml
+module:
+  inputs:
+    - $include: ../../partials/inputs/name.yml
+    - id: networking
+      type: section
+      label: Networking
+    - $template: ../../partials/templates/ref-input.yml
+      with:
+        id: vpc
+        type: stack
+        label: VPC
+
+  stack:
+    $merge:
+      - ../../partials/stack/pipelines.yml
+      - ravion_state_backend_workspace: "<< module.given_id >>"
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+```
+
+### Validation And Status
+
+The module definition tooling lives in `tools/ravion-modules`.
+
+```bash
+cd tools/ravion-modules
+npm install
+npm run typecheck
+npm test
+node dist/src/cli.js validate ../../networking/vpc/definition.yml
+node dist/src/cli.js compile
+node dist/src/cli.js status
+```
+
+`validate` checks an authored definition, compiles it, and validates the canonical module config.
+`compile` compiles all colocated definitions and verifies local release metadata. `status` reports
+each local release version and can compare it with remote inventory when run with
+`--inventory <inventory.json>`.
+
+### Publishing
+
+Publishing is handled after merge on `main`. The publish workflow compiles all definitions, compares
+local releases with existing Ravion module versions, creates any missing module-scoped tags, and
+publishes missing versions through the Ravion API.
+
+Manual dry runs use the same commands:
+
+```bash
+cd tools/ravion-modules
+node dist/src/cli.js tags --api
+node dist/src/cli.js publish
+```
+
+Mutation commands are explicit:
+
+```bash
+node dist/src/cli.js tags --api --create
+node dist/src/cli.js publish --apply
+```
+
+`publish` creates missing definitions, patches changed definition metadata, creates missing module
+versions, and skips already-published identical versions. It fails if the same `release.version`
+already exists remotely with different compiled config.
+
+### Module Release Tags
+
+Published definitions use module-scoped annotated Git tags as source refs, for example
+`ravion-aws-vpc@1.2.0`. Tags are created only after merge because pre-merge commit SHAs are not the
+stable commits that will exist on `main`. Branch refs are mutable, so they are not suitable for
+published module source pins.
+
+Release tags are immutable. If a published module version is wrong, publish a new patch version
+instead of moving or replacing the existing tag.
+
 ### Adding a New Module
 
 1. Create a new directory following the `<category>/<module-name>` structure

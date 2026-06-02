@@ -42,3 +42,8 @@
 - Added node:test workflow syntax/shape coverage for the new workflow.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck`, `npm test`, and `node dist/src/cli.js compile`.
 - Next suggested task: add developer documentation for authoring definitions, directives, release metadata, and tag immutability.
+
+- Completed task 9: added developer documentation to the root `README.md` covering colocated `definition.yml` authoring, release metadata, supported composition directives and merge semantics, local validation/status commands, publish dry-runs/apply commands, and immutable module-scoped release tags.
+- Documentation examples align with existing compiled fixtures under `tools/ravion-modules/test/fixtures/compile`, which continue to exercise directives and `$local.module_tag` behavior.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: add migration guardrails so CI fails on legacy module definition YAML files and duplicate `definition.type` values.
