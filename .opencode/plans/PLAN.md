@@ -354,7 +354,7 @@ For each compiled module definition:
   - Emits readable errors with file paths and YAML paths.
   - Compiled output contains no repo-only metadata, composition directives, or `$local.*` tokens.
 
-- [ ] 3. Add canonical module schema validation.
+- [x] 3. Add canonical module schema validation.
 
   Tests:
   - Validate compiled fixtures against current Flightcontrol module schema.

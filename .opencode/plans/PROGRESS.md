@@ -9,3 +9,8 @@
 - Added compile fixtures and node:test coverage for array splicing, map replacement, map merges, template parameter rendering, Ravion `<< ... >>` template pass-through, stable output ordering, `$local.*` leak failure, include cycle failure, and category-directory discovery.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: add canonical Flightcontrol module schema validation against compiled output, including duplicate input IDs, unsupported input types, and old `input.properties.validation` shape coverage.
+
+- Completed task 3: added canonical module config validation via `tools/ravion-modules/src/module-schema.ts` and wired the CLI `validate` command to compile definitions before validating canonical output.
+- Added node:test coverage for accepted current module shapes, duplicate input IDs, unsupported input types, and the old `input.properties.validation` shape.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: inventory existing `rvn-` module definitions from Ravion Local and generate colocated self-contained `definition.yml` files where matching Terraform module directories already exist.
