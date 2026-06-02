@@ -335,7 +335,7 @@ For each compiled module definition:
   - Invalid authoring files fail before publish.
   - Existing canonical Flightcontrol config can be embedded under `module` without losing data.
 
-- [ ] 2. Build `ravion-modules compile`.
+- [x] 2. Build `ravion-modules compile`.
 
   Tests:
   - Include array splice tests for `$include`.

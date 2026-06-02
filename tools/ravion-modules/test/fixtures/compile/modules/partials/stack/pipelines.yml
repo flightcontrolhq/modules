@@ -1,0 +1,10 @@
+pipelines:
+  defaults:
+    variant: standard
+    input:
+      source:
+        repo: https://github.com/flightcontrolhq/modules
+        ref: $local.module_tag
+        base_path: networking/vpc
+  change:
+    pipeline_id: terraform-change
