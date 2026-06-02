@@ -3,7 +3,7 @@ import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { validateModuleConfig } from "./module-schema.js";
-import { createDefaultRavionApiClient, publishDefinitions } from "./publish.js";
+import { createDefaultRavionApiClient, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags } from "./tags.js";
 
@@ -29,7 +29,11 @@ if (command === "validate") {
 } else if (command === "tags") {
   const inventoryIndex = args.indexOf("--inventory");
   const targetIndex = args.indexOf("--target");
-  const inventory = inventoryIndex >= 0 && args[inventoryIndex + 1] ? await readInventoryFile(args[inventoryIndex + 1]) : undefined;
+  const inventory = args.includes("--api")
+    ? await loadRemoteInventory(await createDefaultRavionApiClient())
+    : inventoryIndex >= 0 && args[inventoryIndex + 1]
+      ? await readInventoryFile(args[inventoryIndex + 1])
+      : undefined;
   const targetCommit = targetIndex >= 0 && args[targetIndex + 1] ? args[targetIndex + 1] : await getCurrentCommit();
   const compiled = await compileAllDefinitions();
   const statuses = getReleaseStatuses(compiled, { inventory });

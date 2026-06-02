@@ -102,7 +102,7 @@ export async function createDefaultRavionApiClient(options: { baseUrl?: string; 
   return new HttpRavionModuleApiClient(baseUrl, token);
 }
 
-async function loadRemoteInventory(client: RavionModuleApiClient): Promise<RemoteModuleInventory> {
+export async function loadRemoteInventory(client: RavionModuleApiClient): Promise<RemoteModuleInventory> {
   const definitions = await client.listModuleDefinitions();
   const versions = await Promise.all(definitions.map(async (definition) => [definition.id, await client.listModuleVersions(definition.id)] as const));
   return { definitions, versionsByDefinitionId: Object.fromEntries(versions) };

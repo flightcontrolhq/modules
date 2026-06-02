@@ -436,7 +436,7 @@ For each compiled module definition:
   - Never overwrites an existing version.
   - Supports dry-run mode.
 
-- [ ] 8. Add GitHub Actions workflows.
+- [x] 8. Add GitHub Actions workflows.
 
   Tests:
   - Validate workflow syntax.

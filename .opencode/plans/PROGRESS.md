@@ -36,3 +36,9 @@
 - Added node:test coverage for mocked definition list/create/patch calls, version creation, duplicate version responses, identical-version skips, conflict failures, `release.description` propagation to `ModuleVersion.description`, and dry-run non-mutation.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: add GitHub Actions workflows that run compile/validate/release checks in PRs and tags/publish with secrets on `main`.
+
+- Completed task 8: added the `Module Definitions` GitHub Actions workflow with PR validation for the module tools and compiled definitions, plus a main-branch publish job that dry-runs the publish plan, creates annotated module release tags from Ravion API inventory, pushes tags, and publishes with `RAVION_API_URL`/`RAVION_API_TOKEN` only on `main`.
+- Added `ravion-modules tags --api` so CI can plan tags from the live Ravion module inventory instead of requiring a checked-in inventory file.
+- Added node:test workflow syntax/shape coverage for the new workflow.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck`, `npm test`, and `node dist/src/cli.js compile`.
+- Next suggested task: add developer documentation for authoring definitions, directives, release metadata, and tag immutability.

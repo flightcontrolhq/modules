@@ -1,0 +1,94 @@
+name: Module Definitions
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Module Definitions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/ravion-modules/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: tools/ravion-modules
+
+      - name: Typecheck tools
+        run: npm run typecheck
+        working-directory: tools/ravion-modules
+
+      - name: Test tools
+        run: npm test
+        working-directory: tools/ravion-modules
+
+      - name: Compile and validate definitions
+        run: node dist/src/cli.js compile
+        working-directory: tools/ravion-modules
+
+  publish:
+    name: Publish Module Definitions
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    env:
+      RAVION_API_URL: ${{ vars.RAVION_API_URL }}
+      RAVION_API_TOKEN: ${{ secrets.RAVION_API_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/ravion-modules/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: tools/ravion-modules
+
+      - name: Build and test tools
+        run: npm test
+        working-directory: tools/ravion-modules
+
+      - name: Dry-run publish plan
+        run: node dist/src/cli.js publish
+        working-directory: tools/ravion-modules
+
+      - name: Configure Git tag author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release tags
+        run: node dist/src/cli.js tags --api --create
+        working-directory: tools/ravion-modules
+
+      - name: Push release tags
+        run: git push origin --tags
+
+      - name: Publish module versions
+        run: node dist/src/cli.js publish --apply
+        working-directory: tools/ravion-modules
