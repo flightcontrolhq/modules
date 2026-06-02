@@ -365,7 +365,7 @@ For each compiled module definition:
   - Validation catches old `input.properties.validation` shape.
   - Validation runs locally and in CI.
 
-- [ ] 4. Read existing `rvn-` module types from executor Ravion Local and create canonical colocated
+- [x] 4. Read existing `rvn-` module types from executor Ravion Local and create canonical colocated
      `definition.yml` files without partials.
 
   Tests:

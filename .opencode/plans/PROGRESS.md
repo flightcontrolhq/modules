@@ -14,3 +14,9 @@
 - Added node:test coverage for accepted current module shapes, duplicate input IDs, unsupported input types, and the old `input.properties.validation` shape.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: inventory existing `rvn-` module definitions from Ravion Local and generate colocated self-contained `definition.yml` files where matching Terraform module directories already exist.
+
+- Completed task 4: added `ravion-modules generate-definitions` for converting Ravion Local inventory snapshots into self-contained colocated `definition.yml` files, normalizing module repo source refs to `$local.module_tag`, reporting `rvn-` definitions without matching Terraform module directories, and validating generated definitions after write.
+- Added node:test coverage for matching `rvn-` generation, missing-module reporting, no partial/composition directives in generated files, latest-version selection, schema validation, and semantic equivalence after compilation.
+- Queried executor Ravion Local during implementation. Current `rvn-` inventory has six matching Terraform module directories (`rvn-aws-network`, `rvn-ecs-cluster`, `rvn-ecs-web`, `rvn-aws-acm-certificate`, `rvn-aws-rds`, `rvn-static`) and one `rvn-stack` definition with no matching Terraform module directory, which should remain a manual follow-up unless a stack module directory is added.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: validate release metadata during status, compile, and publish, including local release state reporting and remote-version mismatch detection.

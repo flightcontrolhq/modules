@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
+import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { validateModuleConfig } from "./module-schema.js";
 
 const [, , command, ...args] = process.argv;
@@ -14,7 +15,19 @@ if (command === "validate") {
 } else if (command === "compile") {
   const compiled = args.length > 0 ? await Promise.all(args.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
   console.log(JSON.stringify(compiled, null, 2));
+} else if (command === "generate-definitions") {
+  const inventoryPath = args.find((arg) => !arg.startsWith("--"));
+  if (!inventoryPath) {
+    console.error("Usage: ravion-modules generate-definitions <inventory.json> [--write]");
+    process.exitCode = 1;
+  } else {
+    const result = await generateDefinitionsFromInventory(await readInventoryFile(inventoryPath), process.cwd(), { write: args.includes("--write") });
+    if (args.includes("--write")) {
+      await validateGeneratedDefinitions(result);
+    }
+    console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
+  }
 } else {
-  console.error("Usage: ravion-modules <validate|compile> <definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|generate-definitions> <definition.yml...>");
   process.exitCode = 1;
 }
