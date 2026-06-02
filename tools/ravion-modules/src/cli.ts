@@ -4,6 +4,7 @@ import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { validateModuleConfig } from "./module-schema.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
+import { createPlannedTags, getCurrentCommit, listExistingTags, planTags } from "./tags.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -24,6 +25,19 @@ if (command === "validate") {
   const statuses = getReleaseStatuses(compiled, { inventory });
   validateReleaseStatuses(statuses);
   console.log(JSON.stringify(statuses, null, 2));
+} else if (command === "tags") {
+  const inventoryIndex = args.indexOf("--inventory");
+  const targetIndex = args.indexOf("--target");
+  const inventory = inventoryIndex >= 0 && args[inventoryIndex + 1] ? await readInventoryFile(args[inventoryIndex + 1]) : undefined;
+  const targetCommit = targetIndex >= 0 && args[targetIndex + 1] ? args[targetIndex + 1] : await getCurrentCommit();
+  const compiled = await compileAllDefinitions();
+  const statuses = getReleaseStatuses(compiled, { inventory });
+  validateReleaseStatuses(statuses);
+  const plan = planTags(statuses, await listExistingTags(), targetCommit);
+  if (args.includes("--create")) {
+    await createPlannedTags(plan);
+  }
+  console.log(JSON.stringify(plan, null, 2));
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
   if (!inventoryPath) {
@@ -37,6 +51,6 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|status|generate-definitions> <definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|status|tags|generate-definitions> <definition.yml...>");
   process.exitCode = 1;
 }

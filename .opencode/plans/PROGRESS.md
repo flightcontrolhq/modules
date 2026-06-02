@@ -26,3 +26,8 @@
 - Added node:test coverage for unpublished state reporting, published identical-version detection, remote config conflict rejection, and missing unpublished release descriptions.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: implement tag planning and creation with annotated module-scoped tags, dry-run output, existing-tag detection, and conflict detection for tags pointing at different commits.
+
+- Completed task 6: added tag planning and annotated tag creation support through a new `ravion-modules tags` command. The command derives module-scoped tags from unpublished release statuses, defaults to dry-run JSON output, supports `--target <commit>`, and creates annotated tags only when `--create` is passed.
+- Added node:test coverage for tag-name generation, planning only unpublished versions, detecting existing matching tags, failing when existing tags point at different commits, and invoking annotated tag creation only for missing tags.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: implement `ravion-modules publish`, reusing release status and tag planning so publish only creates missing versions and remains idempotent.

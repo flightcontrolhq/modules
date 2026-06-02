@@ -405,7 +405,7 @@ For each compiled module definition:
     `release.version` and updated `release.description`.
   - No release intent is tracked outside `definition.yml`.
 
-- [ ] 6. Implement tag planning and creation.
+- [x] 6. Implement tag planning and creation.
 
   Tests:
   - Generate expected tag names from module types and versions.
