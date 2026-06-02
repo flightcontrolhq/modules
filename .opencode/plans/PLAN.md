@@ -389,7 +389,7 @@ For each compiled module definition:
   - Modules present in Ravion Local but missing a Terraform module directory are reported for
     manual follow-up instead of creating a new directory silently.
 
-- [ ] 5. Validate release metadata during status, compile, and publish.
+- [x] 5. Validate release metadata during status, compile, and publish.
 
   Tests:
   - Reject missing `release.version`.

@@ -3,6 +3,7 @@ import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { validateModuleConfig } from "./module-schema.js";
+import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -14,7 +15,15 @@ if (command === "validate") {
   }
 } else if (command === "compile") {
   const compiled = args.length > 0 ? await Promise.all(args.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
+  validateReleaseStatuses(getReleaseStatuses(compiled));
   console.log(JSON.stringify(compiled, null, 2));
+} else if (command === "status") {
+  const inventoryIndex = args.indexOf("--inventory");
+  const inventory = inventoryIndex >= 0 && args[inventoryIndex + 1] ? await readInventoryFile(args[inventoryIndex + 1]) : undefined;
+  const compiled = await compileAllDefinitions();
+  const statuses = getReleaseStatuses(compiled, { inventory });
+  validateReleaseStatuses(statuses);
+  console.log(JSON.stringify(statuses, null, 2));
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
   if (!inventoryPath) {
@@ -28,6 +37,6 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|generate-definitions> <definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|status|generate-definitions> <definition.yml...>");
   process.exitCode = 1;
 }

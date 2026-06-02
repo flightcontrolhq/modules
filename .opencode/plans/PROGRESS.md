@@ -20,3 +20,9 @@
 - Queried executor Ravion Local during implementation. Current `rvn-` inventory has six matching Terraform module directories (`rvn-aws-network`, `rvn-ecs-cluster`, `rvn-ecs-web`, `rvn-aws-acm-certificate`, `rvn-aws-rds`, `rvn-static`) and one `rvn-stack` definition with no matching Terraform module directory, which should remain a manual follow-up unless a stack module directory is added.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: validate release metadata during status, compile, and publish, including local release state reporting and remote-version mismatch detection.
+
+- Completed task 5: added release status validation for compiled definitions, including local release version reporting, unpublished/published/conflict remote state calculation from inventory data, and hard failure when a remote version already exists with different compiled config.
+- Wired `ravion-modules status` and `ravion-modules compile` through release status validation; `status` accepts `--inventory <inventory.json>` for remote comparison while still reporting local release metadata without inventory.
+- Added node:test coverage for unpublished state reporting, published identical-version detection, remote config conflict rejection, and missing unpublished release descriptions.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: implement tag planning and creation with annotated module-scoped tags, dry-run output, existing-tag detection, and conflict detection for tags pointing at different commits.
