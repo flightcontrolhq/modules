@@ -464,7 +464,7 @@ For each compiled module definition:
   - Documentation explains tag immutability and why tags are used instead of pre-merge commits.
   - Documentation lists supported directives and merge semantics.
 
-- [ ] 10. Add migration guardrails.
+- [x] 10. Add migration guardrails.
 
   Tests:
   - CI fails if legacy module definition YAML files are added.

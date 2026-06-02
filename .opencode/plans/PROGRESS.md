@@ -47,3 +47,9 @@
 - Documentation examples align with existing compiled fixtures under `tools/ravion-modules/test/fixtures/compile`, which continue to exercise directives and `$local.module_tag` behavior.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: add migration guardrails so CI fails on legacy module definition YAML files and duplicate `definition.type` values.
+
+- Completed task 10: added migration guardrails for legacy module-definition YAML files and duplicate `definition.type` values.
+- Added `ravion-modules guardrails` for CI repo scans, wired it into the Module Definitions workflow, and made `compileAllDefinitions` fail on duplicate module identities before publish/status/tag operations can proceed.
+- Added node:test coverage for legacy YAML detection, allowed colocated `definition.yml` files, duplicate type failures, and the workflow guardrail step.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck`, `npm test`, and from repo root: `node tools/ravion-modules/dist/src/cli.js guardrails`.
+- All tasks in `PLAN.md` are now complete.

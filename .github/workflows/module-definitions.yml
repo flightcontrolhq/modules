@@ -38,6 +38,9 @@ jobs:
         run: npm test
         working-directory: tools/ravion-modules
 
+      - name: Run migration guardrails
+        run: node tools/ravion-modules/dist/src/cli.js guardrails
+
       - name: Compile and validate definitions
         run: node dist/src/cli.js compile
         working-directory: tools/ravion-modules

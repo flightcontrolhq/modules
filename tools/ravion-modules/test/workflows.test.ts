@@ -18,6 +18,7 @@ test("module definition workflow has valid syntax and expected jobs", async () =
   assert.ok(jobs.validate);
   assert.ok(jobs.publish);
   assert.deepEqual(jobs.publish.permissions, { contents: "write" });
+  assert.ok(jobs.validate.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js guardrails"));
   assert.ok(jobs.publish.steps.some((step) => step.run === "node dist/src/cli.js tags --api --create"));
   assert.ok(jobs.publish.steps.some((step) => step.run === "node dist/src/cli.js publish --apply"));
 });

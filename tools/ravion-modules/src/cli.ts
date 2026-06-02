@@ -2,6 +2,7 @@
 import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
+import { runMigrationGuardrails } from "./guardrails.js";
 import { validateModuleConfig } from "./module-schema.js";
 import { createDefaultRavionApiClient, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
@@ -19,6 +20,9 @@ if (command === "validate") {
   const compiled = args.length > 0 ? await Promise.all(args.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
   validateReleaseStatuses(getReleaseStatuses(compiled));
   console.log(JSON.stringify(compiled, null, 2));
+} else if (command === "guardrails") {
+  await runMigrationGuardrails(getRootArg(args));
+  console.log(JSON.stringify({ ok: true }, null, 2));
 } else if (command === "status") {
   const inventoryIndex = args.indexOf("--inventory");
   const inventory = inventoryIndex >= 0 && args[inventoryIndex + 1] ? await readInventoryFile(args[inventoryIndex + 1]) : undefined;
@@ -64,6 +68,11 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|status|tags|publish|generate-definitions> <definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|publish|generate-definitions> <definition.yml...>");
   process.exitCode = 1;
+}
+
+function getRootArg(args: string[]): string | undefined {
+  const rootIndex = args.indexOf("--root");
+  return rootIndex >= 0 ? args[rootIndex + 1] : undefined;
 }
