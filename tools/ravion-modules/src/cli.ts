@@ -3,6 +3,7 @@ import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { validateModuleConfig } from "./module-schema.js";
+import { createDefaultRavionApiClient, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags } from "./tags.js";
 
@@ -38,6 +39,14 @@ if (command === "validate") {
     await createPlannedTags(plan);
   }
   console.log(JSON.stringify(plan, null, 2));
+} else if (command === "publish") {
+  const compiled = await compileAllDefinitions();
+  for (const definition of compiled) {
+    validateModuleConfig(definition.module, definition.filePath);
+  }
+  const client = await createDefaultRavionApiClient();
+  const result = await publishDefinitions(compiled, client, { dryRun: !args.includes("--apply") });
+  console.log(JSON.stringify(result, null, 2));
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
   if (!inventoryPath) {
@@ -51,6 +60,6 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|status|tags|generate-definitions> <definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|status|tags|publish|generate-definitions> <definition.yml...>");
   process.exitCode = 1;
 }

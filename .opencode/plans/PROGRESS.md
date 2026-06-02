@@ -31,3 +31,8 @@
 - Added node:test coverage for tag-name generation, planning only unpublished versions, detecting existing matching tags, failing when existing tags point at different commits, and invoking annotated tag creation only for missing tags.
 - Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
 - Next suggested task: implement `ravion-modules publish`, reusing release status and tag planning so publish only creates missing versions and remains idempotent.
+
+- Completed task 7: added `ravion-modules publish` with an injectable Ravion API client, dry-run-by-default behavior, `--apply` mutations, definition create/patch support, idempotent identical-version skips, duplicate-version handling, and hard failures for config conflicts.
+- Added node:test coverage for mocked definition list/create/patch calls, version creation, duplicate version responses, identical-version skips, conflict failures, `release.description` propagation to `ModuleVersion.description`, and dry-run non-mutation.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: add GitHub Actions workflows that run compile/validate/release checks in PRs and tags/publish with secrets on `main`.

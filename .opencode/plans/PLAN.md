@@ -418,7 +418,7 @@ For each compiled module definition:
   - Tags are annotated tags.
   - The command can run in dry-run mode and show all tags it would create.
 
-- [ ] 7. Implement `ravion-modules publish`.
+- [x] 7. Implement `ravion-modules publish`.
 
   Tests:
   - Mock Ravion API list/create/patch definition calls.
