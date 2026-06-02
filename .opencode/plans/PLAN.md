@@ -322,7 +322,7 @@ For each compiled module definition:
 
 ## Tasks
 
-- [ ] 1. Define the authoring schema for `**/definition.yml` files that live inside existing
+- [x] 1. Define the authoring schema for `**/definition.yml` files that live inside existing
      module directories.
 
   Tests:

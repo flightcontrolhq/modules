@@ -39,3 +39,7 @@ terraform.rc
 # Test environment files (contain AWS credentials)
 test/.env.test
 .env.test
+
+# Generated tool builds
+tools/ravion-modules/dist/
+tools/ravion-modules/node_modules/
