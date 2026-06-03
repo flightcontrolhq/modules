@@ -13,12 +13,13 @@ export class ModuleSchemaError extends Error {
   }
 }
 
-const ROOT_KEYS = new Set(["inputs", "output", "outputs", "ui", "stack", "build", "deploy"]);
+const ROOT_KEYS = new Set(["inputs", "output", "outputs", "ui", "stack", "build", "deploy", "readme"]);
 const INPUT_TYPES = new Set([
   "string",
   "text",
   "json",
   "string_array",
+  "array",
   "number",
   "boolean",
   "divider",
@@ -86,7 +87,7 @@ function validateInputs(value: unknown, path: string, issues: ModuleSchemaIssue[
     const type = input.type;
     if (typeof type !== "string" || type.trim().length === 0) {
       issues.push({ path: `${inputPath}.type`, message: "Input type must be a non-empty string." });
-    } else if (!INPUT_TYPES.has(type)) {
+    } else if (!INPUT_TYPES.has(type) && !type.startsWith("$ref:")) {
       issues.push({ path: `${inputPath}.type`, message: `Unsupported input type ${type}.` });
     }
 
