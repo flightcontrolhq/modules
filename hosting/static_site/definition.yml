@@ -1,0 +1,698 @@
+definition:
+  type: rvn-aws-static
+  name: Static Hosting
+  description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
+release:
+  version: 0.0.1
+  description: init
+module:
+  build:
+    builder: '<< module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile: module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} : {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs, output_directory: module.input.output_directory} >>'
+    destinations:
+      - bucket: << stack.output.hosting_bucket_id >>
+        id: hosting-bucket
+        region: << stack.output.region >>
+        type: s3
+    environment_variables: << module.input.build_environment_variables >>
+    infrastructure:
+      ami: << module.input.build_ami || nil >>
+      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
+      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
+      instance_size: << module.input.build_instance_size >>
+      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
+      type: << module.input.build_infrastructure_type >>
+    inputs:
+      - description: Defaults to repo default branch
+        id: branch
+        label: Git branch
+        required: false
+        type: string
+      - description: Optional commit SHA, tag, or ref to build.
+        id: ref
+        label: Git ref (commit or tag)
+        required: false
+        type: string
+    source:
+      base_path: << module.input.source_base_path || "." >>
+      branch: << build.input.branch >>
+      ref: << build.input.ref >>
+      repo: << module.input.source_repo >>
+      type: git
+    timeout: 1800
+    type: '<< module.input.build_type == "none" ? "disabled" : "static" >>'
+  deploy:
+    definition:
+      cloudfront_invalidation_paths: << module.input.cloudfront_invalidation_paths >>
+      keep_latest_successful_deploy_count: << module.input.keep_latest_successful_deploy_count >>
+      s3_directory: << deploy.input.directory >>
+    infrastructure:
+      cloudfront_distribution_arns: << stack.output.cloudfront_distribution_arns >>
+      cloudfront_keyvaluestore_arn: << stack.output.cloudfront_keyvaluestore_arn >>
+      s3_bucket: << stack.output.hosting_bucket_id >>
+      s3_region: << stack.output.region >>
+    inputs:
+      - description: Existing S3 prefix to promote
+        id: directory
+        label: S3 directory
+        required: true
+        type: string
+    timeout: 1800
+    type: aws:static
+  inputs:
+    - id: section_aws
+      label: AWS account & region
+      type: section
+    - id: aws_account_id
+      label: AWS account
+      required: true
+      type: string
+      values: $values:ravion/aws_accounts
+    - default: us-east-1
+      description: Region for the s3 bucket. CloudFront and KVS is always in us-east-1
+      id: aws_region
+      label: Region
+      required: true
+      type: string
+      values: $values:aws/regions
+    - id: section_hosting
+      label: Static hosting
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      description: Name for the bucket and other resources' prefix. Must be globally unique.
+      id: name
+      label: Name slug
+      patterns:
+        - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
+          pattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
+      required: true
+      type: string
+    - default: spa
+      description: Use single page app for client-side routers, or Filesystem for static file trees where paths map to index files.
+      id: routing
+      label: Routing mode
+      required: true
+      type: string
+      values:
+        - description: Rewrite non-asset paths to index.html for client-side routers.
+          label: Single page app
+          value: spa
+        - description: Each path has its own file
+          label: Filesystem
+          value: filesystem
+    - collapsible: true
+      default: index.html
+      description: Object name resolved when a viewer requests the distribution root.
+      id: default_root_object
+      label: Default root object
+      type: string
+    - collapsible: true
+      default: main
+      description: Fallback version prefix and initial active KVS value.
+      id: default_version
+      label: Default version prefix
+      required: true
+      type: string
+    - id: section_build
+      label: Build config
+      type: section
+    - default: nixpacks
+      id: build_type
+      label: Build type
+      required: true
+      type: string
+      values:
+        - description: Automatically build static files based on your code and config
+          label: Nixpacks
+          value: nixpacks
+        - description: Bring your own Dockerfile
+          label: Dockerfile
+          value: dockerfile
+        - description: Skip the build step and promote an existing S3 directory at deploy time.
+          label: Disabled
+          value: none
+    - id: source_repo
+      label: Git repository
+      required: true
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: gitrepo
+    - default: .
+      description: Path from repo root to your source code
+      id: source_base_path
+      label: Source base path
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+    - default: dist
+      description: Directory produced by the build and uploaded to S3.
+      id: output_directory
+      label: Output directory
+      required: true
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+    - id: section_dockerfile
+      label: Docker
+      show_when:
+        build_type: dockerfile
+      type: section
+    - description: Path to the Dockerfile to use for the static build, relative to the repository root or configured source base path.
+      id: dockerfile
+      label: Dockerfile path
+      placeholder: Dockerfile
+      show_when:
+        build_type: dockerfile
+      type: string
+    - description: Directory to use as the Docker build context, relative to the repository root or configured source base path.
+      id: dockerfile_context
+      label: Docker build context path
+      placeholder: .
+      show_when:
+        build_type: dockerfile
+      type: string
+    - id: section_nixpacks
+      label: Nixpacks
+      show_when:
+        build_type: nixpacks
+      type: section
+    - id: nixpacks_install_cmd
+      label: Install command
+      placeholder: Intelligent default based on your language & framework
+      show_when:
+        build_type: nixpacks
+      type: string
+    - id: nixpacks_build_cmd
+      label: Build command
+      placeholder: Intelligent default based on your language & framework
+      show_when:
+        build_type: nixpacks
+      type: string
+    - collapsible: true
+      description: Path to a custom Nixpacks config file, relative to the repository root or configured source base path.
+      id: nixpacks_config_file_path
+      label: Nixpacks config file path
+      show_when:
+        build_type: nixpacks
+      type: string
+    - collapsible: true
+      description: Application path for Nixpacks to build, relative to the repository root or configured source base path.
+      id: nixpacks_build_path
+      label: Nixpacks build path
+      show_when:
+        build_type: nixpacks
+      type: string
+    - collapsible: true
+      description: Optional Nixpacks version to use for the build. Leave blank to use the default version.
+      id: nixpacks_version
+      label: Nixpacks version
+      show_when:
+        build_type: nixpacks
+      type: string
+    - collapsible: true
+      description: Additional Nix packages to install during the Nixpacks build.
+      id: nixpacks_nix_pkgs
+      label: Nix packages
+      show_when:
+        build_type: nixpacks
+      type: string_array
+    - collapsible: true
+      description: Additional APT packages to install during the Nixpacks build.
+      id: nixpacks_apt_pkgs
+      label: APT packages
+      show_when:
+        build_type: nixpacks
+      type: string_array
+    - collapsible: true
+      description: Additional Nix libraries to make available during the Nixpacks build.
+      id: nixpacks_nix_libs
+      label: Nix libraries
+      show_when:
+        build_type: nixpacks
+      type: string_array
+    - description: Environment variables available during static builds. Values can be plain strings or references loaded from Parameter Store.
+      id: build_environment_variables
+      label: Build environment variables
+      placeholder: |-
+        {
+          "NODE_ENV": "production",
+          "API_URL": {
+            "fromParameterStore": "my-secret"
+          },
+          "NPM_TOKEN": {
+            "fromSecretManager": "arn:..."
+          }
+        }
+      required: false
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: object
+    - default: false
+      description: Pass build environment variables into Dockerfile builds as build arguments.
+      id: dockerfile_inject_env_variables
+      label: Inject environment variables in Dockerfile
+      show_when:
+        build_type: dockerfile
+      type: boolean
+    - id: section_cloudfront
+      label: CloudFront settings
+      type: section
+    - description: Required if using domain aliases. Must be in us-east-1.
+      id: distribution_acm_certificate_arn
+      label: ACM certificate ARN
+      placeholder: arn:aws:acm:us-east-1:123456789012:certificate/abc-123
+      required: false
+      type: string
+    - add_button_label: Add domain alias
+      default: []
+      description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain.
+      id: distribution_aliases
+      label: Domain aliases
+      type: string_array
+    - default: PriceClass_All
+      description: You can reduce edge locations for some cost savings if it becomes an issue.
+      id: price_class
+      label: Price class
+      type: string
+      values:
+        - label: All edge locations
+          value: PriceClass_All
+        - label: Most edge locations
+          value: PriceClass_200
+        - label: US, Canada, Europe
+          value: PriceClass_100
+    - default: none
+      id: geo_restriction_type
+      label: Geo restriction
+      type: string
+      values:
+        - label: None
+          value: none
+        - label: Whitelist
+          value: whitelist
+        - label: Blacklist
+          value: blacklist
+    - default: []
+      id: geo_restriction_locations
+      label: Geo restriction country codes
+      show_when:
+        geo_restriction_type:
+          - whitelist
+          - blacklist
+      type: string_array
+    - id: section_cache_headers
+      label: Cache and headers
+      type: section
+    - default: true
+      description: Attach a CloudFront Function that sets Cache-Control headers for HTML and asset responses.
+      id: manage_cache_control
+      label: Manage Cache-Control headers
+      type: boolean
+    - collapsible: true
+      default: null
+      description: Cache-Control header for HTML responses, routes without file extensions, dotted paths, and configured HTML path overrides. Defaults to s-maxage=5, stale-while-revalidate=31536000.
+      id: html_cache_control
+      label: HTML Cache-Control
+      show_when:
+        manage_cache_control: true
+      type: string
+    - collapsible: true
+      description: Cache-Control header for versioned static assets such as JavaScript, CSS, images, and fonts. Defaults to public, max-age=31536000, immutable
+      id: assets_cache_control
+      label: Asset Cache-Control
+      show_when:
+        manage_cache_control: true
+      type: string
+    - add_button_label: Add path override
+      collapsible: true
+      description: Exact viewer paths that should receive the HTML Cache-Control header even when they have a file extension.
+      id: html_path_overrides
+      label: HTML cache path overrides
+      show_when:
+        manage_cache_control: true
+      type: string_array
+    - collapsible: true
+      description: Optional externally managed CloudFront response headers policy ID for security headers, CORS, or custom headers.
+      id: response_headers_policy_id
+      label: Response headers policy ID
+      required: false
+      type: string
+    - collapsible: true
+      description: Optional module-managed CloudFront response headers policy for security headers, CORS, custom headers, and removed headers.
+      id: response_headers_policy
+      label: Managed response headers policy
+      required: false
+      type: object
+    - collapsible: true
+      description: CloudFront cache policy ID for the default behavior. Defaults to AWS managed CachingOptimized.
+      id: cache_policy_id
+      label: Cache policy ID
+      type: string
+    - collapsible: true
+      description: CloudFront origin request policy ID. Defaults to AWS managed CORS-S3Origin.
+      id: origin_request_policy_id
+      label: Origin request policy ID
+      type: string
+    - collapsible: true
+      default: []
+      description: Path patterns that should bypass CloudFront caching. Versioned deploys usually do not need this.
+      id: no_cache_paths
+      label: No-cache path patterns
+      type: string_array
+    - id: section_logging
+      label: Access logging
+      type: section
+    - default: false
+      description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
+      id: enable_logging
+      label: CloudFront access logging
+      type: boolean
+    - default: 90
+      description: Days to retain CloudFront access logs in the automatically created logging bucket.
+      id: logging_retention_days
+      label: Logging retention days
+      min: 1
+      show_when:
+        enable_logging: true
+      type: number
+    - id: section_builder_config
+      label: Builder config
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: section
+    - default: ec2
+      description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
+      id: build_infrastructure_type
+      label: Builder instance type
+      required: true
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+      values:
+        - label: EC2
+          value: ec2
+        - label: EC2 spot
+          value: ec2-spot
+    - default: c7a.4xlarge
+      description: EC2 instance type for static builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
+      id: build_instance_size
+      label: Builder instance size
+      no_options_message: Select an AWS account and region to load available EC2 instance types.
+      required: true
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
+    - collapsible: true
+      description: Optional execution environment ID or given ID for static builds. Defaults to the module Terraform execution environment.
+      id: build_execution_environment_id
+      label: Builder execution environment
+      required: false
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+    - collapsible: true
+      description: Optional AMI ID for build runners. Leave empty to use the default runner image.
+      id: build_ami
+      label: Builder AMI
+      required: false
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+    - id: section_deploy
+      label: Deploy config
+      type: section
+    - add_button_label: Add invalidation path
+      default:
+        - /*
+      description: CloudFront paths to invalidate after promotion. Defaults to invalidating the full distribution.
+      id: cloudfront_invalidation_paths
+      label: CloudFront invalidation paths
+      type: string_array
+    - collapsible: true
+      default: 20
+      description: Old deploys are automatically removed from the s3 bucket based on this config.
+      id: keep_latest_successful_deploy_count
+      label: Successful deploys to retain
+      min: 0
+      type: number
+    - id: section_advanced
+      label: Terraform settings
+      type: section
+    - collapsible: true
+      description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
+      id: execution_environment_id
+      label: Terraform execution environment
+      required: false
+      type: string
+      values: $values:ravion/execution_environments
+    - collapsible: true
+      default: $values:first
+      id: opentofu_version
+      label: OpenTofu version
+      type: string
+      values: $values:opentofu/versions
+    - collapsible: true
+      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
+      id: ravion_state_backend_workspace
+      label: Ravion Terraform workspace name
+      type: string
+    - collapsible: true
+      default: {}
+      id: advanced_terraform_variables
+      label: Advanced Terraform variables
+      type: object
+    - collapsible: true
+      description: Additional tags for all resources. Ravion also adds Owner, ProjectGivenId, EnvironmentGivenId, ModuleGivenId, and ModuleId tags.
+      id: tags
+      label: Tags
+      required: false
+      type: keyvalue
+  readme: |
+    Static file hosting for S3-backed sites and assets delivered through CloudFront.
+
+    ## Overview
+
+    The Static Hosting module creates an AWS S3 hosting bucket, a CloudFront distribution, CloudFront KeyValueStore version routing, and the supporting edge functions needed to serve versioned static files.
+
+    Use it for single-page apps, generated documentation, static marketing sites, downloadable assets, or any static file tree that should be served through CloudFront. Ravion can build files from a Git repository with Nixpacks or a Dockerfile, or you can disable builds and promote an existing S3 directory at deploy time.
+
+    Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
+
+    Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/453e3360349be6197a49213780e9c77729758c84/hosting/static_site)
+
+    ## Use cases
+
+    | Scenario | Static Hosting helps by... |
+    | --- | --- |
+    | Hosting a SPA | Rewriting client-side routes to the active version's root object |
+    | Hosting docs or generated static files | Serving filesystem-style paths from S3 through CloudFront |
+    | Building from source | Running Nixpacks or Dockerfile builds and uploading build output to S3 |
+    | Deploying prebuilt files | Skipping builds and promoting an existing S3 directory |
+    | Using custom domains | Attaching CloudFront aliases and an ACM certificate |
+    | Tuning cache behavior | Managing HTML and asset Cache-Control headers separately |
+    | Auditing access | Enabling CloudFront access logs with automatic log bucket creation |
+
+    ## Hosting and routing
+
+    Choose an AWS account and Region for the S3 bucket. CloudFront and the CloudFront KeyValueStore are global services and use us-east-1 behind the scenes; the Region field controls the hosting bucket region.
+
+    Name slug is required and is used for the bucket name and resource prefixes. Because S3 bucket names are globally unique, use a stable slug that is unlikely to collide with another AWS account.
+
+    Routing mode controls how viewer paths resolve inside the active version prefix.
+
+    | Routing mode | Use it for | Behavior |
+    | --- | --- | --- |
+    | Single page app | React, Vue, TanStack Router, and other client-side routers | Non-asset routes resolve to the active version's root object |
+    | Filesystem | Astro, Hugo, MkDocs, and static file trees | Clean paths resolve to matching files or index files |
+
+    Default root object defaults to index.html. Default version prefix defaults to main and is used before any deploy has promoted a different active version.
+
+    ## Build options
+
+    | Build type | When to use it |
+    | --- | --- |
+    | Nixpacks | Let Ravion detect the static app stack and run the build |
+    | Dockerfile | Build static files with a Dockerfile in the selected repository |
+    | Disabled | Build or upload files outside Ravion, then promote an existing S3 directory |
+
+    For Nixpacks and Dockerfile builds, select a Git repository, optional source base path, and output directory. The output directory is the folder Ravion uploads to the hosting bucket after the build.
+
+    Nixpacks settings let you override install command, build command, config path, build path, Nixpacks version, Nix packages, APT packages, and Nix libraries.
+
+    Docker settings let you choose the Dockerfile path and Docker build context. Inject environment variables in Dockerfile passes build environment variables as Docker build arguments.
+
+    Build environment variables are available to static builds and can be plain values or references loaded from Parameter Store or Secrets Manager.
+
+    ## CloudFront distribution
+
+    The module exposes one CloudFront distribution. Domain aliases are optional. Leave them empty to use the default cloudfront.net domain. If you set domain aliases, provide an ACM certificate ARN from us-east-1.
+
+    The first domain alias is used as the CloudFront distribution comment. The distribution is always created enabled.
+
+    Price class controls the CloudFront edge location footprint. PriceClass_All uses all edge locations. PriceClass_200 and PriceClass_100 can reduce edge coverage for cost-sensitive workloads.
+
+    Geo restriction can be none, whitelist, or blacklist. When whitelist or blacklist is selected, provide ISO country codes in Geo restriction country codes.
+
+    ## Cache and headers
+
+    Manage Cache-Control headers is enabled by default. When enabled, the module attaches a CloudFront Function that sets different browser cache headers for HTML-like responses and static assets.
+
+    | Setting | Default | Purpose |
+    | --- | --- | --- |
+    | HTML Cache-Control | Terraform module default: s-maxage=5, stale-while-revalidate=31536000 | Keeps HTML and route responses fresh while allowing edge revalidation |
+    | Asset Cache-Control | Terraform module default: public, max-age=31536000, immutable | Lets versioned assets be cached by browsers for a long time |
+    | HTML cache path overrides | Terraform module defaults for service workers, manifests, favicon, robots, and sitemap | Treats stable root files as HTML-like responses instead of immutable assets |
+    | No-cache path patterns | [] | Bypasses CloudFront caching for selected path patterns |
+    | Cache policy ID | AWS managed CachingOptimized by default | Controls CloudFront cache behavior |
+    | Origin request policy ID | AWS managed CORS-S3Origin by default | Controls what CloudFront forwards to S3 |
+
+    Use Response headers policy ID to attach an existing CloudFront response headers policy. Use Managed response headers policy when this module should create one for security headers, CORS, custom headers, or removed headers. Avoid putting Cache-Control into a response headers policy unless you intentionally want to override the cache-control function.
+
+    ## Access logging
+
+    CloudFront access logging is off by default. When enabled, the module automatically creates a logging bucket and stores CloudFront access logs there.
+
+    Logging retention days defaults to 90 and controls how long logs are retained in the automatically created logging bucket.
+
+    ## Deploy behavior
+
+    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Disabled builds, enter the existing S3 prefix that already contains the files to promote.
+
+    CloudFront invalidation paths defaults to /*. This invalidates the full distribution after promotion. Because deployments are versioned, invalidations are often conservative rather than strictly required, but the default favors correctness for users who are changing stable paths.
+
+    Successful deploys to retain defaults to 20. Older deploy directories are pruned from the hosting bucket based on this setting.
+
+    ## Builder config
+
+    Builder config is only used for Nixpacks and Dockerfile builds.
+
+    | Field | Default | Purpose |
+    | --- | --- | --- |
+    | Builder instance type | EC2 | Choose EC2 or EC2 Spot for build runners |
+    | Builder instance size | c7a.4xlarge | Select the EC2 size used for builds |
+    | Builder execution environment | unset | Override where build runners execute |
+    | Builder AMI | unset | Use a custom build runner AMI |
+
+    EC2 Spot can reduce build cost, but builds may wait longer or be interrupted. Start with the default builder size, then adjust based on build resource usage.
+
+    ## Configuration
+
+    | Section | Field | Required | Default | Notes |
+    | --- | --- | --- | --- | --- |
+    | AWS account & region | AWS account | Yes | none | Account where S3 and supporting resources are created |
+    | AWS account & region | Region | Yes | us-east-1 | Region for the S3 bucket |
+    | Static hosting | Name slug | Yes | Generated from project, environment, and module IDs | Must be globally unique as an S3 bucket name |
+    | Static hosting | Routing mode | Yes | Single page app | Choose SPA or filesystem URL handling |
+    | Static hosting | Default root object | No | index.html | Root object for distribution root requests |
+    | Static hosting | Default version prefix | Yes | main | Initial and fallback version prefix |
+    | Build config | Build type | Yes | Nixpacks | Nixpacks, Dockerfile, or Disabled |
+    | Build config | Git repository | Required for Nixpacks and Dockerfile | none | Source repository for builds |
+    | Build config | Source base path | No | . | Path from repository root to source code |
+    | Build config | Output directory | Required for Nixpacks and Dockerfile | dist | Directory uploaded to S3 after build |
+    | CloudFront settings | ACM certificate ARN | Required when using aliases | none | Certificate must be in us-east-1 |
+    | CloudFront settings | Domain aliases | No | [] | Custom CloudFront aliases |
+    | CloudFront settings | Price class | No | PriceClass_All | Edge location coverage |
+    | CloudFront settings | Geo restriction | No | none | Optional country allow or deny list |
+    | Cache and headers | Manage Cache-Control headers | No | true | Attaches the cache-control function |
+    | Access logging | CloudFront access logging | No | false | Creates a logging bucket when enabled |
+    | Access logging | Logging retention days | No | 90 | Visible when logging is enabled |
+    | Deploy config | CloudFront invalidation paths | No | /* | Paths invalidated after promotion |
+    | Deploy config | Successful deploys to retain | No | 20 | Old S3 deploy prefixes to retain |
+    | Terraform settings | Terraform execution environment | No | unset | Override Terraform runner environment |
+    | Terraform settings | OpenTofu version | No | first available version | OpenTofu version for infrastructure changes |
+    | Terraform settings | Ravion Terraform workspace name | No | Generated from project, environment, and module IDs | Override state backend workspace name |
+    | Terraform settings | Advanced Terraform variables | No | {} | Escape hatch for uncommon Terraform inputs |
+    | Terraform settings | Tags | No | none | Additional tags; Ravion also adds standard ownership tags |
+
+    ## Design decisions
+
+    The module exposes one CloudFront distribution instead of the full Terraform distributions map. This keeps the Ravion form focused on the common case while still supporting custom domains and certificate configuration.
+
+    The CloudFront distribution is always enabled. If traffic should not yet use the distribution, leave DNS records pointed elsewhere until ready.
+
+    Access logging automatically creates its logging bucket when enabled. This avoids requiring users to pre-create and wire a separate logging bucket for the common audit trail use case.
+
+    CloudFront and KVS behavior is intentionally versioned. Promotions change which S3 prefix is active rather than overwriting files in place.
+
+    ## Learn more
+
+    - [Amazon CloudFront documentation](https://docs.aws.amazon.com/cloudfront/)
+    - [CloudFront KeyValueStore](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/kvs-with-functions.html)
+    - [Serving static websites with S3 and CloudFront](https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteHosting.html)
+    - [CloudFront response headers policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/understanding-response-headers-policies.html)
+  stack:
+    pipelines:
+      change:
+        pipeline_id: << defaults.change_pipeline_id >>
+      defaults:
+        input:
+          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
+          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
+          base_path: hosting/static_site
+          branch: main
+          execution_environment_id: << module.input.execution_environment_id >>
+          ref: 453e3360349be6197a49213780e9c77729758c84
+          repo: https://github.com/flightcontrolhq/modules
+          stack_id: <<stack.id>>
+          terraform_variables:
+            ...overrides: << module.input.advanced_terraform_variables >>
+            assets_cache_control: << module.input.assets_cache_control >>
+            cache_policy_id: << module.input.cache_policy_id >>
+            create_logging_bucket: << module.input.enable_logging >>
+            default_root_object: << module.input.default_root_object >>
+            default_version: << module.input.default_version >>
+            distributions:
+              main:
+                acm_certificate_arn: << module.input.distribution_acm_certificate_arn || nil >>
+                aliases: << module.input.distribution_aliases >>
+                comment: "<< module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ? module.input.distribution_aliases[0] : nil >>"
+                enabled: true
+            enable_logging: << module.input.enable_logging >>
+            geo_restriction_locations: << module.input.geo_restriction_locations >>
+            geo_restriction_type: << module.input.geo_restriction_type >>
+            html_cache_control: << module.input.html_cache_control >>
+            html_path_overrides: << module.input.html_path_overrides >>
+            logging_bucket_domain_name: null
+            logging_prefix: ""
+            logging_retention_days: << module.input.logging_retention_days >>
+            manage_cache_control: << module.input.manage_cache_control >>
+            name: << module.input.name >>
+            no_cache_paths: << module.input.no_cache_paths >>
+            origin_request_policy_id: << module.input.origin_request_policy_id >>
+            price_class: << module.input.price_class >>
+            region: << module.input.aws_region >>
+            response_headers_policy: "<< module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ? module.input.response_headers_policy : nil >>"
+            response_headers_policy_id: << module.input.response_headers_policy_id || nil >>
+            routing: << module.input.routing >>
+            tags:
+              ...overrides: << module.input.tags >>
+              EnvironmentGivenId: <<environment.given_id>>
+              ModuleGivenId: <<module.given_id>>
+              ModuleId: <<module.id>>
+              Owner: Ravion
+              ProjectGivenId: <<project.given_id>>
+          tool: opentofu
+          tool_version: << module.input.opentofu_version >>
+        variant: standard
+      destroy:
+        pipeline_id: << defaults.destroy_pipeline_id >>
+    ravion_state_backend_workspace: << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id>>
+    type: opentofu
