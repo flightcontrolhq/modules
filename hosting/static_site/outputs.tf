@@ -148,3 +148,17 @@ output "ravion_fqdn" {
   description = "Primary FQDN Ravion manages for the site."
   value       = var.use_ravion_managed_domains ? ravion_certificate.site[0].fqdn : null
 }
+
+################################################################################
+# Access Logs (CloudWatch)
+################################################################################
+
+output "cloudfront_access_log_group_name" {
+  description = "Name of the CloudWatch log group receiving CloudFront standard-logging-v2 access logs (always in us-east-1)."
+  value       = aws_cloudwatch_log_group.cloudfront_access.name
+}
+
+output "cloudfront_access_log_group_arn" {
+  description = "ARN of the CloudWatch log group receiving CloudFront access logs."
+  value       = aws_cloudwatch_log_group.cloudfront_access.arn
+}

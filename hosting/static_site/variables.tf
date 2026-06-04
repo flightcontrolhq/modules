@@ -398,6 +398,12 @@ variable "logging_retention_days" {
   default     = 90
 }
 
+variable "cloudfront_access_log_retention_days" {
+  type        = number
+  description = "Retention (days) for the CloudWatch log group that receives CloudFront standard-logging-v2 access logs (delivered in us-east-1)."
+  default     = 30
+}
+
 ################################################################################
 # Deploy Role (optional)
 ################################################################################
