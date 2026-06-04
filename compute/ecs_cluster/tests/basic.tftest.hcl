@@ -170,7 +170,7 @@ mock_provider "aws" {
   }
 }
 
-# Default (BYO) runs never create ravion_certificate.cluster (count = 0), but
+# Default (BYO) runs never create ravion_aws_acm_certificate.cluster (count = 0), but
 # Terraform still configures the ravion provider because the module declares it.
 # An empty mock prevents the provider's real Configure (which requires
 # RAVION_API_KEY) from failing the plan. listeners.tftest.hcl mocks it with

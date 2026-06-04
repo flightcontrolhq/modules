@@ -8,15 +8,15 @@
 # certificate SOURCE changes by mode:
 #
 #   - use_ravion_managed_domains = true  -> the Ravion wildcard cert
-#     (ravion_certificate.cluster, see ravion_domains.tf) is the default cert on
+#     (ravion_aws_acm_certificate.cluster, see ravion_domains.tf) is the default cert on
 #     BOTH listeners; public/private services nest their auto-FQDNs under it.
 #   - use_ravion_managed_domains = false -> the listener uses the customer's
 #     first public/private_alb_certificate_arns entry as default and attaches
 #     the rest for SNI.
 #
 # The listeners live here (not in the alb submodule) to avoid a DAG cycle:
-# aws_lb.this -> ravion_certificate.cluster -> aws_lb_listener.public_https
-# (uses the cert). ravion_certificate with role=shared_wildcard blocks until
+# aws_lb.this -> ravion_aws_acm_certificate.cluster -> aws_lb_listener.public_https
+# (uses the cert). ravion_aws_acm_certificate with role=shared_wildcard blocks until
 # ISSUED, so cert_arn is valid at listener create time.
 
 # Public ALB HTTPS listener. Mode-independent address: created whenever the
@@ -30,7 +30,7 @@ resource "aws_lb_listener" "public_https" {
   ssl_policy        = var.public_alb_ssl_policy
   # try(...) defers to the precondition below for the clean error when BYO mode
   # has no cert ARN, instead of a cryptic index-out-of-range.
-  certificate_arn = local.enable_ravion_domain ? ravion_certificate.cluster[0].cert_arn : try(var.public_alb_certificate_arns[0], null)
+  certificate_arn = local.enable_ravion_domain ? ravion_aws_acm_certificate.cluster[0].arn : try(var.public_alb_certificate_arns[0], null)
 
   default_action {
     type = "fixed-response"
@@ -73,7 +73,7 @@ resource "aws_lb_listener" "private_https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = var.private_alb_ssl_policy
-  certificate_arn   = local.enable_ravion_domain ? ravion_certificate.cluster[0].cert_arn : try(var.private_alb_certificate_arns[0], null)
+  certificate_arn   = local.enable_ravion_domain ? ravion_aws_acm_certificate.cluster[0].arn : try(var.private_alb_certificate_arns[0], null)
 
   default_action {
     type = "fixed-response"

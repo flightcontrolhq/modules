@@ -58,16 +58,16 @@ mock_provider "aws" {
   }
 }
 
-# ravion_certificate needs a DomainProvider JWT to configure against the real
+# ravion_aws_acm_certificate needs a DomainProvider JWT to configure against the real
 # control plane; mock it so tests are hermetic. The cert_arn override is a valid
 # ACM ARN so the listener's certificate_arn passes provider validation.
 mock_provider "ravion" {
   override_resource {
-    target = ravion_certificate.cluster
+    target = ravion_aws_acm_certificate.cluster
     values = {
       id       = "cert_test"
       cert_arn = "arn:aws:acm:us-east-1:123456789012:certificate/99999999-9999-9999-9999-999999999999"
-      fqdn     = "*.test-cluster-abcd.ravion.app"
+      domain_name     = "*.test-cluster-abcd.ravion.app"
       status   = "ISSUED"
     }
   }
@@ -221,7 +221,7 @@ run "ravion_managed_public_https" {
   }
 
   assert {
-    condition     = length(ravion_certificate.cluster) == 1
+    condition     = length(ravion_aws_acm_certificate.cluster) == 1
     error_message = "Ravion wildcard cert must be created in managed mode"
   }
 

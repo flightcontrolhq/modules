@@ -90,8 +90,8 @@ locals {
 # apply against a signed token claim (Dns:PARENT_APEX_UNAUTHORIZED), so this
 # only moves the failure earlier.
 data "ravion_parent_apex_check" "cluster" {
-  count       = local.ravion_managed && length(local.wildcard_covered) > 0 ? 1 : 0
-  parent_fqdn = local.apex
+  count              = local.ravion_managed && length(local.wildcard_covered) > 0 ? 1 : 0
+  parent_domain_name = local.apex
 }
 
 # Wildcard-covered domains (incl. the auto-FQDN): nest under the cluster
@@ -101,7 +101,7 @@ resource "ravion_domain" "wildcard" {
 
   name               = trimsuffix(each.value, ".${local.apex}")
   module_instance_id = var.module_instance_id
-  parent_fqdn        = local.apex
+  parent_domain_name = local.apex
 
   lifecycle {
     precondition {
@@ -116,7 +116,7 @@ resource "ravion_domain" "wildcard" {
 
 # Per-service certificate covering the custom (non-wildcard) domains (<=10 SANs),
 # attached to the cluster listener via Ravion.
-resource "ravion_certificate" "svc" {
+resource "ravion_aws_acm_certificate" "svc" {
   count = length(local.custom_domains) > 0 ? 1 : 0
 
   role               = "instance"

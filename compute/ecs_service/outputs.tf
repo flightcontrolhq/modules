@@ -266,5 +266,5 @@ output "ravion_domain_url" {
 
 output "ravion_custom_cert_arn" {
   description = "ACM ARN of the per-service instance cert covering the custom (non-wildcard) domains. Null when there are none."
-  value       = length(local.custom_domains) > 0 ? ravion_certificate.svc[0].cert_arn : null
+  value       = length(local.custom_domains) > 0 ? ravion_aws_acm_certificate.svc[0].arn : null
 }

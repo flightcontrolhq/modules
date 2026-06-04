@@ -20,11 +20,11 @@ locals {
 # that domain — a re-apply of THIS cluster does not collide with itself. The
 # allocator enforces the same rule server-side as an apply-time backstop.
 data "ravion_dns_collision_check" "cluster" {
-  count = local.enable_ravion_domain ? 1 : 0
-  fqdn  = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
+  count       = local.enable_ravion_domain ? 1 : 0
+  domain_name = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
 }
 
-resource "ravion_certificate" "cluster" {
+resource "ravion_aws_acm_certificate" "cluster" {
   count = local.enable_ravion_domain ? 1 : 0
 
   role               = "shared_wildcard"
@@ -74,5 +74,5 @@ resource "ravion_certificate" "cluster" {
 # (Dns:CERT_APEX_IN_USE), which is the real backstop.
 data "ravion_apex_dependents" "cluster" {
   count = local.enable_ravion_domain ? 1 : 0
-  apex  = ravion_certificate.cluster[0].fqdn
+  apex  = ravion_aws_acm_certificate.cluster[0].domain_name
 }

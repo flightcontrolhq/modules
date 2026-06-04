@@ -247,17 +247,17 @@ output "region" {
 
 output "ravion_cluster_certificate_id" {
   description = "Ravion managed-certificate id for the cluster wildcard (null unless use_ravion_managed_domains)."
-  value       = local.enable_ravion_domain ? ravion_certificate.cluster[0].id : null
+  value       = local.enable_ravion_domain ? ravion_aws_acm_certificate.cluster[0].id : null
 }
 
 output "ravion_cluster_domain_fqdn" {
   description = "Cluster wildcard apex FQDN. Pass to ecs_service as cluster_parent_fqdn."
-  value       = local.enable_ravion_domain ? ravion_certificate.cluster[0].fqdn : null
+  value       = local.enable_ravion_domain ? ravion_aws_acm_certificate.cluster[0].domain_name : null
 }
 
 output "ravion_cluster_cert_arn" {
   description = "ACM ARN of the cluster wildcard cert."
-  value       = local.enable_ravion_domain ? ravion_certificate.cluster[0].cert_arn : null
+  value       = local.enable_ravion_domain ? ravion_aws_acm_certificate.cluster[0].arn : null
 }
 
 output "ravion_aws_account_id" {
