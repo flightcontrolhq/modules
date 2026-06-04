@@ -1,12 +1,12 @@
 # ECS Service Module
 
-This module creates an Amazon ECS service with a placeholder task definition, load balancer integration, auto scaling, and service discovery. It supports both rolling and blue/green deployment strategies.
+This module creates an Amazon ECS service with a placeholder task definition, load balancer integration, auto scaling, and service discovery. It supports the native ECS deployment strategies: rolling, blue/green, linear, and canary.
 
 **Note:** This module provisions infrastructure with a placeholder container (hello-world). An external deployment controller (e.g. CodeDeploy or another CI/CD tool) is expected to deploy the actual application by updating the task definition.
 
 ## Features
 
-- ECS service with configurable deployment strategies (rolling or blue/green)
+- ECS service with configurable native deployment strategies (rolling, blue/green, linear, canary)
 - Placeholder task definition (hello-world) - the external deployment controller updates with the actual application
 - IAM roles for task execution and task roles with optional ECS Exec support
 - Security group for ECS tasks with configurable ingress rules
@@ -314,7 +314,9 @@ module "worker_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | desired_count | Desired number of tasks (0 for infrastructure-first) | `number` | `0` | no |
-| deployment_type | Deployment type: rolling or blue_green | `string` | `"rolling"` | no |
+| deployment_type | Deployment strategy: rolling, blue_green, linear, or canary | `string` | `"rolling"` | no |
+| deployment_strategy_config | Initial bake/canary/linear tuning for native traffic-shift strategies (seed only — the deploy manager owns it per-deploy) | `object` | `{}` | no |
+| test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation | `string` | `null` | no |
 | deployment_minimum_healthy_percent | Minimum healthy percent during deployment | `number` | `100` | no |
 | deployment_maximum_percent | Maximum percent during deployment | `number` | `200` | no |
 | enable_execute_command | Enable ECS Exec for debugging | `bool` | `false` | no |
@@ -823,25 +825,23 @@ The module deploys `public.ecr.aws/docker/library/hello-world:latest` as a place
 
 The placeholder container prints a message and exits, so load balancer health checks will fail until the actual application is deployed. This is expected behavior.
 
-### When should I use rolling vs blue/green deployment?
+### When should I use which deployment strategy?
 
-| Feature | Rolling (ECS) | Blue/Green (external controller) |
-|---------|--------------|----------------------------------|
-| **Complexity** | Simple | More complex (requires an external deployment controller) |
-| **Rollback** | Automatic via circuit breaker | Instant traffic switch |
-| **Traffic shift** | Gradual (min/max healthy %) | All-at-once or gradual |
-| **Testing** | No pre-production testing | Test green before switching |
-| **Infrastructure** | 1 target group | 2 target groups |
+All four strategies run on the native ECS deployment controller — no
+CodeDeploy and no external controller.
 
-**Use rolling when:**
-- Simple deployments with automatic rollback are sufficient
-- You want minimal infrastructure complexity
-- Built-in ECS deployment features meet your needs
+| Feature | Rolling | Blue/Green | Linear | Canary |
+|---------|---------|------------|--------|--------|
+| **Traffic shift** | Task replacement (min/max healthy %) | All-at-once + bake | Equal % steps + per-step bake | Small % first, then the rest |
+| **Rollback** | Circuit breaker | Instant (old revision kept through bake) | Instant | Instant |
+| **Testing** | None | Test-listener validation before shift | Per-step validation | Canary validation |
+| **Infrastructure** | 1 target group | 2 target groups + infra role | 2 target groups + infra role | 2 target groups + infra role |
 
-**Use blue/green when:**
-- You need instant rollback capability
-- You want to test in production before switching traffic
-- You need advanced deployment strategies (canary, linear)
+**Use rolling when:** simple deployments with automatic rollback are sufficient and you want minimal infrastructure.
+
+**Use blue/green when:** you want full validation of the new revision (optionally via a test listener rule) before shifting all production traffic at once, with instant rollback during the bake window.
+
+**Use linear/canary when:** you want production traffic to shift gradually with monitoring between steps.
 
 ### How do I use this module with an NLB instead of an ALB?
 
@@ -1001,22 +1001,22 @@ Uses the ECS deployment controller for zero-downtime rolling updates:
 - Built-in circuit breaker with optional rollback
 - Simple and fully managed by ECS
 
-### Blue/Green Deployment
+### Native Traffic-Shift Strategies (blue_green / linear / canary)
 
-Sets up infrastructure for blue/green deployments managed by an external controller:
-- Creates two target groups (tg-1 and tg-2)
-- Sets deployment controller to CODE_DEPLOY
-- Outputs all ARNs needed to wire up the external controller
-- The external deployment controller (application, deployment group, etc.) must be managed outside of this module
+Sets up infrastructure for the ECS deployment controller's built-in traffic shifting:
+- Creates two target groups (tg-1 = production, tg-2 = alternate)
+- Creates an ECS infrastructure IAM role (AmazonECSInfrastructureRolePolicyForLoadBalancers) that ECS assumes to rewrite listener rules and (de)register targets during the shift
+- Wires the service's `load_balancer.advanced_configuration` (alternate target group, production listener rule, optional test listener rule, infrastructure role)
+- Seeds `deployment_configuration` (strategy, bake time, canary/linear tuning); the Flightcontrol deploy manager passes the authoritative configuration — including pause lifecycle hooks — on every UpdateService call, so the block is in `ignore_changes`
 
 ## Notes
 
 - The module creates a security group that allows inbound traffic from the VPC CIDR on the container port
 - For Fargate tasks in public subnets without NAT, set `assign_public_ip = true`
 - The placeholder container uses hello-world from public ECR - no special permissions needed
-- For blue/green deployments, the module only creates the infrastructure; the external deployment controller must be configured separately
+- For blue_green/linear/canary deployments, ECS itself executes the traffic shift; the Flightcontrol deploy manager drives it via UpdateService and pause lifecycle hooks
 - The task definition has `lifecycle { ignore_changes = all }` since the external deployment controller manages updates
-- Listener rules have `lifecycle { ignore_changes = [action] }` for blue/green deployments where the external controller switches target groups
+- Listener rules have `lifecycle { ignore_changes = [action] }` — the ECS deployment controller rewrites the forward action (weighted target groups) during native traffic shifts
 - When using `ALBRequestCountPerTarget` metric for auto scaling, a load balancer must be configured
 - The `desired_count` defaults to 0 for infrastructure-first provisioning; the external controller will manage the actual count
 - Target group names are truncated to meet AWS naming requirements (max 32 characters)

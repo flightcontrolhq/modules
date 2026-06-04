@@ -15,8 +15,22 @@ locals {
 
   tags = merge(local.default_tags, var.tags)
 
-  # Determine deployment controller type
-  deployment_controller_type = var.deployment_type == "blue_green" ? "CODE_DEPLOY" : "ECS"
+  # Every strategy runs on the native ECS deployment controller — the
+  # blue_green / linear / canary traffic shifts are executed by ECS
+  # itself (deployment_configuration.strategy), not CodeDeploy.
+  deployment_controller_type = "ECS"
+
+  # Strategies that run the ECS controller's traffic-shift state machine
+  # over two target groups (production + alternate).
+  is_native_traffic_shift = contains(["blue_green", "linear", "canary"], var.deployment_type)
+
+  # Map the module's strategy name to the AWS deploymentConfiguration enum.
+  deployment_strategy = {
+    rolling    = "ROLLING"
+    blue_green = "BLUE_GREEN"
+    linear     = "LINEAR"
+    canary     = "CANARY"
+  }[var.deployment_type]
 
   # Determine if load balancer is configured
   enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled

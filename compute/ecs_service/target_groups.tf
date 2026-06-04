@@ -50,7 +50,7 @@ resource "aws_lb_target_group" "this" {
 ################################################################################
 
 resource "aws_lb_target_group" "tg_1" {
-  count = local.enable_load_balancer && var.deployment_type == "blue_green" ? 1 : 0
+  count = local.enable_load_balancer && local.is_native_traffic_shift ? 1 : 0
 
   name        = "${substr(var.name, 0, min(length(var.name), 24))}-tg-1"
   port        = var.load_balancer_attachment.target_group.port
@@ -94,7 +94,7 @@ resource "aws_lb_target_group" "tg_1" {
 }
 
 resource "aws_lb_target_group" "tg_2" {
-  count = local.enable_load_balancer && var.deployment_type == "blue_green" ? 1 : 0
+  count = local.enable_load_balancer && local.is_native_traffic_shift ? 1 : 0
 
   name        = "${substr(var.name, 0, min(length(var.name), 24))}-tg-2"
   port        = var.load_balancer_attachment.target_group.port

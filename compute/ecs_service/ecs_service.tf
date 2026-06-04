@@ -40,12 +40,42 @@ resource "aws_ecs_service" "this" {
     type = local.deployment_controller_type
   }
 
-  # Deployment circuit breaker (only for ECS deployment controller)
+  # Deployment circuit breaker (rolling strategy only — native
+  # traffic-shift strategies have their own rollback semantics)
   dynamic "deployment_circuit_breaker" {
     for_each = var.deployment_type == "rolling" && var.deployment_circuit_breaker.enable ? [1] : []
     content {
       enable   = var.deployment_circuit_breaker.enable
       rollback = var.deployment_circuit_breaker.rollback
+    }
+  }
+
+  # Native deployment strategy. Seeds the strategy + traffic-shift
+  # tuning at create time; the Flightcontrol deploy manager passes the
+  # authoritative deploymentConfiguration (including pause lifecycle
+  # hooks) on every UpdateService call, so this block is in
+  # ignore_changes below.
+  dynamic "deployment_configuration" {
+    for_each = local.is_native_traffic_shift ? [1] : []
+    content {
+      strategy             = local.deployment_strategy
+      bake_time_in_minutes = var.deployment_strategy_config.bake_time_in_minutes
+
+      dynamic "canary_configuration" {
+        for_each = var.deployment_type == "canary" ? [1] : []
+        content {
+          canary_percent              = var.deployment_strategy_config.canary.canary_percent
+          canary_bake_time_in_minutes = var.deployment_strategy_config.canary.canary_bake_time_in_minutes
+        }
+      }
+
+      dynamic "linear_configuration" {
+        for_each = var.deployment_type == "linear" ? [1] : []
+        content {
+          step_percent              = var.deployment_strategy_config.linear.step_percent
+          step_bake_time_in_minutes = var.deployment_strategy_config.linear.step_bake_time_in_minutes
+        }
+      }
     }
   }
 
@@ -63,13 +93,28 @@ resource "aws_ecs_service" "this" {
     }
   }
 
-  # Load balancer configuration - Blue/Green deployment (attach to blue initially)
+  # Load balancer configuration - native traffic-shift strategies.
+  # The service starts on the production target group (tg-1); ECS
+  # alternates between tg-1 and the alternate target group (tg-2) on
+  # each deployment, rewriting the production listener rule via the
+  # infrastructure role.
   dynamic "load_balancer" {
-    for_each = local.enable_load_balancer && var.deployment_type == "blue_green" ? [1] : []
+    for_each = local.enable_load_balancer && local.is_native_traffic_shift ? [1] : []
     content {
       target_group_arn = aws_lb_target_group.tg_1[0].arn
       container_name   = local.lb_container_name
       container_port   = local.lb_container_port
+
+      advanced_configuration {
+        alternate_target_group_arn = aws_lb_target_group.tg_2[0].arn
+        production_listener_rule = (
+          local.enable_nlb_listener
+          ? aws_lb_listener.nlb[0].arn
+          : aws_lb_listener_rule.alb["0"].arn
+        )
+        test_listener_rule = var.test_listener_rule_arn
+        role_arn           = aws_iam_role.ecs_infrastructure[0].arn
+      }
     }
   }
 
@@ -106,17 +151,32 @@ resource "aws_ecs_service" "this" {
   # Dependencies
   depends_on = [
     aws_iam_role_policy_attachment.execution_base,
+    aws_iam_role_policy_attachment.ecs_infrastructure_elb,
     aws_lb_listener_rule.alb,
   ]
 
-  # Lifecycle: desired_count is managed by autoscaling (or external controllers),
-  # so Terraform must not fight it on subsequent applies.
+  # Lifecycle: desired_count is managed by autoscaling, task_definition /
+  # load_balancer / deployment_configuration by the Flightcontrol deploy
+  # manager (UpdateService passes the authoritative strategy + pause
+  # lifecycle hooks on every deploy, and native traffic-shift deploys
+  # alternate the service between the production and alternate target
+  # groups), so Terraform must not fight them on subsequent applies.
   lifecycle {
     ignore_changes = [
       desired_count,
       task_definition,
       load_balancer,
+      deployment_configuration,
     ]
+
+    precondition {
+      condition = (
+        !(local.is_native_traffic_shift && local.enable_load_balancer)
+        || local.enable_nlb_listener
+        || length(var.load_balancer_attachment.listener_rules) > 0
+      )
+      error_message = "Native traffic-shift strategies (blue_green/linear/canary) require either listener_rules (ALB) or nlb_listener so the production listener rule can be wired into advanced_configuration."
+    }
   }
 }
 

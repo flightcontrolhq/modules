@@ -14,7 +14,7 @@ resource "aws_lb_listener_rule" "alb" {
   action {
     type = "forward"
     target_group_arn = (
-      var.deployment_type == "blue_green"
+      local.is_native_traffic_shift
       ? aws_lb_target_group.tg_1[0].arn
       : aws_lb_target_group.this[0].arn
     )
@@ -108,7 +108,7 @@ resource "aws_lb_listener" "nlb" {
   default_action {
     type = "forward"
     target_group_arn = (
-      var.deployment_type == "blue_green"
+      local.is_native_traffic_shift
       ? aws_lb_target_group.tg_1[0].arn
       : aws_lb_target_group.this[0].arn
     )

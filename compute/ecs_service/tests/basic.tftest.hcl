@@ -153,17 +153,100 @@ run "blue_green_deployment" {
 
   assert {
     condition     = length(aws_lb_target_group.tg_1) == 1
-    error_message = "Should create blue target group for blue/green deployment"
+    error_message = "Should create production target group for blue/green deployment"
   }
 
   assert {
     condition     = length(aws_lb_target_group.tg_2) == 1
-    error_message = "Should create green target group for blue/green deployment"
+    error_message = "Should create alternate target group for blue/green deployment"
   }
 
   assert {
     condition     = length(aws_lb_target_group.this) == 0
     error_message = "Should not create single target group for blue/green deployment"
+  }
+
+  assert {
+    condition     = length(aws_iam_role.ecs_infrastructure) == 1
+    error_message = "Should create the ECS infrastructure role for native traffic-shift strategies"
+  }
+}
+
+################################################################################
+# Test: Canary Deployment
+################################################################################
+
+run "canary_deployment" {
+  command = plan
+
+  variables {
+    deployment_type = "canary"
+    container_port  = 8080
+    deployment_strategy_config = {
+      bake_time_in_minutes = 15
+      canary = {
+        canary_percent              = 10.0
+        canary_bake_time_in_minutes = 5
+      }
+    }
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+      }
+      listener_rules = [{
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+        priority     = 100
+        conditions = [{
+          type   = "host-header"
+          values = ["api.example.com"]
+        }]
+      }]
+    }
+  }
+
+  assert {
+    condition     = length(aws_lb_target_group.tg_1) == 1 && length(aws_lb_target_group.tg_2) == 1
+    error_message = "Should create production + alternate target groups for canary deployment"
+  }
+}
+
+################################################################################
+# Test: Linear Deployment
+################################################################################
+
+run "linear_deployment" {
+  command = plan
+
+  variables {
+    deployment_type = "linear"
+    container_port  = 8080
+    deployment_strategy_config = {
+      bake_time_in_minutes = 10
+      linear = {
+        step_percent              = 20.0
+        step_bake_time_in_minutes = 5
+      }
+    }
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+      }
+      listener_rules = [{
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+        priority     = 100
+        conditions = [{
+          type   = "host-header"
+          values = ["api.example.com"]
+        }]
+      }]
+    }
+  }
+
+  assert {
+    condition     = length(aws_lb_target_group.tg_1) == 1 && length(aws_lb_target_group.tg_2) == 1
+    error_message = "Should create production + alternate target groups for linear deployment"
   }
 }
 

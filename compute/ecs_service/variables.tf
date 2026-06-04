@@ -286,13 +286,48 @@ variable "desired_count" {
 
 variable "deployment_type" {
   type        = string
-  description = "The deployment type: 'rolling' (ECS) or 'blue_green' (CODE_DEPLOY)."
+  description = "The deployment strategy executed natively by the ECS deployment controller: 'rolling', 'blue_green', 'linear', or 'canary'."
   default     = "rolling"
 
   validation {
-    condition     = contains(["rolling", "blue_green"], var.deployment_type)
-    error_message = "The deployment_type must be either 'rolling' or 'blue_green'."
+    condition     = contains(["rolling", "blue_green", "linear", "canary"], var.deployment_type)
+    error_message = "The deployment_type must be one of: 'rolling', 'blue_green', 'linear', 'canary'."
   }
+}
+
+variable "deployment_strategy_config" {
+  type = object({
+    # Minutes both revisions keep running after production traffic has
+    # fully shifted, before the old revision is terminated.
+    bake_time_in_minutes = optional(number, 10)
+
+    # Canary tuning — only used when deployment_type is 'canary'.
+    canary = optional(object({
+      canary_percent              = optional(number, 5.0)
+      canary_bake_time_in_minutes = optional(number, 10)
+    }), {})
+
+    # Linear tuning — only used when deployment_type is 'linear'.
+    linear = optional(object({
+      step_percent              = optional(number, 25.0)
+      step_bake_time_in_minutes = optional(number, 5)
+    }), {})
+  })
+  description = <<-EOT
+    Initial tuning for the native traffic-shift strategies (blue_green /
+    linear / canary). This only seeds the service at create time — the
+    Flightcontrol deploy manager passes the authoritative
+    deploymentConfiguration (including pause lifecycle hooks) on every
+    UpdateService call, so post-create changes to these values are
+    ignored by Terraform (see ignore_changes on aws_ecs_service.this).
+  EOT
+  default     = {}
+}
+
+variable "test_listener_rule_arn" {
+  type        = string
+  description = "Optional ARN of an ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies."
+  default     = null
 }
 
 variable "deployment_minimum_healthy_percent" {
