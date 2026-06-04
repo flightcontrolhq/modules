@@ -83,23 +83,15 @@ resource "aws_ecs_service" "this" {
   deployment_minimum_healthy_percent = var.deployment_type == "rolling" ? var.deployment_minimum_healthy_percent : null
   deployment_maximum_percent         = var.deployment_type == "rolling" ? var.deployment_maximum_percent : null
 
-  # Load balancer configuration - Rolling deployment
-  dynamic "load_balancer" {
-    for_each = local.enable_load_balancer && var.deployment_type == "rolling" ? [1] : []
-    content {
-      target_group_arn = aws_lb_target_group.this[0].arn
-      container_name   = local.lb_container_name
-      container_port   = local.lb_container_port
-    }
-  }
-
-  # Load balancer configuration - native traffic-shift strategies.
-  # The service starts on the production target group (tg-1); ECS
-  # alternates between tg-1 and the alternate target group (tg-2) on
-  # each deployment, rewriting the production listener rule via the
+  # Load balancer configuration. advanced_configuration is always wired
+  # (production + alternate target groups, listener rule, infrastructure
+  # role) so the deployment strategy stays a per-deployment decision:
+  # rolling deployments serve from the production target group (tg-1)
+  # only, while native traffic-shift deployments alternate between tg-1
+  # and tg-2, rewriting the production listener rule via the
   # infrastructure role.
   dynamic "load_balancer" {
-    for_each = local.enable_load_balancer && local.is_native_traffic_shift ? [1] : []
+    for_each = local.enable_load_balancer ? [1] : []
     content {
       target_group_arn = aws_lb_target_group.tg_1[0].arn
       container_name   = local.lb_container_name
@@ -171,11 +163,11 @@ resource "aws_ecs_service" "this" {
 
     precondition {
       condition = (
-        !(local.is_native_traffic_shift && local.enable_load_balancer)
+        !local.enable_load_balancer
         || local.enable_nlb_listener
         || length(var.load_balancer_attachment.listener_rules) > 0
       )
-      error_message = "Native traffic-shift strategies (blue_green/linear/canary) require either listener_rules (ALB) or nlb_listener so the production listener rule can be wired into advanced_configuration."
+      error_message = "load_balancer_attachment requires either listener_rules (ALB) or nlb_listener so the production listener rule can be wired into advanced_configuration."
     }
   }
 }

@@ -85,62 +85,50 @@ output "security_group_arn" {
 }
 
 ################################################################################
-# Target Groups - Rolling Deployment
+# Target Groups
+#
+# A production (tg-1) + alternate (tg-2) pair always exists when a load
+# balancer is attached, so the deployment strategy can change per
+# deployment without Terraform changes. Rolling deployments only ever
+# use the production target group.
 ################################################################################
 
 output "target_group_arn" {
-  description = "The ARN of the target group (null if load balancer disabled or blue/green deployment)."
-  value       = local.enable_load_balancer && var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn : null
+  description = "The ARN of the production target group the service serves from (alias of production_target_group_arn; null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn : null
 }
 
 output "target_group_arn_suffix" {
-  description = "The ARN suffix of the target group for CloudWatch metrics."
-  value       = local.enable_load_balancer && var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn_suffix : null
+  description = "The ARN suffix of the production target group for CloudWatch metrics."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn_suffix : null
 }
-
-output "target_group_name" {
-  description = "The name of the target group."
-  value       = local.enable_load_balancer && var.deployment_type == "rolling" ? aws_lb_target_group.this[0].name : null
-}
-
-################################################################################
-# Target Groups - Native Traffic-Shift Strategies (blue_green/linear/canary)
-################################################################################
 
 output "production_target_group_arn" {
-  description = "The ARN of the production target group (null unless a native traffic-shift strategy)."
-  value       = local.enable_load_balancer && local.is_native_traffic_shift ? aws_lb_target_group.tg_1[0].arn : null
+  description = "The ARN of the production target group (null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn : null
 }
 
 output "production_target_group_name" {
   description = "The name of the production target group."
-  value       = local.enable_load_balancer && local.is_native_traffic_shift ? aws_lb_target_group.tg_1[0].name : null
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].name : null
 }
 
 output "alternate_target_group_arn" {
-  description = "The ARN of the alternate target group ECS shifts traffic to during native deployments (null unless a native traffic-shift strategy)."
-  value       = local.enable_load_balancer && local.is_native_traffic_shift ? aws_lb_target_group.tg_2[0].arn : null
+  description = "The ARN of the alternate target group ECS shifts traffic to during native traffic-shift deployments (null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_2[0].arn : null
 }
 
 output "alternate_target_group_name" {
   description = "The name of the alternate target group."
-  value       = local.enable_load_balancer && local.is_native_traffic_shift ? aws_lb_target_group.tg_2[0].name : null
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_2[0].name : null
 }
-
-################################################################################
-# Combined Target Group Outputs (for convenience)
-################################################################################
 
 output "target_group_arns" {
   description = "Map of all target group ARNs created by this module."
-  value = local.enable_load_balancer ? (
-    var.deployment_type == "rolling" ? {
-      primary = aws_lb_target_group.this[0].arn
-      } : {
-      production = aws_lb_target_group.tg_1[0].arn
-      alternate  = aws_lb_target_group.tg_2[0].arn
-    }
-  ) : {}
+  value = local.enable_load_balancer ? {
+    production = aws_lb_target_group.tg_1[0].arn
+    alternate  = aws_lb_target_group.tg_2[0].arn
+  } : {}
 }
 
 ################################################################################
@@ -148,8 +136,8 @@ output "target_group_arns" {
 ################################################################################
 
 output "ecs_infrastructure_role_arn" {
-  description = "The ARN of the IAM role ECS assumes to manage load-balancer wiring during native traffic-shift deployments (null for rolling)."
-  value       = local.is_native_traffic_shift && local.enable_load_balancer ? aws_iam_role.ecs_infrastructure[0].arn : null
+  description = "The ARN of the IAM role ECS assumes to manage load-balancer wiring during native traffic-shift deployments (null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_iam_role.ecs_infrastructure[0].arn : null
 }
 
 ################################################################################

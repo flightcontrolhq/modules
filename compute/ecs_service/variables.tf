@@ -286,7 +286,7 @@ variable "desired_count" {
 
 variable "deployment_type" {
   type        = string
-  description = "The deployment strategy executed natively by the ECS deployment controller: 'rolling', 'blue_green', 'linear', or 'canary'."
+  description = "The deployment strategy ('rolling', 'blue_green', 'linear', 'canary') used to seed the service's deployment_configuration at create time. The strategy is a per-deployment setting on the native ECS controller — the Flightcontrol deploy manager passes the authoritative strategy on every UpdateService call, so it can change between deployments without Terraform changes."
   default     = "rolling"
 
   validation {

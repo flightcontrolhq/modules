@@ -1,6 +1,10 @@
 ################################################################################
 # ALB Listener Rules
-# For blue/green deployments, an external controller manages target group switching
+#
+# Rules initially forward to the production target group (tg-1). During
+# native traffic-shift deployments (blue_green/linear/canary) the ECS
+# deployment controller rewrites the rule's forward action between tg-1
+# and tg-2 via the infrastructure role, hence ignore_changes on action.
 ################################################################################
 
 resource "aws_lb_listener_rule" "alb" {
@@ -12,12 +16,8 @@ resource "aws_lb_listener_rule" "alb" {
   priority     = each.value.priority
 
   action {
-    type = "forward"
-    target_group_arn = (
-      local.is_native_traffic_shift
-      ? aws_lb_target_group.tg_1[0].arn
-      : aws_lb_target_group.this[0].arn
-    )
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_1[0].arn
   }
 
   dynamic "condition" {
@@ -80,8 +80,8 @@ resource "aws_lb_listener_rule" "alb" {
     Name = "${var.name}-rule-${each.key}"
   })
 
-  # Ignore changes to action as the external deployment controller manages target group switching for blue/green
-  # This is a no-op for rolling deployments (nothing external modifies the action)
+  # The ECS deployment controller rewrites the forward action during
+  # native traffic-shift deployments; a no-op for rolling deployments.
   lifecycle {
     ignore_changes = [action]
   }
@@ -89,8 +89,9 @@ resource "aws_lb_listener_rule" "alb" {
 
 ################################################################################
 # NLB Listeners
-# For NLB, we create the listener directly (no listener rules in NLB)
-# For blue/green deployments, an external controller manages target group switching
+# For NLB, we create the listener directly (no listener rules in NLB).
+# The ECS deployment controller rewrites the default action during
+# native traffic-shift deployments.
 ################################################################################
 
 resource "aws_lb_listener" "nlb" {
@@ -106,20 +107,16 @@ resource "aws_lb_listener" "nlb" {
   alpn_policy     = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.alpn_policy : null
 
   default_action {
-    type = "forward"
-    target_group_arn = (
-      local.is_native_traffic_shift
-      ? aws_lb_target_group.tg_1[0].arn
-      : aws_lb_target_group.this[0].arn
-    )
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_1[0].arn
   }
 
   tags = merge(local.tags, {
     Name = "${var.name}-nlb-listener"
   })
 
-  # Ignore changes to default_action as the external deployment controller manages target group switching for blue/green
-  # This is a no-op for rolling deployments (nothing external modifies the action)
+  # The ECS deployment controller rewrites the default action during
+  # native traffic-shift deployments; a no-op for rolling deployments.
   lifecycle {
     ignore_changes = [default_action]
   }

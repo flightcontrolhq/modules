@@ -21,7 +21,11 @@ locals {
   deployment_controller_type = "ECS"
 
   # Strategies that run the ECS controller's traffic-shift state machine
-  # over two target groups (production + alternate).
+  # over two target groups (production + alternate). Only used to seed
+  # deployment_configuration at create time — the target-group pair,
+  # infrastructure role, and advanced_configuration are provisioned for
+  # every load-balanced service so the strategy can change per
+  # deployment without Terraform changes.
   is_native_traffic_shift = contains(["blue_green", "linear", "canary"], var.deployment_type)
 
   # Map the module's strategy name to the AWS deploymentConfiguration enum.

@@ -2,8 +2,63 @@
 # Basic ECS Service Module Tests
 ################################################################################
 
-# Mock provider for testing
-mock_provider "aws" {}
+# Mock provider for testing.
+# aws_iam_policy_document data sources need explicit json overrides —
+# the mock provider's generated string is not valid JSON and fails the
+# provider-side assume_role_policy validation at plan time.
+mock_provider "aws" {
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+  mock_data "aws_partition" {
+    defaults = {
+      partition = "aws"
+    }
+  }
+  mock_data "aws_region" {
+    defaults = {
+      id   = "us-east-1"
+      name = "us-east-1"
+    }
+  }
+  mock_data "aws_caller_identity" {
+    defaults = {
+      account_id = "123456789012"
+    }
+  }
+  mock_data "aws_vpc" {
+    defaults = {
+      cidr_block = "10.0.0.0/16"
+    }
+  }
+
+  # Computed ARNs must look like real ARNs to pass provider-side
+  # validation on referencing resources (task definition, listener
+  # rules, advanced_configuration).
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::123456789012:role/mock-role"
+    }
+  }
+  mock_resource "aws_lb_target_group" {
+    defaults = {
+      arn        = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/mock-tg/1234567890123456"
+      arn_suffix = "targetgroup/mock-tg/1234567890123456"
+    }
+  }
+  mock_resource "aws_lb_listener_rule" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/mock-alb/1234567890123456/1234567890123456/1234567890123456"
+    }
+  }
+  mock_resource "aws_lb_listener" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/net/mock-nlb/1234567890123456/1234567890123456"
+    }
+  }
+}
 
 ################################################################################
 # Variables for Tests
@@ -44,7 +99,7 @@ run "basic_service" {
   }
 
   assert {
-    condition     = module.security_group.aws_security_group.this.vpc_id == "vpc-12345678"
+    condition     = module.security_group.security_group_vpc_id == "vpc-12345678"
     error_message = "Security group should be in the correct VPC"
   }
 }
@@ -75,18 +130,23 @@ run "service_with_load_balancer" {
   }
 
   assert {
-    condition     = length(aws_lb_target_group.this) == 1
-    error_message = "Should create one target group for rolling deployment"
+    condition     = length(aws_lb_target_group.tg_1) == 1 && length(aws_lb_target_group.tg_2) == 1
+    error_message = "Should create the production + alternate target group pair whenever a load balancer is attached"
   }
 
   assert {
-    condition     = aws_lb_target_group.this[0].port == 8080
+    condition     = aws_lb_target_group.tg_1[0].port == 8080 && aws_lb_target_group.tg_2[0].port == 8080
     error_message = "Target group port should be 8080"
   }
 
   assert {
-    condition     = aws_lb_target_group.this[0].protocol == "HTTP"
+    condition     = aws_lb_target_group.tg_1[0].protocol == "HTTP"
     error_message = "Target group protocol should be HTTP"
+  }
+
+  assert {
+    condition     = length(aws_iam_role.ecs_infrastructure) == 1
+    error_message = "Should create the ECS infrastructure role whenever a load balancer is attached"
   }
 }
 
@@ -115,13 +175,15 @@ run "service_with_load_balancer_auto_priority" {
   }
 
   assert {
-    condition     = length(aws_lb_target_group.this) == 1
-    error_message = "Should create one target group for rolling deployment"
+    condition     = length(aws_lb_target_group.tg_1) == 1 && length(aws_lb_target_group.tg_2) == 1
+    error_message = "Should create the production + alternate target group pair whenever a load balancer is attached"
   }
 
   assert {
-    condition     = aws_lb_listener_rule.alb["0"].priority == null
-    error_message = "Priority should be null (auto-assigned by AWS)"
+    # The mock provider materializes the unset computed attribute as 0;
+    # a real plan leaves it null for AWS to auto-assign.
+    condition     = coalesce(aws_lb_listener_rule.alb["0"].priority, 0) == 0
+    error_message = "Priority should be unset (auto-assigned by AWS)"
   }
 }
 
@@ -159,11 +221,6 @@ run "blue_green_deployment" {
   assert {
     condition     = length(aws_lb_target_group.tg_2) == 1
     error_message = "Should create alternate target group for blue/green deployment"
-  }
-
-  assert {
-    condition     = length(aws_lb_target_group.this) == 0
-    error_message = "Should not create single target group for blue/green deployment"
   }
 
   assert {
