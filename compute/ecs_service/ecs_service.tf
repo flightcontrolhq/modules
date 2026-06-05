@@ -169,6 +169,19 @@ resource "aws_ecs_service" "this" {
       )
       error_message = "load_balancer_attachment requires either listener_rules (ALB) or nlb_listener so the production listener rule can be wired into advanced_configuration."
     }
+
+    # The ECS advanced_configuration API accepts a single production
+    # listener rule, so during native traffic-shift deployments only the
+    # first rule is rewritten — any additional rules would keep
+    # forwarding to the old revision for the entire deployment.
+    precondition {
+      condition = (
+        !local.is_native_traffic_shift
+        || local.enable_nlb_listener
+        || length(try(var.load_balancer_attachment.listener_rules, [])) <= 1
+      )
+      error_message = "Native traffic-shift strategies (blue_green/linear/canary) rewrite a single production listener rule; additional listener rules would keep serving the old revision throughout the deployment. Use at most one listener rule with these strategies."
+    }
   }
 }
 

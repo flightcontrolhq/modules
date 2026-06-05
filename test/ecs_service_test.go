@@ -4,6 +4,7 @@ package test
 import (
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/flightcontrolhq/modules/test/helpers"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
@@ -167,6 +168,25 @@ func TestEcsServiceWithAlb(t *testing.T) {
 	// Verify ECS service is registered with the target group
 	hasTargetGroup := helpers.EcsServiceHasTargetGroup(t, clusterArn, serviceName, targetGroupArn, awsRegion)
 	assert.True(t, hasTargetGroup, "ECS service should be registered with the target group")
+
+	// The module wires load_balancer.advanced_configuration (alternate
+	// target group, production listener rule, infrastructure role)
+	// unconditionally — including for the rolling strategy used here, where
+	// CreateService carries no deployment_configuration. This asserts the
+	// real AWS API accepted that combination and persisted it on the
+	// service; if AWS ever rejected it, every rolling service with a load
+	// balancer (the module default) would fail to provision.
+	alternateTargetGroupArn := terraform.Output(t, terraformOptions, "alternate_target_group_arn")
+	require.NotEmpty(t, alternateTargetGroupArn, "alternate_target_group_arn should not be empty")
+
+	loadBalancers := helpers.GetEcsServiceLoadBalancers(t, clusterArn, serviceName, awsRegion)
+	require.Len(t, loadBalancers, 1, "ECS service should have exactly one load balancer attachment")
+
+	advancedConfig := loadBalancers[0].AdvancedConfiguration
+	require.NotNil(t, advancedConfig, "load balancer advanced configuration should be set on a rolling service")
+	assert.Equal(t, alternateTargetGroupArn, aws.ToString(advancedConfig.AlternateTargetGroupArn), "alternate target group should match the module output")
+	assert.NotEmpty(t, aws.ToString(advancedConfig.ProductionListenerRule), "production listener rule should be set")
+	assert.NotEmpty(t, aws.ToString(advancedConfig.RoleArn), "infrastructure role should be set")
 
 	// Wait for targets to be registered in the target group
 	// The ECS service needs time to register tasks with the target group

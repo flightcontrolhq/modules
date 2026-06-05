@@ -148,6 +148,15 @@ run "service_with_load_balancer" {
     condition     = length(aws_iam_role.ecs_infrastructure) == 1
     error_message = "Should create the ECS infrastructure role whenever a load balancer is attached"
   }
+
+  # Backward-compatible aliases for pre-traffic-shift callers.
+  assert {
+    condition = (
+      output.target_group_arn == output.production_target_group_arn
+      && output.target_group_name == output.production_target_group_name
+    )
+    error_message = "target_group_arn / target_group_name should alias the production target group outputs"
+  }
 }
 
 ################################################################################
@@ -227,6 +236,49 @@ run "blue_green_deployment" {
     condition     = length(aws_iam_role.ecs_infrastructure) == 1
     error_message = "Should create the ECS infrastructure role for native traffic-shift strategies"
   }
+}
+
+################################################################################
+# Test: Native traffic-shift strategies reject multiple listener rules
+#
+# advanced_configuration accepts a single production listener rule, so
+# ECS would only ever shift traffic on the first rule — additional
+# rules would silently keep serving the old revision.
+################################################################################
+
+run "blue_green_rejects_multiple_listener_rules" {
+  command = plan
+
+  variables {
+    deployment_type = "blue_green"
+    container_port  = 8080
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+      }
+      listener_rules = [
+        {
+          listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+          priority     = 100
+          conditions = [{
+            type   = "host-header"
+            values = ["api.example.com"]
+          }]
+        },
+        {
+          listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+          priority     = 101
+          conditions = [{
+            type   = "host-header"
+            values = ["www.example.com"]
+          }]
+        },
+      ]
+    }
+  }
+
+  expect_failures = [aws_ecs_service.this]
 }
 
 ################################################################################

@@ -487,6 +487,16 @@ variable "load_balancer_attachment" {
     })
 
     # ALB: Listener rules (attach to existing ALB listener)
+    #
+    # IMPORTANT: only the first rule is wired into the service's
+    # advanced_configuration as the production listener rule. Native
+    # traffic-shift deployments (blue_green/linear/canary) rewrite only
+    # that rule — traffic on any additional rules never shifts to the
+    # new revision. Terraform rejects >1 rule when deployment_type is a
+    # traffic-shift strategy, but because the strategy is a
+    # per-deployment decision on the native ECS controller, services
+    # that may ever deploy with a traffic-shift strategy must also keep
+    # to a single rule.
     listener_rules = optional(list(object({
       listener_arn = string
       priority     = optional(number, null) # null = AWS auto-assigns next available priority

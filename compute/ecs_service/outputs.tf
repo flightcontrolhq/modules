@@ -103,6 +103,11 @@ output "target_group_arn_suffix" {
   value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn_suffix : null
 }
 
+output "target_group_name" {
+  description = "The name of the production target group the service serves from (alias of production_target_group_name; null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].name : null
+}
+
 output "production_target_group_arn" {
   description = "The ARN of the production target group (null if load balancer disabled)."
   value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn : null
