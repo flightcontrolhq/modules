@@ -1,5 +1,5 @@
 definition:
-  type: rvn-aws-acm-certificate
+  type: rvn-acm-certificate
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
