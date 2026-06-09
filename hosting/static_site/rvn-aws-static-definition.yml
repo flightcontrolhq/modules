@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.0.2
-  description: standardize terraform settings
+  version: 0.0.3
+  description: fix source ref to use tag
 module:
   build:
     builder: >-
@@ -483,7 +483,7 @@ module:
 
     Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
 
-    Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/453e3360349be6197a49213780e9c77729758c84/hosting/static_site)
+    Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/hosting/static_site)
 
     ## Use cases
 
@@ -636,7 +636,7 @@ module:
           base_path: hosting/static_site
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
-          ref: 453e3360349be6197a49213780e9c77729758c84
+          ref: $local.module_tag
           repo: https://github.com/flightcontrolhq/modules
           stack_id: <<stack.id>>
           terraform_variables:

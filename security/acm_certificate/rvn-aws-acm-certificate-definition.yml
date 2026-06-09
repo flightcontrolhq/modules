@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.0.2
-  description: standardize terraform settings
+  version: 0.0.3
+  description: fix source ref to use tag
 module:
   inputs:
     - id: section_aws
@@ -150,7 +150,7 @@ module:
 
     - [AWS Certificate Manager DNS validation](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html)
     - [AWS Certificate Manager certificates for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/a86527fb50ee8a0566a8749456366cfd837f0cba/security/acm_certificate)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/acm_certificate)
   stack:
     pipelines:
       change:
@@ -162,7 +162,7 @@ module:
           base_path: security/acm_certificate
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
-          ref: a86527fb50ee8a0566a8749456366cfd837f0cba
+          ref: $local.module_tag
           repo: https://github.com/flightcontrolhq/modules
           stack_id: <<stack.id>>
           terraform_variables:

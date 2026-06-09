@@ -61,6 +61,7 @@ describe("compiler", () => {
       deploy: {
         strategy: "rolling",
       },
+      readme: "Terraform source https://github.com/flightcontrolhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
       settings: {
         advanced: {
           retries: 2,

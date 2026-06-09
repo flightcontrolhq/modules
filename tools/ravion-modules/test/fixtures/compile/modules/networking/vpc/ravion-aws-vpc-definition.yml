@@ -34,6 +34,7 @@ module:
       base_path: networking/vpc
   deploy:
     $include: ../../partials/deploy/defaults.yml
+  readme: Terraform source https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc
   settings:
     $merge:
       - ../../partials/settings/base.yml

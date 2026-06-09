@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.1.1
-  description: support default opentofu version
+  version: 0.1.2
+  description: fix source ref to use tag
 module:
   inputs:
     - id: section_service
@@ -1297,7 +1297,7 @@ module:
           base_path: compute/ecs_service
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
-          ref: 84eb256921edf88126c5451608ce6f010d94842f
+          ref: $local.module_tag
           repo: https://github.com/flightcontrolhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
@@ -1721,7 +1721,7 @@ module:
 
     The module is intentionally focused on web services behind an Application Load Balancer. It uses the selected ECS cluster to inherit AWS account, region, VPC, subnets, capacity providers, load balancer listeners, and load balancer security groups.
 
-    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/84eb256921edf88126c5451608ce6f010d94842f/compute/ecs_service)
+    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
 
     ## Use cases
 

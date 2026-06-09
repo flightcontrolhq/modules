@@ -22,7 +22,7 @@ export class CompileError extends Error {
 }
 
 const DIRECTIVE_KEYS = new Set(["$include", "$merge", "$template"]);
-const LOCAL_TOKEN_PATTERN = /^\$local\.[A-Za-z0-9_.-]+$/;
+const LOCAL_TOKEN_PATTERN = /\$local\.[A-Za-z0-9_.-]+/g;
 const WITH_TOKEN_PATTERN = /^\$with\.([A-Za-z0-9_.-]+)$/;
 const WITH_TOKEN_LEAK_PATTERN = /\$with\.[A-Za-z0-9_.-]+/;
 const MODULE_CATEGORIES = new Set([
@@ -190,11 +190,7 @@ async function resolveExternalFile(filePath: string, context: CompileContext, ya
 }
 
 function resolveScalar(value: string, context: CompileContext): unknown {
-  if (value === "$local.module_tag") {
-    return `${context.definition.definition.type}@${context.definition.release.version}`;
-  }
-
-  return value;
+  return value.replaceAll("$local.module_tag", `${context.definition.definition.type}@${context.definition.release.version}`);
 }
 
 function renderTemplate(value: unknown, parameters: Record<string, unknown>, filePath: string, yamlPath: string): unknown {
@@ -242,8 +238,9 @@ function rejectLeakedCompilerSyntax(value: unknown, filePath: string, yamlPath: 
   }
 
   if (typeof value === "string") {
-    if (LOCAL_TOKEN_PATTERN.test(value)) {
-      throw new CompileError(`${filePath} ${yamlPath}: unresolved local token ${value}.`);
+    const unresolvedLocalTokens = value.match(LOCAL_TOKEN_PATTERN);
+    if (unresolvedLocalTokens) {
+      throw new CompileError(`${filePath} ${yamlPath}: unresolved local token ${unresolvedLocalTokens[0]}.`);
     }
     if (WITH_TOKEN_LEAK_PATTERN.test(value)) {
       throw new CompileError(`${filePath} ${yamlPath}: unresolved template token.`);

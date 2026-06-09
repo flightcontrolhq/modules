@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.0.4
-  description: standardize terraform settings
+  version: 0.0.5
+  description: fix source ref to use tag
 module:
   inputs:
     - id: section_aws
@@ -163,7 +163,7 @@ module:
     - **VPC Flow Logs** for network traffic monitoring and SOC 2 compliance
     - **VPC Peering** to connect with existing VPCs across accounts or regions
 
-     Terraform source: [flightcontrolhq/modules/networking/vpc](https://github.com/flightcontrolhq/modules/tree/a95b9b3ae925a5c29d86edd389a12daa1e4062f9/networking/vpc)
+     Terraform source: [flightcontrolhq/modules/networking/vpc](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc)
 
     ## Use cases
 
@@ -289,7 +289,7 @@ module:
           base_path: networking/vpc
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
-          ref: a95b9b3ae925a5c29d86edd389a12daa1e4062f9
+          ref: $local.module_tag
           repo: https://github.com/flightcontrolhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
