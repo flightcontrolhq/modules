@@ -6,13 +6,13 @@ import { type RemoteModuleDefinition, type RemoteModuleVersion } from "../src/ge
 import {
   createDefaultRavionApiClient,
   formatPublishPlanMarkdown,
+  PublishPlanError,
   publishDefinitions,
   PublishError,
   type ModuleDefinitionInput,
   type ModuleVersionInput,
   type RavionModuleApiClient,
 } from "../src/publish.js";
-import { ReleaseMetadataError } from "../src/release.js";
 
 describe("publish", () => {
   it("creates missing definitions and versions through the Ravion API", async () => {
@@ -51,13 +51,37 @@ describe("publish", () => {
     assert.equal(client.createdVersions.length, 0);
   });
 
-  it("fails when an existing version has different config", async () => {
+  it("fails with structured conflict details when an existing version has different config", async () => {
     const client = new MockRavionClient({
       definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
-      versionsByDefinitionId: { vpc: [createRemoteVersion({ config: { inputs: [{ id: "region", type: "string", label: "Region" }] } })] },
+      versionsByDefinitionId: {
+        vpc: [
+          createRemoteVersion({ version: "1.2.3", config: { inputs: [{ id: "region", type: "string", label: "Region" }] } }),
+          createRemoteVersion({ version: "1.2.4", config: { inputs: [{ id: "latest", type: "string", label: "Latest" }] } }),
+        ],
+      },
     });
 
-    await assert.rejects(() => publishDefinitions([createCompiledDefinition()], client), (error) => error instanceof ReleaseMetadataError);
+    await assert.rejects(
+      () => publishDefinitions([createCompiledDefinition()], client),
+      (error) => {
+        assert.ok(error instanceof PublishPlanError);
+        assert.deepEqual(error.result.errors?.map(({ type, version, latestVersion, message }) => ({ type, version, latestVersion, message })), [
+          {
+            type: "ravion-aws-vpc",
+            version: "1.2.3",
+            latestVersion: "1.2.4",
+            message: "Release version already exists remotely with different compiled config.",
+          },
+        ]);
+        assert.match(formatPublishPlanMarkdown(error.result), /### Release Config Conflicts/);
+        assert.match(formatPublishPlanMarkdown(error.result), /Latest Remote vs Compiled/);
+        assert.match(formatPublishPlanMarkdown(error.result), /```diff/);
+        assert.match(formatPublishPlanMarkdown(error.result), /-      "id": "latest"/);
+        assert.match(formatPublishPlanMarkdown(error.result), /\+      "id": "name"/);
+        return true;
+      },
+    );
   });
 
   it("sends release.description as ModuleVersion.description", async () => {

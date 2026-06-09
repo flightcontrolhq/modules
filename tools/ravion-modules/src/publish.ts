@@ -1,6 +1,6 @@
 import { type CompiledDefinition } from "./compiler.js";
 import { type RemoteModuleDefinition, type RemoteModuleInventory, type RemoteModuleVersion } from "./generate-definitions.js";
-import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
+import { getReleaseStatuses, type ReleaseStatus, validateReleaseStatuses } from "./release.js";
 
 export type PublishAction = "create-definition" | "patch-definition" | "create-version" | "skip-version";
 
@@ -16,6 +16,15 @@ export interface PublishPlanItem {
 export interface PublishResult {
   dryRun: boolean;
   items: PublishPlanItem[];
+  errors?: PublishPlanErrorItem[];
+}
+
+export interface PublishPlanErrorItem {
+  type: string;
+  version: string;
+  message: string;
+  latestVersion?: string;
+  diff?: string;
 }
 
 export interface ModuleDefinitionInput {
@@ -59,6 +68,16 @@ export class PublishError extends Error {
   }
 }
 
+export class PublishPlanError extends Error {
+  constructor(
+    message: string,
+    readonly result: PublishResult,
+  ) {
+    super(message);
+    this.name = "PublishPlanError";
+  }
+}
+
 export async function publishDefinitions(
   compiledDefinitions: CompiledDefinition[],
   client: RavionModuleApiClient,
@@ -68,6 +87,10 @@ export async function publishDefinitions(
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
   const statuses = getReleaseStatuses(compiledDefinitions, { inventory });
+  const errors = createPublishPlanErrors(statuses, compiledDefinitions, inventory);
+  if (errors.length > 0) {
+    throw new PublishPlanError("Release metadata validation failed.", { dryRun, items: [], errors });
+  }
   validateReleaseStatuses(statuses);
 
   const definitionsByType = new Map(inventory.definitions.map((definition) => [definition.type, definition]));
@@ -155,6 +178,33 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
     "",
   ];
 
+  if (result.errors && result.errors.length > 0) {
+    lines.push("### Release Config Conflicts", "", "These module versions already exist remotely with different compiled config. Publish a new version, or make the local definition match the existing remote version.", "");
+    lines.push("| Module | Release Version | Latest Remote Version | Problem |", "| --- | --- | --- | --- |");
+    for (const error of result.errors) {
+      lines.push(`| \`${escapeMarkdownTableCell(error.type)}\` | \`${escapeMarkdownTableCell(error.version)}\` | ${error.latestVersion ? `\`${escapeMarkdownTableCell(error.latestVersion)}\`` : "n/a"} | ${escapeMarkdownTableCell(error.message)} |`);
+    }
+
+    const errorsWithDiffs = result.errors.filter((error) => error.diff);
+    if (errorsWithDiffs.length > 0) {
+      lines.push("", "### Latest Remote vs Compiled", "");
+      for (const error of errorsWithDiffs) {
+        lines.push(
+          `<details><summary>${escapeHtml(error.type)} ${escapeHtml(error.latestVersion ?? "no remote version")} -> ${escapeHtml(error.version)}</summary>`,
+          "",
+          "```diff",
+          truncateDiff(error.diff ?? ""),
+          "```",
+          "",
+          "</details>",
+          "",
+        );
+      }
+    }
+
+    return lines.join("\n");
+  }
+
   if (result.items.length === 0) {
     lines.push("No module definitions were found.", "");
     return lines.join("\n");
@@ -180,6 +230,10 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
   return lines.join("\n");
 }
 
+export function isPublishPlanError(error: unknown): error is PublishPlanError {
+  return error instanceof PublishPlanError;
+}
+
 export async function loadRemoteInventory(client: RavionModuleApiClient, options: { logger?: (message: string) => void } = {}): Promise<RemoteModuleInventory> {
   options.logger?.("Loading remote module definitions from Ravion API.");
   const definitions = await wrapApiStep("list remote module definitions", () => client.listModuleDefinitions());
@@ -199,6 +253,24 @@ async function wrapApiStep<T>(label: string, run: () => Promise<T>): Promise<T> 
   } catch (error) {
     throw new PublishError(`Failed to ${label}: ${formatUnknownError(error)}`);
   }
+}
+
+function createPublishPlanErrors(statuses: ReleaseStatus[], compiledDefinitions: CompiledDefinition[], inventory: RemoteModuleInventory): PublishPlanErrorItem[] {
+  const compiledByType = new Map(compiledDefinitions.map((definition) => [definition.type, definition]));
+  return statuses
+    .filter((status) => status.publishState === "conflict" || (status.publishState === "unpublished" && status.releaseDescription.trim().length === 0))
+    .map((status) => {
+      const compiled = compiledByType.get(status.type);
+      const remoteVersions = status.remoteDefinitionId ? (inventory.versionsByDefinitionId[status.remoteDefinitionId] ?? []) : [];
+      const latestVersion = selectLatestVersion(remoteVersions);
+      return {
+        type: status.type,
+        version: status.version,
+        message: status.message,
+        latestVersion: latestVersion?.version,
+        diff: compiled ? createDiff(latestVersion?.config, compiled.module) : undefined,
+      };
+    });
 }
 
 async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, moduleDefinitionId: string, definition: CompiledDefinition): Promise<void> {

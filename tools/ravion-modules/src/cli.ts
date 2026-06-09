@@ -5,7 +5,7 @@ import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { runMigrationGuardrails } from "./guardrails.js";
 import { validateModuleConfig } from "./module-schema.js";
-import { createDefaultRavionApiClient, formatPublishPlanMarkdown, loadRemoteInventory, publishDefinitions } from "./publish.js";
+import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags } from "./tags.js";
 
@@ -60,10 +60,23 @@ if (command === "validate") {
     validateModuleConfig(definition.module, definition.filePath);
   }
   const client = await createDefaultRavionApiClient();
-  const result = await publishDefinitions(compiled, client, { dryRun: !args.includes("--apply"), logger: (message) => console.error(`[publish] ${message}`) });
   const format = getArgValue(args, "--format") ?? "json";
-  const output = format === "markdown" ? formatPublishPlanMarkdown(result) : JSON.stringify(result, null, 2);
   const outputPath = getArgValue(args, "--output");
+  let result;
+  try {
+    result = await publishDefinitions(compiled, client, { dryRun: !args.includes("--apply"), logger: (message) => console.error(`[publish] ${message}`) });
+  } catch (error) {
+    if (isPublishPlanError(error)) {
+      const output = format === "markdown" ? formatPublishPlanMarkdown(error.result) : JSON.stringify(error.result, null, 2);
+      if (outputPath) {
+        await writeFile(outputPath, output);
+      } else {
+        console.log(output);
+      }
+    }
+    throw error;
+  }
+  const output = format === "markdown" ? formatPublishPlanMarkdown(result) : JSON.stringify(result, null, 2);
   if (outputPath) {
     await writeFile(outputPath, output);
   } else {
