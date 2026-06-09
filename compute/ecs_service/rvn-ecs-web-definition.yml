@@ -6,207 +6,142 @@ release:
   version: 0.1.1
   description: support default opentofu version
 module:
-  build:
-    builder: '<< module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile: module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} : module.input.build_type == "nixpacks" ? {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, start_cmd: module.input.nixpacks_start_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs, cache_from: {tag: "nixpacks"}} : {type: "disabled"} >>'
-    destinations:
-      - id: ecr
-        repository_arn: << stack.output.ecr_repository_arn >>
-        tags:
-          - <<pipeline.run.id>>-<< module.input.build_type >>
-          - << module.input.build_type >>
-        type: ecr
-    environment_variables: << module.input.build_environment_variables >>
-    infrastructure:
-      ami: '<< module.input.build_ami != "" ? module.input.build_ami : nil >>'
-      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
-      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
-      instance_size: << module.input.build_instance_size >>
-      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
-      type: << module.input.build_infrastructure_type >>
-    inputs:
-      - description: Defaults to repo default branch
-        id: branch
-        label: Git branch
-        required: false
-        type: string
-      - description: Optional commit SHA, tag, or ref to build. Defaults to the configured branch head.
-        id: ref
-        label: Git ref (commit or tag)
-        required: false
-        type: string
-    source:
-      base_path: << module.input.source_base_path || "." >>
-      branch: << build.input.branch >>
-      ref: << build.input.ref >>
-      repo: << module.input.source_repo >>
-      type: git
-    type: '<< module.input.build_type == "external_image" ? "disabled" : "image" >>'
-  deploy:
-    concurrency:
-      queue_overflow: oldest
-      queue_size: 1
-    infrastructure:
-      ecs_cluster_arn: <<stack.output.service_cluster>>
-      ecs_service_arns:
-        - <<stack.output.service_arn>>
-    inputs:
-      - description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For external image repository mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
-        id: image_ref
-        label: Image tag or digest
-        placeholder: sha256:... or latest or <run-id>-nixpacks
-        required: true
-        type: string
-    task_definition:
-      container_definitions: "<< (module.input.enable_firelens ? [{\"cpu\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)), \"depends_on\": [{\"container_name\": \"log_router\", \"condition\": \"START\"}], \"environment\": ([{name: \"PORT\", value: string(module.input.container_port)}] | concat(module.input.environment_variables != nil ? module.input.environment_variables : [])), \"essential\": true, \"image\": (module.input.build_type == \"external_image\" ? (module.input.use_aws_public_mirror ? (deploy.input.image_ref contains \"sha256:\" ? \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \"@\" + deploy.input.image_ref : \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \":\" + deploy.input.image_ref) : (deploy.input.image_ref contains \"sha256:\" ? module.input.external_image_name + \"@\" + deploy.input.image_ref : module.input.external_image_name + \":\" + deploy.input.image_ref)) : (deploy.input.image_ref contains \"sha256:\" ? stack.output.ecr_repository_url + \"@\" + deploy.input.image_ref : stack.output.ecr_repository_url + \":\" + deploy.input.image_ref)), \"linux_parameters\": {\"init_process_enabled\": true}, \"log_configuration\": {\"log_driver\": \"awsfirelens\"}, \"memory\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)), \"name\": (stack.output.container_name), \"port_mappings\": [{\"app_protocol\": \"http\", \"container_port\": (module.input.container_port), \"protocol\": \"tcp\"}], \"readonly_root_filesystem\": false, \"repository_credentials\": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), \"secrets\": (module.input.secrets), \"stop_timeout\": 30}, {\"name\": \"log_router\", \"image\": module.input.firelens_image, \"cpu\": 0, \"memory_reservation\": 51, \"essential\": true, \"environment\": ([{name: \"FIRELENS_CONFIG_CONTENT\", value: \"[SERVICE]\\n    Flush 1\\n    Grace 30\\n\\n\" + (module.input.firelens_config ? module.input.firelens_config + \"\\n\" : \"\") + (module.input.firelens_enable_cloudwatch_output ? \"\\n[OUTPUT]\\n    Name cloudwatch\\n    Match *\\n    region \" + stack.output.region + \"\\n    log_group_name \" + stack.output.log_group_name + \"\\n    auto_create_group true\\n    log_stream_prefix \" + stack.output.log_stream_prefix + \"/\\n    retry_limit 2\\n    log_key log\\n    log_format json/emf\\n\" : \"\")}] | concat(module.input.firelens_environment_variables != nil ? module.input.firelens_environment_variables : [])), \"secrets\": module.input.firelens_secrets != nil ? module.input.firelens_secrets : [], \"command\": [\"/bin/sh\", \"-c\", \"printf '%s' \\\"$FIRELENS_CONFIG_CONTENT\\\" > /flightcontrol-firelens.conf && exec /entrypoint.sh\"], \"user\": \"0\", \"log_configuration\": {\"log_driver\": \"awslogs\", \"options\": {\"awslogs-group\": stack.output.log_group_name, \"awslogs-region\": stack.output.region, \"awslogs-stream-prefix\": stack.output.log_stream_prefix + \"/firelens\"}}, \"firelens_configuration\": {\"type\": \"fluentbit\", \"options\": {\"config-file-type\": \"file\", \"config-file-value\": \"/flightcontrol-firelens.conf\", \"enable-ecs-log-metadata\": string(module.input.firelens_enable_ecs_metadata)}}}] : [{\"cpu\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)), \"environment\": ([{name: \"PORT\", value: string(module.input.container_port)}] | concat(module.input.environment_variables != nil ? module.input.environment_variables : [])), \"essential\": true, \"image\": (module.input.build_type == \"external_image\" ? (module.input.use_aws_public_mirror ? (deploy.input.image_ref contains \"sha256:\" ? \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \"@\" + deploy.input.image_ref : \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \":\" + deploy.input.image_ref) : (deploy.input.image_ref contains \"sha256:\" ? module.input.external_image_name + \"@\" + deploy.input.image_ref : module.input.external_image_name + \":\" + deploy.input.image_ref)) : (deploy.input.image_ref contains \"sha256:\" ? stack.output.ecr_repository_url + \"@\" + deploy.input.image_ref : stack.output.ecr_repository_url + \":\" + deploy.input.image_ref)), \"linux_parameters\": {\"init_process_enabled\": true}, \"log_configuration\": {\"log_driver\": \"awslogs\", \"options\": {\"awslogs-group\": stack.output.log_group_name, \"awslogs-region\": stack.output.region, \"awslogs-stream-prefix\": stack.output.log_stream_prefix}}, \"memory\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)), \"name\": (stack.output.container_name), \"port_mappings\": [{\"app_protocol\": \"http\", \"container_port\": (module.input.container_port), \"protocol\": \"tcp\"}], \"readonly_root_filesystem\": false, \"repository_credentials\": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), \"secrets\": (module.input.secrets), \"stop_timeout\": 30}] >>"
-      cpu: '<< string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)) >>'
-      execution_role_arn: <<stack.output.execution_role_arn>>
-      family: <<stack.output.task_definition_family>>
-      memory: '<< string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)) >>'
-      network_mode: awsvpc
-      requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
-      runtime_platform:
-        cpu_architecture: <<module.input.cpu_architecture>>
-        operating_system_family: LINUX
-      task_role_arn: <<stack.output.task_role_arn>>
-      volumes: '<< module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name": #.name, "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name, "docker_volume_configuration": #.docker_volume_configuration}) : [] >>'
-    timeout: 1800
-    type: aws:ecs
   inputs:
     - id: section_service
       label: Web service
       type: section
-    - default: true
-      description: Expose this service through the public ALB. Turn off to use the private ALB.
-      id: is_public
+    - id: is_public
       label: Public web service
       type: boolean
-    - default: true
-      description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
-      id: use_private_subnets
+      description: Expose this service through the public ALB. Turn off to use the private ALB.
+      default: true
+    - id: use_private_subnets
       label: Run in private subnets
       type: boolean
-    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
-      description: Name for the ECS service and related resources.
-      id: name
+      description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
+      default: true
+    - id: name
       label: Service name
+      type: string
+      description: Name for the ECS service and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
       patterns:
         - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
           pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
-      required: true
-      type: string
     - id: cluster
       label: ECS cluster
+      type: $ref:rvn-ecs-cluster
       mapped_inputs:
-        - default: <<ref.input.aws_account_id>>
-          id: aws_account_id
+        - id: aws_account_id
           label: AWS account
           type: string
+          default: <<ref.input.aws_account_id>>
           values: $values:ravion/aws_accounts
-        - default: <<ref.input.aws_region>>
-          id: aws_region
+        - id: aws_region
           label: Region
           type: string
+          default: <<ref.input.aws_region>>
           values: $values:aws/regions
-        - collapsible: true
-          default: << ref.input.execution_environment_id >>
-          description: Terraform execution environment inherited from the selected ECS cluster.
-          id: execution_environment_id
+        - id: execution_environment_id
           label: Terraform execution environment
           type: string
+          description: Terraform execution environment inherited from the selected ECS cluster.
+          collapsible: true
+          default: << ref.input.execution_environment_id >>
           values: $values:ravion/execution_environments
-        - default: <<ref.stack.output.cluster_arn>>
-          id: cluster_arn
+        - id: cluster_arn
           label: Cluster ARN
-          required: true
           type: string
-        - default: <<ref.input.vpc_id>>
-          id: vpc_id
+          required: true
+          default: <<ref.stack.output.cluster_arn>>
+        - id: vpc_id
           label: VPC ID
-          required: true
           type: string
-        - add_button_label: Add private subnet ID
-          default: <<ref.input.private_subnet_ids>>
-          description: Private subnets available from the selected ECS cluster network.
-          id: private_subnet_ids
-          label: Private subnet IDs
           required: true
+          default: <<ref.input.vpc_id>>
+        - id: private_subnet_ids
+          label: Private subnet IDs
           type: string_array
-        - add_button_label: Add public subnet ID
-          default: <<ref.input.public_subnet_ids>>
-          description: Public subnets available from the selected ECS cluster network.
-          id: public_subnet_ids
+          description: Private subnets available from the selected ECS cluster network.
+          add_button_label: Add private subnet ID
+          required: true
+          default: <<ref.input.private_subnet_ids>>
+        - id: public_subnet_ids
           label: Public subnet IDs
           type: string_array
-        - add_button_label: Add subnet ID
-          collapsible: true
-          default: <<ref.input.private_subnet_ids>>
-          description: Legacy service subnet override. Leave blank to derive subnets from the public/private service setting.
-          id: subnet_ids
+          description: Public subnets available from the selected ECS cluster network.
+          add_button_label: Add public subnet ID
+          default: <<ref.input.public_subnet_ids>>
+        - id: subnet_ids
           label: Private subnet IDs
-          required: false
           type: string_array
+          description: Legacy service subnet override. Leave blank to derive subnets from the public/private service setting.
+          add_button_label: Add subnet ID
+          collapsible: true
+          required: false
+          default: <<ref.input.private_subnet_ids>>
         - id: section_cluster_capacity
           label: Cluster capacity providers
           type: section
-        - default: <<ref.stack.output.fargate_capacity_provider_name>>
-          id: fargate_capacity_provider_name
+        - id: fargate_capacity_provider_name
           label: Fargate capacity provider
           type: string
-        - default: <<ref.stack.output.fargate_spot_capacity_provider_name>>
-          id: fargate_spot_capacity_provider_name
+          default: <<ref.stack.output.fargate_capacity_provider_name>>
+        - id: fargate_spot_capacity_provider_name
           label: Fargate spot capacity provider
           type: string
-        - default: ""
-          description: EC2 capacity provider name from the selected cluster. Required only when using EC2 capacity.
-          id: ec2_capacity_provider_name
+          default: <<ref.stack.output.fargate_spot_capacity_provider_name>>
+        - id: ec2_capacity_provider_name
           label: EC2 capacity provider
+          type: string
+          description: EC2 capacity provider name from the selected cluster. Required only when using EC2 capacity.
           required: false
           show_when:
             capacity_provider: ec2
-          type: string
+          default: ""
         - id: section_cluster_alb
           label: Cluster load balancers
           type: section
-        - default: <<ref.stack.output.public_alb_http_listener_arn>>
-          id: public_alb_http_listener_arn
+        - id: public_alb_http_listener_arn
           label: Public ALB HTTP listener ARN
           type: string
-        - collapsible: true
-          default: <<ref.stack.output.public_alb_https_listener_arn>>
-          description: HTTPS listener ARN from the selected public ALB. Ravion uses it when present, otherwise falls back to HTTP.
-          id: public_alb_https_listener_arn
+          default: <<ref.stack.output.public_alb_http_listener_arn>>
+        - id: public_alb_https_listener_arn
           label: Public ALB HTTPS listener ARN
-          required: false
           type: string
-        - default: <<ref.stack.output.public_alb_security_group_id>>
-          id: public_alb_security_group_id
+          description: HTTPS listener ARN from the selected public ALB. Ravion uses it when present, otherwise falls back to HTTP.
+          collapsible: true
+          required: false
+          default: <<ref.stack.output.public_alb_https_listener_arn>>
+        - id: public_alb_security_group_id
           label: Public ALB security group ID
           type: string
-        - default: <<ref.stack.output.private_alb_http_listener_arn>>
-          id: private_alb_http_listener_arn
+          default: <<ref.stack.output.public_alb_security_group_id>>
+        - id: private_alb_http_listener_arn
           label: Private ALB HTTP listener ARN
           type: string
-        - collapsible: true
-          default: <<ref.stack.output.private_alb_https_listener_arn>>
-          description: HTTPS listener ARN from the selected private ALB. Ravion uses it when present, otherwise falls back to HTTP.
-          id: private_alb_https_listener_arn
+          default: <<ref.stack.output.private_alb_http_listener_arn>>
+        - id: private_alb_https_listener_arn
           label: Private ALB HTTPS listener ARN
-          required: false
           type: string
-        - default: <<ref.stack.output.private_alb_security_group_id>>
-          id: private_alb_security_group_id
+          description: HTTPS listener ARN from the selected private ALB. Ravion uses it when present, otherwise falls back to HTTP.
+          collapsible: true
+          required: false
+          default: <<ref.stack.output.private_alb_https_listener_arn>>
+        - id: private_alb_security_group_id
           label: Private ALB security group ID
           type: string
+          default: <<ref.stack.output.private_alb_security_group_id>>
       required: true
-      type: $ref:rvn-ecs-cluster
     - id: section_build
       label: Build config
       type: section
-    - default: nixpacks
-      id: build_type
+    - id: build_type
       label: Build type
-      required: true
       type: string
+      required: true
+      default: nixpacks
       values:
         - description: Automatically build an image based on your code and config
           label: Nixpacks
@@ -219,271 +154,271 @@ module:
           value: external_image
     - id: source_repo
       label: Git repository
+      type: gitrepo
       required: true
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: gitrepo
-    - default: .
-      description: Path from repo root to your source code
-      id: source_base_path
+    - id: source_base_path
       label: Source base path
+      type: string
+      description: Path from repo root to your source code
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: string
-    - description: Image repository without a tag or digest, such as nginx, ghcr.io/org/app, or 123456789012.dkr.ecr.us-east-1.amazonaws.com/app.
-      id: external_image_name
+      default: .
+    - id: external_image_name
       label: Image repository
+      type: string
+      description: Image repository without a tag or digest, such as nginx, ghcr.io/org/app, or 123456789012.dkr.ecr.us-east-1.amazonaws.com/app.
       placeholder: nginx
       required: true
       show_when:
         build_type: external_image
-      type: string
-    - default: false
-      description: Avoid Docker Hub rate limits for Docker Official Images such as nginx or node.
-      id: use_aws_public_mirror
+    - id: use_aws_public_mirror
       label: Use AWS public Docker Hub mirror
+      type: boolean
+      description: Avoid Docker Hub rate limits for Docker Official Images such as nginx or node.
       show_when:
         build_type: external_image
-      type: boolean
-    - collapsible: true
-      description: Secrets Manager secret ARN for private registries such as GHCR or Docker Hub. The secret must use the ECS repository credentials JSON format. Not needed for public images or normal same-account ECR.
-      id: image_registry_credentials_secret_arn
+      default: false
+    - id: image_registry_credentials_secret_arn
       label: Registry credentials secret ARN
+      type: string
+      description: Secrets Manager secret ARN for private registries such as GHCR or Docker Hub. The secret must use the ECS repository credentials JSON format. Not needed for public images or normal same-account ECR.
+      collapsible: true
       placeholder: arn:aws:secretsmanager:us-east-1:123456789012:secret:registry-creds
       required: false
       show_when:
         build_type: external_image
-      type: string
     - id: section_dockerfile
       label: Docker
+      type: section
       show_when:
         build_type: dockerfile
-      type: section
-    - description: Path to the Dockerfile to use for the image build, relative to the repository root or configured source base path.
-      id: dockerfile
+    - id: dockerfile
       label: Dockerfile path
+      type: string
+      description: Path to the Dockerfile to use for the image build, relative to the repository root or configured source base path.
       placeholder: Dockerfile
       show_when:
         build_type: dockerfile
-      type: string
-    - description: Directory to use as the Docker build context, relative to the repository root or configured source base path.
-      id: dockerfile_context
+    - id: dockerfile_context
       label: Docker build context path
+      type: string
+      description: Directory to use as the Docker build context, relative to the repository root or configured source base path.
       placeholder: .
       show_when:
         build_type: dockerfile
-      type: string
     - id: section_nixpacks
       label: Nixpacks
+      type: section
       show_when:
         build_type: nixpacks
-      type: section
     - id: nixpacks_install_cmd
       label: Install command
+      type: string
       placeholder: Intelligent default based on your language & framework
       show_when:
         build_type: nixpacks
-      type: string
     - id: nixpacks_build_cmd
       label: Build command
+      type: string
       placeholder: Intelligent default based on your language & framework
       show_when:
         build_type: nixpacks
-      type: string
     - id: nixpacks_start_cmd
       label: Start command
+      type: string
       placeholder: Intelligent default based on your language & framework
       show_when:
         build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Path to a custom Nixpacks config file, relative to the repository root or configured source base path.
-      id: nixpacks_config_file_path
+    - id: nixpacks_config_file_path
       label: Nixpacks config file path
+      type: string
+      description: Path to a custom Nixpacks config file, relative to the repository root or configured source base path.
+      collapsible: true
       show_when:
         build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Application path for Nixpacks to build, relative to the repository root or configured source base path.
-      id: nixpacks_build_path
+    - id: nixpacks_build_path
       label: Nixpacks build path
+      type: string
+      description: Application path for Nixpacks to build, relative to the repository root or configured source base path.
+      collapsible: true
       show_when:
         build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Optional Nixpacks version to use for the build. Leave blank to use the default version.
-      id: nixpacks_version
+    - id: nixpacks_version
       label: Nixpacks version
-      show_when:
-        build_type: nixpacks
       type: string
-    - collapsible: true
-      description: Additional Nix packages to install during the Nixpacks build.
-      id: nixpacks_nix_pkgs
+      description: Optional Nixpacks version to use for the build. Leave blank to use the default version.
+      collapsible: true
+      show_when:
+        build_type: nixpacks
+    - id: nixpacks_nix_pkgs
       label: Nix packages
+      type: string_array
+      description: Additional Nix packages to install during the Nixpacks build.
+      collapsible: true
       show_when:
         build_type: nixpacks
-      type: string_array
-    - collapsible: true
-      description: Additional APT packages to install during the Nixpacks build.
-      id: nixpacks_apt_pkgs
+    - id: nixpacks_apt_pkgs
       label: APT packages
+      type: string_array
+      description: Additional APT packages to install during the Nixpacks build.
+      collapsible: true
       show_when:
         build_type: nixpacks
-      type: string_array
-    - collapsible: true
-      description: Additional Nix libraries to make available during the Nixpacks build.
-      id: nixpacks_nix_libs
+    - id: nixpacks_nix_libs
       label: Nix libraries
+      type: string_array
+      description: Additional Nix libraries to make available during the Nixpacks build.
+      collapsible: true
       show_when:
         build_type: nixpacks
-      type: string_array
     - id: section_health
       label: Health check
       type: section
-    - default: 80
-      description: Port the web container listens on.
-      id: container_port
+    - id: container_port
       label: Container port
+      type: number
+      description: Port the web container listens on.
       max: 65535
       min: 1
       required: true
-      type: number
-    - default: /
-      description: HTTP path the load balancer calls to verify the web server is healthy. Use a lightweight endpoint that does not require authentication.
-      id: health_check_path
+      default: 80
+    - id: health_check_path
       label: Health check path
-      required: true
       type: string
-    - collapsible: true
-      default: 200-399
-      description: HTTP status code matcher for successful health checks. Defaults to 200-399 so redirects and common successful responses are accepted.
-      id: health_check_matcher
+      description: HTTP path the load balancer calls to verify the web server is healthy. Use a lightweight endpoint that does not require authentication.
+      required: true
+      default: /
+    - id: health_check_matcher
       label: Success codes
+      type: string
+      description: HTTP status code matcher for successful health checks. Defaults to 200-399 so redirects and common successful responses are accepted.
+      collapsible: true
       placeholder: 200-399
       required: true
-      type: string
-    - collapsible: true
-      default: 5
-      description: Seconds between load balancer health checks. Lower values detect failures faster but send more health-check traffic.
-      id: health_check_interval
+      default: 200-399
+    - id: health_check_interval
       label: Interval (secs)
+      type: number
+      description: Seconds between load balancer health checks. Lower values detect failures faster but send more health-check traffic.
+      collapsible: true
       max: 300
       min: 5
-      type: number
-    - collapsible: true
-      default: 4
-      description: Seconds to wait for the health-check response before marking that check as failed. Must be lower than the interval.
-      id: health_check_timeout
+      default: 5
+    - id: health_check_timeout
       label: Timeout (secs)
+      type: number
+      description: Seconds to wait for the health-check response before marking that check as failed. Must be lower than the interval.
+      collapsible: true
       max: 120
       min: 2
-      type: number
-    - collapsible: true
-      default: 2
-      description: Number of consecutive successful checks required before an unhealthy target is considered healthy.
-      id: healthy_threshold
+      default: 4
+    - id: healthy_threshold
       label: Healthy threshold
+      type: number
+      description: Number of consecutive successful checks required before an unhealthy target is considered healthy.
+      collapsible: true
       max: 10
       min: 2
-      type: number
-    - collapsible: true
       default: 2
-      description: Number of consecutive failed checks required before a target is considered unhealthy.
-      id: unhealthy_threshold
+    - id: unhealthy_threshold
       label: Unhealthy threshold
+      type: number
+      description: Number of consecutive failed checks required before a target is considered unhealthy.
+      collapsible: true
       max: 10
       min: 2
-      type: number
-    - collapsible: true
-      default: 0
-      description: Seconds ECS ignores failing load balancer health checks after a task starts. Increase this for apps with slow boot times.
-      id: health_check_grace_period_seconds
+      default: 2
+    - id: health_check_grace_period_seconds
       label: Health check grace period (secs)
-      min: 0
       type: number
-    - collapsible: true
+      description: Seconds ECS ignores failing load balancer health checks after a task starts. Increase this for apps with slow boot times.
+      collapsible: true
+      min: 0
       default: 0
-      description: Gradually ramps traffic to newly registered targets. Use 0 to disable.
-      id: target_group_slow_start
+    - id: target_group_slow_start
       label: Slow start duration (secs)
+      type: number
+      description: Gradually ramps traffic to newly registered targets. Use 0 to disable.
+      collapsible: true
       max: 900
       min: 0
-      type: number
-    - collapsible: true
-      default: true
-      description: Enable load balancer cookie stickiness so repeat requests are routed to the same task when possible.
-      id: target_group_stickiness_enabled
+      default: 0
+    - id: target_group_stickiness_enabled
       label: Sticky sessions
       type: boolean
-    - collapsible: true
-      default: lb_cookie
-      id: target_group_stickiness_type
+      description: Enable load balancer cookie stickiness so repeat requests are routed to the same task when possible.
+      collapsible: true
+      default: true
+    - id: target_group_stickiness_type
       label: Stickiness type
+      type: string
+      collapsible: true
       show_when:
         target_group_stickiness_enabled: true
-      type: string
+      default: lb_cookie
       values:
         - label: Load balancer cookie
           value: lb_cookie
         - label: Application cookie
           value: app_cookie
-    - collapsible: true
-      default: 86400
-      id: target_group_stickiness_cookie_duration
+    - id: target_group_stickiness_cookie_duration
       label: Stickiness cookie duration (secs)
+      type: number
+      collapsible: true
       max: 604800
       min: 1
       show_when:
         target_group_stickiness_enabled: true
-      type: number
-    - collapsible: true
-      id: target_group_stickiness_cookie_name
+      default: 86400
+    - id: target_group_stickiness_cookie_name
       label: Application cookie name
+      type: string
+      collapsible: true
       required: false
       show_when:
         target_group_stickiness_type: app_cookie
-      type: string
-    - description: Add at least one domain host rule or path rule.
-      id: section_routing
+    - id: section_routing
       label: HTTP listener rules
       type: section
-    - add_button_label: Add domain host
-      default: null
-      description: Hostnames that should route to this service, such as app.example.com or *.example.com. Leave empty to use path-based routing.
-      id: host_header_values
+      description: Add at least one domain host rule or path rule.
+    - id: host_header_values
       label: Domain host rules
+      type: string_array
+      description: Hostnames that should route to this service, such as app.example.com or *.example.com. Leave empty to use path-based routing.
+      add_button_label: Add domain host
       placeholder: app.example.com
       required: false
-      type: string_array
-    - add_button_label: Add path pattern
-      collapsible: true
       default: null
-      description: Path patterns that should route to this service, such as /*, /api/*, or /app/*. If both domain host rules and path rules are empty, the service routes all paths with /*.
-      id: path_pattern_values
+    - id: path_pattern_values
       label: Path rules
-      required: false
       type: string_array
-    - collapsible: true
-      description: Optional ALB listener rule priority. Leave blank to let AWS assign the next available priority.
-      id: listener_rule_priority
+      description: Path patterns that should route to this service, such as /*, /api/*, or /app/*. If both domain host rules and path rules are empty, the service routes all paths with /*.
+      add_button_label: Add path pattern
+      collapsible: true
+      required: false
+      default: null
+    - id: listener_rule_priority
       label: Listener rule priority
+      type: number
+      description: Optional ALB listener rule priority. Leave blank to let AWS assign the next available priority.
+      collapsible: true
       max: 50000
       min: 1
-      type: number
     - id: section_task
       label: Container resources
       type: section
-    - default: fargate
-      description: Choose the primary capacity provider. Most services should use only one provider.
-      id: capacity_provider
+    - id: capacity_provider
       label: Capacity provider
-      required: true
       type: string
+      description: Choose the primary capacity provider. Most services should use only one provider.
+      required: true
+      default: fargate
       values:
         - label: Fargate
           value: fargate
@@ -491,79 +426,79 @@ module:
           value: fargate_spot
         - label: EC2
           value: ec2
-    - collapsible: true
-      default: false
-      description: Add Fargate to the capacity provider strategy in addition to the primary provider.
-      id: add_fargate_capacity
+    - id: add_fargate_capacity
       label: Also use Fargate
+      type: boolean
+      description: Add Fargate to the capacity provider strategy in addition to the primary provider.
+      collapsible: true
       show_when:
         capacity_provider:
           not: fargate
-      type: boolean
-    - collapsible: true
       default: false
-      description: Add lower-cost interruptible Fargate spot capacity in addition to the primary provider.
-      id: add_fargate_spot_capacity
+    - id: add_fargate_spot_capacity
       label: Also use Fargate spot
+      type: boolean
+      description: Add lower-cost interruptible Fargate spot capacity in addition to the primary provider.
+      collapsible: true
       show_when:
         capacity_provider:
           not: fargate_spot
-      type: boolean
-    - collapsible: true
       default: false
-      description: Add EC2 capacity from the selected cluster in addition to the primary provider.
-      id: add_ec2_capacity
+    - id: add_ec2_capacity
       label: Also use EC2
+      type: boolean
+      description: Add EC2 capacity from the selected cluster in addition to the primary provider.
+      collapsible: true
       show_when:
         capacity_provider:
           not: ec2
-      type: boolean
-    - default:
-        memory_gb: 4
-        vcpu: 2
+      default: false
+    - id: fargate_size
+      label: App size
+      type: compound
       description: CPU and memory for Fargate tasks. Prices are estimated from AWS Fargate pricing for the selected region, architecture, and capacity provider.
       fields:
         - vcpu
         - memory_gb
-      id: fargate_size
-      label: App size
       required: true
       show_when:
         capacity_provider:
           - fargate
           - fargate_spot
-      type: compound
+      default:
+        memory_gb: 4
+        vcpu: 2
       values: $values:aws/fargate/sizes?region=<<module.input.aws_region>>&cpuArchitecture=<<module.input.cpu_architecture>>&operatingSystem=linux&capacityProvider=<<module.input.capacity_provider>>
-    - default: "1.5"
-      description: vCPU reserved for each app task on EC2 capacity. Leave at least 0.25 vCPU unreserved on each EC2 instance for the ECS agent and system processes.
-      id: task_cpu
+    - id: task_cpu
       label: App vCPU
+      type: string
+      description: vCPU reserved for each app task on EC2 capacity. Leave at least 0.25 vCPU unreserved on each EC2 instance for the ECS agent and system processes.
+      placeholder: "1"
+      required: true
+      show_when:
+        capacity_provider: ec2
+      default: "1.5"
       patterns:
         - message: Enter a vCPU value, such as 0.5, 1, or 2.
           pattern: ^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+    - id: task_memory
+      label: App memory in GB
+      type: string
+      description: Memory reserved for each app task on EC2 capacity. Leave at least 0.5 GB unreserved on each EC2 instance for the ECS agent and system processes.
       placeholder: "1"
       required: true
       show_when:
         capacity_provider: ec2
-      type: string
-    - default: "3.5"
-      description: Memory reserved for each app task on EC2 capacity. Leave at least 0.5 GB unreserved on each EC2 instance for the ECS agent and system processes.
-      id: task_memory
-      label: App memory in GB
+      default: "3.5"
       patterns:
         - message: Enter a memory value in GB, such as 0.5, 1, or 4.
           pattern: ^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
-      placeholder: "1"
-      required: true
-      show_when:
-        capacity_provider: ec2
-      type: string
-    - collapsible: true
-      default: X86_64
-      description: Use x86_64 for broad compatibility; use ARM64 for lower cost when your image and dependencies support it.
-      id: cpu_architecture
+    - id: cpu_architecture
       label: CPU architecture
       type: string
+      description: Use x86_64 for broad compatibility; use ARM64 for lower cost when your image and dependencies support it.
+      collapsible: true
+      default: X86_64
       values:
         - description: Best default when you are unsure, use native x86 dependencies, or deploy existing images built for AMD/Intel CPUs.
           label: x86_64 - widest compatibility
@@ -571,166 +506,166 @@ module:
         - description: Often cheaper and efficient, but your image must be built for ARM64 and all native dependencies must support it.
           label: ARM64 - lower cost
           value: ARM64
-    - collapsible: true
-      default: false
-      description: Enable ECS Exec for interactive debugging in running containers. Leave off by default for tighter access control; turn on when operators need shell/debug access through AWS Systems Manager.
-      id: enable_execute_command
+    - id: enable_execute_command
       label: ECS exec
       type: boolean
+      description: Enable ECS Exec for interactive debugging in running containers. Leave off by default for tighter access control; turn on when operators need shell/debug access through AWS Systems Manager.
+      collapsible: true
+      default: false
     - id: section_scaling
       label: Autoscaling
       type: section
-    - default: true
-      id: enable_auto_scaling
+    - id: enable_auto_scaling
       label: Autoscaling
       type: boolean
-    - default: 1
-      description: Recommend at least 2 for production.
-      id: min_capacity
+      default: true
+    - id: min_capacity
       label: Minimum tasks
+      type: number
+      description: Recommend at least 2 for production.
       min: 0
       show_when:
         enable_auto_scaling: true
-      type: number
-    - default: 3
-      id: max_capacity
+      default: 1
+    - id: max_capacity
       label: Maximum tasks
+      type: number
       min: 1
       show_when:
         enable_auto_scaling: true
-      type: number
-    - collapsible: true
-      default: 70
-      id: cpu_target_value
+      default: 3
+    - id: cpu_target_value
       label: CPU target (%)
+      type: number
+      collapsible: true
       max: 100
       min: 1
       show_when:
         enable_auto_scaling: true
-      type: number
-    - collapsible: true
-      default: 80
-      description: Target average memory utilization for memory-based autoscaling. Leave blank to disable memory autoscaling.
-      id: memory_target_value
+      default: 70
+    - id: memory_target_value
       label: Memory target (%)
+      type: number
+      description: Target average memory utilization for memory-based autoscaling. Leave blank to disable memory autoscaling.
+      collapsible: true
       max: 100
       min: 1
       required: false
-      type: number
-    - collapsible: true
-      default: 300
-      description: Time after a scale-in activity before another scale-in can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
-      id: scale_in_cooldown
+      default: 80
+    - id: scale_in_cooldown
       label: Scale-in cooldown (secs)
-      min: 0
       type: number
-    - collapsible: true
+      description: Time after a scale-in activity before another scale-in can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
+      collapsible: true
+      min: 0
       default: 300
-      description: Time after a scale-out activity before another scale-out can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
-      id: scale_out_cooldown
+    - id: scale_out_cooldown
       label: Scale-out cooldown (secs)
-      min: 0
       type: number
-    - collapsible: true
-      default: false
-      description: Prevent autoscaling from reducing task count automatically.
-      id: disable_scale_in
+      description: Time after a scale-out activity before another scale-out can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
+      collapsible: true
+      min: 0
+      default: 300
+    - id: disable_scale_in
       label: Scale-in disabled
       type: boolean
-    - default: []
+      description: Prevent autoscaling from reducing task count automatically.
+      collapsible: true
+      default: false
+    - id: scheduled_scaling
+      label: Scheduled scaling actions
+      type: object_array
       description: Optional Application Auto Scaling scheduled actions for the ECS service desired count. Each action sets a recurring, one-time, or rate-based schedule and may update the minimum capacity, maximum capacity, or both.
-      id: scheduled_scaling
       item_inputs:
-        - description: Unique scheduled action name for this ECS service scalable target. AWS allows 1-256 characters and rejects leading/trailing spaces, control characters, colon, slash, and pipe.
-          id: name
+        - id: name
           label: Action name
+          type: string
+          description: Unique scheduled action name for this ECS service scalable target. AWS allows 1-256 characters and rejects leading/trailing spaces, control characters, colon, slash, and pipe.
+          placeholder: business-hours
+          required: true
           patterns:
             - message: Use 1-256 characters with no leading/trailing spaces and no control characters, colon, slash, or pipe.
               pattern: ^(?! )(?!.* $)(?!.*[\x00-\x1F\x7F-\x9F:/|]).{1,256}$
-          placeholder: business-hours
-          required: true
-          type: string
-        - description: "Application Auto Scaling schedule expression: at(yyyy-mm-ddThh:mm:ss), rate(value unit), or cron(fields). Cron normally uses six fields: minutes, hours, day-of-month, month, day-of-week, year."
-          id: schedule
+        - id: schedule
           label: Schedule expression
+          type: string
+          description: "Application Auto Scaling schedule expression: at(yyyy-mm-ddThh:mm:ss), rate(value unit), or cron(fields). Cron normally uses six fields: minutes, hours, day-of-month, month, day-of-week, year."
+          placeholder: cron(0 13 ? * MON-FRI *)
+          required: true
           patterns:
             - message: Use at(...), rate(value minute|minutes|hour|hours|day|days), or cron(...).
               pattern: ^(at\(.+\)|rate\([1-9][0-9]* (minute|minutes|hour|hours|day|days)\)|cron\(.+\))$
-          placeholder: cron(0 13 ? * MON-FRI *)
-          required: true
-          type: string
-        - description: Optional desired-count floor to apply when this action runs. Set minimum capacity, maximum capacity, or both.
-          id: min_capacity
+        - id: min_capacity
           label: Minimum capacity
+          type: number
+          description: Optional desired-count floor to apply when this action runs. Set minimum capacity, maximum capacity, or both.
           min: 0
           placeholder: "2"
           required: false
-          type: number
-        - description: Optional desired-count ceiling to apply when this action runs. Set maximum capacity, minimum capacity, or both.
-          id: max_capacity
+        - id: max_capacity
           label: Maximum capacity
+          type: number
+          description: Optional desired-count ceiling to apply when this action runs. Set maximum capacity, minimum capacity, or both.
           min: 0
           placeholder: "10"
           required: false
-          type: number
-        - default: UTC
-          description: IANA/Joda-Time canonical time zone used for at() and cron() expressions. Defaults to UTC. Does not affect start_time or end_time.
-          id: timezone
+        - id: timezone
           label: Time zone
+          type: string
+          description: IANA/Joda-Time canonical time zone used for at() and cron() expressions. Defaults to UTC. Does not affect start_time or end_time.
+          placeholder: UTC
+          required: false
+          default: UTC
           patterns:
             - message: Use a canonical IANA/Joda-Time time zone such as UTC, America/New_York, Etc/GMT+9, or Pacific/Tahiti.
               pattern: ^[A-Za-z_+-]+(?:/[A-Za-z0-9_+.-]+)*$
-          placeholder: UTC
-          required: false
-          type: string
-        - description: Optional UTC boundary for when a recurring scheduled action starts. Terraform expects RFC 3339 format and this value is not affected by timezone.
-          id: start_time
+        - id: start_time
           label: Start time
+          type: string
+          description: Optional UTC boundary for when a recurring scheduled action starts. Terraform expects RFC 3339 format and this value is not affected by timezone.
+          placeholder: "2026-01-02T15:04:05Z"
+          required: false
           patterns:
             - message: Use UTC RFC 3339 format, for example 2026-01-02T15:04:05Z.
               pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$
-          placeholder: 2026-01-02T15:04:05Z
-          required: false
-          type: string
-        - description: Optional UTC boundary for when a recurring scheduled action stops. Terraform expects RFC 3339 format and this value is not affected by timezone.
-          id: end_time
+        - id: end_time
           label: End time
+          type: string
+          description: Optional UTC boundary for when a recurring scheduled action stops. Terraform expects RFC 3339 format and this value is not affected by timezone.
+          placeholder: "2026-01-02T23:04:05Z"
+          required: false
           patterns:
             - message: Use UTC RFC 3339 format, for example 2026-01-02T23:04:05Z.
               pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$
-          placeholder: 2026-01-02T23:04:05Z
-          required: false
-          type: string
       item_label: Scheduled action
-      label: Scheduled scaling actions
       required: false
       show_when:
         enable_auto_scaling: true
+      default: []
+    - id: custom_metric_scaling_policies
+      label: Custom metric scaling policies
       type: object_array
-    - default: []
       description: Additional target tracking scaling policies using custom CloudWatch metrics. Each policy must use a metric that changes proportionally with ECS service capacity.
-      id: custom_metric_scaling_policies
       item_inputs:
-        - description: Application Auto Scaling policy name. Terraform/AWS require 1-255 characters and this name must be unique for the scalable target.
-          id: policy_name
+        - id: policy_name
           label: Policy name
+          type: string
+          description: Application Auto Scaling policy name. Terraform/AWS require 1-255 characters and this name must be unique for the scalable target.
+          placeholder: queue-depth
+          required: true
           patterns:
             - message: Use 1-255 characters.
               pattern: ^.{1,255}$
-          placeholder: queue-depth
-          required: true
-          type: string
-        - description: Target value for the custom metric. Choose a value appropriate for the CloudWatch metric, such as desired average queue depth per task.
-          id: target_value
+        - id: target_value
           label: Target value
+          type: number
+          description: Target value for the custom metric. Choose a value appropriate for the CloudWatch metric, such as desired average queue depth per task.
           placeholder: "100"
           required: true
-          type: number
-        - default:
-            dimensions: {}
-          description: "CloudWatch customized metric specification supported by this Terraform module: metric_name, namespace, statistic, and optional dimensions map. Statistic must be Average, Minimum, Maximum, SampleCount, or Sum."
-          id: custom_metric
+        - id: custom_metric
           label: Custom metric
+          type: object
+          description: "CloudWatch customized metric specification supported by this Terraform module: metric_name, namespace, statistic, and optional dimensions map. Statistic must be Average, Minimum, Maximum, SampleCount, or Sum."
           placeholder: |-
             metric_name: ApproximateNumberOfMessagesVisible
             namespace: AWS/SQS
@@ -738,40 +673,41 @@ module:
             dimensions:
               QueueName: my-queue
           required: true
-          type: object
-        - default: 300
-          description: Seconds after a scale-in activity completes before another scale-in activity can start.
-          id: scale_in_cooldown
+          default:
+            dimensions: {}
+        - id: scale_in_cooldown
           label: Scale-in cooldown seconds
+          type: number
+          description: Seconds after a scale-in activity completes before another scale-in activity can start.
           min: 0
           placeholder: "300"
           required: false
-          type: number
-        - default: 300
-          description: Seconds to wait for a previous scale-out activity to take effect.
-          id: scale_out_cooldown
+          default: 300
+        - id: scale_out_cooldown
           label: Scale-out cooldown seconds
+          type: number
+          description: Seconds to wait for a previous scale-out activity to take effect.
           min: 0
           placeholder: "60"
           required: false
-          type: number
-        - default: false
-          description: When enabled, the target tracking policy can scale out but will not remove running tasks.
-          id: disable_scale_in
+          default: 300
+        - id: disable_scale_in
           label: Disable scale in
           type: boolean
+          description: When enabled, the target tracking policy can scale out but will not remove running tasks.
+          default: false
       item_label: Custom metric policy
-      label: Custom metric scaling policies
       required: false
       show_when:
         enable_auto_scaling: true
-      type: object_array
+      default: []
     - id: section_app_config
       label: Environment variables
       type: section
-    - description: Environment variables available during image builds. Values can be plain strings or references loaded from Parameter Store.
-      id: build_environment_variables
+    - id: build_environment_variables
       label: Build environment variables
+      type: object
+      description: Environment variables available during image builds. Values can be plain strings or references loaded from Parameter Store.
       placeholder: |-
         {
           "NODE_ENV": "production",
@@ -783,50 +719,49 @@ module:
           }
         }
       required: false
-      type: object
-    - default: false
-      description: Pass build environment variables into Dockerfile builds as build arguments.
-      id: dockerfile_inject_env_variables
+    - id: dockerfile_inject_env_variables
       label: Inject environment variables in Dockerfile
+      type: boolean
+      description: Pass build environment variables into Dockerfile builds as build arguments.
       show_when:
         build_type: dockerfile
-      type: boolean
-    - description: Runtime environment variables passed to the app container. PORT is added automatically from the container port setting.
-      id: environment_variables
+      default: false
+    - id: environment_variables
       label: Runtime environment variables
+      type: array
+      description: Runtime environment variables passed to the app container. PORT is added automatically from the container port setting.
       placeholder: |-
         - name: NODE_ENV
           value: production
-      type: array
-    - description: Secrets injected into the ECS task at runtime as an array of {name, value_from} objects. value_from can be an SSM parameter or Secrets Manager ARN.
-      id: secrets
+    - id: secrets
       label: Runtime secrets
+      type: array
+      description: Secrets injected into the ECS task at runtime as an array of {name, value_from} objects. value_from can be an SSM parameter or Secrets Manager ARN.
       placeholder: |-
         - name: DATABASE_URL
           valueFrom: arn:aws:ssm:...
-      type: array
-    - description: CloudWatch logging is enabled by default. Enable FireLens to route app stdout/stderr to additional destinations with Fluent Bit.
-      id: section_logging
+    - id: section_logging
       label: Logging
       type: section
-    - default: false
-      description: Routes the app container logs through a Fluent Bit sidecar. CloudWatch output stays enabled by default so Ravion runtime logs continue to work.
-      id: enable_firelens
+      description: CloudWatch logging is enabled by default. Enable FireLens to route app stdout/stderr to additional destinations with Fluent Bit.
+    - id: enable_firelens
       label: FireLens log routing
       type: boolean
-    - default: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
-      description: Container image for the Fluent Bit log router sidecar.
-      id: firelens_image
+      description: Routes the app container logs through a Fluent Bit sidecar. CloudWatch output stays enabled by default so Ravion runtime logs continue to work.
+      default: false
+    - id: firelens_image
       label: FireLens image
+      type: string
+      description: Container image for the Fluent Bit log router sidecar.
       placeholder: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
       required: true
       show_when:
         enable_firelens: true
-      type: string
-    - default: ""
-      description: Optional Fluent Bit config appended after the generated [SERVICE] block. Add [OUTPUT] blocks here for destinations such as Datadog, Splunk, Firehose, OpenSearch, or S3.
-      id: firelens_config
+      default: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
+    - id: firelens_config
       label: Additional Fluent Bit config
+      type: text
+      description: Optional Fluent Bit config appended after the generated [SERVICE] block. Add [OUTPUT] blocks here for destinations such as Datadog, Splunk, Firehose, OpenSearch, or S3.
       placeholder: |-
         [OUTPUT]
             Name firehose
@@ -836,70 +771,70 @@ module:
       required: false
       show_when:
         enable_firelens: true
-      type: text
-    - default: true
-      description: Recommended. Sends FireLens-routed app logs to the service CloudWatch log group so Ravion runtime logs continue to work. Disable only if all app logs should go exclusively to external destinations.
-      id: firelens_enable_cloudwatch_output
+      default: ""
+    - id: firelens_enable_cloudwatch_output
       label: Keep CloudWatch output enabled
+      type: boolean
+      description: Recommended. Sends FireLens-routed app logs to the service CloudWatch log group so Ravion runtime logs continue to work. Disable only if all app logs should go exclusively to external destinations.
       show_when:
         enable_firelens: true
-      type: boolean
-    - default: true
-      description: Adds ECS cluster, task, and container metadata to FireLens log records.
-      id: firelens_enable_ecs_metadata
+      default: true
+    - id: firelens_enable_ecs_metadata
       label: Add ECS log metadata
+      type: boolean
+      description: Adds ECS cluster, task, and container metadata to FireLens log records.
       show_when:
         enable_firelens: true
-      type: boolean
-    - default: []
-      description: Environment variables passed to the log router sidecar. Use these for non-secret destination options.
-      id: firelens_environment_variables
+      default: true
+    - id: firelens_environment_variables
       label: FireLens environment variables
+      type: array
+      description: Environment variables passed to the log router sidecar. Use these for non-secret destination options.
       placeholder: |-
         - name: DD_SITE
           value: datadoghq.com
       required: false
       show_when:
         enable_firelens: true
-      type: array
-    - default: []
-      description: Secrets injected into the log router sidecar as an array of {name, value_from} objects. Use these for API keys or tokens stored in SSM Parameter Store or Secrets Manager.
-      id: firelens_secrets
+      default: []
+    - id: firelens_secrets
       label: FireLens secrets
+      type: array
+      description: Secrets injected into the log router sidecar as an array of {name, value_from} objects. Use these for API keys or tokens stored in SSM Parameter Store or Secrets Manager.
       placeholder: |-
         - name: DD_API_KEY
           valueFrom: arn:aws:ssm:us-east-1:123456789012:parameter/datadog-api-key
       required: false
       show_when:
         enable_firelens: true
-      type: array
+      default: []
     - id: section_iam
       label: IAM roles and policies
       type: section
-    - collapsible: true
-      description: Optional existing ECS task execution role ARN. Leave blank to let the module create and manage the execution role used for pulling images and writing logs.
-      id: execution_role_arn
+    - id: execution_role_arn
       label: Execution role ARN override
-      required: false
       type: string
-    - collapsible: true
-      description: Optional existing ECS task role ARN for application AWS permissions. Leave blank to let the module create a task role and attach the policies configured below.
-      id: task_role_arn
+      description: Optional existing ECS task execution role ARN. Leave blank to let the module create and manage the execution role used for pulling images and writing logs.
+      collapsible: true
+      required: false
+    - id: task_role_arn
       label: Task role ARN override
-      required: false
       type: string
-    - collapsible: true
-      default: []
-      description: Additional managed IAM policy ARNs to attach to the generated task role. Only used when task role ARN override is blank.
-      id: task_role_policies
-      label: Task role policy ARNs
+      description: Optional existing ECS task role ARN for application AWS permissions. Leave blank to let the module create a task role and attach the policies configured below.
+      collapsible: true
       required: false
+    - id: task_role_policies
+      label: Task role policy ARNs
       type: string_array
-    - collapsible: true
-      default: {}
-      description: Inline IAM policy documents keyed by policy name.
-      id: task_role_inline_policies
+      description: Additional managed IAM policy ARNs to attach to the generated task role. Only used when task role ARN override is blank.
+      collapsible: true
+      required: false
+      default: []
+    - id: task_role_inline_policies
       label: Task role inline policies
+      type: object
+      description: Inline IAM policy documents keyed by policy name.
+      collapsible: true
       placeholder: |-
         {
           "read-app-bucket": {
@@ -916,155 +851,755 @@ module:
           }
         }
       required: false
-      type: object
-    - collapsible: true
-      default: []
-      description: Additional managed IAM policy ARNs to attach to the generated execution role. Only used when execution role ARN override is blank.
-      id: execution_role_policies
+      default: {}
+    - id: execution_role_policies
       label: Execution role policy ARNs
-      required: false
       type: string_array
-    - id: section_deployment
-      label: Deployment rollout
+      description: Additional managed IAM policy ARNs to attach to the generated execution role. Only used when execution role ARN override is blank.
+      collapsible: true
+      required: false
+      default: []
+    - id: section_runtime_networking
+      label: Networking and deployment
       type: section
-    - collapsible: true
-      default: 100
-      description: Minimum percentage of desired tasks that must stay healthy during rolling deployments. Keep 100 for zero-downtime deploys. Lower it only when the cluster does not have enough spare capacity to start replacement tasks first, since lowering it can reduce availability during deploys.
-      id: deployment_minimum_healthy_percent
+      description: Configure deployment rollout limits, task network access, sidecars, and task volumes.
+    - id: deployment_minimum_healthy_percent
       label: Minimum healthy percent
+      type: number
+      description: Minimum percentage of desired tasks that must stay healthy during rolling deployments. Keep 100 for zero-downtime deploys. Lower it only when the cluster does not have enough spare capacity to start replacement tasks first, since lowering it can reduce availability during deploys.
+      collapsible: true
       max: 200
       min: 0
-      type: number
-    - collapsible: true
-      default: 200
-      description: Maximum temporary task count during rolling deployments. Keep 200 for fast replacement capacity. Lower it when cluster capacity, IP availability, or burst cost should limit how many extra tasks ECS can start.
-      id: deployment_maximum_percent
+      default: 100
+    - id: deployment_maximum_percent
       label: Maximum percent
+      type: number
+      description: Maximum temporary task count during rolling deployments. Keep 200 for fast replacement capacity. Lower it when cluster capacity, IP availability, or burst cost should limit how many extra tasks ECS can start.
+      collapsible: true
       max: 400
       min: 100
-      type: number
-    - id: section_network_security
-      label: Network security
-      type: section
-    - collapsible: true
-      default: []
-      description: Additional security group IDs to attach to ECS tasks.
-      id: security_group_ids
+      default: 200
+    - id: security_group_ids
       label: Additional security groups
-      required: false
       type: string_array
-    - collapsible: true
+      description: Additional security group IDs to attach to ECS tasks.
+      collapsible: true
+      required: false
       default: []
-      description: CIDR blocks allowed direct access to the service in addition to load balancer traffic.
-      id: allowed_cidr_blocks
+    - id: allowed_cidr_blocks
       label: Allowed CIDR blocks
-      required: false
       type: string_array
-    - id: section_storage
-      label: Volumes
-      type: section
-    - default: []
-      description: ECS task volume definitions, including EFS or Docker volumes.
-      id: volumes
+      description: CIDR blocks allowed direct access to the service in addition to load balancer traffic.
+      collapsible: true
+      required: false
+      default: []
+    - id: sidecars
+      label: Sidecars
+      type: object_array
+      description: Optional containers that run in the same ECS task as the web container. Use sidecars for agents, local proxies, lightweight workers, or helper processes that should share task networking and lifecycle with the app.
+      item_inputs:
+        - id: name
+          label: Container name
+          type: string
+          description: Unique name for this sidecar container within the task.
+          placeholder: datadog-agent
+          required: true
+          patterns:
+            - message: "Use 1-255 characters: letters, numbers, hyphens, and underscores only."
+              pattern: ^[A-Za-z0-9_-]{1,255}$
+        - id: image
+          label: Container image
+          type: string
+          description: Container image URI or registry reference for the sidecar.
+          placeholder: public.ecr.aws/datadog/agent:latest
+          required: true
+        - id: essential
+          label: Essential container
+          type: boolean
+          description: When enabled, ECS stops the whole task if this sidecar exits. Leave disabled for optional agents or helpers that should not take down the app.
+          default: false
+        - id: cpu
+          label: CPU units
+          type: number
+          description: Optional CPU units reserved for this sidecar. Increase the task size if sidecars need dedicated CPU.
+          min: 0
+          placeholder: "128"
+          required: false
+        - id: memory
+          label: Memory limit in MiB
+          type: number
+          description: Optional hard memory limit for this sidecar. ECS stops the container if it exceeds this limit.
+          min: 0
+          placeholder: "256"
+          required: false
+        - id: memory_reservation
+          label: Memory reservation in MiB
+          type: number
+          description: Optional soft memory reservation for this sidecar. Useful for agents that can burst above their normal memory use.
+          min: 0
+          placeholder: "128"
+          required: false
+        - id: environment
+          label: Environment variables
+          type: object_array
+          description: Environment variables passed to this sidecar container.
+          item_inputs:
+            - id: name
+              label: Name
+              type: string
+              description: Environment variable name.
+              placeholder: DD_ENV
+              required: true
+              patterns:
+                - message: Use a valid environment variable name.
+                  pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+            - id: value
+              label: Value
+              type: string
+              description: Environment variable value.
+              placeholder: production
+              required: true
+          item_label: Environment variable
+          required: false
+          default: []
+        - id: secrets
+          label: Secrets
+          type: object_array
+          description: Secrets injected into this sidecar from SSM Parameter Store or Secrets Manager.
+          item_inputs:
+            - id: name
+              label: Name
+              type: string
+              description: Environment variable name exposed to the sidecar.
+              placeholder: API_KEY
+              required: true
+              patterns:
+                - message: Use a valid environment variable name.
+                  pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+            - id: value_from
+              label: Value from
+              type: string
+              description: SSM parameter or Secrets Manager ARN containing the secret value.
+              placeholder: arn:aws:ssm:us-east-1:123456789012:parameter/my-secret
+              required: true
+          item_label: Secret
+          required: false
+          default: []
+        - id: port_mappings
+          label: Port mappings
+          type: object_array
+          description: Optional ports exposed by this sidecar inside the task. Most helper sidecars do not need port mappings.
+          item_inputs:
+            - id: container_port
+              label: Container port
+              type: number
+              description: Port exposed by the sidecar container.
+              max: 65535
+              min: 1
+              placeholder: "8126"
+              required: true
+            - id: host_port
+              label: Host port
+              type: number
+              description: Optional host port for EC2 networking modes. Leave empty for awsvpc tasks unless you need a fixed host port.
+              max: 65535
+              min: 1
+              placeholder: "8126"
+              required: false
+            - id: protocol
+              label: Protocol
+              type: string
+              description: Network protocol for this port mapping.
+              required: false
+              default: tcp
+              values:
+                - label: TCP
+                  value: tcp
+                - label: UDP
+                  value: udp
+            - id: app_protocol
+              label: Application protocol
+              type: string
+              description: Optional application protocol used by service connect integrations.
+              required: false
+              values:
+                - label: HTTP
+                  value: http
+                - label: HTTP/2
+                  value: http2
+                - label: gRPC
+                  value: grpc
+          item_label: Port mapping
+          required: false
+          default: []
+        - id: mount_points
+          label: Mount points
+          type: object_array
+          description: Optional task volume mounts for this sidecar. The source volume must match a task volume name.
+          item_inputs:
+            - id: source_volume
+              label: Source volume
+              type: string
+              description: Task volume name to mount into the sidecar.
+              placeholder: shared-data
+              required: true
+            - id: container_path
+              label: Container path
+              type: string
+              description: Path inside the sidecar container where the volume is mounted.
+              placeholder: /data
+              required: true
+              patterns:
+                - message: Use an absolute container path.
+                  pattern: ^/
+            - id: read_only
+              label: Read only
+              type: boolean
+              description: Mount the volume as read-only inside the sidecar.
+              default: false
+          item_label: Mount point
+          required: false
+          default: []
+        - id: depends_on
+          label: Container dependencies
+          type: object_array
+          description: Optional startup dependencies for this sidecar. Use this when the sidecar should wait for another container to start or become healthy.
+          item_inputs:
+            - id: container_name
+              label: Container name
+              type: string
+              description: Container this sidecar depends on.
+              placeholder: app
+              required: true
+            - id: condition
+              label: Condition
+              type: string
+              description: Startup condition to wait for before starting this sidecar.
+              required: true
+              default: START
+              values:
+                - label: Start
+                  value: START
+                - label: Healthy
+                  value: HEALTHY
+                - label: Complete
+                  value: COMPLETE
+                - label: Success
+                  value: SUCCESS
+          item_label: Dependency
+          required: false
+          default: []
+        - id: command
+          label: Command
+          type: string_array
+          description: Optional command arguments that override the image default command.
+          placeholder: "--config"
+          required: false
+          default: []
+        - id: entry_point
+          label: Entry point
+          type: string_array
+          description: Optional entry point arguments that override the image default entry point.
+          placeholder: /bin/sh
+          required: false
+          default: []
+        - id: working_directory
+          label: Working directory
+          type: string
+          description: Optional working directory inside the sidecar container.
+          placeholder: /app
+          required: false
+      item_label: Sidecar
+      required: false
+      default: []
+    - id: volumes
       label: Task volumes
-      placeholder: |-
-        - name: shared-data
-          efs_volume_configuration:
+      type: object_array
+      description: Optional ECS task volumes. Use EFS for persistent shared storage that can be mounted by Fargate or EC2 Linux tasks, such as user uploads or shared application data. Use Docker volumes only for EC2 launch type tasks when data can live on the container instance and does not need Fargate support. Each volume can use either EFS or Docker, not both.
+      item_inputs:
+        - id: name
+          label: Volume name
+          type: string
+          description: Required ECS task volume name. Use this name from container mount points.
+          placeholder: shared-data
+          required: true
+          patterns:
+            - message: "Use 1-255 characters: letters, numbers, hyphens, and underscores only."
+              pattern: ^[A-Za-z0-9_-]{1,255}$
+        - id: volume_type
+          label: Volume type
+          type: string
+          description: Choose the backing storage for this task volume.
+          required: true
+          default: efs
+          values:
+            - description: Persistent shared file storage for Fargate or EC2 Linux tasks.
+              label: EFS
+              value: efs
+            - description: Local Docker-managed volume for EC2 launch type tasks only.
+              label: Docker
+              value: docker
+        - id: efs_volume_configuration
+          label: EFS volume configuration
+          type: object
+          description: Configure an existing Amazon EFS file system. Use this when files must survive task replacement, be shared across tasks, or run on Fargate. At minimum provide file_system_id; add an access point and IAM authorization when you need scoped POSIX permissions.
+          placeholder: |-
             file_system_id: fs-abc123
             root_directory: /
+            transit_encryption: ENABLED
+            authorization_config:
+              access_point_id: fsap-abc123
+              iam: ENABLED
+          required: true
+          show_when:
+            volume_type: efs
+        - id: docker_volume_configuration
+          label: Docker volume configuration
+          type: object
+          description: Configure a Docker-managed volume for EC2 launch type tasks. Use this only when the service runs on EC2 capacity and the volume can be tied to the container instance. Do not use Docker volumes for Fargate services.
+          placeholder: |-
+            scope: task
+            autoprovision: false
+            driver: local
+            driver_opts: {}
+            labels: {}
+          required: true
+          show_when:
+            volume_type: docker
+      item_label: Volume
       required: false
-      type: array
+      default: []
     - id: section_builder_config
       label: Builder config
+      type: section
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: section
-    - default: ec2
-      description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
-      id: build_infrastructure_type
+    - id: build_infrastructure_type
       label: Builder instance type
+      type: string
+      description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
       required: true
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: string
+      default: ec2
       values:
         - label: EC2
           value: ec2
         - label: EC2 spot
           value: ec2-spot
-    - default: c7a.4xlarge
-      description: EC2 instance type for image builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
-      id: build_instance_size
+    - id: build_instance_size
       label: Builder instance size
+      type: string
+      description: EC2 instance type for image builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
       no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
       required: true
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: string
+      default: c7a.4xlarge
       values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
-    - collapsible: true
-      description: Optional execution environment ID or given ID for image builds. Defaults to the selected cluster execution environment.
-      id: build_execution_environment_id
+    - id: build_execution_environment_id
       label: Builder execution environment
+      type: string
+      description: Optional execution environment ID or given ID for image builds. Defaults to the selected cluster execution environment.
+      collapsible: true
       required: false
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: string
-    - collapsible: true
-      description: Optional AMI ID for build runners. Leave empty to use the default runner image.
-      id: build_ami
+    - id: build_ami
       label: Builder AMI
+      type: string
+      description: Optional AMI ID for build runners. Leave empty to use the default runner image.
+      collapsible: true
       required: false
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: string
     - id: section_ecr
       label: Image registry lifecycle
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
       type: section
-    - collapsible: true
-      default: true
-      description: Ask ECR to run its basic vulnerability scan whenever a new image is pushed. Keep this on for early dependency and OS package findings; disable only if another scanner owns image scanning or duplicate findings are noisy.
-      id: ecr_scan_on_push
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+    - id: ecr_scan_on_push
       label: Scan images on push
+      type: boolean
+      description: Ask ECR to run its basic vulnerability scan whenever a new image is pushed. Keep this on for early dependency and OS package findings; disable only if another scanner owns image scanning or duplicate findings are noisy.
+      collapsible: true
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: boolean
-    - collapsible: true
-      default: false
-      description: Allow the ECR repository to be deleted even when it contains images. Use with care.
-      id: ecr_force_delete
+      default: true
+    - id: ecr_force_delete
       label: Force delete image repository
+      type: boolean
+      description: Allow the ECR repository to be deleted even when it contains images. Use with care.
+      collapsible: true
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: boolean
+      default: false
     - id: section_misc
       label: Misc
       type: section
-    - default: true
-      description: Force ECS to start a new deployment when applying service configuration, even if the task definition did not change.
-      id: force_new_deployment
+    - id: force_new_deployment
       label: Force new deployment
       type: boolean
-    - $include: ../../partials/inputs/tags.yml
-    - $include: ../../partials/inputs/terraform-settings.yml
+      description: Force ECS to start a new deployment when applying service configuration, even if the task definition did not change.
+      default: true
+    - id: tags
+      label: Tags
+      type: keyvalue
+      description: Additional tags for all resources. Ravion also adds standard project, environment, and module tags.
+      required: false
+    - id: section_advanced
+      label: Terraform settings
+      type: section
+    - id: opentofu_version
+      label: OpenTofu version override
+      type: string
+      collapsible: true
+      required: false
+      values: $values:opentofu/versions
+    - id: ravion_state_backend_workspace
+      label: Ravion Terraform workspace name
+      type: string
+      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
+      collapsible: true
+    - id: advanced_terraform_variables
+      label: Advanced Terraform variables
+      type: object
+      description: Optional raw Terraform variable overrides for lower-level ecs_service inputs.
+      collapsible: true
+      required: false
+      default: {}
+  stack:
+    type: opentofu
+    ravion_state_backend_workspace: << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id>>
+    pipelines:
+      defaults:
+        input:
+          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
+          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
+          base_path: compute/ecs_service
+          branch: main
+          execution_environment_id: << module.input.execution_environment_id >>
+          ref: 84eb256921edf88126c5451608ce6f010d94842f
+          repo: https://github.com/flightcontrolhq/modules
+          stack_id: <<stack.id>>
+          terraform_variables:
+            ...overrides: << module.input.advanced_terraform_variables >>
+            allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
+            assign_public_ip: "<< module.input.use_private_subnets ? false : true >>"
+            auto_scaling:
+              enabled: << module.input.enable_auto_scaling >>
+              max_capacity: << module.input.max_capacity >>
+              min_capacity: << module.input.min_capacity >>
+              scheduled: "<< module.input.scheduled_scaling != nil ? module.input.scheduled_scaling : [] >>"
+              target_tracking:
+                - disable_scale_in: << module.input.disable_scale_in >>
+                  policy_name: cpu
+                  predefined_metric: ECSServiceAverageCPUUtilization
+                  scale_in_cooldown: << module.input.scale_in_cooldown >>
+                  scale_out_cooldown: << module.input.scale_out_cooldown >>
+                  target_value: << module.input.cpu_target_value >>
+                - '...<< module.input.memory_target_value ? [{policy_name: "memory", predefined_metric: "ECSServiceAverageMemoryUtilization", target_value: module.input.memory_target_value, scale_in_cooldown: module.input.scale_in_cooldown, scale_out_cooldown: module.input.scale_out_cooldown, disable_scale_in: module.input.disable_scale_in}] : [] >>'
+                - "...<< module.input.custom_metric_scaling_policies != nil && module.input.custom_metric_scaling_policies != [] ? module.input.custom_metric_scaling_policies : [] >>"
+            capacity_provider_strategies:
+              - '...<< module.input.capacity_provider == "fargate" || module.input.add_fargate_capacity ? [{capacity_provider: module.input.fargate_capacity_provider_name, weight: 1, base: 0}] : [] >>'
+              - '...<< module.input.capacity_provider == "fargate_spot" || module.input.add_fargate_spot_capacity ? [{capacity_provider: module.input.fargate_spot_capacity_provider_name, weight: 1, base: 0}] : [] >>'
+              - '...<< module.input.capacity_provider == "ec2" || module.input.add_ec2_capacity ? [{capacity_provider: module.input.ec2_capacity_provider_name, weight: 1, base: 0}] : [] >>'
+            cluster_arn: << module.input.cluster_arn >>
+            container_port: << module.input.container_port >>
+            deployment_maximum_percent: << module.input.deployment_maximum_percent >>
+            deployment_minimum_healthy_percent: << module.input.deployment_minimum_healthy_percent >>
+            deployment_type: rolling
+            desired_count: 0
+            ecr_enable_default_lifecycle_policy: true
+            ecr_force_delete: << module.input.ecr_force_delete >>
+            ecr_repository_name: << module.input.name >>
+            ecr_scan_on_push: << module.input.ecr_scan_on_push >>
+            enable_ecr: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
+            enable_execute_command: << module.input.enable_execute_command >>
+            execution_role_arn: << module.input.execution_role_arn || nil >>
+            execution_role_policies: << module.input.execution_role_policies >>
+            force_new_deployment: << module.input.force_new_deployment >>
+            health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
+            launch_type: '<< module.input.capacity_provider == "ec2" ? "EC2" : "FARGATE" >>'
+            load_balancer_attachment:
+              container_port: << module.input.container_port >>
+              enabled: true
+              listener_rules:
+                - conditions:
+                    - '...<< module.input.host_header_values != nil && module.input.host_header_values != [] ? [{type: "host-header", values: module.input.host_header_values}] : [] >>'
+                    - '...<< module.input.path_pattern_values != nil && module.input.path_pattern_values != [] ? [{type: "path-pattern", values: module.input.path_pattern_values}] : module.input.host_header_values != nil && module.input.host_header_values != [] ? [] : [{type: "path-pattern", values: ["/*"]}] >>'
+                  listener_arn: "<< module.input.is_public ? (module.input.public_alb_https_listener_arn || module.input.public_alb_http_listener_arn) : (module.input.private_alb_https_listener_arn || module.input.private_alb_http_listener_arn) >>"
+                  priority: << module.input.listener_rule_priority >>
+              target_group:
+                health_check:
+                  enabled: true
+                  healthy_threshold: << module.input.healthy_threshold >>
+                  interval: << module.input.health_check_interval >>
+                  matcher: << module.input.health_check_matcher >>
+                  path: << module.input.health_check_path >>
+                  timeout: << module.input.health_check_timeout >>
+                  unhealthy_threshold: << module.input.unhealthy_threshold >>
+                port: << module.input.container_port >>
+                protocol: HTTP
+                slow_start: << module.input.target_group_slow_start >>
+                stickiness:
+                  cookie_duration: << module.input.target_group_stickiness_cookie_duration >>
+                  cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
+                  enabled: << module.input.target_group_stickiness_enabled >>
+                  type: << module.input.target_group_stickiness_type >>
+                target_type: ip
+            load_balancer_security_group_id: "<< module.input.is_public ? module.input.public_alb_security_group_id : module.input.private_alb_security_group_id >>"
+            name: << module.input.name >>
+            network_mode: awsvpc
+            region: << module.input.aws_region >>
+            requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
+            runtime_platform:
+              cpu_architecture: << module.input.cpu_architecture >>
+              operating_system_family: LINUX
+            security_group_ids: << module.input.security_group_ids >>
+            subnet_ids: "<< module.input.use_private_subnets ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
+            tags:
+              ...overrides: << module.input.tags >>
+              EnvironmentGivenId: <<environment.given_id>>
+              ModuleGivenId: <<module.given_id>>
+              ModuleId: <<module.id>>
+              Owner: Ravion
+              ProjectGivenId: <<project.given_id>>
+            task_cpu: '<< module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024) >>'
+            task_memory: '<< module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024) >>'
+            task_role_arn: << module.input.task_role_arn || nil >>
+            task_role_inline_policies: << module.input.task_role_inline_policies >>
+            task_role_policies: << module.input.task_role_policies >>
+            volumes: '<< module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name": #.name, "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name, "docker_volume_configuration": #.docker_volume_configuration}) : [] >>'
+            vpc_id: << module.input.vpc_id >>
+            wait_for_steady_state: false
+          tool: opentofu
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
+        variant: standard
+      change:
+        pipeline_id: << defaults.change_pipeline_id >>
+      destroy:
+        pipeline_id: << defaults.destroy_pipeline_id >>
+  build:
+    type: '<< module.input.build_type == "external_image" ? "disabled" : "image" >>'
+    builder: '<< module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile: module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} : module.input.build_type == "nixpacks" ? {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, start_cmd: module.input.nixpacks_start_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs, cache_from: {tag: "nixpacks"}} : {type: "disabled"} >>'
+    destinations:
+      - id: ecr
+        type: ecr
+        repository_arn: << stack.output.ecr_repository_arn >>
+        tags:
+          - <<pipeline.run.id>>-<< module.input.build_type >>
+          - << module.input.build_type >>
+    environment_variables: << module.input.build_environment_variables >>
+    infrastructure:
+      ami: '<< module.input.build_ami != "" ? module.input.build_ami : nil >>'
+      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
+      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
+      instance_size: << module.input.build_instance_size >>
+      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
+      type: << module.input.build_infrastructure_type >>
+    inputs:
+      - id: branch
+        label: Git branch
+        type: string
+        description: Defaults to repo default branch
+        required: false
+      - id: ref
+        label: Git ref (commit or tag)
+        type: string
+        description: Optional commit SHA, tag, or ref to build. Defaults to the configured branch head.
+        required: false
+    source:
+      base_path: << module.input.source_base_path || "." >>
+      branch: << build.input.branch >>
+      ref: << build.input.ref >>
+      repo: << module.input.source_repo >>
+      type: git
+  deploy:
+    type: aws:ecs
+    concurrency:
+      queue_overflow: oldest
+      queue_size: 1
+    infrastructure:
+      ecs_cluster_arn: <<stack.output.service_cluster>>
+      ecs_service_arns:
+        - <<stack.output.service_arn>>
+    inputs:
+      - id: image_ref
+        label: Image tag or digest
+        type: string
+        description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For external image repository mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
+        placeholder: sha256:... or latest or <run-id>-nixpacks
+        required: true
+    task_definition:
+      container_definitions: "<< (module.input.enable_firelens ? [{\"cpu\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)), \"depends_on\": [{\"container_name\": \"log_router\", \"condition\": \"START\"}], \"environment\": ([{name: \"PORT\", value: string(module.input.container_port)}] | concat(module.input.environment_variables != nil ? module.input.environment_variables : [])), \"essential\": true, \"image\": (module.input.build_type == \"external_image\" ? (module.input.use_aws_public_mirror ? (deploy.input.image_ref contains \"sha256:\" ? \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \"@\" + deploy.input.image_ref : \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \":\" + deploy.input.image_ref) : (deploy.input.image_ref contains \"sha256:\" ? module.input.external_image_name + \"@\" + deploy.input.image_ref : module.input.external_image_name + \":\" + deploy.input.image_ref)) : (deploy.input.image_ref contains \"sha256:\" ? stack.output.ecr_repository_url + \"@\" + deploy.input.image_ref : stack.output.ecr_repository_url + \":\" + deploy.input.image_ref)), \"linux_parameters\": {\"init_process_enabled\": true}, \"log_configuration\": {\"log_driver\": \"awsfirelens\"}, \"memory\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)), \"name\": (stack.output.container_name), \"port_mappings\": [{\"app_protocol\": \"http\", \"container_port\": (module.input.container_port), \"protocol\": \"tcp\"}], \"readonly_root_filesystem\": false, \"repository_credentials\": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), \"secrets\": (module.input.secrets), \"stop_timeout\": 30}, {\"name\": \"log_router\", \"image\": module.input.firelens_image, \"cpu\": 0, \"memory_reservation\": 51, \"essential\": true, \"environment\": ([{name: \"FIRELENS_CONFIG_CONTENT\", value: \"[SERVICE]\\n    Flush 1\\n    Grace 30\\n\\n\" + (module.input.firelens_config ? module.input.firelens_config + \"\\n\" : \"\") + (module.input.firelens_enable_cloudwatch_output ? \"\\n[OUTPUT]\\n    Name cloudwatch\\n    Match *\\n    region \" + stack.output.region + \"\\n    log_group_name \" + stack.output.log_group_name + \"\\n    auto_create_group true\\n    log_stream_prefix \" + stack.output.log_stream_prefix + \"/\\n    retry_limit 2\\n    log_key log\\n    log_format json/emf\\n\" : \"\")}] | concat(module.input.firelens_environment_variables != nil ? module.input.firelens_environment_variables : [])), \"secrets\": module.input.firelens_secrets != nil ? module.input.firelens_secrets : [], \"command\": [\"/bin/sh\", \"-c\", \"printf '%s' \\\"$FIRELENS_CONFIG_CONTENT\\\" > /flightcontrol-firelens.conf && exec /entrypoint.sh\"], \"user\": \"0\", \"log_configuration\": {\"log_driver\": \"awslogs\", \"options\": {\"awslogs-group\": stack.output.log_group_name, \"awslogs-region\": stack.output.region, \"awslogs-stream-prefix\": stack.output.log_stream_prefix + \"/firelens\"}}, \"firelens_configuration\": {\"type\": \"fluentbit\", \"options\": {\"config-file-type\": \"file\", \"config-file-value\": \"/flightcontrol-firelens.conf\", \"enable-ecs-log-metadata\": string(module.input.firelens_enable_ecs_metadata)}}}] : [{\"cpu\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)), \"environment\": ([{name: \"PORT\", value: string(module.input.container_port)}] | concat(module.input.environment_variables != nil ? module.input.environment_variables : [])), \"essential\": true, \"image\": (module.input.build_type == \"external_image\" ? (module.input.use_aws_public_mirror ? (deploy.input.image_ref contains \"sha256:\" ? \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \"@\" + deploy.input.image_ref : \"public.ecr.aws/docker/library/\" + module.input.external_image_name + \":\" + deploy.input.image_ref) : (deploy.input.image_ref contains \"sha256:\" ? module.input.external_image_name + \"@\" + deploy.input.image_ref : module.input.external_image_name + \":\" + deploy.input.image_ref)) : (deploy.input.image_ref contains \"sha256:\" ? stack.output.ecr_repository_url + \"@\" + deploy.input.image_ref : stack.output.ecr_repository_url + \":\" + deploy.input.image_ref)), \"linux_parameters\": {\"init_process_enabled\": true}, \"log_configuration\": {\"log_driver\": \"awslogs\", \"options\": {\"awslogs-group\": stack.output.log_group_name, \"awslogs-region\": stack.output.region, \"awslogs-stream-prefix\": stack.output.log_stream_prefix}}, \"memory\": (module.input.capacity_provider == \"ec2\" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)), \"name\": (stack.output.container_name), \"port_mappings\": [{\"app_protocol\": \"http\", \"container_port\": (module.input.container_port), \"protocol\": \"tcp\"}], \"readonly_root_filesystem\": false, \"repository_credentials\": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), \"secrets\": (module.input.secrets), \"stop_timeout\": 30}]) | concat(module.input.sidecars ? module.input.sidecars : []) >>"
+      cpu: '<< string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)) >>'
+      execution_role_arn: <<stack.output.execution_role_arn>>
+      family: <<stack.output.task_definition_family>>
+      memory: '<< string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)) >>'
+      network_mode: awsvpc
+      requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
+      runtime_platform:
+        cpu_architecture: <<module.input.cpu_architecture>>
+        operating_system_family: LINUX
+      task_role_arn: <<stack.output.task_role_arn>>
+      volumes: '<< module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name": #.name, "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name, "docker_volume_configuration": #.docker_volume_configuration}) : [] >>'
+    timeout: 1800
+  ui:
+    metrics:
+      - id: cpu_utilization
+        name: CPU utilization
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+            ServiceName: << stack.output.service_name >>
+          name: CPUUtilization
+          namespace: AWS/ECS
+          region: << stack.output.region >>
+          statistic: Average
+      - id: memory_utilization
+        name: Memory utilization
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+            ServiceName: << stack.output.service_name >>
+          name: MemoryUtilization
+          namespace: AWS/ECS
+          region: << stack.output.region >>
+          statistic: Average
+      - id: running_tasks
+        name: Running tasks
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+            ServiceName: << stack.output.service_name >>
+          name: RunningTaskCount
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+      - id: request_count
+        name: Request count
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: RequestCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_5xx_errors
+        name: 5xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HTTPCode_Target_5XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_4xx_errors
+        name: 4xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HTTPCode_Target_4XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_response_time
+        name: Target response time
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: TargetResponseTime
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: healthy_hosts
+        name: Healthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HealthyHostCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: unhealthy_hosts
+        name: Unhealthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: UnHealthyHostCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: network_in
+        name: Network in
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+            ServiceName: << stack.output.service_name >>
+          name: NetworkRxBytes
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: network_out
+        name: Network out
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+            ServiceName: << stack.output.service_name >>
+          name: NetworkTxBytes
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Sum
   readme: |
     Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 
@@ -1242,249 +1777,3 @@ module:
     - [Amazon ECS capacity providers](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cluster-capacity-providers.html)
     - [Amazon ECS service auto scaling](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html)
     - [Nixpacks documentation](https://nixpacks.com/docs)
-  stack:
-    pipelines:
-      change:
-        pipeline_id: << defaults.change_pipeline_id >>
-      defaults:
-        input:
-          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
-          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
-          base_path: compute/ecs_service
-          branch: main
-          execution_environment_id: << module.input.execution_environment_id >>
-          ref: 84eb256921edf88126c5451608ce6f010d94842f
-          repo: https://github.com/flightcontrolhq/modules
-          stack_id: <<stack.id>>
-          terraform_variables:
-            ...overrides: << module.input.advanced_terraform_variables >>
-            allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
-            assign_public_ip: "<< module.input.use_private_subnets ? false : true >>"
-            auto_scaling:
-              enabled: << module.input.enable_auto_scaling >>
-              max_capacity: << module.input.max_capacity >>
-              min_capacity: << module.input.min_capacity >>
-              scheduled: "<< module.input.scheduled_scaling != nil ? module.input.scheduled_scaling : [] >>"
-              target_tracking:
-                - disable_scale_in: << module.input.disable_scale_in >>
-                  policy_name: cpu
-                  predefined_metric: ECSServiceAverageCPUUtilization
-                  scale_in_cooldown: << module.input.scale_in_cooldown >>
-                  scale_out_cooldown: << module.input.scale_out_cooldown >>
-                  target_value: << module.input.cpu_target_value >>
-                - '...<< module.input.memory_target_value ? [{policy_name: "memory", predefined_metric: "ECSServiceAverageMemoryUtilization", target_value: module.input.memory_target_value, scale_in_cooldown: module.input.scale_in_cooldown, scale_out_cooldown: module.input.scale_out_cooldown, disable_scale_in: module.input.disable_scale_in}] : [] >>'
-                - "...<< module.input.custom_metric_scaling_policies != nil && module.input.custom_metric_scaling_policies != [] ? module.input.custom_metric_scaling_policies : [] >>"
-            capacity_provider_strategies:
-              - '...<< module.input.capacity_provider == "fargate" || module.input.add_fargate_capacity ? [{capacity_provider: module.input.fargate_capacity_provider_name, weight: 1, base: 0}] : [] >>'
-              - '...<< module.input.capacity_provider == "fargate_spot" || module.input.add_fargate_spot_capacity ? [{capacity_provider: module.input.fargate_spot_capacity_provider_name, weight: 1, base: 0}] : [] >>'
-              - '...<< module.input.capacity_provider == "ec2" || module.input.add_ec2_capacity ? [{capacity_provider: module.input.ec2_capacity_provider_name, weight: 1, base: 0}] : [] >>'
-            cluster_arn: << module.input.cluster_arn >>
-            container_port: << module.input.container_port >>
-            deployment_maximum_percent: << module.input.deployment_maximum_percent >>
-            deployment_minimum_healthy_percent: << module.input.deployment_minimum_healthy_percent >>
-            deployment_type: rolling
-            desired_count: 0
-            ecr_enable_default_lifecycle_policy: true
-            ecr_force_delete: << module.input.ecr_force_delete >>
-            ecr_repository_name: << module.input.name >>
-            ecr_scan_on_push: << module.input.ecr_scan_on_push >>
-            enable_ecr: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
-            enable_execute_command: << module.input.enable_execute_command >>
-            execution_role_arn: << module.input.execution_role_arn || nil >>
-            execution_role_policies: << module.input.execution_role_policies >>
-            force_new_deployment: << module.input.force_new_deployment >>
-            health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
-            launch_type: '<< module.input.capacity_provider == "ec2" ? "EC2" : "FARGATE" >>'
-            load_balancer_attachment:
-              container_port: << module.input.container_port >>
-              enabled: true
-              listener_rules:
-                - conditions:
-                    - '...<< module.input.host_header_values != nil && module.input.host_header_values != [] ? [{type: "host-header", values: module.input.host_header_values}] : [] >>'
-                    - '...<< module.input.path_pattern_values != nil && module.input.path_pattern_values != [] ? [{type: "path-pattern", values: module.input.path_pattern_values}] : module.input.host_header_values != nil && module.input.host_header_values != [] ? [] : [{type: "path-pattern", values: ["/*"]}] >>'
-                  listener_arn: "<< module.input.is_public ? (module.input.public_alb_https_listener_arn || module.input.public_alb_http_listener_arn) : (module.input.private_alb_https_listener_arn || module.input.private_alb_http_listener_arn) >>"
-                  priority: << module.input.listener_rule_priority >>
-              target_group:
-                health_check:
-                  enabled: true
-                  healthy_threshold: << module.input.healthy_threshold >>
-                  interval: << module.input.health_check_interval >>
-                  matcher: << module.input.health_check_matcher >>
-                  path: << module.input.health_check_path >>
-                  timeout: << module.input.health_check_timeout >>
-                  unhealthy_threshold: << module.input.unhealthy_threshold >>
-                port: << module.input.container_port >>
-                protocol: HTTP
-                slow_start: << module.input.target_group_slow_start >>
-                stickiness:
-                  cookie_duration: << module.input.target_group_stickiness_cookie_duration >>
-                  cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
-                  enabled: << module.input.target_group_stickiness_enabled >>
-                  type: << module.input.target_group_stickiness_type >>
-                target_type: ip
-            load_balancer_security_group_id: "<< module.input.is_public ? module.input.public_alb_security_group_id : module.input.private_alb_security_group_id >>"
-            name: << module.input.name >>
-            network_mode: awsvpc
-            region: << module.input.aws_region >>
-            requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
-            runtime_platform:
-              cpu_architecture: << module.input.cpu_architecture >>
-              operating_system_family: LINUX
-            security_group_ids: << module.input.security_group_ids >>
-            subnet_ids: "<< module.input.use_private_subnets ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
-            tags:
-              $include: ../../partials/stack/ravion-tags.yml
-            task_cpu: '<< module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024) >>'
-            task_memory: '<< module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024) >>'
-            task_role_arn: << module.input.task_role_arn || nil >>
-            task_role_inline_policies: << module.input.task_role_inline_policies >>
-            task_role_policies: << module.input.task_role_policies >>
-            volumes: << module.input.volumes >>
-            vpc_id: << module.input.vpc_id >>
-            wait_for_steady_state: false
-          tool: opentofu
-          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
-        variant: standard
-      destroy:
-        pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id>>
-    type: opentofu
-  ui:
-    metrics:
-      - id: cpu_utilization
-        name: CPU utilization
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-            ServiceName: << stack.output.service_name >>
-          name: CPUUtilization
-          namespace: AWS/ECS
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: memory_utilization
-        name: Memory utilization
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-            ServiceName: << stack.output.service_name >>
-          name: MemoryUtilization
-          namespace: AWS/ECS
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: running_tasks
-        name: Running tasks
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-            ServiceName: << stack.output.service_name >>
-          name: RunningTaskCount
-          namespace: ECS/ContainerInsights
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: request_count
-        name: Request count
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            TargetGroup: << stack.output.target_group_arn_suffix >>
-          name: RequestCount
-          namespace: AWS/ApplicationELB
-          region: << stack.output.region >>
-          statistic: Sum
-          type: cloudwatch
-        type: line
-      - id: target_5xx_errors
-        name: 5xx errors
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            TargetGroup: << stack.output.target_group_arn_suffix >>
-          name: HTTPCode_Target_5XX_Count
-          namespace: AWS/ApplicationELB
-          region: << stack.output.region >>
-          statistic: Sum
-          type: cloudwatch
-        type: line
-      - id: target_4xx_errors
-        name: 4xx errors
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            TargetGroup: << stack.output.target_group_arn_suffix >>
-          name: HTTPCode_Target_4XX_Count
-          namespace: AWS/ApplicationELB
-          region: << stack.output.region >>
-          statistic: Sum
-          type: cloudwatch
-        type: line
-      - id: target_response_time
-        name: Target response time
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            TargetGroup: << stack.output.target_group_arn_suffix >>
-          name: TargetResponseTime
-          namespace: AWS/ApplicationELB
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: healthy_hosts
-        name: Healthy hosts
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            TargetGroup: << stack.output.target_group_arn_suffix >>
-          name: HealthyHostCount
-          namespace: AWS/ApplicationELB
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: unhealthy_hosts
-        name: Unhealthy hosts
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            TargetGroup: << stack.output.target_group_arn_suffix >>
-          name: UnHealthyHostCount
-          namespace: AWS/ApplicationELB
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: network_in
-        name: Network in
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-            ServiceName: << stack.output.service_name >>
-          name: NetworkRxBytes
-          namespace: ECS/ContainerInsights
-          region: << stack.output.region >>
-          statistic: Sum
-          type: cloudwatch
-        type: line
-      - id: network_out
-        name: Network out
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-            ServiceName: << stack.output.service_name >>
-          name: NetworkTxBytes
-          namespace: ECS/ContainerInsights
-          region: << stack.output.region >>
-          statistic: Sum
-          type: cloudwatch
-        type: line
