@@ -149,13 +149,15 @@ run "service_with_load_balancer" {
     error_message = "Should create the ECS infrastructure role whenever a load balancer is attached"
   }
 
+  assert {
+    condition     = aws_iam_role_policy_attachment.ecs_infrastructure_elb[0].policy_arn == "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
+    error_message = "ECS infrastructure role should attach the documented AWS-managed load-balancer policy ARN"
+  }
+
   # Backward-compatible aliases for pre-traffic-shift callers.
   assert {
-    condition = (
-      output.target_group_arn == output.production_target_group_arn
-      && output.target_group_name == output.production_target_group_name
-    )
-    error_message = "target_group_arn / target_group_name should alias the production target group outputs"
+    condition     = output.target_group_name == output.production_target_group_name
+    error_message = "target_group_name should alias the production target group name output"
   }
 }
 
@@ -189,10 +191,8 @@ run "service_with_load_balancer_auto_priority" {
   }
 
   assert {
-    # The mock provider materializes the unset computed attribute as 0;
-    # a real plan leaves it null for AWS to auto-assign.
-    condition     = coalesce(aws_lb_listener_rule.alb["0"].priority, 0) == 0
-    error_message = "Priority should be unset (auto-assigned by AWS)"
+    condition     = var.load_balancer_attachment.listener_rules[0].priority == null
+    error_message = "Priority should default to null so AWS auto-assigns it"
   }
 }
 

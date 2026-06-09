@@ -41,5 +41,5 @@ resource "aws_iam_role_policy_attachment" "ecs_infrastructure_elb" {
   count = local.enable_load_balancer ? 1 : 0
 
   role       = aws_iam_role.ecs_infrastructure[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRolePolicyForLoadBalancers"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
 }
