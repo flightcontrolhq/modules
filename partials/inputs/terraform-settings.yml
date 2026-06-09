@@ -19,3 +19,4 @@
   label: Advanced Terraform variables
   required: false
   type: object
+  collapsible: true

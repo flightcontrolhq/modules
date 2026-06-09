@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.1.2
-  description: fix source ref to use tag
+  version: 0.1.3
+  description: unify labels and descriptions across modules
 module:
   inputs:
     - id: section_service
@@ -152,23 +152,7 @@ module:
         - description: Deploy an image from a repository configured on this module. Provide only the tag or digest at deploy time.
           label: External image repository
           value: external_image
-    - id: source_repo
-      label: Git repository
-      type: gitrepo
-      required: true
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-    - id: source_base_path
-      label: Source base path
-      type: string
-      description: Path from repo root to your source code
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      default: .
+    - $include: ../../partials/inputs/build-git-source.yml
     - id: external_image_name
       label: Image repository
       type: string
@@ -193,90 +177,15 @@ module:
       required: false
       show_when:
         build_type: external_image
-    - id: section_dockerfile
-      label: Docker
-      type: section
-      show_when:
-        build_type: dockerfile
-    - id: dockerfile
-      label: Dockerfile path
-      type: string
-      description: Path to the Dockerfile to use for the image build, relative to the repository root or configured source base path.
-      placeholder: Dockerfile
-      show_when:
-        build_type: dockerfile
-    - id: dockerfile_context
-      label: Docker build context path
-      type: string
-      description: Directory to use as the Docker build context, relative to the repository root or configured source base path.
-      placeholder: .
-      show_when:
-        build_type: dockerfile
-    - id: section_nixpacks
-      label: Nixpacks
-      type: section
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_install_cmd
-      label: Install command
-      type: string
-      placeholder: Intelligent default based on your language & framework
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_build_cmd
-      label: Build command
-      type: string
-      placeholder: Intelligent default based on your language & framework
-      show_when:
-        build_type: nixpacks
+    - $include: ../../partials/inputs/dockerfile-build.yml
+    - $include: ../../partials/inputs/nixpacks-basic.yml
     - id: nixpacks_start_cmd
       label: Start command
       type: string
       placeholder: Intelligent default based on your language & framework
       show_when:
         build_type: nixpacks
-    - id: nixpacks_config_file_path
-      label: Nixpacks config file path
-      type: string
-      description: Path to a custom Nixpacks config file, relative to the repository root or configured source base path.
-      collapsible: true
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_build_path
-      label: Nixpacks build path
-      type: string
-      description: Application path for Nixpacks to build, relative to the repository root or configured source base path.
-      collapsible: true
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_version
-      label: Nixpacks version
-      type: string
-      description: Optional Nixpacks version to use for the build. Leave blank to use the default version.
-      collapsible: true
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_nix_pkgs
-      label: Nix packages
-      type: string_array
-      description: Additional Nix packages to install during the Nixpacks build.
-      collapsible: true
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_apt_pkgs
-      label: APT packages
-      type: string_array
-      description: Additional APT packages to install during the Nixpacks build.
-      collapsible: true
-      show_when:
-        build_type: nixpacks
-    - id: nixpacks_nix_libs
-      label: Nix libraries
-      type: string_array
-      description: Additional Nix libraries to make available during the Nixpacks build.
-      collapsible: true
-      show_when:
-        build_type: nixpacks
+    - $include: ../../partials/inputs/nixpacks-advanced.yml
     - id: section_health
       label: Health check
       type: section
@@ -704,28 +613,8 @@ module:
     - id: section_app_config
       label: Environment variables
       type: section
-    - id: build_environment_variables
-      label: Build environment variables
-      type: object
-      description: Environment variables available during image builds. Values can be plain strings or references loaded from Parameter Store.
-      placeholder: |-
-        {
-          "NODE_ENV": "production",
-          "API_URL": {
-            "fromParameterStore": "my-secret"
-          },
-          "NPM_TOKEN": {
-            "fromSecretManager": "arn:..."
-          }
-        }
-      required: false
-    - id: dockerfile_inject_env_variables
-      label: Inject environment variables in Dockerfile
-      type: boolean
-      description: Pass build environment variables into Dockerfile builds as build arguments.
-      show_when:
-        build_type: dockerfile
-      default: false
+    - $include: ../../partials/inputs/build-environment-variables.yml
+    - $include: ../../partials/inputs/dockerfile-env-injection.yml
     - id: environment_variables
       label: Runtime environment variables
       type: array
@@ -1169,60 +1058,9 @@ module:
       item_label: Volume
       required: false
       default: []
-    - id: section_builder_config
-      label: Builder config
-      type: section
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-    - id: build_infrastructure_type
-      label: Builder instance type
-      type: string
-      description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
-      required: true
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      default: ec2
-      values:
-        - label: EC2
-          value: ec2
-        - label: EC2 spot
-          value: ec2-spot
-    - id: build_instance_size
-      label: Builder instance size
-      type: string
-      description: EC2 instance type for image builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
-      no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
-      required: true
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      default: c7a.4xlarge
-      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
-    - id: build_execution_environment_id
-      label: Builder execution environment
-      type: string
-      description: Optional execution environment ID or given ID for image builds. Defaults to the selected cluster execution environment.
-      collapsible: true
-      required: false
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-    - id: build_ami
-      label: Builder AMI
-      type: string
-      description: Optional AMI ID for build runners. Leave empty to use the default runner image.
-      collapsible: true
-      required: false
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
+    - $template: ../../partials/templates/builder-infrastructure-inputs.yml
+      with:
+        no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
     - id: section_ecr
       label: Image registry lifecycle
       type: section
@@ -1250,40 +1088,14 @@ module:
           - nixpacks
           - dockerfile
       default: false
-    - id: section_misc
-      label: Misc
-      type: section
+    - $include: ../../partials/inputs/misc-section.yml
     - id: force_new_deployment
       label: Force new deployment
       type: boolean
       description: Force ECS to start a new deployment when applying service configuration, even if the task definition did not change.
       default: true
-    - id: tags
-      label: Tags
-      type: keyvalue
-      description: Additional tags for all resources. Ravion also adds standard project, environment, and module tags.
-      required: false
-    - id: section_advanced
-      label: Terraform settings
-      type: section
-    - id: opentofu_version
-      label: OpenTofu version override
-      type: string
-      collapsible: true
-      required: false
-      values: $values:opentofu/versions
-    - id: ravion_state_backend_workspace
-      label: Ravion Terraform workspace name
-      type: string
-      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
-      collapsible: true
-    - id: advanced_terraform_variables
-      label: Advanced Terraform variables
-      type: object
-      description: Optional raw Terraform variable overrides for lower-level ecs_service inputs.
-      collapsible: true
-      required: false
-      default: {}
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
   stack:
     type: opentofu
     ravion_state_backend_workspace: >-
@@ -1405,12 +1217,7 @@ module:
             security_group_ids: << module.input.security_group_ids >>
             subnet_ids: "<< module.input.use_private_subnets ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
             tags:
-              ...overrides: << module.input.tags >>
-              EnvironmentGivenId: <<environment.given_id>>
-              ModuleGivenId: <<module.given_id>>
-              ModuleId: <<module.id>>
-              Owner: Ravion
-              ProjectGivenId: <<project.given_id>>
+              $include: ../../partials/stack/ravion-tags.yml
             task_cpu: >-
               << module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
               int(float(module.input.fargate_size.vcpu) * 1024) >>
@@ -1454,29 +1261,11 @@ module:
           - << module.input.build_type >>
     environment_variables: << module.input.build_environment_variables >>
     infrastructure:
-      ami: '<< module.input.build_ami != "" ? module.input.build_ami : nil >>'
-      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
-      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
-      instance_size: << module.input.build_instance_size >>
-      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
-      type: << module.input.build_infrastructure_type >>
+      $include: ../../partials/build/infrastructure.yml
     inputs:
-      - id: branch
-        label: Git branch
-        type: string
-        description: Defaults to repo default branch
-        required: false
-      - id: ref
-        label: Git ref (commit or tag)
-        type: string
-        description: Optional commit SHA, tag, or ref to build. Defaults to the configured branch head.
-        required: false
+      - $include: ../../partials/inputs/build-inputs.yml
     source:
-      base_path: << module.input.source_base_path || "." >>
-      branch: << build.input.branch >>
-      ref: << build.input.ref >>
-      repo: << module.input.source_repo >>
-      type: git
+      $include: ../../partials/build/git-source.yml
   deploy:
     type: aws:ecs
     concurrency:

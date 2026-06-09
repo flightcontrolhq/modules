@@ -1,0 +1,17 @@
+- id: source_repo
+  label: Git repository
+  required: true
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: gitrepo
+- default: .
+  description: Path from repo root to your source code.
+  id: source_base_path
+  label: Source base path
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: string

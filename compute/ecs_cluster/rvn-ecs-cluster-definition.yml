@@ -3,56 +3,21 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.0.4
-  description: fix source ref to use tag
+  version: 0.0.5
+  description: unify labels and descriptions across modules
 module:
   inputs:
     - id: network
       label: VPC network
       mapped_inputs:
-        - id: section_aws
-          label: AWS account & region
-          type: section
-        - default: << ref.input.aws_account_id >>
-          id: aws_account_id
-          label: AWS account
-          type: string
-          values: $values:ravion/aws_accounts
-        - default: << ref.input.aws_region >>
-          description: AWS region for the ECS cluster. If unset in Terraform, the provider region is used.
-          id: aws_region
-          label: Region
-          type: string
-          values: $values:aws/regions
-        - collapsible: true
-          default: << ref.input.execution_environment_id >>
-          description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
-          id: execution_environment_id
-          label: Terraform execution environment
-          type: string
-          values: $values:ravion/execution_environments
-        - id: section_vpc
-          label: VPC
-          type: section
-        - default: <<ref.stack.output.vpc_id>>
-          id: vpc_id
-          label: VPC ID
-          required: true
-          type: string
-        - add_button_label: Add private subnet ID
-          default: <<ref.stack.output.private_subnet_ids>>
-          description: Required by Terraform. Used for ECS tasks, EC2 capacity, and private load balancers. At least one private subnet is required; private ALBs require at least two.
-          id: private_subnet_ids
-          label: Private subnet IDs
-          required: true
-          type: string_array
-        - add_button_label: Add public subnet ID
-          default: <<ref.stack.output.public_subnet_ids>>
-          description: Used for public ALB/NLB. Terraform defaults to [] when no public load balancer is enabled.
-          id: public_subnet_ids
-          label: Public subnet IDs
-          placeholder: subnet-...
-          type: string_array
+        - $template: ../../partials/templates/network-ref-mapped-inputs.yml
+          with:
+            aws_account_id_default: << ref.input.aws_account_id >>
+            aws_region_default: << ref.input.aws_region >>
+            execution_environment_default: << ref.input.execution_environment_id >>
+            private_subnet_ids_default: <<ref.stack.output.private_subnet_ids>>
+            public_subnet_ids_default: <<ref.stack.output.public_subnet_ids>>
+            vpc_id_default: <<ref.stack.output.vpc_id>>
       required: true
       type: $ref:rvn-aws-network
     - id: section_cluster
@@ -83,7 +48,7 @@ module:
     - default: true
       description: Allows ECS services in this cluster to use Fargate Spot for lower-cost, interruptible serverless task capacity.
       id: enable_fargate_spot
-      label: Fargate Spot
+      label: Fargate spot
       type: boolean
     - description: Enables the EC2 capacity provider when set. Leave blank to use only Fargate/Fargate Spot.
       id: ec2_instance_type
@@ -525,9 +490,7 @@ module:
         enable_private_nlb: true
         private_nlb_enable_access_logs: true
       type: string
-    - id: section_misc
-      label: Misc
-      type: section
+    - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
   readme: |-
@@ -671,87 +634,68 @@ module:
     - [Network Load Balancers](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html) — TCP/UDP and static IP load balancing
     - [ECS Container Insights](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-container-insights.html) — CloudWatch metrics and dashboards
   stack:
-    pipelines:
-      change:
-        pipeline_id: << defaults.change_pipeline_id >>
-      defaults:
-        input:
-          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
-          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
-          base_path: compute/ecs_cluster
-          branch: main
-          execution_environment_id: << module.input.execution_environment_id >>
-          ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
-          stack_id: <<stack.id>>
-          terraform_variables:
-            ...overrides: << module.input.advanced_terraform_variables >>
-            ec2_ami_id: << module.input.ec2_ami_id >>
-            ec2_enable_spot: << module.input.ec2_enable_spot >>
-            ec2_instance_type: << module.input.ec2_instance_type >>
-            ec2_key_name: << module.input.ec2_key_name >>
-            ec2_managed_scaling_target_capacity: << module.input.ec2_managed_scaling_target_capacity >>
-            ec2_managed_termination_protection: << module.input.ec2_managed_termination_protection >>
-            ec2_max_size: << module.input.ec2_max_size >>
-            ec2_min_size: << module.input.ec2_min_size >>
-            ec2_root_volume_size: << module.input.ec2_root_volume_size >>
-            ec2_root_volume_type: << module.input.ec2_root_volume_type >>
-            ec2_security_group_ids: << module.input.ec2_security_group_ids >>
-            ec2_spot_instance_types: << module.input.ec2_spot_instance_types >>
-            ec2_user_data: << module.input.ec2_user_data >>
-            enable_container_insights: << module.input.enable_container_insights >>
-            enable_fargate: << module.input.enable_fargate >>
-            enable_fargate_spot: << module.input.enable_fargate_spot >>
-            enable_private_alb: << module.input.enable_private_alb >>
-            enable_private_nlb: << module.input.enable_private_nlb >>
-            enable_public_alb: << module.input.enable_public_alb >>
-            enable_public_nlb: << module.input.enable_public_nlb >>
-            name: << module.input.name >>
-            private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
-            private_alb_certificate_arns: << module.input.private_alb_certificate_arns >>
-            private_alb_enable_access_logs: << module.input.private_alb_enable_access_logs >>
-            private_alb_enable_deletion_protection: << module.input.private_alb_enable_deletion_protection >>
-            private_alb_enable_https: << module.input.private_alb_enable_https >>
-            private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
-            private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
-            private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
-            private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
-            private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
-            private_nlb_enable_access_logs: << module.input.private_nlb_enable_access_logs >>
-            private_nlb_enable_cross_zone_load_balancing: << module.input.private_nlb_enable_cross_zone_load_balancing >>
-            private_nlb_enable_deletion_protection: << module.input.private_nlb_enable_deletion_protection >>
-            private_nlb_enable_elastic_ips: << module.input.private_nlb_enable_elastic_ips >>
-            private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
-            private_subnet_ids: << module.input.private_subnet_ids >>
-            public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
-            public_alb_certificate_arns: << module.input.public_alb_certificate_arns >>
-            public_alb_enable_access_logs: << module.input.public_alb_enable_access_logs >>
-            public_alb_enable_deletion_protection: << module.input.public_alb_enable_deletion_protection >>
-            public_alb_enable_https: << module.input.public_alb_enable_https >>
-            public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>
-            public_alb_ssl_policy: << module.input.public_alb_ssl_policy >>
-            public_alb_web_acl_arn: << module.input.public_alb_web_acl_arn >>
-            public_nlb_access_logs_bucket_arn: << module.input.public_nlb_access_logs_bucket_arn >>
-            public_nlb_elastic_ip_allocation_ids: << module.input.public_nlb_elastic_ip_allocation_ids >>
-            public_nlb_enable_access_logs: << module.input.public_nlb_enable_access_logs >>
-            public_nlb_enable_cross_zone_load_balancing: << module.input.public_nlb_enable_cross_zone_load_balancing >>
-            public_nlb_enable_deletion_protection: << module.input.public_nlb_enable_deletion_protection >>
-            public_nlb_enable_elastic_ips: << module.input.public_nlb_enable_elastic_ips >>
-            public_nlb_security_group_ids: << module.input.public_nlb_security_group_ids >>
-            public_subnet_ids: << module.input.public_subnet_ids || [] >>
-            region: << module.input.aws_region >>
-            tags:
-              $include: ../../partials/stack/ravion-tags.yml
-            vpc_id: << module.input.vpc_id >>
-          tool: opentofu
-          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
-        variant: standard
-      destroy:
-        pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: >-
-      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
-      + module.given_id + "-" + stack.id>>
-    type: opentofu
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/ecs_cluster
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        ec2_ami_id: << module.input.ec2_ami_id >>
+        ec2_enable_spot: << module.input.ec2_enable_spot >>
+        ec2_instance_type: << module.input.ec2_instance_type >>
+        ec2_key_name: << module.input.ec2_key_name >>
+        ec2_managed_scaling_target_capacity: << module.input.ec2_managed_scaling_target_capacity >>
+        ec2_managed_termination_protection: << module.input.ec2_managed_termination_protection >>
+        ec2_max_size: << module.input.ec2_max_size >>
+        ec2_min_size: << module.input.ec2_min_size >>
+        ec2_root_volume_size: << module.input.ec2_root_volume_size >>
+        ec2_root_volume_type: << module.input.ec2_root_volume_type >>
+        ec2_security_group_ids: << module.input.ec2_security_group_ids >>
+        ec2_spot_instance_types: << module.input.ec2_spot_instance_types >>
+        ec2_user_data: << module.input.ec2_user_data >>
+        enable_container_insights: << module.input.enable_container_insights >>
+        enable_fargate: << module.input.enable_fargate >>
+        enable_fargate_spot: << module.input.enable_fargate_spot >>
+        enable_private_alb: << module.input.enable_private_alb >>
+        enable_private_nlb: << module.input.enable_private_nlb >>
+        enable_public_alb: << module.input.enable_public_alb >>
+        enable_public_nlb: << module.input.enable_public_nlb >>
+        name: << module.input.name >>
+        private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
+        private_alb_certificate_arns: << module.input.private_alb_certificate_arns >>
+        private_alb_enable_access_logs: << module.input.private_alb_enable_access_logs >>
+        private_alb_enable_deletion_protection: << module.input.private_alb_enable_deletion_protection >>
+        private_alb_enable_https: << module.input.private_alb_enable_https >>
+        private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
+        private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
+        private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
+        private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
+        private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
+        private_nlb_enable_access_logs: << module.input.private_nlb_enable_access_logs >>
+        private_nlb_enable_cross_zone_load_balancing: << module.input.private_nlb_enable_cross_zone_load_balancing >>
+        private_nlb_enable_deletion_protection: << module.input.private_nlb_enable_deletion_protection >>
+        private_nlb_enable_elastic_ips: << module.input.private_nlb_enable_elastic_ips >>
+        private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
+        private_subnet_ids: << module.input.private_subnet_ids >>
+        public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
+        public_alb_certificate_arns: << module.input.public_alb_certificate_arns >>
+        public_alb_enable_access_logs: << module.input.public_alb_enable_access_logs >>
+        public_alb_enable_deletion_protection: << module.input.public_alb_enable_deletion_protection >>
+        public_alb_enable_https: << module.input.public_alb_enable_https >>
+        public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>
+        public_alb_ssl_policy: << module.input.public_alb_ssl_policy >>
+        public_alb_web_acl_arn: << module.input.public_alb_web_acl_arn >>
+        public_nlb_access_logs_bucket_arn: << module.input.public_nlb_access_logs_bucket_arn >>
+        public_nlb_elastic_ip_allocation_ids: << module.input.public_nlb_elastic_ip_allocation_ids >>
+        public_nlb_enable_access_logs: << module.input.public_nlb_enable_access_logs >>
+        public_nlb_enable_cross_zone_load_balancing: << module.input.public_nlb_enable_cross_zone_load_balancing >>
+        public_nlb_enable_deletion_protection: << module.input.public_nlb_enable_deletion_protection >>
+        public_nlb_enable_elastic_ips: << module.input.public_nlb_enable_elastic_ips >>
+        public_nlb_security_group_ids: << module.input.public_nlb_security_group_ids >>
+        public_subnet_ids: << module.input.public_subnet_ids || [] >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        vpc_id: << module.input.vpc_id >>
   ui:
     links: |-
       <<

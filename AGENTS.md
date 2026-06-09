@@ -39,6 +39,10 @@ Every module **MUST** contain the following files:
 | `versions.tf` | Version constraints | OpenTofu/Terraform and provider version requirements |
 | `README.md` | Module documentation | Usage examples, input/output documentation, requirements |
 
+### Module Definitions
+
+- **Form labels and sections**: Use sentence case, not title case, for all form field labels and form section headers.
+
 ### File Organization
 
 Each resource type should be defined in its own dedicated file, named after the resource it contains. This improves code organization, readability, and makes it easier to locate specific resources.

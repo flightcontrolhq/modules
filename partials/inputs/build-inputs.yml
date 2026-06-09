@@ -1,0 +1,10 @@
+- description: Defaults to repo default branch
+  id: branch
+  label: Git branch
+  required: false
+  type: string
+- description: Optional commit SHA, tag, or ref to build. Defaults to the configured branch head.
+  id: ref
+  label: Git ref (commit or tag)
+  required: false
+  type: string

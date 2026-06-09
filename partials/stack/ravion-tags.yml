@@ -1,6 +1,6 @@
 ...overrides: << module.input.tags >>
+Owner: Ravion
+ProjectGivenId: <<project.given_id>>
 EnvironmentGivenId: <<environment.given_id>>
 ModuleGivenId: <<module.given_id>>
 ModuleId: <<module.id>>
-Owner: Ravion
-ProjectGivenId: <<project.given_id>>
