@@ -60,8 +60,8 @@ module "vpc" {
   subnet_count = 2
 
   # Enable NAT Gateway so Fargate tasks in private subnets can pull container images
-  enable_nat_gateway            = true
-  nat_gateway_high_availability = false
+  nat_gateway_enabled                   = true
+  nat_gateway_high_availability_enabled = false
 
   tags = local.common_tags
 }
@@ -78,11 +78,11 @@ module "ecs_cluster" {
   private_subnet_ids = module.vpc.private_subnet_ids
 
   # Enable Fargate capacity provider
-  enable_fargate      = true
-  enable_fargate_spot = false
+  fargate_enabled      = true
+  fargate_spot_enabled = false
 
   # Disable Container Insights to reduce costs for testing
-  enable_container_insights = false
+  container_insights_enabled = false
 
   tags = local.common_tags
 }

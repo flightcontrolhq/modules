@@ -3,7 +3,7 @@
 ################################################################################
 
 module "public_alb" {
-  count = var.enable_public_alb ? 1 : 0
+  count = var.public_alb_enabled ? 1 : 0
 
   source = "../../networking/alb"
 
@@ -16,8 +16,8 @@ module "public_alb" {
 
   # Listener configuration
   enable_http_listener   = true
-  enable_https_listener  = var.public_alb_enable_https
-  http_to_https_redirect = var.public_alb_enable_https
+  enable_https_listener  = var.public_alb_https_enabled
+  http_to_https_redirect = var.public_alb_https_enabled
 
   # SSL/TLS
   certificate_arns = var.public_alb_certificate_arns
@@ -31,7 +31,7 @@ module "public_alb" {
   ingress_cidr_blocks = var.public_alb_ingress_cidr_blocks
 
   # Access logs
-  enable_access_logs     = var.public_alb_enable_access_logs
+  enable_access_logs     = var.public_alb_access_logs_enabled
   access_logs_bucket_arn = var.public_alb_access_logs_bucket_arn
 
   # WAF
@@ -43,7 +43,7 @@ module "public_alb" {
 ################################################################################
 
 module "private_alb" {
-  count = var.enable_private_alb ? 1 : 0
+  count = var.private_alb_enabled ? 1 : 0
 
   source = "../../networking/alb"
 
@@ -56,8 +56,8 @@ module "private_alb" {
 
   # Listener configuration
   enable_http_listener   = true
-  enable_https_listener  = var.private_alb_enable_https
-  http_to_https_redirect = var.private_alb_enable_https
+  enable_https_listener  = var.private_alb_https_enabled
+  http_to_https_redirect = var.private_alb_https_enabled
 
   # SSL/TLS
   certificate_arns = var.private_alb_certificate_arns
@@ -71,7 +71,7 @@ module "private_alb" {
   ingress_cidr_blocks = var.private_alb_ingress_cidr_blocks
 
   # Access logs
-  enable_access_logs     = var.private_alb_enable_access_logs
+  enable_access_logs     = var.private_alb_access_logs_enabled
   access_logs_bucket_arn = var.private_alb_access_logs_bucket_arn
 }
 
@@ -80,7 +80,7 @@ module "private_alb" {
 ################################################################################
 
 module "public_nlb" {
-  count = var.enable_public_nlb ? 1 : 0
+  count = var.public_nlb_enabled ? 1 : 0
 
   source = "../../networking/nlb"
 
@@ -93,17 +93,17 @@ module "public_nlb" {
 
   # NLB settings
   deletion_protection              = var.deletion_protection
-  enable_cross_zone_load_balancing = var.public_nlb_enable_cross_zone_load_balancing
+  enable_cross_zone_load_balancing = var.public_nlb_cross_zone_load_balancing_enabled
 
   # Security groups
   additional_security_group_ids = var.public_nlb_security_group_ids
 
   # Access logs
-  enable_access_logs     = var.public_nlb_enable_access_logs
+  enable_access_logs     = var.public_nlb_access_logs_enabled
   access_logs_bucket_arn = var.public_nlb_access_logs_bucket_arn
 
   # Elastic IPs
-  enable_elastic_ips        = var.public_nlb_enable_elastic_ips
+  enable_elastic_ips        = var.public_nlb_elastic_ips_enabled
   elastic_ip_allocation_ids = var.public_nlb_elastic_ip_allocation_ids
 }
 
@@ -112,7 +112,7 @@ module "public_nlb" {
 ################################################################################
 
 module "private_nlb" {
-  count = var.enable_private_nlb ? 1 : 0
+  count = var.private_nlb_enabled ? 1 : 0
 
   source = "../../networking/nlb"
 
@@ -125,17 +125,16 @@ module "private_nlb" {
 
   # NLB settings
   deletion_protection              = var.deletion_protection
-  enable_cross_zone_load_balancing = var.private_nlb_enable_cross_zone_load_balancing
+  enable_cross_zone_load_balancing = var.private_nlb_cross_zone_load_balancing_enabled
 
   # Security groups
   additional_security_group_ids = var.private_nlb_security_group_ids
 
   # Access logs
-  enable_access_logs     = var.private_nlb_enable_access_logs
+  enable_access_logs     = var.private_nlb_access_logs_enabled
   access_logs_bucket_arn = var.private_nlb_access_logs_bucket_arn
 
   # Elastic IPs
-  enable_elastic_ips        = var.private_nlb_enable_elastic_ips
+  enable_elastic_ips        = var.private_nlb_elastic_ips_enabled
   elastic_ip_allocation_ids = var.private_nlb_elastic_ip_allocation_ids
 }
-

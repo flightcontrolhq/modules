@@ -32,8 +32,8 @@ module "ecs_cluster" {
   private_subnet_ids = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
-  enable_public_alb       = true
-  public_alb_enable_https = true
+  public_alb_enabled       = true
+  public_alb_https_enabled = true
   public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 }
 

@@ -65,7 +65,7 @@ module "ecs_instance_security_group" {
 
   ingress_rules = concat(
     # Allow inbound from public ALB if enabled
-    var.enable_public_alb ? [
+    var.public_alb_enabled ? [
       {
         description                  = "Allow inbound from public ALB"
         from_port                    = 0
@@ -75,7 +75,7 @@ module "ecs_instance_security_group" {
       }
     ] : [],
     # Allow inbound from private ALB if enabled
-    var.enable_private_alb ? [
+    var.private_alb_enabled ? [
       {
         description                  = "Allow inbound from private ALB"
         from_port                    = 0
@@ -124,7 +124,7 @@ resource "aws_launch_template" "ecs" {
 
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = var.ec2_enable_imdsv2 ? "required" : "optional"
+    http_tokens                 = var.ec2_imdsv2_enabled ? "required" : "optional"
     http_put_response_hop_limit = 2
   }
 
@@ -191,7 +191,7 @@ module "ecs_autoscaling" {
   }
 
   # Mixed instances policy for Spot support
-  mixed_instances_policy = var.ec2_enable_spot ? {
+  mixed_instances_policy = var.ec2_spot_enabled ? {
     instances_distribution = {
       on_demand_base_capacity                  = var.ec2_on_demand_base_capacity
       on_demand_percentage_above_base_capacity = var.ec2_on_demand_percentage_above_base

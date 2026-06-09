@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.0.5
-  description: unify labels and descriptions across modules
+  version: 0.0.6
+  description: rename ECS boolean inputs to noun-first enabled format
 module:
   inputs:
     - id: network
@@ -33,8 +33,13 @@ module:
       required: true
       type: string
     - default: true
+      description: Prevent accidental deletion of load balancers created by this module.
+      id: deletion_protection
+      label: Deletion protection
+      type: boolean
+    - default: true
       description: Enables CloudWatch Container Insights for detailed task, container, network, storage, and EC2 capacity metrics beyond the basic ECS CPU and memory metrics available by default.
-      id: enable_container_insights
+      id: container_insights_enabled
       label: Container insights
       type: boolean
     - id: section_capacity
@@ -42,12 +47,12 @@ module:
       type: section
     - default: true
       description: Allows ECS services in this cluster to use Fargate for serverless task capacity.
-      id: enable_fargate
+      id: fargate_enabled
       label: Fargate
       type: boolean
     - default: true
       description: Allows ECS services in this cluster to use Fargate Spot for lower-cost, interruptible serverless task capacity.
-      id: enable_fargate_spot
+      id: fargate_spot_enabled
       label: Fargate spot
       type: boolean
     - description: Enables the EC2 capacity provider when set. Leave blank to use only Fargate/Fargate Spot.
@@ -113,7 +118,7 @@ module:
     - collapsible: true
       default: false
       description: Use Spot instances in the EC2 Auto Scaling Group.
-      id: ec2_enable_spot
+      id: ec2_spot_enabled
       label: Spot instances
       show_when:
         ec2_instance_type:
@@ -126,7 +131,7 @@ module:
       label: Spot instance types
       placeholder: t3.large
       show_when:
-        ec2_enable_spot: true
+        ec2_spot_enabled: true
         ec2_instance_type:
           not: ""
       type: string_array
@@ -206,15 +211,15 @@ module:
       label: Public application load balancer
       type: section
     - default: true
-      id: enable_public_alb
+      id: public_alb_enabled
       label: Public load balancer
       type: boolean
     - default: true
       description: Enable HTTPS listener on the public ALB.
-      id: public_alb_enable_https
+      id: public_alb_https_enabled
       label: HTTPS
       show_when:
-        enable_public_alb: true
+        public_alb_enabled: true
       type: boolean
     - add_button_label: Add certificate ARN
       description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
@@ -223,8 +228,8 @@ module:
       placeholder: arn:aws:acm:...
       required: true
       show_when:
-        enable_public_alb: true
-        public_alb_enable_https: true
+        public_alb_enabled: true
+        public_alb_https_enabled: true
       type: string_array
     - collapsible: true
       description: SSL policy for public ALB HTTPS.
@@ -232,8 +237,8 @@ module:
       label: SSL policy
       placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
       show_when:
-        enable_public_alb: true
-        public_alb_enable_https: true
+        public_alb_enabled: true
+        public_alb_https_enabled: true
       type: string
     - collapsible: true
       description: Idle timeout for the public ALB.
@@ -243,31 +248,23 @@ module:
       min: 1
       placeholder: "60"
       show_when:
-        enable_public_alb: true
+        public_alb_enabled: true
       type: number
-    - collapsible: true
-      default: false
-      description: Prevent accidental public ALB deletion.
-      id: public_alb_enable_deletion_protection
-      label: Deletion protection
-      show_when:
-        enable_public_alb: true
-      type: boolean
     - collapsible: true
       description: WAFv2 Web ACL ARN for the public ALB.
       id: public_alb_web_acl_arn
       label: WAF web ACL ARN
       placeholder: arn:aws:wafv2:...
       show_when:
-        enable_public_alb: true
+        public_alb_enabled: true
       type: string
     - collapsible: true
       default: false
       description: Enable public ALB access logging.
-      id: public_alb_enable_access_logs
+      id: public_alb_access_logs_enabled
       label: Access logs
       show_when:
-        enable_public_alb: true
+        public_alb_enabled: true
       type: boolean
     - collapsible: true
       description: Existing S3 bucket ARN for public ALB access logs.
@@ -275,23 +272,23 @@ module:
       label: Access logs bucket ARN
       placeholder: arn:aws:s3:::my-bucket
       show_when:
-        enable_public_alb: true
-        public_alb_enable_access_logs: true
+        public_alb_enabled: true
+        public_alb_access_logs_enabled: true
       type: string
     - description: Creates an internal Application Load Balancer for services that should only be reachable inside the VPC or private network, such as internal APIs, admin tools, and service-to-service traffic.
       id: section_private_alb
       label: Private application load balancer
       type: section
     - default: false
-      id: enable_private_alb
+      id: private_alb_enabled
       label: Private load balancer
       type: boolean
     - default: false
       description: Enable HTTPS listener on the private ALB.
-      id: private_alb_enable_https
+      id: private_alb_https_enabled
       label: HTTPS
       show_when:
-        enable_private_alb: true
+        private_alb_enabled: true
       type: boolean
     - add_button_label: Add certificate ARN
       description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
@@ -300,8 +297,8 @@ module:
       placeholder: arn:aws:acm:...
       required: true
       show_when:
-        enable_private_alb: true
-        private_alb_enable_https: true
+        private_alb_enabled: true
+        private_alb_https_enabled: true
       type: string_array
     - collapsible: true
       description: SSL policy for private ALB HTTPS.
@@ -309,8 +306,8 @@ module:
       label: SSL policy
       placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
       show_when:
-        enable_private_alb: true
-        private_alb_enable_https: true
+        private_alb_enabled: true
+        private_alb_https_enabled: true
       type: string
     - add_button_label: Add CIDR block
       collapsible: true
@@ -319,7 +316,7 @@ module:
       label: Ingress CIDRs
       placeholder: 10.0.0.0/8
       show_when:
-        enable_private_alb: true
+        private_alb_enabled: true
       type: string_array
     - collapsible: true
       description: Idle timeout for the private ALB.
@@ -329,23 +326,15 @@ module:
       min: 1
       placeholder: "60"
       show_when:
-        enable_private_alb: true
+        private_alb_enabled: true
       type: number
     - collapsible: true
       default: false
-      description: Prevent accidental private ALB deletion.
-      id: private_alb_enable_deletion_protection
-      label: Deletion protection
-      show_when:
-        enable_private_alb: true
-      type: boolean
-    - collapsible: true
-      default: false
       description: Enable private ALB access logging.
-      id: private_alb_enable_access_logs
+      id: private_alb_access_logs_enabled
       label: Access logs
       show_when:
-        enable_private_alb: true
+        private_alb_enabled: true
       type: boolean
     - collapsible: true
       description: Existing S3 bucket ARN for private ALB access logs.
@@ -353,8 +342,8 @@ module:
       label: Access logs bucket ARN
       placeholder: arn:aws:s3:::my-bucket
       show_when:
-        enable_private_alb: true
-        private_alb_enable_access_logs: true
+        private_alb_enabled: true
+        private_alb_access_logs_enabled: true
       type: string
     - description: Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer the Application Load Balancer sections above.
       id: section_nlb
@@ -362,7 +351,7 @@ module:
       type: section
     - default: false
       description: Create an internet-facing Network Load Balancer.
-      id: enable_public_nlb
+      id: public_nlb_enabled
       label: Public NLB
       type: boolean
     - add_button_label: Add security group ID
@@ -372,31 +361,23 @@ module:
       label: Security groups
       placeholder: sg-...
       show_when:
-        enable_public_nlb: true
+        public_nlb_enabled: true
       type: string_array
     - collapsible: true
       default: false
       description: Enable cross-zone load balancing for the public NLB.
-      id: public_nlb_enable_cross_zone_load_balancing
+      id: public_nlb_cross_zone_load_balancing_enabled
       label: Cross-zone load balancing
       show_when:
-        enable_public_nlb: true
-      type: boolean
-    - collapsible: true
-      default: false
-      description: Prevent accidental public NLB deletion.
-      id: public_nlb_enable_deletion_protection
-      label: Deletion protection
-      show_when:
-        enable_public_nlb: true
+        public_nlb_enabled: true
       type: boolean
     - collapsible: true
       default: false
       description: Assign static Elastic IPs to the public NLB.
-      id: public_nlb_enable_elastic_ips
+      id: public_nlb_elastic_ips_enabled
       label: Use elastic IPs
       show_when:
-        enable_public_nlb: true
+        public_nlb_enabled: true
       type: boolean
     - add_button_label: Add allocation ID
       collapsible: true
@@ -405,16 +386,16 @@ module:
       label: Elastic IP allocation IDs
       placeholder: eipalloc-...
       show_when:
-        enable_public_nlb: true
-        public_nlb_enable_elastic_ips: true
+        public_nlb_enabled: true
+        public_nlb_elastic_ips_enabled: true
       type: string_array
     - collapsible: true
       default: false
       description: Enable public NLB access logging.
-      id: public_nlb_enable_access_logs
+      id: public_nlb_access_logs_enabled
       label: Access logs
       show_when:
-        enable_public_nlb: true
+        public_nlb_enabled: true
       type: boolean
     - collapsible: true
       description: Existing S3 bucket ARN for public NLB access logs.
@@ -422,12 +403,12 @@ module:
       label: Access logs bucket ARN
       placeholder: arn:aws:s3:::my-bucket
       show_when:
-        enable_public_nlb: true
-        public_nlb_enable_access_logs: true
+        public_nlb_enabled: true
+        public_nlb_access_logs_enabled: true
       type: string
     - default: false
       description: Create an internal Network Load Balancer.
-      id: enable_private_nlb
+      id: private_nlb_enabled
       label: Private NLB
       type: boolean
     - add_button_label: Add security group ID
@@ -437,31 +418,23 @@ module:
       label: Security groups
       placeholder: sg-...
       show_when:
-        enable_private_nlb: true
+        private_nlb_enabled: true
       type: string_array
     - collapsible: true
       default: false
       description: Enable cross-zone load balancing for the private NLB.
-      id: private_nlb_enable_cross_zone_load_balancing
+      id: private_nlb_cross_zone_load_balancing_enabled
       label: Cross-zone load balancing
       show_when:
-        enable_private_nlb: true
-      type: boolean
-    - collapsible: true
-      default: false
-      description: Prevent accidental private NLB deletion.
-      id: private_nlb_enable_deletion_protection
-      label: Deletion protection
-      show_when:
-        enable_private_nlb: true
+        private_nlb_enabled: true
       type: boolean
     - collapsible: true
       default: false
       description: Assign static Elastic IPs to the private NLB.
-      id: private_nlb_enable_elastic_ips
+      id: private_nlb_elastic_ips_enabled
       label: Use elastic IPs
       show_when:
-        enable_private_nlb: true
+        private_nlb_enabled: true
       type: boolean
     - add_button_label: Add allocation ID
       collapsible: true
@@ -470,16 +443,16 @@ module:
       label: Elastic IP allocation IDs
       placeholder: eipalloc-...
       show_when:
-        enable_private_nlb: true
-        private_nlb_enable_elastic_ips: true
+        private_nlb_enabled: true
+        private_nlb_elastic_ips_enabled: true
       type: string_array
     - collapsible: true
       default: false
       description: Enable private NLB access logging.
-      id: private_nlb_enable_access_logs
+      id: private_nlb_access_logs_enabled
       label: Access logs
       show_when:
-        enable_private_nlb: true
+        private_nlb_enabled: true
       type: boolean
     - collapsible: true
       description: Existing S3 bucket ARN for private NLB access logs.
@@ -487,8 +460,8 @@ module:
       label: Access logs bucket ARN
       placeholder: arn:aws:s3:::my-bucket
       show_when:
-        enable_private_nlb: true
-        private_nlb_enable_access_logs: true
+        private_nlb_enabled: true
+        private_nlb_access_logs_enabled: true
       type: string
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
@@ -639,8 +612,9 @@ module:
       base_path: compute/ecs_cluster
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
+        deletion_protection: << module.input.deletion_protection >>
         ec2_ami_id: << module.input.ec2_ami_id >>
-        ec2_enable_spot: << module.input.ec2_enable_spot >>
+        ec2_spot_enabled: << module.input.ec2_spot_enabled >>
         ec2_instance_type: << module.input.ec2_instance_type >>
         ec2_key_name: << module.input.ec2_key_name >>
         ec2_managed_scaling_target_capacity: << module.input.ec2_managed_scaling_target_capacity >>
@@ -652,44 +626,40 @@ module:
         ec2_security_group_ids: << module.input.ec2_security_group_ids >>
         ec2_spot_instance_types: << module.input.ec2_spot_instance_types >>
         ec2_user_data: << module.input.ec2_user_data >>
-        enable_container_insights: << module.input.enable_container_insights >>
-        enable_fargate: << module.input.enable_fargate >>
-        enable_fargate_spot: << module.input.enable_fargate_spot >>
-        enable_private_alb: << module.input.enable_private_alb >>
-        enable_private_nlb: << module.input.enable_private_nlb >>
-        enable_public_alb: << module.input.enable_public_alb >>
-        enable_public_nlb: << module.input.enable_public_nlb >>
+        container_insights_enabled: << module.input.container_insights_enabled >>
+        fargate_enabled: << module.input.fargate_enabled >>
+        fargate_spot_enabled: << module.input.fargate_spot_enabled >>
+        private_alb_enabled: << module.input.private_alb_enabled >>
+        private_nlb_enabled: << module.input.private_nlb_enabled >>
+        public_alb_enabled: << module.input.public_alb_enabled >>
+        public_nlb_enabled: << module.input.public_nlb_enabled >>
         name: << module.input.name >>
         private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
         private_alb_certificate_arns: << module.input.private_alb_certificate_arns >>
-        private_alb_enable_access_logs: << module.input.private_alb_enable_access_logs >>
-        private_alb_enable_deletion_protection: << module.input.private_alb_enable_deletion_protection >>
-        private_alb_enable_https: << module.input.private_alb_enable_https >>
+        private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
+        private_alb_https_enabled: << module.input.private_alb_https_enabled >>
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
         private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
         private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
         private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
         private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
-        private_nlb_enable_access_logs: << module.input.private_nlb_enable_access_logs >>
-        private_nlb_enable_cross_zone_load_balancing: << module.input.private_nlb_enable_cross_zone_load_balancing >>
-        private_nlb_enable_deletion_protection: << module.input.private_nlb_enable_deletion_protection >>
-        private_nlb_enable_elastic_ips: << module.input.private_nlb_enable_elastic_ips >>
+        private_nlb_access_logs_enabled: << module.input.private_nlb_access_logs_enabled >>
+        private_nlb_cross_zone_load_balancing_enabled: << module.input.private_nlb_cross_zone_load_balancing_enabled >>
+        private_nlb_elastic_ips_enabled: << module.input.private_nlb_elastic_ips_enabled >>
         private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
         private_subnet_ids: << module.input.private_subnet_ids >>
         public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
         public_alb_certificate_arns: << module.input.public_alb_certificate_arns >>
-        public_alb_enable_access_logs: << module.input.public_alb_enable_access_logs >>
-        public_alb_enable_deletion_protection: << module.input.public_alb_enable_deletion_protection >>
-        public_alb_enable_https: << module.input.public_alb_enable_https >>
+        public_alb_access_logs_enabled: << module.input.public_alb_access_logs_enabled >>
+        public_alb_https_enabled: << module.input.public_alb_https_enabled >>
         public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>
         public_alb_ssl_policy: << module.input.public_alb_ssl_policy >>
         public_alb_web_acl_arn: << module.input.public_alb_web_acl_arn >>
         public_nlb_access_logs_bucket_arn: << module.input.public_nlb_access_logs_bucket_arn >>
         public_nlb_elastic_ip_allocation_ids: << module.input.public_nlb_elastic_ip_allocation_ids >>
-        public_nlb_enable_access_logs: << module.input.public_nlb_enable_access_logs >>
-        public_nlb_enable_cross_zone_load_balancing: << module.input.public_nlb_enable_cross_zone_load_balancing >>
-        public_nlb_enable_deletion_protection: << module.input.public_nlb_enable_deletion_protection >>
-        public_nlb_enable_elastic_ips: << module.input.public_nlb_enable_elastic_ips >>
+        public_nlb_access_logs_enabled: << module.input.public_nlb_access_logs_enabled >>
+        public_nlb_cross_zone_load_balancing_enabled: << module.input.public_nlb_cross_zone_load_balancing_enabled >>
+        public_nlb_elastic_ips_enabled: << module.input.public_nlb_elastic_ips_enabled >>
         public_nlb_security_group_ids: << module.input.public_nlb_security_group_ids >>
         public_subnet_ids: << module.input.public_subnet_ids || [] >>
         region: << module.input.aws_region >>
@@ -699,10 +669,10 @@ module:
   ui:
     links: |-
       <<
-      (module.input.enable_public_alb && stack.output.public_alb_dns_name ? [{"name":"Public ALB","href":(module.input.public_alb_enable_https ? "https://" : "http://") + stack.output.public_alb_dns_name}] : []) +
-      (module.input.enable_private_alb && stack.output.private_alb_dns_name ? [{"name":"Private ALB","href":(module.input.private_alb_enable_https ? "https://" : "http://") + stack.output.private_alb_dns_name}] : []) +
-      (module.input.enable_public_nlb && stack.output.public_nlb_dns_name ? [{"name":"Public NLB","href":"http://" + stack.output.public_nlb_dns_name}] : []) +
-      (module.input.enable_private_nlb && stack.output.private_nlb_dns_name ? [{"name":"Private NLB","href":"http://" + stack.output.private_nlb_dns_name}] : [])
+      (module.input.public_alb_enabled && stack.output.public_alb_dns_name ? [{"name":"Public ALB","href":(module.input.public_alb_https_enabled ? "https://" : "http://") + stack.output.public_alb_dns_name}] : []) +
+      (module.input.private_alb_enabled && stack.output.private_alb_dns_name ? [{"name":"Private ALB","href":(module.input.private_alb_https_enabled ? "https://" : "http://") + stack.output.private_alb_dns_name}] : []) +
+      (module.input.public_nlb_enabled && stack.output.public_nlb_dns_name ? [{"name":"Public NLB","href":"http://" + stack.output.public_nlb_dns_name}] : []) +
+      (module.input.private_nlb_enabled && stack.output.private_nlb_dns_name ? [{"name":"Private NLB","href":"http://" + stack.output.private_nlb_dns_name}] : [])
       >>
     metrics:
       - id: task_cpu_utilization
