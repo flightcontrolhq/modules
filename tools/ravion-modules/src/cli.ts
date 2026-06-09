@@ -60,7 +60,7 @@ if (command === "validate") {
     validateModuleConfig(definition.module, definition.filePath);
   }
   const client = await createDefaultRavionApiClient();
-  const result = await publishDefinitions(compiled, client, { dryRun: !args.includes("--apply") });
+  const result = await publishDefinitions(compiled, client, { dryRun: !args.includes("--apply"), logger: (message) => console.error(`[publish] ${message}`) });
   const format = getArgValue(args, "--format") ?? "json";
   const output = format === "markdown" ? formatPublishPlanMarkdown(result) : JSON.stringify(result, null, 2);
   const outputPath = getArgValue(args, "--output");

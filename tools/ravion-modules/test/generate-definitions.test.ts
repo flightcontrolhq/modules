@@ -52,6 +52,22 @@ describe("definition generation", () => {
     assert.equal(result.generated[0].version, "1.3.0");
     assert.match(result.generated[0].content, /version: 1\.3\.0/);
   });
+
+  it("selects stable releases over prereleases with the same version core", async () => {
+    const rootPath = await createModuleRoot(["networking/vpc"]);
+    const inventory = createInventory();
+    inventory.versionsByDefinitionId.network.unshift({
+      moduleDefinitionId: "network",
+      version: "1.2.0-alpha",
+      description: "Prerelease VPC definition.",
+      config: { inputs: [{ id: "name", type: "string", label: "Name" }] },
+    });
+
+    const result = await generateDefinitionsFromInventory(inventory, rootPath);
+
+    assert.equal(result.generated[0].version, "1.2.0");
+    assert.match(result.generated[0].content, /version: 1\.2\.0/);
+  });
 });
 
 async function createModuleRoot(modulePaths: string[]): Promise<string> {

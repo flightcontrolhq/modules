@@ -37,6 +37,11 @@ export interface RavionApiClientOptions {
   requireToken?: boolean;
 }
 
+export interface PublishOptions {
+  dryRun?: boolean;
+  logger?: (message: string) => void;
+}
+
 const DEFAULT_RAVION_API_URL = "https://api.ravion.com";
 
 export interface RavionModuleApiClient {
@@ -57,10 +62,11 @@ export class PublishError extends Error {
 export async function publishDefinitions(
   compiledDefinitions: CompiledDefinition[],
   client: RavionModuleApiClient,
-  options: { dryRun?: boolean } = {},
+  options: PublishOptions = {},
 ): Promise<PublishResult> {
   const dryRun = options.dryRun ?? true;
-  const inventory = await loadRemoteInventory(client);
+  const inventory = await loadRemoteInventory(client, { logger: options.logger });
+  options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
   const statuses = getReleaseStatuses(compiledDefinitions, { inventory });
   validateReleaseStatuses(statuses);
 
@@ -174,10 +180,25 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
   return lines.join("\n");
 }
 
-export async function loadRemoteInventory(client: RavionModuleApiClient): Promise<RemoteModuleInventory> {
-  const definitions = await client.listModuleDefinitions();
-  const versions = await Promise.all(definitions.map(async (definition) => [definition.id, await client.listModuleVersions(definition.id)] as const));
+export async function loadRemoteInventory(client: RavionModuleApiClient, options: { logger?: (message: string) => void } = {}): Promise<RemoteModuleInventory> {
+  options.logger?.("Loading remote module definitions from Ravion API.");
+  const definitions = await wrapApiStep("list remote module definitions", () => client.listModuleDefinitions());
+  options.logger?.(`Loading remote module versions for ${definitions.length} definitions.`);
+  const versions = await Promise.all(
+    definitions.map(async (definition) => {
+      const label = `${definition.type} (${definition.id})`;
+      return [definition.id, await wrapApiStep(`list remote module versions for ${label}`, () => client.listModuleVersions(definition.id))] as const;
+    }),
+  );
   return { definitions, versionsByDefinitionId: Object.fromEntries(versions) };
+}
+
+async function wrapApiStep<T>(label: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    throw new PublishError(`Failed to ${label}: ${formatUnknownError(error)}`);
+  }
 }
 
 async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, moduleDefinitionId: string, definition: CompiledDefinition): Promise<void> {
@@ -222,15 +243,28 @@ function selectLatestVersion(versions: RemoteModuleVersion[]): RemoteModuleVersi
 }
 
 function compareSemver(left: string, right: string): number {
-  const leftParts = left.split(".").map((part) => Number.parseInt(part, 10));
-  const rightParts = right.split(".").map((part) => Number.parseInt(part, 10));
+  const leftParsed = parseSemver(left);
+  const rightParsed = parseSemver(right);
   for (let index = 0; index < 3; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    const difference = leftParsed.numbers[index] - rightParsed.numbers[index];
     if (difference !== 0) {
       return difference;
     }
   }
+
+  if (leftParsed.prerelease && !rightParsed.prerelease) {
+    return -1;
+  }
+  if (!leftParsed.prerelease && rightParsed.prerelease) {
+    return 1;
+  }
   return left.localeCompare(right);
+}
+
+function parseSemver(version: string): { numbers: [number, number, number]; prerelease?: string } {
+  const [core, prerelease] = version.split("-", 2);
+  const parts = core.split(".").map((part) => Number.parseInt(part, 10));
+  return { numbers: [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0], prerelease };
 }
 
 function formatAction(action: PublishAction): string {
@@ -321,10 +355,17 @@ class HttpRavionModuleApiClient implements RavionModuleApiClient {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/${procedure}`, { method: "POST", headers, body: JSON.stringify(input) });
+    const url = `${this.baseUrl}/${procedure}`;
+    let response: Response;
+    try {
+      response = await fetch(url, { method: "POST", headers, body: JSON.stringify(input) });
+    } catch (error) {
+      throw new PublishError(`Ravion API request failed before receiving a response: POST ${url}: ${formatUnknownError(error)}`);
+    }
     const payload = await readResponsePayload(response);
     if (!response.ok) {
-      throw new HttpApiError(response.status, extractErrorMessage(payload, `${procedure} failed with HTTP ${response.status}.`));
+      const message = extractErrorMessage(payload, "No response error message was returned.");
+      throw new HttpApiError(response.status, `${procedure} failed with HTTP ${response.status}: ${message}`);
     }
     return unwrapApiPayload(payload) as T;
   }
@@ -366,4 +407,11 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
     }
   }
   return typeof payload === "string" && payload.length > 0 ? payload : fallback;
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  return String(error);
 }

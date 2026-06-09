@@ -100,6 +100,20 @@ describe("publish", () => {
     });
   });
 
+  it("adds inventory context when loading remote versions fails", async () => {
+    const logs: string[] = [];
+    const client = new MockRavionClient({ definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }] });
+    client.onListModuleVersions = async () => {
+      throw new Error("Forbidden");
+    };
+
+    await assert.rejects(() => publishDefinitions([createCompiledDefinition()], client, { logger: (message) => logs.push(message) }), {
+      name: "PublishError",
+      message: "Failed to list remote module versions for ravion-aws-vpc (vpc): Error: Forbidden",
+    });
+    assert.deepEqual(logs, ["Loading remote module definitions from Ravion API.", "Loading remote module versions for 1 definitions."]);
+  });
+
   it("handles duplicate version responses as an idempotent skip when the remote config matches", async () => {
     const compiled = createCompiledDefinition();
     const client = new MockRavionClient({ definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }] });
@@ -153,6 +167,7 @@ class MockRavionClient implements RavionModuleApiClient {
   createdDefinitions: ModuleDefinitionInput[] = [];
   patchedDefinitions: RemoteModuleDefinition[] = [];
   createdVersions: ModuleVersionInput[] = [];
+  onListModuleVersions?: (moduleDefinitionId: string) => Promise<RemoteModuleVersion[]>;
   onCreateVersion?: (input: ModuleVersionInput) => Promise<void>;
 
   constructor(options: { definitions?: RemoteModuleDefinition[]; versionsByDefinitionId?: Record<string, RemoteModuleVersion[]> } = {}) {
@@ -178,6 +193,9 @@ class MockRavionClient implements RavionModuleApiClient {
   }
 
   async listModuleVersions(moduleDefinitionId: string): Promise<RemoteModuleVersion[]> {
+    if (this.onListModuleVersions) {
+      return this.onListModuleVersions(moduleDefinitionId);
+    }
     return this.versionsByDefinitionId[moduleDefinitionId] ?? [];
   }
 

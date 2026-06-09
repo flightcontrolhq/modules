@@ -186,15 +186,28 @@ function selectLatestVersion(versions: RemoteModuleVersion[]): RemoteModuleVersi
 }
 
 function compareSemver(left: string, right: string): number {
-  const leftParts = left.split(".").map((part) => Number.parseInt(part, 10));
-  const rightParts = right.split(".").map((part) => Number.parseInt(part, 10));
+  const leftParsed = parseSemver(left);
+  const rightParsed = parseSemver(right);
   for (let index = 0; index < 3; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    const difference = leftParsed.numbers[index] - rightParsed.numbers[index];
     if (difference !== 0) {
       return difference;
     }
   }
+
+  if (leftParsed.prerelease && !rightParsed.prerelease) {
+    return -1;
+  }
+  if (!leftParsed.prerelease && rightParsed.prerelease) {
+    return 1;
+  }
   return left.localeCompare(right);
+}
+
+function parseSemver(version: string): { numbers: [number, number, number]; prerelease?: string } {
+  const [core, prerelease] = version.split("-", 2);
+  const parts = core.split(".").map((part) => Number.parseInt(part, 10));
+  return { numbers: [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0], prerelease };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
