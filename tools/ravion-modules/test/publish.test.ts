@@ -52,18 +52,38 @@ describe("publish", () => {
   });
 
   it("fails with structured conflict details when an existing version has different config", async () => {
+    const remoteConfig = {
+      inputs: [
+        { id: "unchanged-first", type: "string", label: "Unchanged First" },
+        { id: "unchanged-second", type: "string", label: "Unchanged Second" },
+        { id: "unchanged-third", type: "string", label: "Unchanged Third" },
+        { id: "unchanged-fourth", type: "string", label: "Unchanged Fourth" },
+        { id: "latest", type: "string", label: "Latest" },
+        { id: "unchanged-fifth", type: "string", label: "Unchanged Fifth" },
+      ],
+    };
+    const localConfig = {
+      inputs: [
+        { id: "unchanged-first", type: "string", label: "Unchanged First" },
+        { id: "unchanged-second", type: "string", label: "Unchanged Second" },
+        { id: "unchanged-third", type: "string", label: "Unchanged Third" },
+        { id: "unchanged-fourth", type: "string", label: "Unchanged Fourth" },
+        { id: "name", type: "string", label: "Name" },
+        { id: "unchanged-fifth", type: "string", label: "Unchanged Fifth" },
+      ],
+    };
     const client = new MockRavionClient({
       definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
       versionsByDefinitionId: {
         vpc: [
           createRemoteVersion({ version: "1.2.3", config: { inputs: [{ id: "region", type: "string", label: "Region" }] } }),
-          createRemoteVersion({ version: "1.2.4", config: { inputs: [{ id: "latest", type: "string", label: "Latest" }] } }),
+          createRemoteVersion({ version: "1.2.4", config: remoteConfig }),
         ],
       },
     });
 
     await assert.rejects(
-      () => publishDefinitions([createCompiledDefinition()], client),
+      () => publishDefinitions([createCompiledDefinition({ module: localConfig })], client),
       (error) => {
         assert.ok(error instanceof PublishPlanError);
         assert.deepEqual(error.result.errors?.map(({ type, version, latestVersion, message }) => ({ type, version, latestVersion, message })), [
@@ -79,6 +99,7 @@ describe("publish", () => {
         assert.match(formatPublishPlanMarkdown(error.result), /```diff/);
         assert.match(formatPublishPlanMarkdown(error.result), /-      "id": "latest"/);
         assert.match(formatPublishPlanMarkdown(error.result), /\+      "id": "name"/);
+        assert.doesNotMatch(formatPublishPlanMarkdown(error.result), /unchanged-first/);
         return true;
       },
     );

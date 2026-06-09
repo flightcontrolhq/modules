@@ -303,7 +303,75 @@ function createDiff(remote: unknown, local: unknown): string | undefined {
     return undefined;
   }
 
-  return ["--- remote", "+++ local", ...remoteText.split("\n").filter(Boolean).map((line) => `-${line}`), ...localText.split("\n").filter(Boolean).map((line) => `+${line}`)].join("\n");
+  return createUnifiedDiff(remoteText, localText);
+}
+
+function createUnifiedDiff(remoteText: string, localText: string, contextLineCount = 3): string {
+  const remoteLines = remoteText.split("\n");
+  const localLines = localText.split("\n");
+  const operations = diffLines(remoteLines, localLines);
+  const changedIndexes = operations.flatMap((operation, index) => (operation.type === "equal" ? [] : [index]));
+  if (changedIndexes.length === 0) {
+    return "";
+  }
+
+  const selected = new Set<number>();
+  for (const index of changedIndexes) {
+    for (let selectedIndex = Math.max(0, index - contextLineCount); selectedIndex <= Math.min(operations.length - 1, index + contextLineCount); selectedIndex += 1) {
+      selected.add(selectedIndex);
+    }
+  }
+
+  const lines = ["--- remote", "+++ compiled"];
+  let previousIndex = -1;
+  for (const index of [...selected].sort((left, right) => left - right)) {
+    if (previousIndex >= 0 && index > previousIndex + 1) {
+      lines.push("@@");
+    }
+    const operation = operations[index];
+    lines.push(`${operation.type === "add" ? "+" : operation.type === "remove" ? "-" : " "}${operation.line}`);
+    previousIndex = index;
+  }
+
+  return lines.join("\n");
+}
+
+function diffLines(remoteLines: string[], localLines: string[]): Array<{ type: "equal" | "remove" | "add"; line: string }> {
+  const lengths = Array.from({ length: remoteLines.length + 1 }, () => Array<number>(localLines.length + 1).fill(0));
+  for (let remoteIndex = remoteLines.length - 1; remoteIndex >= 0; remoteIndex -= 1) {
+    for (let localIndex = localLines.length - 1; localIndex >= 0; localIndex -= 1) {
+      lengths[remoteIndex][localIndex] = remoteLines[remoteIndex] === localLines[localIndex]
+        ? lengths[remoteIndex + 1][localIndex + 1] + 1
+        : Math.max(lengths[remoteIndex + 1][localIndex], lengths[remoteIndex][localIndex + 1]);
+    }
+  }
+
+  const operations: Array<{ type: "equal" | "remove" | "add"; line: string }> = [];
+  let remoteIndex = 0;
+  let localIndex = 0;
+  while (remoteIndex < remoteLines.length && localIndex < localLines.length) {
+    if (remoteLines[remoteIndex] === localLines[localIndex]) {
+      operations.push({ type: "equal", line: remoteLines[remoteIndex] });
+      remoteIndex += 1;
+      localIndex += 1;
+    } else if (lengths[remoteIndex + 1][localIndex] >= lengths[remoteIndex][localIndex + 1]) {
+      operations.push({ type: "remove", line: remoteLines[remoteIndex] });
+      remoteIndex += 1;
+    } else {
+      operations.push({ type: "add", line: localLines[localIndex] });
+      localIndex += 1;
+    }
+  }
+  while (remoteIndex < remoteLines.length) {
+    operations.push({ type: "remove", line: remoteLines[remoteIndex] });
+    remoteIndex += 1;
+  }
+  while (localIndex < localLines.length) {
+    operations.push({ type: "add", line: localLines[localIndex] });
+    localIndex += 1;
+  }
+
+  return operations;
 }
 
 function stableStringifyPretty(value: unknown): string {
