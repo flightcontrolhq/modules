@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
+import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from "./github-releases.js";
 import { runMigrationGuardrails } from "./guardrails.js";
 import { validateModuleConfig } from "./module-schema.js";
 import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
@@ -54,6 +55,18 @@ if (command === "validate") {
     await createPlannedTags(plan);
   }
   console.log(JSON.stringify(plan, null, 2));
+} else if (command === "github-releases") {
+  const planPath = getArgValue(args, "--plan");
+  if (!planPath) {
+    console.error("Usage: ravion-modules github-releases --plan <tag-plan.json> [--create]");
+    process.exitCode = 1;
+    return;
+  }
+  const plan = await planGitHubReleases(await readTagPlanFile(planPath));
+  if (args.includes("--create")) {
+    await createPlannedGitHubReleases(plan);
+  }
+  console.log(JSON.stringify(plan, null, 2));
 } else if (command === "publish") {
   const compiled = await compileAllDefinitions();
   for (const definition of compiled) {
@@ -95,7 +108,7 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|publish|generate-definitions> <*-definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|github-releases|publish|generate-definitions> <*-definition.yml...>");
   process.exitCode = 1;
 }
 }
