@@ -4,7 +4,7 @@ definition:
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
   version: 0.0.4
-  description: extract shared definition partials
+  description: unify labels and descriptions across modules
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

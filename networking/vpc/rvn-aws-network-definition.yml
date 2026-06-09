@@ -4,7 +4,7 @@ definition:
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
   version: 0.0.6
-  description: extract shared definition partials
+  description: unify labels and descriptions across modules
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
