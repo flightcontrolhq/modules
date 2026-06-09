@@ -51,6 +51,7 @@ resource "aws_lb_target_group" "tg_1" {
 
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [name]
   }
 }
 
