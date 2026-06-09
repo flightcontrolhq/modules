@@ -97,8 +97,8 @@ describe("publish", () => {
         assert.match(formatPublishPlanMarkdown(error.result), /### Release Config Conflicts/);
         assert.match(formatPublishPlanMarkdown(error.result), /Latest Remote vs Compiled/);
         assert.match(formatPublishPlanMarkdown(error.result), /```diff/);
-        assert.match(formatPublishPlanMarkdown(error.result), /-      "id": "latest"/);
-        assert.match(formatPublishPlanMarkdown(error.result), /\+      "id": "name"/);
+        assert.match(formatPublishPlanMarkdown(error.result), /-  - id: latest/);
+        assert.match(formatPublishPlanMarkdown(error.result), /\+  - id: name/);
         assert.doesNotMatch(formatPublishPlanMarkdown(error.result), /unchanged-first/);
         return true;
       },
@@ -135,7 +135,7 @@ describe("publish", () => {
     assert.match(markdown, /Create Definition/);
     assert.match(markdown, /Create Version/);
     assert.match(markdown, /```diff/);
-    assert.match(markdown, /\+  "type": "ravion-aws-vpc"/);
+    assert.match(markdown, /\+type: ravion-aws-vpc/);
   });
 
   it("requires a Ravion API token by default", async () => {

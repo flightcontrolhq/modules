@@ -1,6 +1,7 @@
 import { type CompiledDefinition } from "./compiler.js";
 import { type RemoteModuleDefinition, type RemoteModuleInventory, type RemoteModuleVersion } from "./generate-definitions.js";
 import { getReleaseStatuses, type ReleaseStatus, validateReleaseStatuses } from "./release.js";
+import YAML from "yaml";
 
 export type PublishAction = "create-definition" | "patch-definition" | "create-version" | "skip-version";
 
@@ -297,8 +298,8 @@ function createItem(definition: CompiledDefinition, action: PublishAction, dryRu
 }
 
 function createDiff(remote: unknown, local: unknown): string | undefined {
-  const remoteText = remote === undefined ? "" : stableStringifyPretty(remote);
-  const localText = stableStringifyPretty(local);
+  const remoteText = remote === undefined ? "" : stableStringifyYaml(remote);
+  const localText = stableStringifyYaml(local);
   if (remoteText === localText) {
     return undefined;
   }
@@ -374,8 +375,8 @@ function diffLines(remoteLines: string[], localLines: string[]): Array<{ type: "
   return operations;
 }
 
-function stableStringifyPretty(value: unknown): string {
-  return JSON.stringify(sortObjectKeys(value), null, 2);
+function stableStringifyYaml(value: unknown): string {
+  return YAML.stringify(sortObjectKeys(value), { lineWidth: 0 }).trimEnd();
 }
 
 function selectLatestVersion(versions: RemoteModuleVersion[]): RemoteModuleVersion | undefined {
