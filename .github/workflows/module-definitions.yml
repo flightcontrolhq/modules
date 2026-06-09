@@ -42,8 +42,7 @@ jobs:
         run: node tools/ravion-modules/dist/src/cli.js guardrails
 
       - name: Compile and validate definitions
-        run: node dist/src/cli.js compile
-        working-directory: tools/ravion-modules
+        run: node tools/ravion-modules/dist/src/cli.js compile
 
   publish-plan:
     name: Publish Dry-Run Plan
@@ -77,8 +76,7 @@ jobs:
       - name: Generate publish dry-run plan
         id: publish_plan
         continue-on-error: true
-        run: node dist/src/cli.js publish --format markdown --output ../../publish-plan.md 2> ../../publish-plan.err
-        working-directory: tools/ravion-modules
+        run: node tools/ravion-modules/dist/src/cli.js publish --format markdown --output publish-plan.md 2> publish-plan.err
 
       - name: Comment publish dry-run plan
         uses: actions/github-script@v7
@@ -137,8 +135,7 @@ jobs:
         working-directory: tools/ravion-modules
 
       - name: Dry-run publish plan
-        run: node dist/src/cli.js publish
-        working-directory: tools/ravion-modules
+        run: node tools/ravion-modules/dist/src/cli.js publish
 
       - name: Configure Git tag author
         run: |
@@ -146,12 +143,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Create release tags
-        run: node dist/src/cli.js tags --api --create
-        working-directory: tools/ravion-modules
+        run: node tools/ravion-modules/dist/src/cli.js tags --api --create
 
       - name: Push release tags
         run: git push origin --tags
 
       - name: Publish module versions
-        run: node dist/src/cli.js publish --apply
-        working-directory: tools/ravion-modules
+        run: node tools/ravion-modules/dist/src/cli.js publish --apply
