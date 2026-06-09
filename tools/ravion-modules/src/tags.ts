@@ -4,7 +4,7 @@ import { type ReleaseStatus } from "./release.js";
 
 const execFileAsync = promisify(execFile);
 
-export type TagPlanAction = "create" | "exists";
+export type TagPlanAction = "create" | "exists" | "update";
 
 export interface ExistingTag {
   name: string;
@@ -35,13 +35,19 @@ export class TagPlanError extends Error {
 
 export interface GitTagClient {
   createAnnotatedTag(tagName: string, commit: string, message: string): Promise<void>;
+  deleteTag(tagName: string): Promise<void>;
+  pushTags(refspecs: string[]): Promise<void>;
+}
+
+export interface TagPlanOptions {
+  overwrite?: boolean;
 }
 
 export function getModuleTagName(type: string, version: string): string {
   return `${type}@${version}`;
 }
 
-export function planTags(statuses: ReleaseStatus[], existingTags: ExistingTag[], targetCommit: string): TagPlanItem[] {
+export function planTags(statuses: ReleaseStatus[], existingTags: ExistingTag[], targetCommit: string, options: TagPlanOptions = {}): TagPlanItem[] {
   const existingTagsByName = new Map(existingTags.map((tag) => [tag.name, tag.commit]));
   const publishStatuses = statuses.filter((status) => status.publishState === "unpublished");
   const plan = publishStatuses.map((status) => {
@@ -63,6 +69,20 @@ export function planTags(statuses: ReleaseStatus[], existingTags: ExistingTag[],
     }
 
     if (existingCommit !== targetCommit) {
+      if (options.overwrite) {
+        return {
+          type: status.type,
+          name: status.name,
+          version: status.version,
+          releaseDescription: status.releaseDescription,
+          modulePath: status.modulePath,
+          tagName,
+          commit: targetCommit,
+          action: "update" as const,
+          message: `Move ${tagName} from ${existingCommit} to ${targetCommit}.`,
+        };
+      }
+
       return {
         type: status.type,
         name: status.name,
@@ -101,7 +121,19 @@ export async function createPlannedTags(plan: TagPlanItem[], git: GitTagClient =
   for (const item of plan) {
     if (item.action === "create") {
       await git.createAnnotatedTag(item.tagName, item.commit, `${item.tagName}: ${item.type} ${item.version}`);
+    } else if (item.action === "update") {
+      await git.deleteTag(item.tagName);
+      await git.createAnnotatedTag(item.tagName, item.commit, `${item.tagName}: ${item.type} ${item.version}`);
     }
+  }
+}
+
+export async function pushPlannedTags(plan: TagPlanItem[], git: GitTagClient = defaultGitTagClient): Promise<void> {
+  const refspecs = plan
+    .filter((item) => item.action === "create" || item.action === "update")
+    .map((item) => `${item.action === "update" ? "+" : ""}refs/tags/${item.tagName}:refs/tags/${item.tagName}`);
+  if (refspecs.length > 0) {
+    await git.pushTags(refspecs);
   }
 }
 
@@ -125,6 +157,12 @@ export async function listExistingTags(): Promise<ExistingTag[]> {
 const defaultGitTagClient: GitTagClient = {
   async createAnnotatedTag(tagName, commit, message) {
     await execFileAsync("git", ["tag", "-a", tagName, commit, "-m", message]);
+  },
+  async deleteTag(tagName) {
+    await execFileAsync("git", ["tag", "-d", tagName]);
+  },
+  async pushTags(refspecs) {
+    await execFileAsync("git", ["push", "origin", ...refspecs]);
   },
 };
 

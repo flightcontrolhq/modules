@@ -8,7 +8,7 @@ import { runMigrationGuardrails } from "./guardrails.js";
 import { validateModuleConfig } from "./module-schema.js";
 import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
-import { createPlannedTags, getCurrentCommit, listExistingTags, planTags } from "./tags.js";
+import { createPlannedTags, getCurrentCommit, listExistingTags, planTags, pushPlannedTags } from "./tags.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -50,10 +50,20 @@ if (command === "validate") {
   const compiled = await compileAllDefinitions();
   const statuses = getReleaseStatuses(compiled, { inventory });
   validateReleaseStatuses(statuses);
-  const plan = planTags(statuses, await listExistingTags(), targetCommit);
+  const plan = planTags(statuses, await listExistingTags(), targetCommit, { overwrite: args.includes("--overwrite") });
   if (args.includes("--create")) {
     await createPlannedTags(plan);
   }
+  console.log(JSON.stringify(plan, null, 2));
+} else if (command === "push-tags") {
+  const planPath = getArgValue(args, "--plan");
+  if (!planPath) {
+    console.error("Usage: ravion-modules push-tags --plan <tag-plan.json>");
+    process.exitCode = 1;
+    return;
+  }
+  const plan = await readTagPlanFile(planPath);
+  await pushPlannedTags(plan);
   console.log(JSON.stringify(plan, null, 2));
 } else if (command === "github-releases") {
   const planPath = getArgValue(args, "--plan");
@@ -108,7 +118,7 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|github-releases|publish|generate-definitions> <*-definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|generate-definitions> <*-definition.yml...>");
   process.exitCode = 1;
 }
 }
