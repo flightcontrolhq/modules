@@ -13,7 +13,6 @@ locals {
   }
   tags = merge(local.default_tags, var.tags)
 
-  create_zone        = var.create_zone
   create_public_zone = var.create_zone && !var.private_zone
 
   zone_id = var.create_zone ? (

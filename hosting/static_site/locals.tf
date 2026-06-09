@@ -70,6 +70,5 @@ locals {
   deploy_role_name             = var.deploy_role_name != null ? var.deploy_role_name : "${var.name}-deploy"
   oac_policy_sid               = "AllowCloudFrontServicePrincipal"
   partition                    = data.aws_partition.current.partition
-  account_id                   = data.aws_caller_identity.current.account_id
   hosting_bucket_arn           = "arn:${local.partition}:s3:::${var.name}"
 }

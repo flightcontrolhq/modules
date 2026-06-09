@@ -106,11 +106,6 @@ output "replica_regions" {
   value       = [for r in var.replicas : r.region_name]
 }
 
-output "region" {
-  description = "The AWS region where the table is created."
-  value       = local.region
-}
-
 ################################################################################
 # Account & Region
 ################################################################################
