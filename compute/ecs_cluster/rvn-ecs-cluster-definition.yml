@@ -10,49 +10,14 @@ module:
     - id: network
       label: VPC network
       mapped_inputs:
-        - id: section_aws
-          label: AWS account & region
-          type: section
-        - default: << ref.input.aws_account_id >>
-          id: aws_account_id
-          label: AWS account
-          type: string
-          values: $values:ravion/aws_accounts
-        - default: << ref.input.aws_region >>
-          description: AWS region for the ECS cluster. If unset in Terraform, the provider region is used.
-          id: aws_region
-          label: Region
-          type: string
-          values: $values:aws/regions
-        - collapsible: true
-          default: << ref.input.execution_environment_id >>
-          description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
-          id: execution_environment_id
-          label: Terraform execution environment
-          type: string
-          values: $values:ravion/execution_environments
-        - id: section_vpc
-          label: VPC
-          type: section
-        - default: <<ref.stack.output.vpc_id>>
-          id: vpc_id
-          label: VPC ID
-          required: true
-          type: string
-        - add_button_label: Add private subnet ID
-          default: <<ref.stack.output.private_subnet_ids>>
-          description: Required by Terraform. Used for ECS tasks, EC2 capacity, and private load balancers. At least one private subnet is required; private ALBs require at least two.
-          id: private_subnet_ids
-          label: Private subnet IDs
-          required: true
-          type: string_array
-        - add_button_label: Add public subnet ID
-          default: <<ref.stack.output.public_subnet_ids>>
-          description: Used for public ALB/NLB. Terraform defaults to [] when no public load balancer is enabled.
-          id: public_subnet_ids
-          label: Public subnet IDs
-          placeholder: subnet-...
-          type: string_array
+        - $template: ../../partials/templates/network-ref-mapped-inputs.yml
+          with:
+            aws_account_id_default: << ref.input.aws_account_id >>
+            aws_region_default: << ref.input.aws_region >>
+            execution_environment_default: << ref.input.execution_environment_id >>
+            private_subnet_ids_default: <<ref.stack.output.private_subnet_ids>>
+            public_subnet_ids_default: <<ref.stack.output.public_subnet_ids>>
+            vpc_id_default: <<ref.stack.output.vpc_id>>
       required: true
       type: $ref:rvn-aws-network
     - id: section_cluster
@@ -83,7 +48,7 @@ module:
     - default: true
       description: Allows ECS services in this cluster to use Fargate Spot for lower-cost, interruptible serverless task capacity.
       id: enable_fargate_spot
-      label: Fargate Spot
+      label: Fargate spot
       type: boolean
     - description: Enables the EC2 capacity provider when set. Leave blank to use only Fargate/Fargate Spot.
       id: ec2_instance_type
@@ -525,9 +490,7 @@ module:
         enable_private_nlb: true
         private_nlb_enable_access_logs: true
       type: string
-    - id: section_misc
-      label: Misc
-      type: section
+    - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
   readme: |-

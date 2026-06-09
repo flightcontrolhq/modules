@@ -1,0 +1,5 @@
+id: aws_region
+label: Region
+required: true
+type: string
+values: $values:aws/regions

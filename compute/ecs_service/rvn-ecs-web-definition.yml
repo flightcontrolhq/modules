@@ -613,28 +613,8 @@ module:
     - id: section_app_config
       label: Environment variables
       type: section
-    - id: build_environment_variables
-      label: Build environment variables
-      type: object
-      description: Environment variables available during image builds. Values can be plain strings or references loaded from Parameter Store.
-      placeholder: |-
-        {
-          "NODE_ENV": "production",
-          "API_URL": {
-            "fromParameterStore": "my-secret"
-          },
-          "NPM_TOKEN": {
-            "fromSecretManager": "arn:..."
-          }
-        }
-      required: false
-    - id: dockerfile_inject_env_variables
-      label: Inject environment variables in Dockerfile
-      type: boolean
-      description: Pass build environment variables into Dockerfile builds as build arguments.
-      show_when:
-        build_type: dockerfile
-      default: false
+    - $include: ../../partials/inputs/build-environment-variables.yml
+    - $include: ../../partials/inputs/dockerfile-env-injection.yml
     - id: environment_variables
       label: Runtime environment variables
       type: array
@@ -1080,8 +1060,6 @@ module:
       default: []
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
-        execution_environment_description: Optional execution environment ID or given ID for image builds. Defaults to the selected cluster execution environment.
-        instance_size_description: EC2 instance type for image builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
         no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
     - id: section_ecr
       label: Image registry lifecycle
@@ -1110,9 +1088,7 @@ module:
           - nixpacks
           - dockerfile
       default: false
-    - id: section_misc
-      label: Misc
-      type: section
+    - $include: ../../partials/inputs/misc-section.yml
     - id: force_new_deployment
       label: Force new deployment
       type: boolean
@@ -1285,29 +1261,11 @@ module:
           - << module.input.build_type >>
     environment_variables: << module.input.build_environment_variables >>
     infrastructure:
-      ami: '<< module.input.build_ami != "" ? module.input.build_ami : nil >>'
-      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
-      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
-      instance_size: << module.input.build_instance_size >>
-      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
-      type: << module.input.build_infrastructure_type >>
+      $include: ../../partials/build/infrastructure.yml
     inputs:
-      - id: branch
-        label: Git branch
-        type: string
-        description: Defaults to repo default branch
-        required: false
-      - id: ref
-        label: Git ref (commit or tag)
-        type: string
-        description: Optional commit SHA, tag, or ref to build. Defaults to the configured branch head.
-        required: false
+      - $include: ../../partials/inputs/build-inputs.yml
     source:
-      base_path: << module.input.source_base_path || "." >>
-      branch: << build.input.branch >>
-      ref: << build.input.ref >>
-      repo: << module.input.source_repo >>
-      type: git
+      $include: ../../partials/build/git-source.yml
   deploy:
     type: aws:ecs
     concurrency:

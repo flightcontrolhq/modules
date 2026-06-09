@@ -7,20 +7,10 @@ release:
   description: extract shared definition partials
 module:
   inputs:
-    - id: section_aws
-      label: AWS account & region
-      type: section
-    - id: aws_account_id
-      label: AWS account
-      required: true
-      type: string
-      values: $values:ravion/aws_accounts
-    - description: Must be same region as Load Balancer, or us-east-1 for CloudFront.
-      id: aws_region
-      label: Region
-      required: true
-      type: string
-      values: $values:aws/regions
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      description: Must be the same region as the load balancer, or us-east-1 for CloudFront.
     - id: section_certificate
       label: Certificate
       type: section
@@ -69,9 +59,7 @@ module:
       id: wait_for_validation
       label: Wait for certificate issuance
       type: boolean
-    - id: section_misc
-      label: Misc
-      type: section
+    - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
     - $merge:

@@ -7,22 +7,12 @@ release:
   description: extract shared definition partials
 module:
   inputs:
-    - id: section_aws
-      label: AWS account & region
-      type: section
-    - id: aws_account_id
-      label: AWS account
-      required: true
-      type: string
-      values: $values:ravion/aws_accounts
-    - description: Recommend anything but us-east-1 as it has most outages
-      id: aws_region
-      label: Region
-      required: true
-      type: string
-      values: $values:aws/regions
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      description: Recommend anything but us-east-1 as it has the most outages.
     - id: section_vpc
-      label: VPC Config
+      label: VPC config
       type: section
     - default: <<project.given_id>>-<<environment.given_id>>
       description: Name prefix for all resources created by this module.
@@ -40,17 +30,17 @@ module:
       required: false
       type: string
     - id: section_nat
-      label: NAT Gateway
+      label: NAT gateway
       type: section
     - default: true
       description: Needed if you want to access the internet from within private subnets
       id: enable_nat_gateway
-      label: NAT Gateway
+      label: NAT gateway
       type: boolean
     - default: false
       description: High availability adds NAT Gateway to every AZ. Otherwise single NAT gateway serves all AZs.
       id: nat_gateway_high_availability
-      label: NAT Gateway High Availability
+      label: NAT gateway high availability
       type: boolean
     - collapsible: true
       default: null
@@ -67,7 +57,7 @@ module:
         keeping NAT public IPs stable across VPC replacements (e.g. for partner
         allowlists or firewall rules).
       id: nat_gateway_eip_allocation_ids
-      label: NAT Gateway Elastic IP Allocation IDs
+      label: NAT gateway Elastic IP allocation IDs
       required: false
       type: string_array
     - id: section_soc2
@@ -76,14 +66,12 @@ module:
     - default: false
       description: Enable VPC Flow Logs for network traffic monitoring. Required for SOC 2.
       id: enable_flow_logs
-      label: Enable Flow Logs
+      label: Enable flow logs
       type: boolean
-    - id: section_misc
-      label: Misc
-      type: section
+    - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - id: section_peering
-      label: VPC Peering
+      label: VPC peering
       type: section
     - description: |
         Connect this VPC to other VPCs
@@ -100,17 +88,17 @@ module:
           type: string
         - description: CIDR blocks of the peer VPC. Routes will be added in this VPC's route tables for each CIDR pointing at the peering connection.
           id: peer_cidr_blocks
-          label: Peer CIDR Blocks
+          label: Peer CIDR blocks
           required: true
           type: string_array
         - description: AWS account ID that owns the peer VPC. Defaults to the current account. Required for cross-account peering.
           id: peer_owner_id
-          label: Peer AWS Account ID Number
+          label: Peer AWS account ID number
           required: false
           type: string
         - description: AWS region of the peer VPC. Defaults to the current region. Required for cross-region peering.
           id: peer_region
-          label: Peer Region
+          label: Peer region
           required: false
           type: string
           values: $values:aws/regions
@@ -118,30 +106,30 @@ module:
           default: false
           description: Allow DNS resolution of private hostnames in the peer VPC from this VPC. Only valid for same-account, same-region peerings.
           id: allow_remote_vpc_dns_resolution
-          label: Allow Remote VPC DNS Resolution
+          label: Allow remote VPC DNS resolution
           type: boolean
         - collapsible: true
           default: true
           description: Add routes for peer_cidr_blocks to this VPC's public route table.
           id: add_to_public_route_table
-          label: Add To Public Route Table
+          label: Add to public route table
           type: boolean
         - collapsible: true
           default: true
           description: Add routes for peer_cidr_blocks to this VPC's private route table(s).
           id: add_to_private_route_tables
-          label: Add To Private Route Tables
+          label: Add to private route tables
           type: boolean
         - collapsible: true
           description: Optional list of route table IDs in the peer VPC to add return routes to (destination = this VPC's CIDR, target = the peering connection). Only supported for same-account, same-region peerings, since the AWS provider used by this module must have access to the peer's route tables. For cross-account or cross-region peerings, manage the return routes from the peer side instead.
           id: peer_route_table_ids
-          label: Peer Route Table IDs
+          label: Peer route table IDs
           required: false
           type: string_array
-      item_label: Peering Connection
+      item_label: Peering connection
       key:
         label: Key
-      label: Peering Connections
+      label: Peering connections
       required: false
       type: object_map
     - $include: ../../partials/inputs/terraform-settings.yml

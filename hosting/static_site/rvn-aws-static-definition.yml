@@ -23,29 +23,11 @@ module:
         type: s3
     environment_variables: << module.input.build_environment_variables >>
     infrastructure:
-      ami: << module.input.build_ami || nil >>
-      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
-      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
-      instance_size: << module.input.build_instance_size >>
-      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
-      type: << module.input.build_infrastructure_type >>
+      $include: ../../partials/build/infrastructure.yml
     inputs:
-      - description: Defaults to repo default branch
-        id: branch
-        label: Git branch
-        required: false
-        type: string
-      - description: Optional commit SHA, tag, or ref to build.
-        id: ref
-        label: Git ref (commit or tag)
-        required: false
-        type: string
+      - $include: ../../partials/inputs/build-inputs.yml
     source:
-      base_path: << module.input.source_base_path || "." >>
-      branch: << build.input.branch >>
-      ref: << build.input.ref >>
-      repo: << module.input.source_repo >>
-      type: git
+      $include: ../../partials/build/git-source.yml
     timeout: 1800
     type: '<< module.input.build_type == "none" ? "disabled" : "static" >>'
   deploy:
@@ -67,21 +49,11 @@ module:
     timeout: 1800
     type: aws:static
   inputs:
-    - id: section_aws
-      label: AWS account & region
-      type: section
-    - id: aws_account_id
-      label: AWS account
-      required: true
-      type: string
-      values: $values:ravion/aws_accounts
-    - default: us-east-1
-      description: Region for the s3 bucket. CloudFront and KVS is always in us-east-1
-      id: aws_region
-      label: Region
-      required: true
-      type: string
-      values: $values:aws/regions
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      default: us-east-1
+      description: Region for the S3 bucket. CloudFront and KVS always use us-east-1.
     - id: section_hosting
       label: Static hosting
       type: section
@@ -152,32 +124,13 @@ module:
     - $include: ../../partials/inputs/dockerfile-build.yml
     - $include: ../../partials/inputs/nixpacks-basic.yml
     - $include: ../../partials/inputs/nixpacks-advanced.yml
-    - description: Environment variables available during static builds. Values can be plain strings or references loaded from Parameter Store.
-      id: build_environment_variables
-      label: Build environment variables
-      placeholder: |-
-        {
-          "NODE_ENV": "production",
-          "API_URL": {
-            "fromParameterStore": "my-secret"
-          },
-          "NPM_TOKEN": {
-            "fromSecretManager": "arn:..."
-          }
-        }
-      required: false
+    - $merge:
+        - ../../partials/inputs/build-environment-variables.yml
       show_when:
         build_type:
           - nixpacks
           - dockerfile
-      type: object
-    - default: false
-      description: Pass build environment variables into Dockerfile builds as build arguments.
-      id: dockerfile_inject_env_variables
-      label: Inject environment variables in Dockerfile
-      show_when:
-        build_type: dockerfile
-      type: boolean
+    - $include: ../../partials/inputs/dockerfile-env-injection.yml
     - id: section_cloudfront
       label: CloudFront settings
       type: section
@@ -301,8 +254,6 @@ module:
       type: number
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
-        execution_environment_description: Optional execution environment ID or given ID for static builds. Defaults to the module Terraform execution environment.
-        instance_size_description: EC2 instance type for static builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
         no_options_message: Select an AWS account and region to load available EC2 instance types.
     - id: section_deploy
       label: Deploy config
