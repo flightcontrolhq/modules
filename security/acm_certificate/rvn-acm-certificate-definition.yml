@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.0.4
-  description: unify labels and descriptions across modules
+  version: 0.0.5
+  description: change type from rvn-aws-acm-certificate to rvn-acm-certificate
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
