@@ -1,0 +1,10 @@
+definition:
+  type: ravion-aws-cycle
+  name: Cycle
+  description: Cyclic definition
+release:
+  version: 1.0.0
+  description: Broken release.
+module:
+  inputs:
+    - $include: cycle-a.yml

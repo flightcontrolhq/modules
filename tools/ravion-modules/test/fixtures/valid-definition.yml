@@ -1,0 +1,28 @@
+definition:
+  type: ravion-aws-vpc
+  name: AWS VPC
+  description: AWS VPC and subnets
+release:
+  version: 1.2.3
+  description: Add subnet options.
+module:
+  inputs:
+    - id: region
+      type: string
+      label: AWS Region
+      required: true
+      values: "$values:aws/regions.select"
+    - id: settings
+      type: object
+      label: Settings
+      properties:
+        enabled:
+          type: boolean
+          default: true
+  stack:
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+    ravion_state_backend_workspace: "<< module.given_id >>"

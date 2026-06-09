@@ -1,0 +1,8 @@
+- id: name
+  type: string
+  label: Name
+  required: true
+- id: environment
+  type: string
+  label: Environment
+  required: true

@@ -1,0 +1,8 @@
+definition:
+  type: ravion-aws-vpc
+  description: AWS VPC and subnets
+release:
+  version: 1.2.3
+  description: ""
+module:
+  inputs: []

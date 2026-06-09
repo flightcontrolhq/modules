@@ -1,0 +1,9 @@
+definition:
+  type: ravion-aws-vpc
+  name: AWS VPC
+  description: AWS VPC and subnets
+release:
+  version: v1.2
+  description: Add subnet options.
+module:
+  inputs: []
