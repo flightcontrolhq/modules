@@ -132,10 +132,26 @@ describe("publish", () => {
 
     assert.match(markdown, /<!-- ravion-module-publish-plan -->/);
     assert.match(markdown, /Dry run only/);
-    assert.match(markdown, /Create Definition/);
-    assert.match(markdown, /Create Version/);
+    assert.match(markdown, /\| Module \| Version \| Description \|/);
+    assert.match(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| Add subnet options\. \|/);
+    assert.doesNotMatch(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| AWS VPC and subnets\. \|/);
+    assert.doesNotMatch(markdown, /\| Module \| Version \| Action \| Summary \|/);
     assert.match(markdown, /```diff/);
     assert.match(markdown, /\+type: ravion-aws-vpc/);
+  });
+
+  it("omits unchanged modules from the markdown plan", async () => {
+    const client = new MockRavionClient({
+      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
+      versionsByDefinitionId: { vpc: [createRemoteVersion({ config: createCompiledDefinition().module })] },
+    });
+
+    const result = await publishDefinitions([createCompiledDefinition()], client);
+    const markdown = formatPublishPlanMarkdown(result);
+
+    assert.match(markdown, /No publish changes are required/);
+    assert.doesNotMatch(markdown, /\| Module \| Version \| Description \|/);
+    assert.doesNotMatch(markdown, /Skip ravion-aws-vpc@1\.2\.3/);
   });
 
   it("requires a Ravion API token by default", async () => {

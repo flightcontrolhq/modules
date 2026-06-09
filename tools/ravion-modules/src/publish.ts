@@ -11,6 +11,7 @@ export interface PublishPlanItem {
   action: PublishAction;
   dryRun: boolean;
   message: string;
+  description: string;
   diff?: string;
 }
 
@@ -106,6 +107,7 @@ export async function publishDefinitions(
           "create-definition",
           dryRun,
           `Create module definition ${definition.type}.`,
+          definition.description,
           createDiff(undefined, { type: definition.type, name: definition.name, description: definition.description }),
         ),
       );
@@ -121,6 +123,7 @@ export async function publishDefinitions(
           "patch-definition",
           dryRun,
           `Patch metadata for module definition ${definition.type}.`,
+          definition.description,
           createDiff(
             { type: remoteDefinition.type, name: remoteDefinition.name, description: remoteDefinition.description },
             { type: definition.type, name: definition.name, description: definition.description },
@@ -135,7 +138,7 @@ export async function publishDefinitions(
 
     const remoteVersion = remoteDefinition ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).find((version) => version.version === definition.version) : undefined;
     if (remoteVersion) {
-      items.push(createItem(definition, "skip-version", dryRun, `Skip ${definition.type}@${definition.version}; identical version already exists.`));
+      items.push(createItem(definition, "skip-version", dryRun, `Skip ${definition.type}@${definition.version}; identical version already exists.`, remoteVersion.description));
       continue;
     }
 
@@ -146,6 +149,7 @@ export async function publishDefinitions(
         "create-version",
         dryRun,
         `Create module version ${definition.type}@${definition.version}.`,
+        definition.releaseDescription,
         createDiff(latestRemoteVersion?.config, definition.module),
       ),
     );
@@ -213,18 +217,19 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
 
   if (plannedChanges.length === 0) {
     lines.push("No publish changes are required. All local versions already exist remotely with identical config.", "");
+    return lines.join("\n");
   }
 
-  lines.push("| Module | Version | Action | Summary |", "| --- | --- | --- | --- |");
-  for (const item of result.items) {
-    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${formatAction(item.action)} | ${escapeMarkdownTableCell(item.message)} |`);
+  lines.push("| Module | Version | Description |", "| --- | --- | --- |");
+  for (const item of summarizePublishPlanTableItems(plannedChanges)) {
+    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${escapeMarkdownTableCell(item.description || item.message)} |`);
   }
 
   const itemsWithDiffs = plannedChanges.filter((item) => item.diff);
   if (itemsWithDiffs.length > 0) {
     lines.push("", "### Diffs", "");
     for (const item of itemsWithDiffs) {
-      lines.push(`<details><summary>${escapeHtml(item.type)}@${escapeHtml(item.version)} ${escapeHtml(formatAction(item.action))}</summary>`, "", "```diff", truncateDiff(item.diff ?? ""), "```", "", "</details>", "");
+      lines.push(`<details><summary>${escapeHtml(item.type)}@${escapeHtml(item.version)}</summary>`, "", "```diff", truncateDiff(item.diff ?? ""), "```", "", "</details>", "");
     }
   }
 
@@ -293,8 +298,21 @@ async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, mo
   }
 }
 
-function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string, diff?: string): PublishPlanItem {
-  return { type: definition.type, version: definition.version, action, dryRun, message, diff };
+function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string, description: string, diff?: string): PublishPlanItem {
+  return { type: definition.type, version: definition.version, action, dryRun, message, description, diff };
+}
+
+function summarizePublishPlanTableItems(items: PublishPlanItem[]): PublishPlanItem[] {
+  const rows: PublishPlanItem[] = [];
+  for (const item of items) {
+    const existingIndex = rows.findIndex((row) => row.type === item.type && row.version === item.version);
+    if (existingIndex === -1) {
+      rows.push(item);
+    } else if (rows[existingIndex].action !== "create-version" && item.action === "create-version") {
+      rows[existingIndex] = item;
+    }
+  }
+  return rows;
 }
 
 function createDiff(remote: unknown, local: unknown): string | undefined {
@@ -406,13 +424,6 @@ function parseSemver(version: string): { numbers: [number, number, number]; prer
   const [core, prerelease] = version.split("-", 2);
   const parts = core.split(".").map((part) => Number.parseInt(part, 10));
   return { numbers: [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0], prerelease };
-}
-
-function formatAction(action: PublishAction): string {
-  return action
-    .split("-")
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function escapeMarkdownTableCell(value: string): string {
