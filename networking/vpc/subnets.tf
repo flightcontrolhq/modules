@@ -9,8 +9,8 @@ resource "aws_subnet" "public" {
   cidr_block                      = local.public_subnet_cidrs[count.index]
   availability_zone               = local.azs[count.index]
   map_public_ip_on_launch         = true
-  assign_ipv6_address_on_creation = var.enable_ipv6
-  ipv6_cidr_block                 = var.enable_ipv6 ? cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index) : null
+  assign_ipv6_address_on_creation = var.ipv6_enabled
+  ipv6_cidr_block                 = var.ipv6_enabled ? cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index) : null
 
   tags = merge(local.tags, {
     Name = "${var.name}-public-${local.azs[count.index]}"
@@ -41,8 +41,8 @@ resource "aws_subnet" "private" {
   cidr_block                      = local.private_subnet_cidrs[count.index]
   availability_zone               = local.azs[count.index]
   map_public_ip_on_launch         = false
-  assign_ipv6_address_on_creation = var.enable_ipv6
-  ipv6_cidr_block                 = var.enable_ipv6 ? cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index + 10) : null
+  assign_ipv6_address_on_creation = var.ipv6_enabled
+  ipv6_cidr_block                 = var.ipv6_enabled ? cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index + 10) : null
 
   tags = merge(local.tags, {
     Name = "${var.name}-private-${local.azs[count.index]}"
@@ -56,5 +56,4 @@ resource "aws_subnet" "private" {
     }
   }
 }
-
 
