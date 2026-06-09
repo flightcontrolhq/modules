@@ -10,6 +10,7 @@ export interface PublishPlanItem {
   action: PublishAction;
   dryRun: boolean;
   message: string;
+  diff?: string;
 }
 
 export interface PublishResult {
@@ -29,6 +30,14 @@ export interface ModuleVersionInput {
   description: string;
   config: Record<string, unknown>;
 }
+
+export interface RavionApiClientOptions {
+  baseUrl?: string;
+  token?: string;
+  requireToken?: boolean;
+}
+
+const DEFAULT_RAVION_API_URL = "https://api.ravion.com";
 
 export interface RavionModuleApiClient {
   listModuleDefinitions(): Promise<RemoteModuleDefinition[]>;
@@ -61,14 +70,33 @@ export async function publishDefinitions(
   for (const definition of [...compiledDefinitions].sort((left, right) => left.type.localeCompare(right.type))) {
     let remoteDefinition = definitionsByType.get(definition.type);
     if (!remoteDefinition) {
-      items.push(createItem(definition, "create-definition", dryRun, `Create module definition ${definition.type}.`));
+      items.push(
+        createItem(
+          definition,
+          "create-definition",
+          dryRun,
+          `Create module definition ${definition.type}.`,
+          createDiff(undefined, { type: definition.type, name: definition.name, description: definition.description }),
+        ),
+      );
       if (!dryRun) {
         remoteDefinition = await client.createModuleDefinition({ type: definition.type, name: definition.name, description: definition.description });
         definitionsByType.set(remoteDefinition.type, remoteDefinition);
         inventory.versionsByDefinitionId[remoteDefinition.id] = [];
       }
     } else if (remoteDefinition.name !== definition.name || remoteDefinition.description !== definition.description) {
-      items.push(createItem(definition, "patch-definition", dryRun, `Patch metadata for module definition ${definition.type}.`));
+      items.push(
+        createItem(
+          definition,
+          "patch-definition",
+          dryRun,
+          `Patch metadata for module definition ${definition.type}.`,
+          createDiff(
+            { type: remoteDefinition.type, name: remoteDefinition.name, description: remoteDefinition.description },
+            { type: definition.type, name: definition.name, description: definition.description },
+          ),
+        ),
+      );
       if (!dryRun) {
         remoteDefinition = await client.patchModuleDefinition({ ...remoteDefinition, name: definition.name, description: definition.description });
         definitionsByType.set(remoteDefinition.type, remoteDefinition);
@@ -81,7 +109,16 @@ export async function publishDefinitions(
       continue;
     }
 
-    items.push(createItem(definition, "create-version", dryRun, `Create module version ${definition.type}@${definition.version}.`));
+    const latestRemoteVersion = remoteDefinition ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? []) : undefined;
+    items.push(
+      createItem(
+        definition,
+        "create-version",
+        dryRun,
+        `Create module version ${definition.type}@${definition.version}.`,
+        createDiff(latestRemoteVersion?.config, definition.module),
+      ),
+    );
     if (!dryRun) {
       if (!remoteDefinition) {
         throw new PublishError(`Cannot create ${definition.type}@${definition.version}; module definition was not created.`);
@@ -93,13 +130,48 @@ export async function publishDefinitions(
   return { dryRun, items };
 }
 
-export async function createDefaultRavionApiClient(options: { baseUrl?: string; token?: string } = {}): Promise<RavionModuleApiClient> {
-  const baseUrl = options.baseUrl ?? process.env.RAVION_API_URL;
-  if (!baseUrl) {
-    throw new PublishError("RAVION_API_URL must be set to publish through the Ravion API.");
-  }
+export async function createDefaultRavionApiClient(options: RavionApiClientOptions = {}): Promise<RavionModuleApiClient> {
+  const baseUrl = options.baseUrl ?? DEFAULT_RAVION_API_URL;
   const token = options.token ?? process.env.RAVION_API_TOKEN;
+  if ((options.requireToken ?? true) && !token) {
+    throw new PublishError("RAVION_API_TOKEN must be set to read or publish module definitions through the Ravion API.");
+  }
   return new HttpRavionModuleApiClient(baseUrl, token);
+}
+
+export function formatPublishPlanMarkdown(result: PublishResult): string {
+  const plannedChanges = result.items.filter((item) => item.action !== "skip-version");
+  const lines = [
+    "<!-- ravion-module-publish-plan -->",
+    "## Ravion Module Publish Plan",
+    "",
+    result.dryRun ? "Dry run only. No Ravion API mutations were made." : "Applied publish changes to the Ravion API.",
+    "",
+  ];
+
+  if (result.items.length === 0) {
+    lines.push("No module definitions were found.", "");
+    return lines.join("\n");
+  }
+
+  if (plannedChanges.length === 0) {
+    lines.push("No publish changes are required. All local versions already exist remotely with identical config.", "");
+  }
+
+  lines.push("| Module | Version | Action | Summary |", "| --- | --- | --- | --- |");
+  for (const item of result.items) {
+    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${formatAction(item.action)} | ${escapeMarkdownTableCell(item.message)} |`);
+  }
+
+  const itemsWithDiffs = plannedChanges.filter((item) => item.diff);
+  if (itemsWithDiffs.length > 0) {
+    lines.push("", "### Diffs", "");
+    for (const item of itemsWithDiffs) {
+      lines.push(`<details><summary>${escapeHtml(item.type)}@${escapeHtml(item.version)} ${escapeHtml(formatAction(item.action))}</summary>`, "", "```diff", truncateDiff(item.diff ?? ""), "```", "", "</details>", "");
+    }
+  }
+
+  return lines.join("\n");
 }
 
 export async function loadRemoteInventory(client: RavionModuleApiClient): Promise<RemoteModuleInventory> {
@@ -127,8 +199,61 @@ async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, mo
   }
 }
 
-function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string): PublishPlanItem {
-  return { type: definition.type, version: definition.version, action, dryRun, message };
+function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string, diff?: string): PublishPlanItem {
+  return { type: definition.type, version: definition.version, action, dryRun, message, diff };
+}
+
+function createDiff(remote: unknown, local: unknown): string | undefined {
+  const remoteText = remote === undefined ? "" : stableStringifyPretty(remote);
+  const localText = stableStringifyPretty(local);
+  if (remoteText === localText) {
+    return undefined;
+  }
+
+  return ["--- remote", "+++ local", ...remoteText.split("\n").filter(Boolean).map((line) => `-${line}`), ...localText.split("\n").filter(Boolean).map((line) => `+${line}`)].join("\n");
+}
+
+function stableStringifyPretty(value: unknown): string {
+  return JSON.stringify(sortObjectKeys(value), null, 2);
+}
+
+function selectLatestVersion(versions: RemoteModuleVersion[]): RemoteModuleVersion | undefined {
+  return [...versions].sort((left, right) => compareSemver(right.version, left.version))[0];
+}
+
+function compareSemver(left: string, right: string): number {
+  const leftParts = left.split(".").map((part) => Number.parseInt(part, 10));
+  const rightParts = right.split(".").map((part) => Number.parseInt(part, 10));
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return left.localeCompare(right);
+}
+
+function formatAction(action: PublishAction): string {
+  return action
+    .split("-")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function escapeMarkdownTableCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
+}
+
+function truncateDiff(diff: string): string {
+  const maxLength = 12000;
+  if (diff.length <= maxLength) {
+    return diff;
+  }
+  return `${diff.slice(0, maxLength)}\n... diff truncated ...`;
 }
 
 function isDuplicateVersionError(error: unknown): boolean {

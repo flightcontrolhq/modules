@@ -1,15 +1,22 @@
 #!/usr/bin/env node
+import { writeFile } from "node:fs/promises";
 import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { runMigrationGuardrails } from "./guardrails.js";
 import { validateModuleConfig } from "./module-schema.js";
-import { createDefaultRavionApiClient, loadRemoteInventory, publishDefinitions } from "./publish.js";
+import { createDefaultRavionApiClient, formatPublishPlanMarkdown, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags } from "./tags.js";
 
 const [, , command, ...args] = process.argv;
 
+await main().catch((error) => {
+  console.error(formatError(error));
+  process.exitCode = 1;
+});
+
+async function main(): Promise<void> {
 if (command === "validate") {
   for (const filePath of args) {
     await parseAuthoringDefinitionFile(filePath);
@@ -54,7 +61,14 @@ if (command === "validate") {
   }
   const client = await createDefaultRavionApiClient();
   const result = await publishDefinitions(compiled, client, { dryRun: !args.includes("--apply") });
-  console.log(JSON.stringify(result, null, 2));
+  const format = getArgValue(args, "--format") ?? "json";
+  const output = format === "markdown" ? formatPublishPlanMarkdown(result) : JSON.stringify(result, null, 2);
+  const outputPath = getArgValue(args, "--output");
+  if (outputPath) {
+    await writeFile(outputPath, output);
+  } else {
+    console.log(output);
+  }
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
   if (!inventoryPath) {
@@ -71,8 +85,20 @@ if (command === "validate") {
   console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|publish|generate-definitions> <definition.yml...>");
   process.exitCode = 1;
 }
+}
 
 function getRootArg(args: string[]): string | undefined {
-  const rootIndex = args.indexOf("--root");
-  return rootIndex >= 0 ? args[rootIndex + 1] : undefined;
+  return getArgValue(args, "--root");
+}
+
+function getArgValue(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  return String(error);
 }

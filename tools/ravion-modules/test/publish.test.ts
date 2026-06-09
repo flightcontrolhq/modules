@@ -3,7 +3,15 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { type CompiledDefinition } from "../src/compiler.js";
 import { type RemoteModuleDefinition, type RemoteModuleVersion } from "../src/generate-definitions.js";
-import { publishDefinitions, PublishError, type ModuleDefinitionInput, type ModuleVersionInput, type RavionModuleApiClient } from "../src/publish.js";
+import {
+  createDefaultRavionApiClient,
+  formatPublishPlanMarkdown,
+  publishDefinitions,
+  PublishError,
+  type ModuleDefinitionInput,
+  type ModuleVersionInput,
+  type RavionModuleApiClient,
+} from "../src/publish.js";
 import { ReleaseMetadataError } from "../src/release.js";
 
 describe("publish", () => {
@@ -69,6 +77,27 @@ describe("publish", () => {
     assert.deepEqual(result.items.map(({ action }) => action), ["create-definition", "create-version"]);
     assert.equal(client.createdDefinitions.length, 0);
     assert.equal(client.createdVersions.length, 0);
+  });
+
+  it("formats a markdown dry-run plan with diffs", async () => {
+    const client = new MockRavionClient();
+
+    const result = await publishDefinitions([createCompiledDefinition()], client);
+    const markdown = formatPublishPlanMarkdown(result);
+
+    assert.match(markdown, /<!-- ravion-module-publish-plan -->/);
+    assert.match(markdown, /Dry run only/);
+    assert.match(markdown, /Create Definition/);
+    assert.match(markdown, /Create Version/);
+    assert.match(markdown, /```diff/);
+    assert.match(markdown, /\+  "type": "ravion-aws-vpc"/);
+  });
+
+  it("requires a Ravion API token by default", async () => {
+    await assert.rejects(() => createDefaultRavionApiClient({ token: "" }), {
+      name: "PublishError",
+      message: "RAVION_API_TOKEN must be set to read or publish module definitions through the Ravion API.",
+    });
   });
 
   it("handles duplicate version responses as an idempotent skip when the remote config matches", async () => {

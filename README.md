@@ -211,6 +211,10 @@ Publishing is handled after merge on `main`. The publish workflow compiles all d
 local releases with existing Ravion module versions, creates any missing module-scoped tags, and
 publishes missing versions through the Ravion API.
 
+Pull requests run the same publish comparison in dry-run mode and post a PR comment with the
+planned creates, patches, skips, and config diffs. The dry run uses `https://api.ravion.com` and
+requires `RAVION_API_TOKEN`; when the token is missing, CI fails with an explicit credential error.
+
 Manual dry runs use the same commands:
 
 ```bash
