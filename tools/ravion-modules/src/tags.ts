@@ -13,7 +13,10 @@ export interface ExistingTag {
 
 export interface TagPlanItem {
   type: string;
+  name: string;
   version: string;
+  releaseDescription: string;
+  modulePath: string;
   tagName: string;
   commit: string;
   action: TagPlanAction;
@@ -48,7 +51,10 @@ export function planTags(statuses: ReleaseStatus[], existingTags: ExistingTag[],
     if (!existingCommit) {
       return {
         type: status.type,
+        name: status.name,
         version: status.version,
+        releaseDescription: status.releaseDescription,
+        modulePath: status.modulePath,
         tagName,
         commit: targetCommit,
         action: "create" as const,
@@ -59,7 +65,10 @@ export function planTags(statuses: ReleaseStatus[], existingTags: ExistingTag[],
     if (existingCommit !== targetCommit) {
       return {
         type: status.type,
+        name: status.name,
         version: status.version,
+        releaseDescription: status.releaseDescription,
+        modulePath: status.modulePath,
         tagName,
         commit: existingCommit,
         action: "exists" as const,
@@ -69,7 +78,10 @@ export function planTags(statuses: ReleaseStatus[], existingTags: ExistingTag[],
 
     return {
       type: status.type,
+      name: status.name,
       version: status.version,
+      releaseDescription: status.releaseDescription,
+      modulePath: status.modulePath,
       tagName,
       commit: targetCommit,
       action: "exists" as const,

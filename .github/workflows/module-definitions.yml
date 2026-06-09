@@ -143,10 +143,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Create release tags
-        run: node tools/ravion-modules/dist/src/cli.js tags --api --create
+        run: node tools/ravion-modules/dist/src/cli.js tags --api --create > release-tags.json
 
       - name: Push release tags
         run: git push origin --tags
 
       - name: Publish module versions
         run: node tools/ravion-modules/dist/src/cli.js publish --apply
+
+      - name: Create GitHub releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ravion-modules/dist/src/cli.js github-releases --plan release-tags.json --create

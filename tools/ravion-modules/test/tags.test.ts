@@ -16,8 +16,15 @@ describe("release tags", () => {
       "abc123",
     );
 
-    assert.deepEqual(plan.map(({ tagName, action, commit }) => ({ tagName, action, commit })), [
-      { tagName: "ravion-aws-vpc@1.2.3", action: "create", commit: "abc123" },
+    assert.deepEqual(plan.map(({ tagName, name, releaseDescription, modulePath, action, commit }) => ({ tagName, name, releaseDescription, modulePath, action, commit })), [
+      {
+        tagName: "ravion-aws-vpc@1.2.3",
+        name: "AWS VPC",
+        releaseDescription: "Add subnet options.",
+        modulePath: "networking/vpc",
+        action: "create",
+        commit: "abc123",
+      },
     ]);
   });
 
