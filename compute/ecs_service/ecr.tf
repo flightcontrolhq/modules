@@ -2,13 +2,13 @@
 # ECR Repository
 #
 # Optional. Creates a repository for this service's container image when
-# var.enable_ecr is true. The service's execution role already has ECR pull
+# var.ecr_enabled is true. The service's execution role already has ECR pull
 # permissions via AmazonECSTaskExecutionRolePolicy, so no additional wiring
 # is needed for the task definition to pull from it.
 ################################################################################
 
 module "ecr" {
-  count = var.enable_ecr ? 1 : 0
+  count = var.ecr_enabled ? 1 : 0
 
   source = "../../containers/ecr"
 
@@ -16,8 +16,8 @@ module "ecr" {
   tags = var.tags
 
   image_tag_mutability = var.ecr_image_tag_mutability
-  scan_on_push         = var.ecr_scan_on_push
+  scan_on_push         = var.ecr_scan_on_push_enabled
   force_delete         = var.ecr_force_delete
 
-  enable_default_lifecycle_policy = var.ecr_enable_default_lifecycle_policy
+  enable_default_lifecycle_policy = var.ecr_default_lifecycle_policy_enabled
 }

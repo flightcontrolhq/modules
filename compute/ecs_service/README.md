@@ -317,11 +317,11 @@ module "worker_service" {
 | deployment_type | Deployment type: rolling or blue_green | `string` | `"rolling"` | no |
 | deployment_minimum_healthy_percent | Minimum healthy percent during deployment | `number` | `100` | no |
 | deployment_maximum_percent | Maximum percent during deployment | `number` | `200` | no |
-| enable_execute_command | Enable ECS Exec for debugging | `bool` | `false` | no |
+| execute_command_enabled | Enable ECS Exec for debugging | `bool` | `false` | no |
 | force_new_deployment | Force a new deployment | `bool` | `false` | no |
 | wait_for_steady_state | Wait for service to reach steady state | `bool` | `true` | no |
 | health_check_grace_period_seconds | Grace period for LB health checks | `number` | `0` | no |
-| enable_ecs_managed_tags | Enable ECS managed tags | `bool` | `true` | no |
+| ecs_managed_tags_enabled | Enable ECS managed tags | `bool` | `true` | no |
 | propagate_tags | Propagate tags from SERVICE or TASK_DEFINITION | `string` | `"SERVICE"` | no |
 | platform_version | Fargate platform version | `string` | `"LATEST"` | no |
 | capacity_provider_strategies | Capacity provider strategies | `list(object)` | `[]` | no |
@@ -531,7 +531,7 @@ The `service_discovery` object includes:
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled     │   │  ║
 ║  │  │ • enable_nlb_listener = enable_load_balancer && var.load_balancer_attachment.nlb_listener != null         │   │  ║
-║  │  │ • enable_auto_scaling = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
+║  │  │ • auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
 ║  │  │ • enable_service_discovery = var.service_discovery != null                                                │   │  ║
 ║  │  │ • create_execution_role = var.execution_role_arn == null                                                  │   │  ║
 ║  │  │ • create_task_role = var.task_role_arn == null                                                            │   │  ║
@@ -542,7 +542,7 @@ The `service_discovery` object includes:
 ║  │   TASK DEFINITION           │   │       SERVICE CONFIG            │   │        DEPLOYMENT                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • task_cpu                  │   │ • desired_count                 │   │ • deployment_type (rolling/blue_green)  │  ║
-║  │ • task_memory               │   │ • enable_execute_command        │   │ • deployment_minimum_healthy_percent    │  ║
+║  │ • task_memory               │   │ • execute_command_enabled        │   │ • deployment_minimum_healthy_percent    │  ║
 ║  │ • container_port            │   │ • force_new_deployment          │   │ • deployment_maximum_percent            │  ║
 ║  │ • launch_type               │   │ • wait_for_steady_state         │   │ • deployment_circuit_breaker            │  ║
 ║  │ • network_mode              │   │ • platform_version              │   └─────────────────────────────────────────┘  ║
@@ -657,7 +657,7 @@ The `service_discovery` object includes:
 ║                                                                                                                        ║
 ║                   ┌─────────────────────────────────────────────────────────────────────────────────────┐              ║
 ║                   │                              AUTO SCALING RESOURCES                                  │              ║
-║                   │                         (conditional: enable_auto_scaling)                           │              ║
+║                   │                         (conditional: auto_scaling_enabled)                           │              ║
 ║                   ├─────────────────────────────────────────────────────────────────────────────────────┤              ║
 ║                   │                                                                                      │              ║
 ║                   │  aws_appautoscaling_target.this[0]                                                   │              ║
@@ -737,8 +737,8 @@ The `service_discovery` object includes:
 ║                              └───────────────────┬────────────────────────┘                                            ║
 ║                                                  │                                                                     ║
 ║                                                  ▼                                                                     ║
-║  var.execution_role_policies ───► aws_iam_role.execution[0] ◄─── var.enable_execute_command                           ║
-║  var.task_role_policies ────────► aws_iam_role.task[0] ◄──────── var.enable_execute_command                           ║
+║  var.execution_role_policies ───► aws_iam_role.execution[0] ◄─── var.execute_command_enabled                           ║
+║  var.task_role_policies ────────► aws_iam_role.task[0] ◄──────── var.execute_command_enabled                           ║
 ║                                                  │                                                                     ║
 ║                                                  ▼                                                                     ║
 ║  var.task_cpu ─────────────────────────────────────────────────────────────┐                                           ║
@@ -928,7 +928,7 @@ Note: The placeholder task definition does not mount volumes. Your application t
 
 ### How do I enable ECS Exec for debugging?
 
-Set `enable_execute_command = true`. This will:
+Set `execute_command_enabled = true`. This will:
 
 1. Add necessary IAM permissions to the task role
 2. Enable execute command on the ECS service
