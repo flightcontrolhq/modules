@@ -114,6 +114,69 @@ describe("publish", () => {
     assert.deepEqual(logs, ["Loading remote module definitions from Ravion API.", "Loading remote module versions for 1 definitions."]);
   });
 
+  it("uses the OpenAPI REST endpoints and data envelopes", async () => {
+    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: String(url), method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (String(url).includes("/module-definitions?")) {
+        return jsonResponse({ data: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }], meta: { limit: 100 } });
+      }
+      if (String(url).includes("/module-versions?")) {
+        return jsonResponse({ data: [], meta: { limit: 100 } });
+      }
+      if (String(url).endsWith("/module-definitions")) {
+        return jsonResponse({ data: { id: "created", type: "ravion-aws-new", name: "New", description: "New module." } }, 201);
+      }
+      if (String(url).endsWith("/module-definitions/vpc")) {
+        return jsonResponse({ data: { id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "New description." } });
+      }
+      if (String(url).endsWith("/module-versions")) {
+        return jsonResponse({ data: { id: "version", moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} } }, 201);
+      }
+      throw new Error(`Unexpected fetch URL ${url}`);
+    };
+
+    try {
+      const client = await createDefaultRavionApiClient({ baseUrl: "https://api.example.test", token: "token" });
+      await client.listModuleDefinitions();
+      await client.listModuleVersions("vpc");
+      await client.createModuleDefinition({ type: "ravion-aws-new", name: "New", description: "New module." });
+      await client.patchModuleDefinition({ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "New description." });
+      await client.createModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    assert.deepEqual(calls, [
+      { url: "https://api.example.test/module-definitions?limit=100", method: "GET", body: undefined },
+      { url: "https://api.example.test/module-versions?moduleDefinitionId=vpc&limit=100", method: "GET", body: undefined },
+      { url: "https://api.example.test/module-definitions", method: "POST", body: { data: { type: "ravion-aws-new", name: "New", description: "New module." } } },
+      { url: "https://api.example.test/module-definitions/vpc", method: "PATCH", body: { data: { name: "AWS VPC", description: "New description." } } },
+      {
+        url: "https://api.example.test/module-versions",
+        method: "POST",
+        body: { data: { moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} } },
+      },
+    ]);
+  });
+
+  it("includes REST error response details", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => jsonResponse({ code: "Ravion:Auth:FORBIDDEN", message: "Forbidden", description: "Missing scope", requestId: "req_123" }, 403);
+
+    try {
+      const client = await createDefaultRavionApiClient({ baseUrl: "https://api.example.test", token: "token" });
+      await assert.rejects(() => client.listModuleDefinitions(), {
+        name: "HttpApiError",
+        message:
+          'GET https://api.example.test/module-definitions?limit=100 failed with HTTP 403: code=Ravion:Auth:FORBIDDEN; Forbidden; Missing scope; requestId=req_123\nResponse body:\n{\n  "code": "Ravion:Auth:FORBIDDEN",\n  "message": "Forbidden",\n  "description": "Missing scope",\n  "requestId": "req_123"\n}',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("handles duplicate version responses as an idempotent skip when the remote config matches", async () => {
     const compiled = createCompiledDefinition();
     const client = new MockRavionClient({ definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }] });
@@ -159,6 +222,10 @@ function createRemoteVersion(overrides: Partial<RemoteModuleVersion> = {}): Remo
     config: { inputs: [{ id: "name", type: "string", label: "Name" }] },
     ...overrides,
   };
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
 class MockRavionClient implements RavionModuleApiClient {

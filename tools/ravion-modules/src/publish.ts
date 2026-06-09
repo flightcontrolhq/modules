@@ -330,45 +330,66 @@ class HttpRavionModuleApiClient implements RavionModuleApiClient {
   }
 
   async listModuleDefinitions(): Promise<RemoteModuleDefinition[]> {
-    return this.call<RemoteModuleDefinition[]>("moduleDefinitions.listModuleDefinitions", {});
+    return this.list<RemoteModuleDefinition>("/module-definitions");
   }
 
   async createModuleDefinition(input: ModuleDefinitionInput): Promise<RemoteModuleDefinition> {
-    return this.call<RemoteModuleDefinition>("moduleDefinitions.createModuleDefinition", input);
+    return this.call<RemoteModuleDefinition>("POST", "/module-definitions", { data: input });
   }
 
   async patchModuleDefinition(input: RemoteModuleDefinition): Promise<RemoteModuleDefinition> {
-    return this.call<RemoteModuleDefinition>("moduleDefinitions.patchModuleDefinition", input);
+    return this.call<RemoteModuleDefinition>("PATCH", `/module-definitions/${encodeURIComponent(input.id)}`, { data: { name: input.name, description: input.description } });
   }
 
   async listModuleVersions(moduleDefinitionId: string): Promise<RemoteModuleVersion[]> {
-    return this.call<RemoteModuleVersion[]>("moduleVersions.listModuleVersions", { moduleDefinitionId });
+    return this.list<RemoteModuleVersion>("/module-versions", { moduleDefinitionId });
   }
 
   async createModuleVersion(input: ModuleVersionInput): Promise<RemoteModuleVersion> {
-    return this.call<RemoteModuleVersion>("moduleVersions.createModuleVersion", input);
+    return this.call<RemoteModuleVersion>("POST", "/module-versions", { data: input });
   }
 
-  private async call<T>(procedure: string, input: unknown): Promise<T> {
+  private async list<T>(path: string, query: Record<string, string> = {}): Promise<T[]> {
+    const items: T[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const response = await this.call<{ data: T[]; meta?: { nextCursor?: string } }>("GET", path, undefined, { ...query, limit: "100", ...(cursor ? { cursor } : {}) }, { unwrap: false });
+      items.push(...response.data);
+      cursor = response.meta?.nextCursor;
+    } while (cursor);
+
+    return items;
+  }
+
+  private async call<T>(method: string, path: string, input?: unknown, query: Record<string, string> = {}, options: { unwrap?: boolean } = {}): Promise<T> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
-    const url = `${this.baseUrl}/${procedure}`;
+    const url = buildUrl(this.baseUrl, path, query);
     let response: Response;
     try {
-      response = await fetch(url, { method: "POST", headers, body: JSON.stringify(input) });
+      response = await fetch(url, { method, headers, body: input === undefined ? undefined : JSON.stringify(input) });
     } catch (error) {
-      throw new PublishError(`Ravion API request failed before receiving a response: POST ${url}: ${formatUnknownError(error)}`);
+      throw new PublishError(`Ravion API request failed before receiving a response: ${method} ${url}: ${formatUnknownError(error)}`);
     }
     const payload = await readResponsePayload(response);
     if (!response.ok) {
       const message = extractErrorMessage(payload, "No response error message was returned.");
-      throw new HttpApiError(response.status, `${procedure} failed with HTTP ${response.status}: ${message}`);
+      throw new HttpApiError(response.status, `${method} ${url} failed with HTTP ${response.status}: ${message}\nResponse body:\n${formatResponsePayload(payload)}`);
     }
-    return unwrapApiPayload(payload) as T;
+    return (options.unwrap === false ? payload : unwrapApiPayload(payload)) as T;
   }
+}
+
+function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
+  const url = new URL(`${baseUrl}${path}`);
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -399,14 +420,34 @@ function unwrapApiPayload(payload: unknown): unknown {
 
 function extractErrorMessage(payload: unknown, fallback: string): string {
   if (isRecord(payload)) {
-    if (typeof payload.message === "string") {
-      return payload.message;
+    const parts = [];
+    if (typeof payload.code === "string") {
+      parts.push(`code=${payload.code}`);
     }
-    if (isRecord(payload.error) && typeof payload.error.message === "string") {
-      return payload.error.message;
+    if (typeof payload.message === "string") {
+      parts.push(payload.message);
+    }
+    if (typeof payload.description === "string") {
+      parts.push(payload.description);
+    }
+    if (typeof payload.requestId === "string") {
+      parts.push(`requestId=${payload.requestId}`);
+    }
+    if (parts.length > 0) {
+      return parts.join("; ");
+    }
+    if (isRecord(payload.error)) {
+      return extractErrorMessage(payload.error, fallback);
     }
   }
   return typeof payload === "string" && payload.length > 0 ? payload : fallback;
+}
+
+function formatResponsePayload(payload: unknown): string {
+  if (typeof payload === "string") {
+    return payload;
+  }
+  return JSON.stringify(payload, null, 2);
 }
 
 function formatUnknownError(error: unknown): string {
