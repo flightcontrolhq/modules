@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.0.5
-  description: change type from rvn-aws-acm-certificate to rvn-acm-certificate
+  version: 0.0.6
+  description: rename Route53 validation record creation input to noun-first format
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -40,7 +40,7 @@ module:
       type: section
     - default: false
       description: Use only when the domain already has a Route53 public hosted zone and all primary/SAN validation records belong in that zone.
-      id: create_route53_validation_records
+      id: route53_validation_records_creation_enabled
       label: Create Route53 validation records
       type: boolean
     - description: Public hosted zone used for validation records. Required when Route53 validation records are enabled.
@@ -52,7 +52,7 @@ module:
       placeholder: Z1234567890ABC
       required: true
       show_when:
-        create_route53_validation_records: true
+        route53_validation_records_creation_enabled: true
       type: string
     - default: false
       description: Wait for ACM to issue the certificate during apply. Enable after DNS validation can complete.
@@ -142,10 +142,10 @@ module:
       base_path: security/acm_certificate
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
-        create_route53_validation_records: << module.input.create_route53_validation_records >>
         domain_name: << module.input.domain_name >>
         name: << module.input.name >>
         region: << module.input.aws_region >>
+        route53_validation_records_creation_enabled: << module.input.route53_validation_records_creation_enabled >>
         route53_zone_id: << module.input.route53_zone_id >>
         subject_alternative_names: << module.input.subject_alternative_names || [] >>
         tags:

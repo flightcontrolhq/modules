@@ -78,7 +78,7 @@ run "wait_for_validation_only" {
 
   assert {
     condition     = length(aws_route53_record.validation) == 0
-    error_message = "Route53 records should not be created when create_route53_validation_records is false"
+    error_message = "Route53 records should not be created when route53_validation_records_creation_enabled is false"
   }
 }
 
@@ -90,9 +90,9 @@ run "route53_and_wait" {
   command = plan
 
   variables {
-    create_route53_validation_records = true
-    route53_zone_id                   = "Z1234567890ABC"
-    wait_for_validation               = true
+    route53_validation_records_creation_enabled = true
+    route53_zone_id                             = "Z1234567890ABC"
+    wait_for_validation                         = true
   }
 
   assert {
