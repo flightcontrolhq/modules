@@ -88,4 +88,11 @@ describe("compiler", () => {
       (error) => error instanceof CompileError && error.message.includes("include cycle detected") && error.message.includes("cycle-a.yml"),
     );
   });
+
+  it("fails when a $with token is embedded in a template string", async () => {
+    await assert.rejects(
+      compileDefinitionFile(join(fixturesDir, "invalid-with-token.yml")),
+      (error) => error instanceof CompileError && error.message.includes("$with tokens must occupy the entire string"),
+    );
+  });
 });

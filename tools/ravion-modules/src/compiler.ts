@@ -24,6 +24,7 @@ export class CompileError extends Error {
 const DIRECTIVE_KEYS = new Set(["$include", "$merge", "$template"]);
 const LOCAL_TOKEN_PATTERN = /^\$local\.[A-Za-z0-9_.-]+$/;
 const WITH_TOKEN_PATTERN = /^\$with\.([A-Za-z0-9_.-]+)$/;
+const WITH_TOKEN_LEAK_PATTERN = /\$with\.[A-Za-z0-9_.-]+/;
 const MODULE_CATEGORIES = new Set([
   "cache",
   "cdn",
@@ -203,11 +204,15 @@ function renderTemplate(value: unknown, parameters: Record<string, unknown>, fil
 
   if (typeof value === "string") {
     const match = value.match(WITH_TOKEN_PATTERN);
-    if (!match) {
-      return value;
+    if (match) {
+      return getParameter(parameters, match[1], filePath, yamlPath);
     }
 
-    return getParameter(parameters, match[1], filePath, yamlPath);
+    if (WITH_TOKEN_LEAK_PATTERN.test(value)) {
+      throw new CompileError(`${filePath} ${yamlPath}: $with tokens must occupy the entire string.`);
+    }
+
+    return value;
   }
 
   if (!isRecord(value)) {
@@ -239,6 +244,9 @@ function rejectLeakedCompilerSyntax(value: unknown, filePath: string, yamlPath: 
   if (typeof value === "string") {
     if (LOCAL_TOKEN_PATTERN.test(value)) {
       throw new CompileError(`${filePath} ${yamlPath}: unresolved local token ${value}.`);
+    }
+    if (WITH_TOKEN_LEAK_PATTERN.test(value)) {
+      throw new CompileError(`${filePath} ${yamlPath}: unresolved template token.`);
     }
     return;
   }
