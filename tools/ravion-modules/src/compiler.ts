@@ -286,10 +286,14 @@ async function collectDefinitionFiles(directoryPath: string, files: string[]): P
     const entryPath = join(directoryPath, entry.name);
     if (entry.isDirectory()) {
       await collectDefinitionFiles(entryPath, files);
-    } else if (entry.isFile() && entry.name === "definition.yml") {
+    } else if (entry.isFile() && isDefinitionFileName(entry.name)) {
       files.push(entryPath);
     }
   }
+}
+
+function isDefinitionFileName(fileName: string): boolean {
+  return fileName.endsWith("-definition.yml");
 }
 
 function isDirectiveRecord(value: unknown, directive: "$include" | "$template"): value is Record<string, unknown> {

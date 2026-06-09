@@ -89,7 +89,7 @@ export async function generateDefinitionsFromInventory(
       },
       module,
     };
-    const filePath = join(root, modulePath, "definition.yml");
+    const filePath = join(root, modulePath, `${definition.type}-definition.yml`);
     const content = YAML.stringify(authoringDefinition, { lineWidth: 0 });
 
     if (options.write) {

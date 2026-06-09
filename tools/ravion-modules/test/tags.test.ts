@@ -59,7 +59,7 @@ function createStatus(overrides: Partial<ReleaseStatus>): ReleaseStatus {
     name: "AWS VPC",
     version: "1.2.3",
     releaseDescription: "Add subnet options.",
-    filePath: join("/repo", "networking", "vpc", "definition.yml"),
+    filePath: join("/repo", "networking", "vpc", "ravion-aws-vpc-definition.yml"),
     modulePath: "networking/vpc",
     publishState: "unpublished",
     message: "Release version does not exist remotely yet.",

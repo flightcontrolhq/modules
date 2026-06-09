@@ -248,7 +248,7 @@ describe("publish", () => {
 
 function createCompiledDefinition(overrides: Partial<CompiledDefinition> = {}): CompiledDefinition {
   return {
-    filePath: join("/repo", "networking", "vpc", "definition.yml"),
+    filePath: join("/repo", "networking", "vpc", "ravion-aws-vpc-definition.yml"),
     type: "ravion-aws-vpc",
     name: "AWS VPC",
     description: "AWS VPC and subnets.",

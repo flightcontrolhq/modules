@@ -95,7 +95,7 @@ if (command === "validate") {
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|publish|generate-definitions> <definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|publish|generate-definitions> <*-definition.yml...>");
   process.exitCode = 1;
 }
 }

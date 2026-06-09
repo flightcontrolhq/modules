@@ -24,12 +24,12 @@ describe("definition generation", () => {
     assert.equal(result.generated.length, 1);
     assert.equal(result.generated[0].modulePath, "networking/vpc");
 
-    const content = await readFile(join(rootPath, "networking", "vpc", "definition.yml"), "utf8");
+    const content = await readFile(join(rootPath, "networking", "vpc", "rvn-aws-network-definition.yml"), "utf8");
     assert.match(content, /type: rvn-aws-network/);
     assert.match(content, /ref: \$local\.module_tag/);
     assert.doesNotMatch(content, /\$include|\$merge|\$template/);
 
-    const compiled = await compileDefinitionFile(join(rootPath, "networking", "vpc", "definition.yml"));
+    const compiled = await compileDefinitionFile(join(rootPath, "networking", "vpc", "rvn-aws-network-definition.yml"));
     validateModuleConfig(compiled.module, compiled.filePath);
     assert.deepEqual(
       compiled.module,

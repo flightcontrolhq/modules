@@ -40,7 +40,7 @@ export async function parseAuthoringDefinitionFile(filePath: string): Promise<Au
   return validateAuthoringDefinition(parsed, filePath);
 }
 
-export function validateAuthoringDefinition(value: unknown, filePath = "definition.yml"): AuthoringDefinition {
+export function validateAuthoringDefinition(value: unknown, filePath = "*-definition.yml"): AuthoringDefinition {
   const issues: ValidationIssue[] = [];
 
   if (!isRecord(value)) {

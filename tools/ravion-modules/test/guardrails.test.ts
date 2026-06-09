@@ -21,15 +21,29 @@ describe("migration guardrails", () => {
     );
   });
 
-  it("allows colocated definition.yml files beside Terraform modules", async () => {
+  it("allows typed colocated definition files beside Terraform modules", async () => {
     const rootPath = await mkdtemp(join(tmpdir(), "ravion-colocated-"));
+    await mkdir(join(rootPath, "networking", "vpc"), { recursive: true });
+    await writeFile(
+      join(rootPath, "networking", "vpc", "ravion-aws-vpc-definition.yml"),
+      ["definition:", "  type: ravion-aws-vpc", "  name: AWS VPC", "module: {}", ""].join("\n"),
+    );
+
+    await assert.doesNotReject(runMigrationGuardrails(rootPath));
+  });
+
+  it("rejects old colocated definition.yml files", async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), "ravion-old-colocated-"));
     await mkdir(join(rootPath, "networking", "vpc"), { recursive: true });
     await writeFile(
       join(rootPath, "networking", "vpc", "definition.yml"),
       ["definition:", "  type: ravion-aws-vpc", "  name: AWS VPC", "module: {}", ""].join("\n"),
     );
 
-    await assert.doesNotReject(runMigrationGuardrails(rootPath));
+    await assert.rejects(
+      runMigrationGuardrails(rootPath),
+      (error) => error instanceof GuardrailError && error.message.includes("Legacy module definition YAML files") && error.message.includes("definition.yml"),
+    );
   });
 
   it("fails on duplicate definition.type values", async () => {
@@ -48,7 +62,7 @@ async function writeDefinition(rootPath: string, category: string, moduleName: s
   const modulePath = join(rootPath, category, moduleName);
   await mkdir(modulePath, { recursive: true });
   await writeFile(
-    join(modulePath, "definition.yml"),
+    join(modulePath, `${type}-definition.yml`),
     [
       "definition:",
       `  type: ${type}`,

@@ -7,7 +7,7 @@ const fixturesDir = join(process.cwd(), "test", "fixtures", "compile");
 
 describe("compiler", () => {
   it("compiles one definition file to canonical module config", async () => {
-    const compiled = await compileDefinitionFile(join(fixturesDir, "modules", "networking", "vpc", "definition.yml"));
+    const compiled = await compileDefinitionFile(join(fixturesDir, "modules", "networking", "vpc", "ravion-aws-vpc-definition.yml"));
 
     assert.equal(compiled.type, "ravion-aws-vpc");
     assert.equal(compiled.name, "AWS VPC");

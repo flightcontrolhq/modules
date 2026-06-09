@@ -99,10 +99,10 @@ Each module in this repository follows a consistent structure:
 ## Module Definitions
 
 Flightcontrol/Ravion module definitions are authored in this repository beside the Terraform
-module they publish. Each definition source file is named `definition.yml` and lives in an
-existing module directory, for example `networking/vpc/definition.yml`.
+module they publish. Each definition source file is named `<definition.type>-definition.yml` and
+lives in an existing module directory, for example `networking/vpc/rvn-aws-network-definition.yml`.
 
-The `definition.yml` file has three top-level sections:
+The definition file has three top-level sections:
 
 ```yaml
 definition:
@@ -135,7 +135,7 @@ contains the canonical Flightcontrol module config that is compiled, validated, 
 
 ### Authoring Rules
 
-- Create module definitions only as colocated `definition.yml` files beside existing Terraform modules.
+- Create module definitions only as colocated `<definition.type>-definition.yml` files beside existing Terraform modules.
 - Keep `definition.type` stable once published. It is the module identity used for versioning.
 - Set `release.version` to a valid semantic version whenever a new module version should publish.
 - Write `release.description` as the human-readable changelog entry for that published version.
@@ -195,7 +195,7 @@ cd tools/ravion-modules
 npm install
 npm run typecheck
 npm test
-node dist/src/cli.js validate ../../networking/vpc/definition.yml
+node dist/src/cli.js validate ../../networking/vpc/rvn-aws-network-definition.yml
 node dist/src/cli.js compile
 node dist/src/cli.js status
 ```

@@ -123,12 +123,16 @@ async function looksLikeModuleDefinitionFile(filePath: string): Promise<boolean>
 }
 
 function isAllowedColocatedDefinition(rootPath: string, filePath: string): boolean {
-  if (basename(filePath) !== "definition.yml") {
+  if (!isDefinitionFileName(basename(filePath))) {
     return false;
   }
 
   const [category] = normalizeRelativePath(rootPath, filePath).split("/");
   return MODULE_CATEGORIES.has(category);
+}
+
+function isDefinitionFileName(fileName: string): boolean {
+  return fileName.endsWith("-definition.yml");
 }
 
 function isYamlFile(fileName: string): boolean {
