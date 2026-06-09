@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.0.2
-  description: update readme
+  version: 0.0.4
+  description: standardize terraform settings
 module:
   inputs:
     - id: section_aws
