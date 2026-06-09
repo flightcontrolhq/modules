@@ -1062,32 +1062,8 @@ module:
       id: force_new_deployment
       label: Force new deployment
       type: boolean
-    - description: Additional tags for all resources. Ravion also adds standard project, environment, and module tags.
-      id: tags
-      label: Tags
-      required: false
-      type: keyvalue
-    - id: section_advanced
-      label: Terraform settings
-      type: section
-    - collapsible: true
-      id: opentofu_version
-      label: OpenTofu version override
-      required: false
-      type: string
-      values: $values:opentofu/versions
-    - collapsible: true
-      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
-      id: ravion_state_backend_workspace
-      label: Ravion Terraform workspace name
-      type: string
-    - collapsible: true
-      default: {}
-      description: Optional raw Terraform variable overrides for lower-level ecs_service inputs.
-      id: advanced_terraform_variables
-      label: Advanced Terraform variables
-      required: false
-      type: object
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
   readme: |
     Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 
@@ -1356,12 +1332,7 @@ module:
             security_group_ids: << module.input.security_group_ids >>
             subnet_ids: "<< module.input.use_private_subnets ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
             tags:
-              ...overrides: << module.input.tags >>
-              EnvironmentGivenId: <<environment.given_id>>
-              ModuleGivenId: <<module.given_id>>
-              ModuleId: <<module.id>>
-              Owner: Ravion
-              ProjectGivenId: <<project.given_id>>
+              $include: ../../partials/stack/ravion-tags.yml
             task_cpu: '<< module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024) >>'
             task_memory: '<< module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024) >>'
             task_role_arn: << module.input.task_role_arn || nil >>
@@ -1371,7 +1342,7 @@ module:
             vpc_id: << module.input.vpc_id >>
             wait_for_steady_state: false
           tool: opentofu
-          tool_version: << module.input.opentofu_version >>
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
         variant: standard
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>

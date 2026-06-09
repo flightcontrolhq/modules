@@ -72,31 +72,14 @@ module:
     - id: section_misc
       label: Misc
       type: section
-    - description: Additional tags for the ACM certificate. Ravion also adds Owner, ProjectGivenId, EnvironmentGivenId, ModuleGivenId, and ModuleId tags.
-      id: tags
-      label: Tags
-      required: false
-      type: keyvalue
-    - id: section_advanced
-      label: Terraform Settings
-      type: section
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
     - collapsible: true
       description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
       id: execution_environment_id
       label: Terraform Execution Environment
       type: string
       values: $values:ravion/execution_environments
-    - default: {}
-      description: Optional raw Terraform variable overrides for advanced module inputs or one-off overrides. Values here override the generated variables above.
-      id: advanced_terraform_variables
-      label: Advanced Terraform variables
-      required: false
-      type: object
-    - collapsible: true
-      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
-      id: ravion_state_backend_workspace
-      label: Ravion Terraform workspace name
-      type: string
   readme: |
     ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 
@@ -191,15 +174,10 @@ module:
             route53_zone_id: << module.input.route53_zone_id >>
             subject_alternative_names: << module.input.subject_alternative_names || [] >>
             tags:
-              ...overrides: << module.input.tags >>
-              EnvironmentGivenId: <<environment.given_id>>
-              ModuleGivenId: <<module.given_id>>
-              ModuleId: <<module.id>>
-              Owner: Ravion
-              ProjectGivenId: <<project.given_id>>
+              $include: ../../partials/stack/ravion-tags.yml
             wait_for_validation: << module.input.wait_for_validation >>
           tool: opentofu
-          tool_version: <<defaults.opentofu_version >>
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
         variant: standard
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>

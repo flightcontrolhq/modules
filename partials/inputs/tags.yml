@@ -1,0 +1,5 @@
+description: A map of tags to assign to all resources. Default tags are `Owner`, `project_given_id`, `environment_given_id`, `module_given_id`, `module_unique_id`
+id: tags
+label: Tags
+required: false
+type: keyvalue

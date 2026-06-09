@@ -528,32 +528,8 @@ module:
     - id: section_misc
       label: Misc
       type: section
-    - description: Additional tags for all resources. Ravion also adds Owner, ProjectGivenId, EnvironmentGivenId, ModuleGivenId, and ModuleId tags.
-      id: tags
-      label: Tags
-      required: false
-      type: keyvalue
-    - default: {}
-      description: Optional raw Terraform variable overrides for advanced module inputs or one-off overrides. Values here override the generated variables above.
-      id: advanced_terraform_variables
-      label: Advanced Terraform variables
-      required: false
-      type: object
-    - id: section_advanced
-      label: Terraform settings
-      type: section
-    - collapsible: true
-      description: Override the environment's default OpenTofu version for this module.
-      id: opentofu_version
-      label: OpenTofu version override
-      required: false
-      type: string
-      values: $values:opentofu/versions
-    - collapsible: true
-      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
-      id: ravion_state_backend_workspace
-      label: Ravion Terraform workspace name
-      type: string
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
   readme: |-
     Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 
@@ -765,15 +741,10 @@ module:
             public_subnet_ids: << module.input.public_subnet_ids || [] >>
             region: << module.input.aws_region >>
             tags:
-              ...overrides: << module.input.tags >>
-              EnvironmentGivenId: <<environment.given_id>>
-              ModuleGivenId: <<module.given_id>>
-              ModuleId: <<module.id>>
-              Owner: Ravion
-              ProjectGivenId: <<project.given_id>>
+              $include: ../../partials/stack/ravion-tags.yml
             vpc_id: << module.input.vpc_id >>
           tool: opentofu
-          tool_version: <<defaults.opentofu_version >>
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
         variant: standard
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>

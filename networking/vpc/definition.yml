@@ -79,11 +79,7 @@ module:
     - id: section_misc
       label: Misc
       type: section
-    - description: A map of tags to assign to all resources. Default tags are `Owner`, `project_given_id`, `environment_given_id`, `module_given_id`, `module_unique_id`
-      id: tags
-      label: Tags
-      required: false
-      type: keyvalue
+    - $include: ../../partials/inputs/tags.yml
     - id: section_peering
       label: VPC Peering
       type: section
@@ -146,22 +142,13 @@ module:
       label: Peering Connections
       required: false
       type: object_map
-    - id: section_advanced
-      label: Terraform Settings
-      type: section
+    - $include: ../../partials/inputs/terraform-settings.yml
     - collapsible: true
       description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must have same AWS account as selected above.
       id: execution_environment_id
       label: Terraform Execution Environment
       type: string
       values: $values:ravion/execution_environments
-    - collapsible: true
-      description: Override the environment's default version for this module
-      id: opentofu_version
-      label: OpenTofu Version Override
-      required: false
-      type: string
-      values: $values:opentofu/versions
   readme: |
     Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 
@@ -306,6 +293,7 @@ module:
           repo: https://github.com/flightcontrolhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
+            ...overrides: << module.input.advanced_terraform_variables >>
             enable_flow_logs: << module.input.enable_flow_logs >>
             enable_nat_gateway: << module.input.enable_nat_gateway >>
             name: << module.input.name >>
@@ -313,18 +301,13 @@ module:
             nat_gateway_high_availability: << module.input.nat_gateway_high_availability >>
             region: << module.input.aws_region >>
             tags:
-              ...overrides: << module.input.tags >>
-              EnvironmentGivenId: <<environment.given_id>>
-              ModuleGivenId: <<module.given_id>>
-              ModuleId: <<module.id>>
-              Owner: Ravion
-              ProjectGivenId: <<project.given_id>>
+              $include: ../../partials/stack/ravion-tags.yml
             vpc_cidr: << module.input.vpc_cidr >>
             vpc_peering_connections: << module.input.vpc_peering_connections >>
           tool: opentofu
-          tool_version: <<defaults.opentofu_version >>
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
         variant: standard
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: << project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id  >>
+    ravion_state_backend_workspace: << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id>>
     type: opentofu
