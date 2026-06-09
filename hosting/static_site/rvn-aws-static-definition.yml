@@ -7,7 +7,15 @@ release:
   description: standardize terraform settings
 module:
   build:
-    builder: '<< module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile: module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} : {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs, output_directory: module.input.output_directory} >>'
+    builder: >-
+      << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
+      || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
+      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
+      {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd:
+      module.input.nixpacks_build_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path:
+      module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs:
+      module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs:
+      module.input.nixpacks_nix_libs, output_directory: module.input.output_directory} >>
     destinations:
       - bucket: << stack.output.hosting_bucket_id >>
         id: hosting-bucket
@@ -642,7 +650,9 @@ module:
               main:
                 acm_certificate_arn: << module.input.distribution_acm_certificate_arn || nil >>
                 aliases: << module.input.distribution_aliases >>
-                comment: "<< module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ? module.input.distribution_aliases[0] : nil >>"
+                comment: >-
+                  << module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ?
+                  module.input.distribution_aliases[0] : nil >>
                 enabled: true
             enable_logging: << module.input.enable_logging >>
             geo_restriction_locations: << module.input.geo_restriction_locations >>
@@ -658,7 +668,9 @@ module:
             origin_request_policy_id: << module.input.origin_request_policy_id >>
             price_class: << module.input.price_class >>
             region: << module.input.aws_region >>
-            response_headers_policy: "<< module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ? module.input.response_headers_policy : nil >>"
+            response_headers_policy: >-
+              << module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ?
+              module.input.response_headers_policy : nil >>
             response_headers_policy_id: << module.input.response_headers_policy_id || nil >>
             routing: << module.input.routing >>
             tags:
@@ -668,5 +680,7 @@ module:
         variant: standard
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id>>
+    ravion_state_backend_workspace: >-
+      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
+      + module.given_id + "-" + stack.id>>
     type: opentofu

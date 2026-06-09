@@ -181,5 +181,7 @@ module:
         variant: standard
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id>>
+    ravion_state_backend_workspace: >-
+      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
+      + module.given_id + "-" + stack.id>>
     type: opentofu
