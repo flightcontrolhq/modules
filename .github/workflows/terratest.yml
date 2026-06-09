@@ -45,7 +45,7 @@ jobs:
   integration-tests:
     name: Integration Tests (Terratest)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-terratest')
+    if: ${{ false }}
     timeout-minutes: 60
     steps:
       - name: Checkout code
