@@ -10,5 +10,5 @@ module:
     type: opentofu
     source:
       repo: https://github.com/flightcontrolhq/modules
-      ref: $local.unknown
+      ref: https://github.com/flightcontrolhq/modules/tree/$local.unknown/broken
       base_path: broken

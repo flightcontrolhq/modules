@@ -154,7 +154,7 @@ than relying on inheritance.
 | `$include` as a map value | Object properties or config values | Replaces that value with the included file content. |
 | `$merge` in a map | Stack, deploy, settings, or object maps | Merges one or more maps into the current map. Later keys override earlier keys. |
 | `$template` in an array item or map value | Parameterized repeated fragments | Loads a fragment and renders it with values from `with`. |
-| `$local.module_tag` as a scalar | Source refs | Resolves to `<definition.type>@<release.version>`. |
+| `$local.module_tag` in a scalar | Source refs and docs | Resolves to `<definition.type>@<release.version>`. |
 
 Directive paths are resolved relative to the file that contains the directive. Cycles fail during
 compile, and compiled output must not contain repo-only metadata, composition directives, or
