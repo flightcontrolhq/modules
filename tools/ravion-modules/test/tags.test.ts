@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { type ReleaseStatus } from "../src/release.js";
-import { createPlannedTags, getModuleTagName, planTags, TagPlanError } from "../src/tags.js";
+import { createPlannedTags, getModuleTagName, planTags, pushPlannedTags, TagPlanError } from "../src/tags.js";
 
 describe("release tags", () => {
   it("generates module-scoped tag names from module types and versions", () => {
@@ -43,6 +43,16 @@ describe("release tags", () => {
     );
   });
 
+  it("plans conflicting tags as updates when overwrite is enabled", () => {
+    const plan = planTags([createStatus({ type: "ravion-aws-vpc", publishState: "unpublished" })], [{ name: "ravion-aws-vpc@1.2.3", commit: "def456" }], "abc123", {
+      overwrite: true,
+    });
+
+    assert.deepEqual(plan.map(({ tagName, action, commit, message }) => ({ tagName, action, commit, message })), [
+      { tagName: "ravion-aws-vpc@1.2.3", action: "update", commit: "abc123", message: "Move ravion-aws-vpc@1.2.3 from def456 to abc123." },
+    ]);
+  });
+
   it("creates only missing tags as annotated tags", async () => {
     const created: Array<{ tagName: string; commit: string; message: string }> = [];
     const plan = [
@@ -54,9 +64,44 @@ describe("release tags", () => {
       async createAnnotatedTag(tagName, commit, message) {
         created.push({ tagName, commit, message });
       },
+      async deleteTag() {},
+      async pushTags() {},
     });
 
     assert.deepEqual(created, [{ tagName: "ravion-aws-vpc@1.2.3", commit: "abc123", message: "ravion-aws-vpc@1.2.3: ravion-aws-vpc 1.2.3" }]);
+  });
+
+  it("recreates tags planned as updates", async () => {
+    const calls: string[] = [];
+    await createPlannedTags(planTags([createStatus({ publishState: "unpublished" })], [{ name: "ravion-aws-vpc@1.2.3", commit: "def456" }], "abc123", { overwrite: true }), {
+      async createAnnotatedTag(tagName, commit) {
+        calls.push(`create ${tagName} ${commit}`);
+      },
+      async deleteTag(tagName) {
+        calls.push(`delete ${tagName}`);
+      },
+      async pushTags() {},
+    });
+
+    assert.deepEqual(calls, ["delete ravion-aws-vpc@1.2.3", "create ravion-aws-vpc@1.2.3 abc123"]);
+  });
+
+  it("pushes created and updated tags with force only for updates", async () => {
+    const pushed: string[][] = [];
+    const plan = [
+      ...planTags([createStatus({ type: "ravion-aws-vpc", publishState: "unpublished" })], [], "abc123"),
+      ...planTags([createStatus({ type: "ravion-aws-rds", publishState: "unpublished" })], [{ name: "ravion-aws-rds@1.2.3", commit: "def456" }], "abc123", { overwrite: true }),
+    ];
+
+    await pushPlannedTags(plan, {
+      async createAnnotatedTag() {},
+      async deleteTag() {},
+      async pushTags(refspecs) {
+        pushed.push(refspecs);
+      },
+    });
+
+    assert.deepEqual(pushed, [["refs/tags/ravion-aws-vpc@1.2.3:refs/tags/ravion-aws-vpc@1.2.3", "+refs/tags/ravion-aws-rds@1.2.3:refs/tags/ravion-aws-rds@1.2.3"]]);
   });
 });
 

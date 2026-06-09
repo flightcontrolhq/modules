@@ -23,7 +23,8 @@ test("module definition workflow has valid syntax and expected jobs", async () =
   assert.ok(jobs.validate.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js guardrails"));
   assert.ok(jobs.validate.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js compile"));
   assert.ok(jobs["publish-plan"].steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js publish --format markdown --output publish-plan.md 2> publish-plan.err"));
-  assert.ok(jobs.publish.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js tags --api --create > release-tags.json"));
+  assert.ok(jobs.publish.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js tags --api --create --overwrite > release-tags.json"));
+  assert.ok(jobs.publish.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js push-tags --plan release-tags.json"));
   assert.ok(jobs.publish.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js publish --apply"));
   assert.ok(jobs.publish.steps.some((step) => step.run === "node tools/ravion-modules/dist/src/cli.js github-releases --plan release-tags.json --create"));
 });
