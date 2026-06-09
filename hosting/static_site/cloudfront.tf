@@ -9,7 +9,7 @@
 # before the cache lookup, so each promoted version produces a fresh cache key
 # automatically — no CreateInvalidation, no custom_error_responses needed.
 #
-# The viewer-response CloudFront Function (created when manage_cache_control =
+# The viewer-response CloudFront Function (created when cache_control_enabled =
 # true, the default) sets Cache-Control on every response based on the
 # rewritten URI shape: HTML responses get a short s-maxage + long
 # stale-while-revalidate, hashed assets get the immutable 1-year browser
@@ -59,7 +59,7 @@ module "cdn" {
   price_class         = var.price_class
   http_version        = "http2and3"
   is_ipv6_enabled     = true
-  wait_for_deployment = var.wait_for_deployment
+  wait_for_deployment = var.deployment_wait_enabled
 
   minimum_protocol_version = var.minimum_protocol_version
 
@@ -68,8 +68,8 @@ module "cdn" {
 
   web_acl_id = var.web_acl_id
 
-  enable_logging                = var.enable_logging
-  create_logging_bucket         = var.create_logging_bucket
+  enable_logging                = var.logging_enabled
+  create_logging_bucket         = var.logging_bucket_enabled
   logging_bucket_domain_name    = var.logging_bucket_domain_name
   logging_prefix                = var.logging_prefix
   logging_bucket_retention_days = var.logging_retention_days

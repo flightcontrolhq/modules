@@ -26,7 +26,7 @@ locals {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.rewrite.arn
     }],
-    var.manage_cache_control ? [{
+    var.cache_control_enabled ? [{
       event_type   = "viewer-response"
       function_arn = aws_cloudfront_function.cache_control[0].arn
     }] : [],
