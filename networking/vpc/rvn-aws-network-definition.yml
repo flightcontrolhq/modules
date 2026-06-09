@@ -3,20 +3,22 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.0.5
-  description: fix source ref to use tag
+  version: 0.0.6
+  description: extract shared definition partials
 module:
   inputs:
     - id: section_aws
-      label: AWS Account & Region
+      label: AWS account & region
       type: section
     - id: aws_account_id
-      label: AWS Account
+      label: AWS account
+      required: true
       type: string
       values: $values:ravion/aws_accounts
     - description: Recommend anything but us-east-1 as it has most outages
       id: aws_region
       label: Region
+      required: true
       type: string
       values: $values:aws/regions
     - id: section_vpc
@@ -143,12 +145,9 @@ module:
       required: false
       type: object_map
     - $include: ../../partials/inputs/terraform-settings.yml
-    - collapsible: true
-      description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must have same AWS account as selected above.
-      id: execution_environment_id
-      label: Terraform Execution Environment
-      type: string
-      values: $values:ravion/execution_environments
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
   readme: |
     Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 
@@ -279,37 +278,18 @@ module:
     - [Building Scalable and Secure Multi-VPC Infrastructure](https://docs.aws.amazon.com/whitepapers/latest/building-scalable-secure-multi-vpc-network-infrastructure/welcome.html) — AWS whitepaper on VPC design patterns
     - [Availability Zones](https://aws.amazon.com/about-aws/global-infrastructure/regions_az/) — Understanding AZ redundancy
   stack:
-    pipelines:
-      change:
-        pipeline_id: << defaults.change_pipeline_id >>
-      defaults:
-        input:
-          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
-          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
-          base_path: networking/vpc
-          branch: main
-          execution_environment_id: << module.input.execution_environment_id >>
-          ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
-          stack_id: <<stack.id>>
-          terraform_variables:
-            ...overrides: << module.input.advanced_terraform_variables >>
-            enable_flow_logs: << module.input.enable_flow_logs >>
-            enable_nat_gateway: << module.input.enable_nat_gateway >>
-            name: << module.input.name >>
-            nat_gateway_eip_allocation_ids: << module.input.nat_gateway_eip_allocation_ids >>
-            nat_gateway_high_availability: << module.input.nat_gateway_high_availability >>
-            region: << module.input.aws_region >>
-            tags:
-              $include: ../../partials/stack/ravion-tags.yml
-            vpc_cidr: << module.input.vpc_cidr >>
-            vpc_peering_connections: << module.input.vpc_peering_connections >>
-          tool: opentofu
-          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
-        variant: standard
-      destroy:
-        pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: >-
-      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
-      + module.given_id + "-" + stack.id>>
-    type: opentofu
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: networking/vpc
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        enable_flow_logs: << module.input.enable_flow_logs >>
+        enable_nat_gateway: << module.input.enable_nat_gateway >>
+        name: << module.input.name >>
+        nat_gateway_eip_allocation_ids: << module.input.nat_gateway_eip_allocation_ids >>
+        nat_gateway_high_availability: << module.input.nat_gateway_high_availability >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        vpc_cidr: << module.input.vpc_cidr >>
+        vpc_peering_connections: << module.input.vpc_peering_connections >>

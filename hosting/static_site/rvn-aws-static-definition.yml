@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.0.3
-  description: fix source ref to use tag
+  version: 0.0.4
+  description: extract shared definition partials
 module:
   build:
     builder: >-
@@ -138,23 +138,7 @@ module:
         - description: Skip the build step and promote an existing S3 directory at deploy time.
           label: Disabled
           value: none
-    - id: source_repo
-      label: Git repository
-      required: true
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: gitrepo
-    - default: .
-      description: Path from repo root to your source code
-      id: source_base_path
-      label: Source base path
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: string
+    - $include: ../../partials/inputs/build-git-source.yml
     - default: dist
       description: Directory produced by the build and uploaded to S3.
       id: output_directory
@@ -165,84 +149,9 @@ module:
           - nixpacks
           - dockerfile
       type: string
-    - id: section_dockerfile
-      label: Docker
-      show_when:
-        build_type: dockerfile
-      type: section
-    - description: Path to the Dockerfile to use for the static build, relative to the repository root or configured source base path.
-      id: dockerfile
-      label: Dockerfile path
-      placeholder: Dockerfile
-      show_when:
-        build_type: dockerfile
-      type: string
-    - description: Directory to use as the Docker build context, relative to the repository root or configured source base path.
-      id: dockerfile_context
-      label: Docker build context path
-      placeholder: .
-      show_when:
-        build_type: dockerfile
-      type: string
-    - id: section_nixpacks
-      label: Nixpacks
-      show_when:
-        build_type: nixpacks
-      type: section
-    - id: nixpacks_install_cmd
-      label: Install command
-      placeholder: Intelligent default based on your language & framework
-      show_when:
-        build_type: nixpacks
-      type: string
-    - id: nixpacks_build_cmd
-      label: Build command
-      placeholder: Intelligent default based on your language & framework
-      show_when:
-        build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Path to a custom Nixpacks config file, relative to the repository root or configured source base path.
-      id: nixpacks_config_file_path
-      label: Nixpacks config file path
-      show_when:
-        build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Application path for Nixpacks to build, relative to the repository root or configured source base path.
-      id: nixpacks_build_path
-      label: Nixpacks build path
-      show_when:
-        build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Optional Nixpacks version to use for the build. Leave blank to use the default version.
-      id: nixpacks_version
-      label: Nixpacks version
-      show_when:
-        build_type: nixpacks
-      type: string
-    - collapsible: true
-      description: Additional Nix packages to install during the Nixpacks build.
-      id: nixpacks_nix_pkgs
-      label: Nix packages
-      show_when:
-        build_type: nixpacks
-      type: string_array
-    - collapsible: true
-      description: Additional APT packages to install during the Nixpacks build.
-      id: nixpacks_apt_pkgs
-      label: APT packages
-      show_when:
-        build_type: nixpacks
-      type: string_array
-    - collapsible: true
-      description: Additional Nix libraries to make available during the Nixpacks build.
-      id: nixpacks_nix_libs
-      label: Nix libraries
-      show_when:
-        build_type: nixpacks
-      type: string_array
+    - $include: ../../partials/inputs/dockerfile-build.yml
+    - $include: ../../partials/inputs/nixpacks-basic.yml
+    - $include: ../../partials/inputs/nixpacks-advanced.yml
     - description: Environment variables available during static builds. Values can be plain strings or references loaded from Parameter Store.
       id: build_environment_variables
       label: Build environment variables
@@ -390,60 +299,11 @@ module:
       show_when:
         enable_logging: true
       type: number
-    - id: section_builder_config
-      label: Builder config
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: section
-    - default: ec2
-      description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
-      id: build_infrastructure_type
-      label: Builder instance type
-      required: true
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: string
-      values:
-        - label: EC2
-          value: ec2
-        - label: EC2 spot
-          value: ec2-spot
-    - default: c7a.4xlarge
-      description: EC2 instance type for static builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
-      id: build_instance_size
-      label: Builder instance size
-      no_options_message: Select an AWS account and region to load available EC2 instance types.
-      required: true
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: string
-      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
-    - collapsible: true
-      description: Optional execution environment ID or given ID for static builds. Defaults to the module Terraform execution environment.
-      id: build_execution_environment_id
-      label: Builder execution environment
-      required: false
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: string
-    - collapsible: true
-      description: Optional AMI ID for build runners. Leave empty to use the default runner image.
-      id: build_ami
-      label: Builder AMI
-      required: false
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-      type: string
+    - $template: ../../partials/templates/builder-infrastructure-inputs.yml
+      with:
+        execution_environment_description: Optional execution environment ID or given ID for static builds. Defaults to the module Terraform execution environment.
+        instance_size_description: EC2 instance type for static builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
+        no_options_message: Select an AWS account and region to load available EC2 instance types.
     - id: section_deploy
       label: Deploy config
       type: section
@@ -462,13 +322,7 @@ module:
       min: 0
       type: number
     - $include: ../../partials/inputs/terraform-settings.yml
-    - collapsible: true
-      description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
-      id: execution_environment_id
-      label: Terraform execution environment
-      required: false
-      type: string
-      values: $values:ravion/execution_environments
+    - $include: ../../partials/inputs/execution-environment.yml
     - $merge:
         - ../../partials/inputs/tags.yml
       collapsible: true
@@ -626,61 +480,42 @@ module:
     - [Serving static websites with S3 and CloudFront](https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteHosting.html)
     - [CloudFront response headers policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/understanding-response-headers-policies.html)
   stack:
-    pipelines:
-      change:
-        pipeline_id: << defaults.change_pipeline_id >>
-      defaults:
-        input:
-          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
-          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
-          base_path: hosting/static_site
-          branch: main
-          execution_environment_id: << module.input.execution_environment_id >>
-          ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
-          stack_id: <<stack.id>>
-          terraform_variables:
-            ...overrides: << module.input.advanced_terraform_variables >>
-            assets_cache_control: << module.input.assets_cache_control >>
-            cache_policy_id: << module.input.cache_policy_id >>
-            create_logging_bucket: << module.input.enable_logging >>
-            default_root_object: << module.input.default_root_object >>
-            default_version: << module.input.default_version >>
-            distributions:
-              main:
-                acm_certificate_arn: << module.input.distribution_acm_certificate_arn || nil >>
-                aliases: << module.input.distribution_aliases >>
-                comment: >-
-                  << module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ?
-                  module.input.distribution_aliases[0] : nil >>
-                enabled: true
-            enable_logging: << module.input.enable_logging >>
-            geo_restriction_locations: << module.input.geo_restriction_locations >>
-            geo_restriction_type: << module.input.geo_restriction_type >>
-            html_cache_control: << module.input.html_cache_control >>
-            html_path_overrides: << module.input.html_path_overrides >>
-            logging_bucket_domain_name: null
-            logging_prefix: ""
-            logging_retention_days: << module.input.logging_retention_days >>
-            manage_cache_control: << module.input.manage_cache_control >>
-            name: << module.input.name >>
-            no_cache_paths: << module.input.no_cache_paths >>
-            origin_request_policy_id: << module.input.origin_request_policy_id >>
-            price_class: << module.input.price_class >>
-            region: << module.input.aws_region >>
-            response_headers_policy: >-
-              << module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ?
-              module.input.response_headers_policy : nil >>
-            response_headers_policy_id: << module.input.response_headers_policy_id || nil >>
-            routing: << module.input.routing >>
-            tags:
-              $include: ../../partials/stack/ravion-tags.yml
-          tool: opentofu
-          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
-        variant: standard
-      destroy:
-        pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: >-
-      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
-      + module.given_id + "-" + stack.id>>
-    type: opentofu
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: hosting/static_site
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        assets_cache_control: << module.input.assets_cache_control >>
+        cache_policy_id: << module.input.cache_policy_id >>
+        create_logging_bucket: << module.input.enable_logging >>
+        default_root_object: << module.input.default_root_object >>
+        default_version: << module.input.default_version >>
+        distributions:
+          main:
+            acm_certificate_arn: << module.input.distribution_acm_certificate_arn || nil >>
+            aliases: << module.input.distribution_aliases >>
+            comment: >-
+              << module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ?
+              module.input.distribution_aliases[0] : nil >>
+            enabled: true
+        enable_logging: << module.input.enable_logging >>
+        geo_restriction_locations: << module.input.geo_restriction_locations >>
+        geo_restriction_type: << module.input.geo_restriction_type >>
+        html_cache_control: << module.input.html_cache_control >>
+        html_path_overrides: << module.input.html_path_overrides >>
+        logging_bucket_domain_name: null
+        logging_prefix: ""
+        logging_retention_days: << module.input.logging_retention_days >>
+        manage_cache_control: << module.input.manage_cache_control >>
+        name: << module.input.name >>
+        no_cache_paths: << module.input.no_cache_paths >>
+        origin_request_policy_id: << module.input.origin_request_policy_id >>
+        price_class: << module.input.price_class >>
+        region: << module.input.aws_region >>
+        response_headers_policy: >-
+          << module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ?
+          module.input.response_headers_policy : nil >>
+        response_headers_policy_id: << module.input.response_headers_policy_id || nil >>
+        routing: << module.input.routing >>
+        tags:
+          $include: ../stack/ravion-tags.yml

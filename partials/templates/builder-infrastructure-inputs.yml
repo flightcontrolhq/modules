@@ -1,0 +1,54 @@
+- id: section_builder_config
+  label: Builder config
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: section
+- default: ec2
+  description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
+  id: build_infrastructure_type
+  label: Builder instance type
+  required: true
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: string
+  values:
+    - label: EC2
+      value: ec2
+    - label: EC2 spot
+      value: ec2-spot
+- default: c7a.4xlarge
+  description: $with.instance_size_description
+  id: build_instance_size
+  label: Builder instance size
+  no_options_message: $with.no_options_message
+  required: true
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: string
+  values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
+- collapsible: true
+  description: $with.execution_environment_description
+  id: build_execution_environment_id
+  label: Builder execution environment
+  required: false
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: string
+- collapsible: true
+  description: Optional AMI ID for build runners. Leave empty to use the default runner image.
+  id: build_ami
+  label: Builder AMI
+  required: false
+  show_when:
+    build_type:
+      - nixpacks
+      - dockerfile
+  type: string

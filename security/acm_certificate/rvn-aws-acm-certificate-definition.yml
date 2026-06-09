@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.0.3
-  description: fix source ref to use tag
+  version: 0.0.4
+  description: extract shared definition partials
 module:
   inputs:
     - id: section_aws
@@ -74,12 +74,9 @@ module:
       type: section
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
-    - collapsible: true
-      description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
-      id: execution_environment_id
-      label: Terraform Execution Environment
-      type: string
-      values: $values:ravion/execution_environments
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
   readme: |
     ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 
@@ -152,36 +149,17 @@ module:
     - [AWS Certificate Manager certificates for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html)
     - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/acm_certificate)
   stack:
-    pipelines:
-      change:
-        pipeline_id: << defaults.change_pipeline_id >>
-      defaults:
-        input:
-          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
-          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
-          base_path: security/acm_certificate
-          branch: main
-          execution_environment_id: << module.input.execution_environment_id >>
-          ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
-          stack_id: <<stack.id>>
-          terraform_variables:
-            ...overrides: << module.input.advanced_terraform_variables >>
-            create_route53_validation_records: << module.input.create_route53_validation_records >>
-            domain_name: << module.input.domain_name >>
-            name: << module.input.name >>
-            region: << module.input.aws_region >>
-            route53_zone_id: << module.input.route53_zone_id >>
-            subject_alternative_names: << module.input.subject_alternative_names || [] >>
-            tags:
-              $include: ../../partials/stack/ravion-tags.yml
-            wait_for_validation: << module.input.wait_for_validation >>
-          tool: opentofu
-          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
-        variant: standard
-      destroy:
-        pipeline_id: << defaults.destroy_pipeline_id >>
-    ravion_state_backend_workspace: >-
-      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
-      + module.given_id + "-" + stack.id>>
-    type: opentofu
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: security/acm_certificate
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        create_route53_validation_records: << module.input.create_route53_validation_records >>
+        domain_name: << module.input.domain_name >>
+        name: << module.input.name >>
+        region: << module.input.aws_region >>
+        route53_zone_id: << module.input.route53_zone_id >>
+        subject_alternative_names: << module.input.subject_alternative_names || [] >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        wait_for_validation: << module.input.wait_for_validation >>
