@@ -18,7 +18,7 @@ variable "tags" {
   default     = {}
 }
 
-variable "deletion_protection" {
+variable "load_balancer_deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers (public/private ALB and NLB) created by this module. Safe-by-default."
   default     = true

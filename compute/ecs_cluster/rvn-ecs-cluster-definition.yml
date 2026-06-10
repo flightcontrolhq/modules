@@ -34,8 +34,8 @@ module:
       type: string
     - default: true
       description: Prevent accidental deletion of load balancers created by this module.
-      id: deletion_protection
-      label: Deletion protection
+      id: load_balancer_deletion_protection_enabled
+      label: Load balancer deletion protection
       type: boolean
     - default: true
       description: Enables CloudWatch Container Insights for detailed task, container, network, storage, and EC2 capacity metrics beyond the basic ECS CPU and memory metrics available by default.
@@ -612,7 +612,7 @@ module:
       base_path: compute/ecs_cluster
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
-        deletion_protection: << module.input.deletion_protection >>
+        load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
         ec2_ami_id: << module.input.ec2_ami_id >>
         ec2_spot_enabled: << module.input.ec2_spot_enabled >>
         ec2_instance_type: << module.input.ec2_instance_type >>

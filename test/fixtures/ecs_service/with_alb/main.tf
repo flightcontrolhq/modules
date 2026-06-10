@@ -83,9 +83,9 @@ module "ecs_cluster" {
   fargate_spot_enabled = false
 
   # Enable public ALB
-  public_alb_enabled       = true
-  public_alb_https_enabled = false
-  deletion_protection      = false
+  public_alb_enabled                        = true
+  public_alb_https_enabled                  = false
+  load_balancer_deletion_protection_enabled = false
 
   # Disable Container Insights to reduce costs for testing
   container_insights_enabled = false

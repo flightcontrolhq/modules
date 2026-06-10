@@ -645,11 +645,11 @@ run "public_alb_custom_settings" {
   command = plan
 
   variables {
-    public_alb_enabled             = true
-    public_subnet_ids              = ["subnet-public1", "subnet-public2"]
-    public_alb_idle_timeout        = 120
-    deletion_protection            = false
-    public_alb_ingress_cidr_blocks = ["10.0.0.0/8"]
+    public_alb_enabled                        = true
+    public_subnet_ids                         = ["subnet-public1", "subnet-public2"]
+    public_alb_idle_timeout                   = 120
+    load_balancer_deletion_protection_enabled = false
+    public_alb_ingress_cidr_blocks            = ["10.0.0.0/8"]
   }
 
   assert {
@@ -707,10 +707,10 @@ run "private_alb_custom_settings" {
   command = plan
 
   variables {
-    private_alb_enabled             = true
-    private_alb_idle_timeout        = 90
-    deletion_protection             = true
-    private_alb_ingress_cidr_blocks = ["192.168.0.0/16"]
+    private_alb_enabled                       = true
+    private_alb_idle_timeout                  = 90
+    load_balancer_deletion_protection_enabled = true
+    private_alb_ingress_cidr_blocks           = ["192.168.0.0/16"]
   }
 
   assert {

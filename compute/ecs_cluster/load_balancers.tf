@@ -25,7 +25,7 @@ module "public_alb" {
 
   # ALB settings
   idle_timeout        = var.public_alb_idle_timeout
-  deletion_protection = var.deletion_protection
+  deletion_protection = var.load_balancer_deletion_protection_enabled
 
   # Security
   ingress_cidr_blocks = var.public_alb_ingress_cidr_blocks
@@ -65,7 +65,7 @@ module "private_alb" {
 
   # ALB settings
   idle_timeout        = var.private_alb_idle_timeout
-  deletion_protection = var.deletion_protection
+  deletion_protection = var.load_balancer_deletion_protection_enabled
 
   # Security
   ingress_cidr_blocks = var.private_alb_ingress_cidr_blocks
@@ -92,7 +92,7 @@ module "public_nlb" {
   internal   = false
 
   # NLB settings
-  deletion_protection              = var.deletion_protection
+  deletion_protection              = var.load_balancer_deletion_protection_enabled
   enable_cross_zone_load_balancing = var.public_nlb_cross_zone_load_balancing_enabled
 
   # Security groups
@@ -124,7 +124,7 @@ module "private_nlb" {
   internal   = true
 
   # NLB settings
-  deletion_protection              = var.deletion_protection
+  deletion_protection              = var.load_balancer_deletion_protection_enabled
   enable_cross_zone_load_balancing = var.private_nlb_cross_zone_load_balancing_enabled
 
   # Security groups

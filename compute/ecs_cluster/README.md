@@ -200,7 +200,7 @@ module "api_service" {
 |------|-------------|------|---------|----------|
 | name | Name prefix for all resources | `string` | n/a | yes |
 | tags | Map of tags to assign to resources | `map(string)` | `{}` | no |
-| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers created by this module | `bool` | `true` | no |
+| load_balancer_deletion_protection_enabled | If true, load balancers created by this module cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
 | vpc_id | VPC ID for ECS resources | `string` | n/a | yes |
 | private_subnet_ids | Private subnet IDs for ECS tasks | `list(string)` | n/a | yes |
 | public_subnet_ids | Public subnet IDs for public ALB | `list(string)` | `[]` | no |
