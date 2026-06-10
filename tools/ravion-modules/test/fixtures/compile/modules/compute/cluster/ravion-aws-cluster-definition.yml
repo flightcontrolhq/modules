@@ -1,0 +1,14 @@
+definition:
+  type: ravion-aws-cluster
+  name: AWS Cluster
+  description: AWS ECS cluster
+release:
+  version: 0.1.0
+  description: Initial definition.
+module:
+  stack:
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: compute/cluster

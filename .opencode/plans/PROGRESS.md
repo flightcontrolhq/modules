@@ -1,0 +1,55 @@
+## 2026-06-02
+
+- Completed task 1: added the initial `tools/ravion-modules` TypeScript package with authoring schema validation for colocated `definition.yml` files.
+- Added fixtures and node:test coverage for valid definitions, missing metadata, invalid semver release metadata, invalid stack source metadata, supported composition directive shapes, and invalid directive shapes.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: build `ravion-modules compile` on top of `parseAuthoringDefinitionFile` and preserve readable file/path errors through include/template resolution.
+
+- Completed task 2: implemented `ravion-modules compile` with single-file and all-definition compilation, explicit `$include`, `$merge`, `$template`, and `$local.module_tag` resolution, cycle detection, and leaked compiler-token/directive rejection.
+- Added compile fixtures and node:test coverage for array splicing, map replacement, map merges, template parameter rendering, Ravion `<< ... >>` template pass-through, stable output ordering, `$local.*` leak failure, include cycle failure, and category-directory discovery.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: add canonical Flightcontrol module schema validation against compiled output, including duplicate input IDs, unsupported input types, and old `input.properties.validation` shape coverage.
+
+- Completed task 3: added canonical module config validation via `tools/ravion-modules/src/module-schema.ts` and wired the CLI `validate` command to compile definitions before validating canonical output.
+- Added node:test coverage for accepted current module shapes, duplicate input IDs, unsupported input types, and the old `input.properties.validation` shape.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: inventory existing `rvn-` module definitions from Ravion Local and generate colocated self-contained `definition.yml` files where matching Terraform module directories already exist.
+
+- Completed task 4: added `ravion-modules generate-definitions` for converting Ravion Local inventory snapshots into self-contained colocated `definition.yml` files, normalizing module repo source refs to `$local.module_tag`, reporting `rvn-` definitions without matching Terraform module directories, and validating generated definitions after write.
+- Added node:test coverage for matching `rvn-` generation, missing-module reporting, no partial/composition directives in generated files, latest-version selection, schema validation, and semantic equivalence after compilation.
+- Queried executor Ravion Local during implementation. Current `rvn-` inventory has six matching Terraform module directories (`rvn-aws-network`, `rvn-ecs-cluster`, `rvn-ecs-web`, `rvn-aws-acm-certificate`, `rvn-aws-rds`, `rvn-static`) and one `rvn-stack` definition with no matching Terraform module directory, which should remain a manual follow-up unless a stack module directory is added.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: validate release metadata during status, compile, and publish, including local release state reporting and remote-version mismatch detection.
+
+- Completed task 5: added release status validation for compiled definitions, including local release version reporting, unpublished/published/conflict remote state calculation from inventory data, and hard failure when a remote version already exists with different compiled config.
+- Wired `ravion-modules status` and `ravion-modules compile` through release status validation; `status` accepts `--inventory <inventory.json>` for remote comparison while still reporting local release metadata without inventory.
+- Added node:test coverage for unpublished state reporting, published identical-version detection, remote config conflict rejection, and missing unpublished release descriptions.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: implement tag planning and creation with annotated module-scoped tags, dry-run output, existing-tag detection, and conflict detection for tags pointing at different commits.
+
+- Completed task 6: added tag planning and annotated tag creation support through a new `ravion-modules tags` command. The command derives module-scoped tags from unpublished release statuses, defaults to dry-run JSON output, supports `--target <commit>`, and creates annotated tags only when `--create` is passed.
+- Added node:test coverage for tag-name generation, planning only unpublished versions, detecting existing matching tags, failing when existing tags point at different commits, and invoking annotated tag creation only for missing tags.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: implement `ravion-modules publish`, reusing release status and tag planning so publish only creates missing versions and remains idempotent.
+
+- Completed task 7: added `ravion-modules publish` with an injectable Ravion API client, dry-run-by-default behavior, `--apply` mutations, definition create/patch support, idempotent identical-version skips, duplicate-version handling, and hard failures for config conflicts.
+- Added node:test coverage for mocked definition list/create/patch calls, version creation, duplicate version responses, identical-version skips, conflict failures, `release.description` propagation to `ModuleVersion.description`, and dry-run non-mutation.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: add GitHub Actions workflows that run compile/validate/release checks in PRs and tags/publish with secrets on `main`.
+
+- Completed task 8: added the `Module Definitions` GitHub Actions workflow with PR validation for the module tools and compiled definitions, plus a main-branch publish job that dry-runs the publish plan, creates annotated module release tags from Ravion API inventory, pushes tags, and publishes with `RAVION_API_URL`/`RAVION_API_TOKEN` only on `main`.
+- Added `ravion-modules tags --api` so CI can plan tags from the live Ravion module inventory instead of requiring a checked-in inventory file.
+- Added node:test workflow syntax/shape coverage for the new workflow.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck`, `npm test`, and `node dist/src/cli.js compile`.
+- Next suggested task: add developer documentation for authoring definitions, directives, release metadata, and tag immutability.
+
+- Completed task 9: added developer documentation to the root `README.md` covering colocated `definition.yml` authoring, release metadata, supported composition directives and merge semantics, local validation/status commands, publish dry-runs/apply commands, and immutable module-scoped release tags.
+- Documentation examples align with existing compiled fixtures under `tools/ravion-modules/test/fixtures/compile`, which continue to exercise directives and `$local.module_tag` behavior.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck` and `npm test`.
+- Next suggested task: add migration guardrails so CI fails on legacy module definition YAML files and duplicate `definition.type` values.
+
+- Completed task 10: added migration guardrails for legacy module-definition YAML files and duplicate `definition.type` values.
+- Added `ravion-modules guardrails` for CI repo scans, wired it into the Module Definitions workflow, and made `compileAllDefinitions` fail on duplicate module identities before publish/status/tag operations can proceed.
+- Added node:test coverage for legacy YAML detection, allowed colocated `definition.yml` files, duplicate type failures, and the workflow guardrail step.
+- Verification passed from `tools/ravion-modules`: `npm run typecheck`, `npm test`, and from repo root: `node tools/ravion-modules/dist/src/cli.js guardrails`.
+- All tasks in `PLAN.md` are now complete.

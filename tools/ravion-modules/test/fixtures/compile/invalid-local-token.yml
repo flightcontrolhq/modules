@@ -1,0 +1,14 @@
+definition:
+  type: ravion-aws-broken
+  name: Broken
+  description: Broken definition
+release:
+  version: 1.0.0
+  description: Broken release.
+module:
+  stack:
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: https://github.com/flightcontrolhq/modules/tree/$local.unknown/broken
+      base_path: broken

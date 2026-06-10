@@ -1,0 +1,31 @@
+definition:
+  type: ravion-aws-vpc
+  name: AWS VPC
+  description: AWS VPC and subnets
+release:
+  version: 1.2.3
+  description: Add subnet options.
+module:
+  inputs:
+    - $include: ../../partials/inputs/name.yml
+    - id: networking
+      type: section
+      label: Networking
+    - $template: ../../partials/templates/ref-input.yml
+      with:
+        id: vpc
+        type: ravion-aws-vpc
+        label: VPC
+    - advanced:
+        $include: ../../partials/inputs/advanced.yml
+  stack:
+    type: opentofu
+    $merge:
+      - ../../partials/stack/pipelines.yml
+      - ravion_state_backend_workspace: "<< module.given_id >>"
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+  deploy:
+    $merge: ../../partials/deploy/defaults.yml

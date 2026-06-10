@@ -1,0 +1,5 @@
+base_path: << module.input.source_base_path || "." >>
+branch: << build.input.branch >>
+ref: << build.input.ref >>
+repo: << module.input.source_repo >>
+type: git
