@@ -26,7 +26,7 @@ locals {
     || var.disk_throughput != null
     || var.ebs_kms_key_arn != null
     || length(var.security_group_ids) > 0
-    || var.enable_detailed_monitoring
+    || var.detailed_monitoring_enabled
     || var.metadata_http_tokens != "required"
     || var.metadata_http_put_response_hop_limit != 2
   )

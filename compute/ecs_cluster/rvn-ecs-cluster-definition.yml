@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.1.0
-  description: "breaking change: TF variables renamed for readability"
+  version: 0.1.1
+  description: "internal refactor: align consumed module variable names with the naming conventions"
 module:
   inputs:
     - id: network

@@ -82,14 +82,14 @@ module "aurora" {
   master_username = "testadmin"
 
   # Security — allow access from VPC CIDR
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Test-friendly settings
-  deletion_protection     = false
-  skip_final_snapshot     = true
-  backup_retention_period = 1
-  apply_immediately       = true
+  deletion_protection_enabled = false
+  skip_final_snapshot         = true
+  backup_retention_period     = 1
+  apply_immediately           = true
 
   # Disable Performance Insights for simpler testing
   performance_insights_enabled = false

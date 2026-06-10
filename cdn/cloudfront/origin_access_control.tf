@@ -1,5 +1,5 @@
 locals {
-  s3_origins = var.create_origin_access_control ? {
+  s3_origins = var.origin_access_control_creation_enabled ? {
     for o in var.origins : o.origin_id => o if o.s3_origin
   } : {}
 }

@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.1.0
-  description: "breaking change: TF variables renamed for readability"
+  version: 0.1.1
+  description: "internal refactor: align consumed module variable names with the naming conventions"
 module:
   build:
     builder: >-
@@ -438,7 +438,7 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         assets_cache_control: << module.input.assets_cache_control >>
         cache_policy_id: << module.input.cache_policy_id >>
-        logging_bucket_enabled: << module.input.logging_enabled >>
+        logging_bucket_creation_enabled: << module.input.logging_enabled >>
         default_root_object: << module.input.default_root_object >>
         default_version: << module.input.default_version >>
         distributions:

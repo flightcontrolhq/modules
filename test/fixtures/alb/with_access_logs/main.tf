@@ -74,16 +74,16 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   # Basic HTTP-only configuration
-  enable_http_listener  = true
-  enable_https_listener = false
+  http_listener_enabled  = true
+  https_listener_enabled = false
 
   # Enable access logs with automatic bucket creation
-  enable_access_logs         = true
+  access_logs_enabled        = true
   access_logs_retention_days = 30
   access_logs_prefix         = "alb-logs"
 
   # Disable deletion protection for test cleanup
-  deletion_protection = false
+  deletion_protection_enabled = false
 
   tags = local.common_tags
 }

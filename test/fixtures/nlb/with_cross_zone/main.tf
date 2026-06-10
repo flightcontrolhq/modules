@@ -77,10 +77,10 @@ module "nlb" {
   internal = false
 
   # Enable cross-zone load balancing
-  enable_cross_zone_load_balancing = true
+  cross_zone_load_balancing_enabled = true
 
   # Disable deletion protection for test cleanup
-  deletion_protection = false
+  deletion_protection_enabled = false
 
   tags = local.common_tags
 }

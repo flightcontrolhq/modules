@@ -136,7 +136,7 @@ module "alb" {
   name                   = "main"
   vpc_id                 = module.vpc.vpc_id
   subnet_ids             = module.vpc.public_subnet_ids
-  enable_access_logs     = true
+  access_logs_enabled     = true
   access_logs_bucket_arn = module.alb_logs.bucket_arn
 }
 ```
@@ -349,7 +349,7 @@ module "s3" {
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • use_kms_encryption = var.kms_key_id != null                                                             │   │  ║
 ║  │  │ • create_lifecycle_configuration = length(var.lifecycle_rules) > 0                                        │   │  ║
-║  │  │ • create_bucket_policy = length(var.policy_templates) > 0 || var.custom_policy != null                    │   │  ║
+║  │  │ • bucket_policy_creation_enabled = length(var.policy_templates) > 0 || var.custom_policy != null                    │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ POLICY PROCESSING:                                                                                         │   │  ║
 ║  │  │ • policy_template_statements = flatten(policy templates)                                                   │   │  ║

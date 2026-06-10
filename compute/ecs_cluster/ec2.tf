@@ -172,9 +172,9 @@ module "ecs_autoscaling" {
   desired_capacity = var.ec2_desired_capacity
 
   # Use existing launch template (don't create new one)
-  create_launch_template  = false
-  launch_template_id      = aws_launch_template.ecs[0].id
-  launch_template_version = "$Latest"
+  launch_template_creation_enabled = false
+  launch_template_id               = aws_launch_template.ecs[0].id
+  launch_template_version          = "$Latest"
 
   # ECS integration
   # Note: the autoscaling submodule already ignores desired_capacity changes

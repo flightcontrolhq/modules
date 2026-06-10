@@ -58,7 +58,7 @@ module "cdn" {
   default_root_object = var.default_root_object
   price_class         = var.price_class
   http_version        = "http2and3"
-  is_ipv6_enabled     = true
+  ipv6_enabled        = true
   wait_for_deployment = var.deployment_wait_enabled
 
   minimum_protocol_version = var.minimum_protocol_version
@@ -68,11 +68,11 @@ module "cdn" {
 
   web_acl_id = var.web_acl_id
 
-  enable_logging                = var.logging_enabled
-  create_logging_bucket         = var.logging_bucket_enabled
-  logging_bucket_domain_name    = var.logging_bucket_domain_name
-  logging_prefix                = var.logging_prefix
-  logging_bucket_retention_days = var.logging_retention_days
+  logging_enabled                 = var.logging_enabled
+  logging_bucket_creation_enabled = var.logging_bucket_creation_enabled
+  logging_bucket_domain_name      = var.logging_bucket_domain_name
+  logging_prefix                  = var.logging_prefix
+  logging_bucket_retention_days   = var.logging_retention_days
 
   tags = local.tags
 }

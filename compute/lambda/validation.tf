@@ -5,10 +5,10 @@
 check "role_configuration" {
   assert {
     condition = (
-      var.create_role ||
+      var.role_creation_enabled ||
       var.role_arn != null
     )
-    error_message = "When create_role is false, role_arn must be provided."
+    error_message = "When role_creation_enabled is false, role_arn must be provided."
   }
 }
 
@@ -50,7 +50,7 @@ check "image_package_configuration" {
 check "lambda_at_edge_constraints" {
   assert {
     condition = (
-      !var.is_lambda_at_edge ||
+      !var.lambda_at_edge_enabled ||
       (
         var.publish &&
         var.package_type == "Zip" &&

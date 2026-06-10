@@ -216,7 +216,7 @@ variable "ca_cert_identifier" {
 # Security Group
 ################################################################################
 
-variable "create_security_group" {
+variable "security_group_creation_enabled" {
   type        = bool
   description = "Whether to create a security group for the RDS instance."
   default     = true
@@ -224,7 +224,7 @@ variable "create_security_group" {
 
 variable "security_group_id" {
   type        = string
-  description = "The ID of an existing security group to use. Required if create_security_group is false."
+  description = "The ID of an existing security group to use. Required if security_group_creation_enabled is false."
   default     = null
 
   validation {
@@ -265,7 +265,7 @@ variable "multi_az" {
   default     = false
 }
 
-variable "create_read_replica" {
+variable "read_replica_creation_enabled" {
   type        = bool
   description = "Whether to create read replicas for the primary instance."
   default     = false
@@ -503,7 +503,7 @@ variable "apply_immediately" {
   default     = false
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "Enable deletion protection for the DB instance."
   default     = true
@@ -532,7 +532,7 @@ variable "monitoring_interval" {
 
 variable "monitoring_role_arn" {
   type        = string
-  description = "The ARN of the IAM role for Enhanced Monitoring. Required if monitoring_interval > 0 and create_monitoring_role is false."
+  description = "The ARN of the IAM role for Enhanced Monitoring. Required if monitoring_interval > 0 and monitoring_role_creation_enabled is false."
   default     = null
 
   validation {
@@ -541,7 +541,7 @@ variable "monitoring_role_arn" {
   }
 }
 
-variable "create_monitoring_role" {
+variable "monitoring_role_creation_enabled" {
   type        = bool
   description = "Whether to create an IAM role for Enhanced Monitoring."
   default     = true
@@ -579,7 +579,7 @@ variable "performance_insights_kms_key_id" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "create_cloudwatch_alarms" {
+variable "cloudwatch_alarms_creation_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for CPU, storage, and connections."
   default     = false
@@ -656,7 +656,7 @@ variable "cloudwatch_ok_actions" {
 # Parameter Group
 ################################################################################
 
-variable "create_parameter_group" {
+variable "parameter_group_creation_enabled" {
   type        = bool
   description = "Whether to create a DB parameter group."
   default     = true
@@ -664,7 +664,7 @@ variable "create_parameter_group" {
 
 variable "parameter_group_name" {
   type        = string
-  description = "The name of an existing DB parameter group to use. Required if create_parameter_group is false."
+  description = "The name of an existing DB parameter group to use. Required if parameter_group_creation_enabled is false."
   default     = null
 }
 
@@ -693,7 +693,7 @@ variable "parameters" {
 # Option Group
 ################################################################################
 
-variable "create_option_group" {
+variable "option_group_creation_enabled" {
   type        = bool
   description = "Whether to create a DB option group. Typically used for Oracle and SQL Server."
   default     = false

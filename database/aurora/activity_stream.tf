@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_rds_cluster_activity_stream" "this" {
-  count = var.enable_activity_stream ? 1 : 0
+  count = var.activity_stream_enabled ? 1 : 0
 
   resource_arn = aws_rds_cluster.this.arn
   mode         = var.activity_stream_mode

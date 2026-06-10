@@ -6,7 +6,7 @@ Requests an AWS Certificate Manager (ACM) **public** certificate using **DNS val
 
 - DNS validation (`aws_acm_certificate` with `validation_method = DNS`)
 - **Default**: output `validation_records` (CNAME name, type, value per domain); no Route53 resources; no blocking wait
-- **Optional**: `route53_validation_records_enabled` + `route53_zone_id` to create validation CNAMEs in a single Route53 public hosted zone
+- **Optional**: `route53_validation_records_creation_enabled` + `route53_zone_id` to create validation CNAMEs in a single Route53 public hosted zone
 - **Optional**: `wait_for_validation` to add `aws_acm_certificate_validation` (apply waits until the certificate is **ISSUED**)
 - Optional Subject Alternative Names (SANs)
 - Tags and `create_before_destroy` lifecycle on the certificate
@@ -29,12 +29,12 @@ module "cert" {
   name        = "api"
   domain_name = "api.example.com"
 
-  # route53_validation_records_enabled = false # default
+  # route53_validation_records_creation_enabled = false # default
   # wait_for_validation                          = false # default
 }
 
 # After apply: add module.cert.validation_records at your DNS provider, then optionally
-# set wait_for_validation = true (and/or route53_validation_records_enabled) and apply again.
+# set wait_for_validation = true (and/or route53_validation_records_creation_enabled) and apply again.
 ```
 
 ### Full automation — Route53 records + wait for issuance
@@ -47,7 +47,7 @@ module "cert" {
 
   name                                        = "api"
   domain_name                                 = "api.example.com"
-  route53_validation_records_enabled = true
+  route53_validation_records_creation_enabled = true
   route53_zone_id                             = aws_route53_zone.primary.zone_id
   wait_for_validation                         = true
 
@@ -90,7 +90,7 @@ module "alb" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 
-  enable_https_listener = true
+  https_listener_enabled = true
   certificate_arn       = module.cert.certificate_arn
 
   tags = {
@@ -116,8 +116,8 @@ Ensure the certificate is **ISSUED** before the ALB listener depends on a fully 
 | domain_name | Primary FQDN for the certificate | `string` | n/a | yes |
 | subject_alternative_names | Additional FQDNs (SANs) | `list(string)` | `[]` | no |
 | tags | Tags for the ACM certificate | `map(string)` | `{}` | no |
-| route53_validation_records_enabled | Create Route53 CNAME validation records | `bool` | `false` | no |
-| route53_zone_id | Route53 public hosted zone ID (required if `route53_validation_records_enabled` is true) | `string` | `null` | no |
+| route53_validation_records_creation_enabled | Create Route53 CNAME validation records | `bool` | `false` | no |
+| route53_zone_id | Route53 public hosted zone ID (required if `route53_validation_records_creation_enabled` is true) | `string` | `null` | no |
 | wait_for_validation | Create `aws_acm_certificate_validation` and wait until issued | `bool` | `false` | no |
 
 ## Outputs
@@ -130,7 +130,7 @@ Ensure the certificate is **ISSUED** before the ALB listener depends on a fully 
 
 ## Limitations (v1)
 
-- **Single Route53 zone**: If you enable `route53_validation_records_enabled`, all validation record names must be creatable in the supplied `route53_zone_id`. SANs that validate under a different zone are not supported in this module version; use default mode and create those records manually or split stacks.
+- **Single Route53 zone**: If you enable `route53_validation_records_creation_enabled`, all validation record names must be creatable in the supplied `route53_zone_id`. SANs that validate under a different zone are not supported in this module version; use default mode and create those records manually or split stacks.
 - **Private CA / imported certificates**: Not supported; use dedicated workflows for those.
 
 Provider and OpenTofu constraints are defined in [versions.tf](versions.tf).

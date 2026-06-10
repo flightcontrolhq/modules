@@ -88,7 +88,7 @@ resource "aws_lambda_function" "this" {
   lifecycle {
     precondition {
       condition = (
-        !var.is_lambda_at_edge ||
+        !var.lambda_at_edge_enabled ||
         (
           var.publish &&
           var.package_type == "Zip" &&
@@ -102,7 +102,7 @@ resource "aws_lambda_function" "this" {
           var.memory_size <= 3008
         )
       )
-      error_message = "Lambda@Edge constraints are violated. Review is_lambda_at_edge requirements in variables.tf and README."
+      error_message = "Lambda@Edge constraints are violated. Review lambda_at_edge_enabled requirements in variables.tf and README."
     }
   }
 

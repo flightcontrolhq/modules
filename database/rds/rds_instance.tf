@@ -77,7 +77,7 @@ resource "aws_db_instance" "this" {
   auto_minor_version_upgrade  = var.auto_minor_version_upgrade
   allow_major_version_upgrade = var.allow_major_version_upgrade
   apply_immediately           = var.apply_immediately
-  deletion_protection         = var.deletion_protection
+  deletion_protection         = var.deletion_protection_enabled
 
   # Monitoring
   enabled_cloudwatch_logs_exports       = var.enabled_cloudwatch_logs_exports
@@ -101,8 +101,8 @@ resource "aws_db_instance" "this" {
 
   lifecycle {
     precondition {
-      condition     = var.create_security_group || var.security_group_id != null
-      error_message = "security_group_id is required when create_security_group is false."
+      condition     = var.security_group_creation_enabled || var.security_group_id != null
+      error_message = "security_group_id is required when security_group_creation_enabled is false."
     }
 
     precondition {
@@ -112,12 +112,12 @@ resource "aws_db_instance" "this" {
 
     precondition {
       condition     = local.create_parameter_group || var.parameter_group_name != null
-      error_message = "parameter_group_name is required when create_parameter_group is false."
+      error_message = "parameter_group_name is required when parameter_group_creation_enabled is false."
     }
 
     precondition {
       condition     = var.monitoring_interval == 0 || local.create_monitoring_role || var.monitoring_role_arn != null
-      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and create_monitoring_role is false."
+      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_creation_enabled is false."
     }
 
     precondition {

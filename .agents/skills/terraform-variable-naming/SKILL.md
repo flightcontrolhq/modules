@@ -15,10 +15,10 @@ Use this skill when Terraform variables or Ravion module definition input IDs be
 - Prefer AWS provider/resource terminology where possible.
 - Use the module context as the implicit top-level prefix.
 - Put the resource, feature, or capability first.
-- Boolean fields that control whether a feature, capability, or Terraform-managed resource exists must end with `_enabled`.
+- Boolean fields that turn a feature or capability on or off must end with `_enabled`.
+- Boolean fields that control whether the module creates a Terraform-managed companion resource must end with `_creation_enabled`; enabling is different from creating, so plain `_enabled` is reserved for feature/capability toggles.
 - Avoid `enable_*` and scoped `*_enable_*` in user-facing variables.
-- Avoid `create_*` in user-facing variables; prefer noun-first `_enabled` toggles.
-- Do not use `_creation_enabled` for Terraform-managed resources; setting the field to false may destroy existing resources, not merely disable future creation.
+- Avoid `create_*` in user-facing variables; `create` reads wrong when set to false because the resource is actually destroyed. Use noun-first `_creation_enabled` instead.
 - Prefer positive booleans over negative booleans.
 - Group related fields with the same meaningful prefix.
 - Repeat the module subject only when needed to disambiguate multiple resources inside the same module.
@@ -36,8 +36,10 @@ Use this skill when Terraform variables or Ravion module definition input IDs be
 | `public_alb_enable_https` | `public_alb_https_enabled` |
 | `ec2_enable_spot` | `ec2_spot_enabled` |
 | `disable_scale_in` | `scale_in_enabled` |
-| `create_route53_validation_records` | `route53_validation_records_enabled` |
-| `create_deploy_role` | `deploy_role_enabled` |
+| `create_zone` | `zone_creation_enabled` |
+| `create_security_group` | `security_group_creation_enabled` |
+| `create_route53_validation_records` | `route53_validation_records_creation_enabled` |
+| `create_deploy_role` | `deploy_role_creation_enabled` |
 
 ## Prefix Guidance
 
@@ -45,7 +47,7 @@ Use this skill when Terraform variables or Ravion module definition input IDs be
 - In `networking/alb`, prefer `http2_enabled` over `alb_http2_enabled` because the module subject is already ALB.
 - In `compute/ecs_cluster`, use prefixes such as `public_alb_*`, `private_alb_*`, `public_nlb_*`, and `private_nlb_*` because the module manages several load balancer resources.
 - In nested object inputs, scope names to the object context and keep the local grouping clear.
-- For optional companion resources created by the module, keep the noun first and use `_enabled` rather than a `create_` prefix.
+- For optional companion resources created by the module, keep the noun first and use `_creation_enabled` rather than a `create_` prefix or plain `_enabled`.
 
 ## Migration Workflow
 
@@ -59,8 +61,8 @@ Use this skill when Terraform variables or Ravion module definition input IDs be
 ## Review Checklist
 
 - Does every feature-toggle boolean end with `_enabled`?
-- Is this a feature/capability toggle or a Terraform-managed resource existence toggle?
-- If it controls a Terraform-managed resource, does the name make the destroy-on-false behavior clear enough with a noun-first `_enabled` form?
+- Is this a feature/capability toggle (`_enabled`) or a Terraform-managed resource existence toggle (`_creation_enabled`)?
+- If it controls a Terraform-managed resource, does it use the noun-first `_creation_enabled` form?
 - Does the field sort next to related fields?
 - Is the noun phrase at the start?
 - Is the boolean positive?

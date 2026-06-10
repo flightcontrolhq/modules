@@ -158,7 +158,7 @@ describe("publish", () => {
     assert.doesNotMatch(markdown, /Skip ravion-aws-vpc@1\.2\.3/);
   });
 
-  it("lists planned changes first in the markdown table, then skips, each sorted by module", () => {
+  it("lists planned changes sorted by module and omits skipped modules from the markdown table", () => {
     const item = (type: string, action: "create-version" | "skip-version") => ({ type, version: "1.0.0", action, dryRun: true, message: `${action} ${type}`, description: `${action} ${type}` });
     const markdown = formatPublishPlanMarkdown({
       dryRun: true,
@@ -168,8 +168,10 @@ describe("publish", () => {
     const rows = markdown.split("\n").filter((line) => line.startsWith("| `"));
     assert.deepEqual(
       rows.map((row) => row.split("|")[1].trim()),
-      ["`bbb-changed`", "`zzz-changed`", "`aaa-skipped`", "`yyy-skipped`"],
+      ["`bbb-changed`", "`zzz-changed`"],
     );
+    assert.doesNotMatch(markdown, /aaa-skipped/);
+    assert.doesNotMatch(markdown, /yyy-skipped/);
   });
 
   it("requires a Ravion API token by default", async () => {

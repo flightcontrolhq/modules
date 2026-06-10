@@ -385,7 +385,7 @@ No external apply-time tools required.
 | Name | Description | Type | Default |
 |---|---|---|---|
 | logging_enabled | Enable CloudFront access logging. | `bool` | `false` |
-| logging_bucket_enabled | Create a new S3 bucket for logs. | `bool` | `false` |
+| logging_bucket_creation_enabled | Create a new S3 bucket for logs. | `bool` | `false` |
 | logging_bucket_domain_name | Existing logging bucket domain name. | `string` | `null` |
 | logging_prefix | Base prefix for log files. | `string` | `""` |
 | logging_retention_days | Days to retain logs in the created bucket. | `number` | `90` |
