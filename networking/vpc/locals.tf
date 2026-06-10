@@ -36,9 +36,16 @@ locals {
   # NAT Gateway EIPs
   # When the caller supplies pre-allocated EIPs, skip creating internal ones and
   # use the supplied allocation IDs directly. Otherwise, fall back to the EIPs
-  # created by aws_eip.nat in this module.
-  create_nat_eips                = var.enable_nat_gateway && var.nat_gateway_eip_allocation_ids == null
-  nat_gateway_eip_allocation_ids = var.nat_gateway_eip_allocation_ids != null ? var.nat_gateway_eip_allocation_ids : aws_eip.nat[*].allocation_id
+  # created by aws_eip.nat in this module. An empty list is treated the same as
+  # null (auto-allocate), since callers that template tfvars often can't omit
+  # the key.
+  supplied_nat_eip_allocation_ids = (
+    var.nat_gateway_eip_allocation_ids != null && length(var.nat_gateway_eip_allocation_ids) > 0
+    ? var.nat_gateway_eip_allocation_ids
+    : null
+  )
+  create_nat_eips                = var.enable_nat_gateway && local.supplied_nat_eip_allocation_ids == null
+  nat_gateway_eip_allocation_ids = local.supplied_nat_eip_allocation_ids != null ? local.supplied_nat_eip_allocation_ids : aws_eip.nat[*].allocation_id
 
   # Flow Logs
   create_flow_log_cloudwatch = var.enable_flow_logs && var.flow_logs_destination == "cloudwatch"
