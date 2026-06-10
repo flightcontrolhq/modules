@@ -80,8 +80,8 @@ resource "aws_elasticache_replication_group" "this" {
     }
 
     precondition {
-      condition     = var.security_group_enabled || var.security_group_id != null
-      error_message = "security_group_id is required when security_group_enabled is false."
+      condition     = var.security_group_creation_enabled || var.security_group_id != null
+      error_message = "security_group_id is required when security_group_creation_enabled is false."
     }
 
     ignore_changes = [

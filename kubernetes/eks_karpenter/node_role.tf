@@ -29,8 +29,8 @@ module "node_role" {
     var.node_role_additional_managed_policy_arns,
   )
 
-  instance_profile_enabled = true
-  instance_profile_name    = "${var.cluster_name}-karpenter-node"
+  instance_profile_creation_enabled = true
+  instance_profile_name             = "${var.cluster_name}-karpenter-node"
 
   tags = local.tags
 }

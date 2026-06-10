@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_rds_global_cluster" "this" {
-  count = var.global_cluster_enabled ? 1 : 0
+  count = var.global_cluster_creation_enabled ? 1 : 0
 
   global_cluster_identifier = var.global_cluster_identifier
   engine                    = var.engine
@@ -107,8 +107,8 @@ resource "aws_rds_cluster" "this" {
     ]
 
     precondition {
-      condition     = var.security_group_enabled || var.security_group_id != null || length(var.security_group_ids) > 0
-      error_message = "At least one security group must be provided: set security_group_enabled = true, provide security_group_id, or provide security_group_ids."
+      condition     = var.security_group_creation_enabled || var.security_group_id != null || length(var.security_group_ids) > 0
+      error_message = "At least one security group must be provided: set security_group_creation_enabled = true, provide security_group_id, or provide security_group_ids."
     }
 
     precondition {
@@ -117,18 +117,18 @@ resource "aws_rds_cluster" "this" {
     }
 
     precondition {
-      condition     = var.cluster_parameter_group_enabled || var.cluster_parameter_group_name != null
-      error_message = "cluster_parameter_group_name is required when cluster_parameter_group_enabled is false."
+      condition     = var.cluster_parameter_group_creation_enabled || var.cluster_parameter_group_name != null
+      error_message = "cluster_parameter_group_name is required when cluster_parameter_group_creation_enabled is false."
     }
 
     precondition {
-      condition     = var.db_parameter_group_enabled || var.db_parameter_group_name != null
-      error_message = "db_parameter_group_name is required when db_parameter_group_enabled is false."
+      condition     = var.db_parameter_group_creation_enabled || var.db_parameter_group_name != null
+      error_message = "db_parameter_group_name is required when db_parameter_group_creation_enabled is false."
     }
 
     precondition {
       condition     = var.monitoring_interval == 0 || local.create_monitoring_role || var.monitoring_role_arn != null
-      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_enabled is false."
+      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_creation_enabled is false."
     }
 
     precondition {

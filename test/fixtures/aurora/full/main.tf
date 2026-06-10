@@ -84,17 +84,17 @@ module "aurora" {
   database_name   = "testdb"
 
   # Security
-  security_group_enabled = true
-  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Monitoring — Enhanced Monitoring + CloudWatch Logs
-  monitoring_interval             = 60
-  monitoring_role_enabled         = true
-  performance_insights_enabled    = true
-  enabled_cloudwatch_logs_exports = ["postgresql"]
+  monitoring_interval              = 60
+  monitoring_role_creation_enabled = true
+  performance_insights_enabled     = true
+  enabled_cloudwatch_logs_exports  = ["postgresql"]
 
   # CloudWatch Alarms
-  cloudwatch_alarms_enabled = true
+  cloudwatch_alarms_creation_enabled = true
 
   # Parameter groups with custom parameters
   cluster_parameter_group_family = "aurora-postgresql16"

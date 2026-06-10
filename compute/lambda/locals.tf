@@ -20,7 +20,7 @@ locals {
     var.role_managed_policy_arns
   ))
 
-  lambda_role_arn = var.role_enabled ? aws_iam_role.this[0].arn : var.role_arn
+  lambda_role_arn = var.role_creation_enabled ? aws_iam_role.this[0].arn : var.role_arn
 
   create_code_bucket = (
     var.package_type == "Zip" &&

@@ -875,8 +875,8 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.logging_bucket_enabled == false
-    error_message = "logging_bucket_enabled should default to false."
+    condition     = var.logging_bucket_creation_enabled == false
+    error_message = "logging_bucket_creation_enabled should default to false."
   }
 
   assert {
@@ -890,8 +890,8 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.origin_access_control_enabled == true
-    error_message = "origin_access_control_enabled should default to true."
+    condition     = var.origin_access_control_creation_enabled == true
+    error_message = "origin_access_control_creation_enabled should default to true."
   }
 
   assert {

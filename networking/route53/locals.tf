@@ -13,9 +13,9 @@ locals {
   }
   tags = merge(local.default_tags, var.tags)
 
-  create_public_zone = var.zone_enabled && !var.private_zone
+  create_public_zone = var.zone_creation_enabled && !var.private_zone
 
-  zone_id = var.zone_enabled ? (
+  zone_id = var.zone_creation_enabled ? (
     var.private_zone ? aws_route53_zone.private[0].zone_id : aws_route53_zone.public[0].zone_id
   ) : var.zone_id
 }

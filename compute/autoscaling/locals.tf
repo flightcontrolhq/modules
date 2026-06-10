@@ -32,7 +32,7 @@ locals {
   ################################################################################
 
   # Whether to create a launch template
-  create_launch_template = var.launch_template_enabled && var.launch_template != null
+  create_launch_template = var.launch_template_creation_enabled && var.launch_template != null
 
   # Whether to enable warm pool
   enable_warm_pool = var.warm_pool != null

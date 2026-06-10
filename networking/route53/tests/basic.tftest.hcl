@@ -121,8 +121,8 @@ run "existing_zone_with_records" {
   command = plan
 
   variables {
-    zone_enabled = false
-    zone_id      = "Z1EXISTING00000000"
+    zone_creation_enabled = false
+    zone_id               = "Z1EXISTING00000000"
     records = {
       www = {
         name    = "www.existing.example.com"
@@ -141,7 +141,7 @@ run "existing_zone_with_records" {
 
   assert {
     condition     = length(aws_route53_zone.public) == 0
-    error_message = "No zone should be created when zone_enabled = false"
+    error_message = "No zone should be created when zone_creation_enabled = false"
   }
 
   assert {

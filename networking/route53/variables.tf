@@ -12,7 +12,7 @@ variable "tags" {
 # Hosted Zone
 ################################################################################
 
-variable "zone_enabled" {
+variable "zone_creation_enabled" {
   type        = bool
   description = "If true, create a new Route53 hosted zone. If false, reference an existing zone via zone_id."
   default     = true
@@ -20,7 +20,7 @@ variable "zone_enabled" {
 
 variable "zone_id" {
   type        = string
-  description = "The ID of an existing Route53 hosted zone to manage records in. Required when zone_enabled is false."
+  description = "The ID of an existing Route53 hosted zone to manage records in. Required when zone_creation_enabled is false."
   default     = null
 
   validation {
@@ -31,7 +31,7 @@ variable "zone_id" {
 
 variable "name" {
   type        = string
-  description = "The fully qualified domain name for the hosted zone (e.g. example.com). Required when zone_enabled is true."
+  description = "The fully qualified domain name for the hosted zone (e.g. example.com). Required when zone_creation_enabled is true."
   default     = null
 
   validation {

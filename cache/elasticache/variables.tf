@@ -90,7 +90,7 @@ variable "ip_discovery" {
 # Security Group
 ################################################################################
 
-variable "security_group_enabled" {
+variable "security_group_creation_enabled" {
   type        = bool
   description = "Whether to create a security group for the ElastiCache cluster."
   default     = true
@@ -98,7 +98,7 @@ variable "security_group_enabled" {
 
 variable "security_group_id" {
   type        = string
-  description = "The ID of an existing security group to use. Required if security_group_enabled is false."
+  description = "The ID of an existing security group to use. Required if security_group_creation_enabled is false."
   default     = null
 
   validation {
@@ -403,7 +403,7 @@ variable "notification_topic_arn" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "cloudwatch_alarms_enabled" {
+variable "cloudwatch_alarms_creation_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for CPU, memory, and connections."
   default     = false
@@ -491,7 +491,7 @@ variable "cloudwatch_ok_actions" {
 # Secrets Manager
 ################################################################################
 
-variable "secret_enabled" {
+variable "secret_creation_enabled" {
   type        = bool
   description = "Create a Secrets Manager secret containing the cache connection string. A secret is also created when secret_name is set, regardless of this flag."
   default     = true
@@ -499,7 +499,7 @@ variable "secret_enabled" {
 
 variable "secret_name" {
   type        = string
-  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'. Providing a value implies secret_enabled=true."
+  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'. Providing a value implies secret_creation_enabled=true."
   default     = null
 }
 

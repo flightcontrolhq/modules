@@ -354,7 +354,7 @@ module "asg" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| launch_template_enabled | Whether to create a launch template | `bool` | `true` | no |
+| launch_template_creation_enabled | Whether to create a launch template | `bool` | `true` | no |
 | launch_template_id | Existing launch template ID | `string` | `null` | no |
 | launch_template_name | Existing launch template name | `string` | `null` | no |
 | launch_template_version | Launch template version | `string` | `"$Latest"` | no |
@@ -544,7 +544,7 @@ module "asg" {
 ║  │  │ • asg_tags = merge(tags, { Name = var.name }, ecs_managed ? { AmazonECSManaged = "true" } : {})           │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
-║  │  │ • launch_template_enabled = var.launch_template_enabled && var.launch_template != null                      │   │  ║
+║  │  │ • launch_template_creation_enabled = var.launch_template_creation_enabled && var.launch_template != null                      │   │  ║
 ║  │  │ • enable_warm_pool = var.warm_pool != null                                                                │   │  ║
 ║  │  │ • enable_notifications = var.notifications != null                                                        │   │  ║
 ║  │  │ • enable_instance_refresh = var.instance_refresh != null                                                  │   │  ║
@@ -572,7 +572,7 @@ module "asg" {
 ║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
 ║  │                                        LAUNCH TEMPLATE CONFIG                                                     │  ║
 ║  ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤  ║
-║  │ • launch_template_enabled          │ • launch_template (complex object):                                          │  ║
+║  │ • launch_template_creation_enabled          │ • launch_template (complex object):                                          │  ║
 ║  │ • launch_template_id              │   - image_id, instance_type, key_name, user_data, ebs_optimized             │  ║
 ║  │ • launch_template_name            │   - iam_instance_profile_arn/name, security_group_ids                       │  ║
 ║  │ • launch_template_version         │   - network_interfaces[], block_device_mappings[], metadata_options          │  ║
@@ -654,7 +654,7 @@ module "asg" {
 ║                                                                                                                        ║
 ║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
 ║    │                                aws_launch_template.this[0]                                                   │    ║
-║    │                         (conditional: launch_template_enabled = true)                                         │    ║
+║    │                         (conditional: launch_template_creation_enabled = true)                                         │    ║
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
 ║    │ Configures: AMI, instance type, user data, IAM profile, security groups, block devices,                      │    ║
 ║    │             network interfaces, metadata options, monitoring, placement, spot options,                       │    ║
@@ -758,7 +758,7 @@ module "asg" {
 ║                                        └────────────┬────────────┘                                                     ║
 ║                                                     │                                                                  ║
 ║                                                     ▼                                                                  ║
-║  var.launch_template_enabled ──────► aws_launch_template.this[0]                                                       ║
+║  var.launch_template_creation_enabled ──────► aws_launch_template.this[0]                                                       ║
 ║                                              │                                                                         ║
 ║  var.launch_template_id ─────────────────────┼──────────────────────────────────────┐                                  ║
 ║  var.launch_template_name ───────────────────┼──────────────────────────────────────┤                                  ║

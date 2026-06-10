@@ -167,7 +167,7 @@ variable "db_subnet_group_name" {
 # Security Group
 ################################################################################
 
-variable "security_group_enabled" {
+variable "security_group_creation_enabled" {
   description = "Whether to create a new security group for the Aurora cluster."
   type        = bool
   default     = true
@@ -466,14 +466,14 @@ variable "auto_minor_version_upgrade" {
 # Parameter Groups
 ################################################################################
 
-variable "cluster_parameter_group_enabled" {
+variable "cluster_parameter_group_creation_enabled" {
   description = "Whether to create a new cluster parameter group."
   type        = bool
   default     = true
 }
 
 variable "cluster_parameter_group_name" {
-  description = "The name of an existing cluster parameter group to use. Required if cluster_parameter_group_enabled is false."
+  description = "The name of an existing cluster parameter group to use. Required if cluster_parameter_group_creation_enabled is false."
   type        = string
   default     = null
 }
@@ -494,14 +494,14 @@ variable "cluster_parameters" {
   default = []
 }
 
-variable "db_parameter_group_enabled" {
+variable "db_parameter_group_creation_enabled" {
   description = "Whether to create a new DB parameter group for instances."
   type        = bool
   default     = true
 }
 
 variable "db_parameter_group_name" {
-  description = "The name of an existing DB parameter group to use. Required if db_parameter_group_enabled is false."
+  description = "The name of an existing DB parameter group to use. Required if db_parameter_group_creation_enabled is false."
   type        = string
   default     = null
 }
@@ -544,7 +544,7 @@ variable "monitoring_interval" {
 }
 
 variable "monitoring_role_arn" {
-  description = "The ARN of the IAM role for Enhanced Monitoring. If not provided and monitoring_role_enabled is true, a new role will be created."
+  description = "The ARN of the IAM role for Enhanced Monitoring. If not provided and monitoring_role_creation_enabled is true, a new role will be created."
   type        = string
   default     = null
 
@@ -554,7 +554,7 @@ variable "monitoring_role_arn" {
   }
 }
 
-variable "monitoring_role_enabled" {
+variable "monitoring_role_creation_enabled" {
   description = "Whether to create an IAM role for Enhanced Monitoring."
   type        = bool
   default     = true
@@ -588,7 +588,7 @@ variable "performance_insights_kms_key_id" {
   }
 }
 
-variable "cloudwatch_alarms_enabled" {
+variable "cloudwatch_alarms_creation_enabled" {
   description = "Whether to create CloudWatch alarms for the Aurora cluster."
   type        = bool
   default     = false
@@ -762,7 +762,7 @@ variable "custom_endpoints" {
 # Global Database
 ################################################################################
 
-variable "global_cluster_enabled" {
+variable "global_cluster_creation_enabled" {
   description = "Whether to create a global Aurora cluster."
   type        = bool
   default     = false

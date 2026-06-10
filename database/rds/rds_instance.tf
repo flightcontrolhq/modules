@@ -101,8 +101,8 @@ resource "aws_db_instance" "this" {
 
   lifecycle {
     precondition {
-      condition     = var.security_group_enabled || var.security_group_id != null
-      error_message = "security_group_id is required when security_group_enabled is false."
+      condition     = var.security_group_creation_enabled || var.security_group_id != null
+      error_message = "security_group_id is required when security_group_creation_enabled is false."
     }
 
     precondition {
@@ -112,12 +112,12 @@ resource "aws_db_instance" "this" {
 
     precondition {
       condition     = local.create_parameter_group || var.parameter_group_name != null
-      error_message = "parameter_group_name is required when parameter_group_enabled is false."
+      error_message = "parameter_group_name is required when parameter_group_creation_enabled is false."
     }
 
     precondition {
       condition     = var.monitoring_interval == 0 || local.create_monitoring_role || var.monitoring_role_arn != null
-      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_enabled is false."
+      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_creation_enabled is false."
     }
 
     precondition {

@@ -149,7 +149,7 @@ module "lambda_with_integrations" {
 | file_system_configs | EFS mount configs | `list(object)` | `[]` | no |
 | snap_start_apply_on | SnapStart mode (`PublishedVersions`) | `string` | `null` | no |
 | code_signing_config_arn | Code signing config ARN | `string` | `null` | no |
-| role_enabled | Create IAM role | `bool` | `true` | no |
+| role_creation_enabled | Create IAM role | `bool` | `true` | no |
 | role_arn | Existing IAM role ARN | `string` | `null` | no |
 | role_name | IAM role name override | `string` | `null` | no |
 | role_path | IAM role path | `string` | `"/"` | no |
@@ -158,7 +158,7 @@ module "lambda_with_integrations" {
 | vpc_execution_policy_enabled | Attach AWS VPC execution policy when vpc_config is set | `bool` | `true` | no |
 | role_managed_policy_arns | Additional managed policy ARNs | `list(string)` | `[]` | no |
 | role_inline_policies | Inline IAM policies map (`name => json`) | `map(string)` | `{}` | no |
-| log_group_enabled | Create CloudWatch log group | `bool` | `true` | no |
+| log_group_creation_enabled | Create CloudWatch log group | `bool` | `true` | no |
 | log_group_name | Custom log group name | `string` | `null` | no |
 | log_retention_days | Log retention in days | `number` | `30` | no |
 | log_kms_key_id | KMS key for log group | `string` | `null` | no |

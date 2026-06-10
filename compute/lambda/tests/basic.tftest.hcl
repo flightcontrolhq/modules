@@ -36,14 +36,14 @@ mock_provider "aws" {
 }
 
 variables {
-  name         = "test-lambda"
-  package_type = "Zip"
-  runtime      = "nodejs20.x"
-  handler      = "index.handler"
-  s3_bucket    = "artifact-bucket"
-  s3_key       = "lambda.zip"
-  role_enabled = false
-  role_arn     = "arn:aws:iam::123456789012:role/existing-lambda-role"
+  name                  = "test-lambda"
+  package_type          = "Zip"
+  runtime               = "nodejs20.x"
+  handler               = "index.handler"
+  s3_bucket             = "artifact-bucket"
+  s3_key                = "lambda.zip"
+  role_creation_enabled = false
+  role_arn              = "arn:aws:iam::123456789012:role/existing-lambda-role"
 }
 
 run "basic_zip_function" {
@@ -74,13 +74,13 @@ run "existing_role_no_create" {
   command = plan
 
   variables {
-    role_enabled = false
-    role_arn     = "arn:aws:iam::123456789012:role/existing-lambda-role-2"
+    role_creation_enabled = false
+    role_arn              = "arn:aws:iam::123456789012:role/existing-lambda-role-2"
   }
 
   assert {
     condition     = length(aws_iam_role.this) == 0
-    error_message = "IAM role should not be created when role_enabled is false."
+    error_message = "IAM role should not be created when role_creation_enabled is false."
   }
 }
 

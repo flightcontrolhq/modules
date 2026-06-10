@@ -183,7 +183,7 @@ module "aurora" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # CloudWatch Alarms
-  cloudwatch_alarms_enabled               = true
+  cloudwatch_alarms_creation_enabled               = true
   cloudwatch_alarm_cpu_threshold         = 75
   cloudwatch_alarm_memory_threshold      = 536870912 # 512 MiB
   cloudwatch_alarm_connections_threshold = 200
@@ -212,7 +212,7 @@ module "aurora" {
 
   # Enhanced Monitoring
   monitoring_interval    = 30
-  monitoring_role_enabled = true
+  monitoring_role_creation_enabled = true
 
   # Performance Insights (enabled by default)
   performance_insights_retention_period = 7
@@ -242,7 +242,7 @@ module "aurora_primary" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # Create global cluster
-  global_cluster_enabled    = true
+  global_cluster_creation_enabled    = true
   global_cluster_identifier = "my-global-db"
 }
 
@@ -319,7 +319,7 @@ module "aurora" {
   master_username = "dbadmin"
 
   # Use existing security group instead of creating one
-  security_group_enabled = false
+  security_group_creation_enabled = false
   security_group_id     = aws_security_group.existing.id
 }
 ```
@@ -355,7 +355,7 @@ module "aurora" {
 | availability_zones | List of EC2 Availability Zones for the DB cluster. | `list(string)` | `[]` | no |
 | publicly_accessible | Whether instances are publicly accessible. | `bool` | `false` | no |
 | db_subnet_group_name | Existing DB subnet group name. | `string` | `null` | no |
-| security_group_enabled | Whether to create a new security group. | `bool` | `true` | no |
+| security_group_creation_enabled | Whether to create a new security group. | `bool` | `true` | no |
 | security_group_id | Existing security group ID to use. | `string` | `null` | no |
 | security_group_ids | Additional security group IDs to attach. | `list(string)` | `[]` | no |
 | allowed_security_group_ids | Security group IDs allowed to access the cluster. | `list(string)` | `[]` | no |
@@ -382,22 +382,22 @@ module "aurora" {
 | preferred_maintenance_window | Weekly maintenance window (ddd:HH:MM-ddd:HH:MM). | `string` | `null` | no |
 | allow_major_version_upgrade | Allow major engine version upgrades. | `bool` | `false` | no |
 | auto_minor_version_upgrade | Enable automatic minor version upgrades. | `bool` | `true` | no |
-| cluster_parameter_group_enabled | Whether to create a cluster parameter group. | `bool` | `true` | no |
+| cluster_parameter_group_creation_enabled | Whether to create a cluster parameter group. | `bool` | `true` | no |
 | cluster_parameter_group_name | Existing cluster parameter group name. | `string` | `null` | no |
 | cluster_parameter_group_family | Cluster parameter group family (auto-derived if not set). | `string` | `null` | no |
 | cluster_parameters | Cluster parameter name/value pairs. | `list(object)` | `[]` | no |
-| db_parameter_group_enabled | Whether to create a DB parameter group. | `bool` | `true` | no |
+| db_parameter_group_creation_enabled | Whether to create a DB parameter group. | `bool` | `true` | no |
 | db_parameter_group_name | Existing DB parameter group name. | `string` | `null` | no |
 | db_parameter_group_family | DB parameter group family (auto-derived if not set). | `string` | `null` | no |
 | db_parameters | DB parameter name/value pairs. | `list(object)` | `[]` | no |
 | enabled_cloudwatch_logs_exports | Log types to export to CloudWatch. | `list(string)` | `[]` | no |
 | monitoring_interval | Enhanced Monitoring interval (0, 1, 5, 10, 15, 30, 60). | `number` | `0` | no |
 | monitoring_role_arn | IAM role ARN for Enhanced Monitoring. | `string` | `null` | no |
-| monitoring_role_enabled | Create IAM role for Enhanced Monitoring. | `bool` | `true` | no |
+| monitoring_role_creation_enabled | Create IAM role for Enhanced Monitoring. | `bool` | `true` | no |
 | performance_insights_enabled | Enable Performance Insights. | `bool` | `true` | no |
 | performance_insights_retention_period | Performance Insights retention (7 or 31-731 days). | `number` | `7` | no |
 | performance_insights_kms_key_id | KMS key ARN for Performance Insights. | `string` | `null` | no |
-| cloudwatch_alarms_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
+| cloudwatch_alarms_creation_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
 | cloudwatch_alarm_cpu_threshold | CPU utilization threshold (%). | `number` | `80` | no |
 | cloudwatch_alarm_memory_threshold | Freeable memory threshold (bytes). | `number` | `268435456` | no |
 | cloudwatch_alarm_connections_threshold | Database connections threshold. | `number` | `100` | no |
@@ -414,7 +414,7 @@ module "aurora" {
 | autoscaling_scale_out_cooldown | Scale-out cooldown period (seconds). | `number` | `300` | no |
 | autoscaling_policy_name | Auto-scaling policy name (auto-generated if null). | `string` | `null` | no |
 | custom_endpoints | Map of custom endpoint configurations. | `map(object)` | `{}` | no |
-| global_cluster_enabled | Whether to create a global Aurora cluster. | `bool` | `false` | no |
+| global_cluster_creation_enabled | Whether to create a global Aurora cluster. | `bool` | `false` | no |
 | global_cluster_identifier | The global cluster identifier. | `string` | `null` | no |
 | source_region | Source region for cross-region replication. | `string` | `null` | no |
 | global_write_forwarding_enabled | Enable global write forwarding (Aurora PostgreSQL only). | `bool` | `false` | no |
@@ -497,7 +497,7 @@ Valid log export types depend on the database engine:
 - **Aurora vs RDS**: Aurora uses a cluster-based architecture (`aws_rds_cluster` + `aws_rds_cluster_instance`) rather than standalone instances (`aws_db_instance`).
 - **Read Replicas**: Aurora supports up to 15 read replicas with automatic failover. Use `reader_count` for homogeneous replicas or `instances` map for heterogeneous configurations.
 - **Serverless v2**: When using `serverless_v2_scaling`, set `instance_class = "db.serverless"`. Capacity scales between `min_capacity` and `max_capacity` ACUs.
-- **Global Database**: A global database spans multiple regions. Use `global_cluster_enabled = true` for the primary cluster and `global_cluster_identifier` to join from secondary regions.
+- **Global Database**: A global database spans multiple regions. Use `global_cluster_creation_enabled = true` for the primary cluster and `global_cluster_identifier` to join from secondary regions.
 - **Parameter Group Family**: Auto-detected from engine and version if not specified.
 - **Backtrack**: Only supported on Aurora MySQL. Set `backtrack_window` in seconds (max 259200 = 72 hours).
 - **Activity Streams**: Requires a KMS key. Use `async` mode for minimal performance impact.
@@ -551,17 +551,17 @@ Valid log export types depend on the database engine:
 
 | Resource | Count Logic | Purpose |
 |----------|-------------|---------|
-| `aws_rds_global_cluster` | 0 or 1 | Global cluster (if `global_cluster_enabled = true`) |
+| `aws_rds_global_cluster` | 0 or 1 | Global cluster (if `global_cluster_creation_enabled = true`) |
 | `aws_rds_cluster` | 1 | Aurora cluster (core resource) |
 | `aws_rds_cluster_instance` | 1 to N | Writer + reader instances (via `for_each`) |
 | `aws_rds_cluster_endpoint` | 0 to N | Custom endpoints (via `for_each`) |
 | `aws_db_subnet_group` | 0 or 1 | Subnet group (if not using existing) |
-| `aws_rds_cluster_parameter_group` | 0 or 1 | Cluster parameter group (if `cluster_parameter_group_enabled = true`) |
-| `aws_db_parameter_group` | 0 or 1 | Instance parameter group (if `db_parameter_group_enabled = true`) |
-| `module.security_group` | 0 or 1 | Security group via `networking/security-groups` (if `security_group_enabled = true`) |
-| `aws_iam_role` | 0 or 1 | Enhanced Monitoring IAM role (if `monitoring_role_enabled = true` and `monitoring_interval > 0`) |
+| `aws_rds_cluster_parameter_group` | 0 or 1 | Cluster parameter group (if `cluster_parameter_group_creation_enabled = true`) |
+| `aws_db_parameter_group` | 0 or 1 | Instance parameter group (if `db_parameter_group_creation_enabled = true`) |
+| `module.security_group` | 0 or 1 | Security group via `networking/security-groups` (if `security_group_creation_enabled = true`) |
+| `aws_iam_role` | 0 or 1 | Enhanced Monitoring IAM role (if `monitoring_role_creation_enabled = true` and `monitoring_interval > 0`) |
 | `aws_iam_role_policy_attachment` | 0 or 1 | Monitoring role policy attachment |
-| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, memory, connections alarms (if `cloudwatch_alarms_enabled = true`) |
+| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, memory, connections alarms (if `cloudwatch_alarms_creation_enabled = true`) |
 | `aws_rds_cluster_activity_stream` | 0 or 1 | Activity stream (if `activity_stream_enabled = true`) |
 | `aws_rds_cluster_role_association` | 0 to N | IAM role associations (via `for_each`) |
 | `aws_appautoscaling_target` | 0 or 1 | Auto-scaling target (if `autoscaling_enabled = true`) |

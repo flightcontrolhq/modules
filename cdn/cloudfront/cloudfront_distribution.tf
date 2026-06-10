@@ -19,7 +19,7 @@ resource "aws_cloudfront_distribution" "this" {
       domain_name = origin.value.domain_name
       origin_path = origin.value.origin_path
 
-      origin_access_control_id = origin.value.s3_origin && var.origin_access_control_enabled ? (
+      origin_access_control_id = origin.value.s3_origin && var.origin_access_control_creation_enabled ? (
         origin.value.origin_access_control_id != null ? origin.value.origin_access_control_id : aws_cloudfront_origin_access_control.this[origin.value.origin_id].id
       ) : origin.value.origin_access_control_id
 
@@ -143,7 +143,7 @@ resource "aws_cloudfront_distribution" "this" {
   dynamic "logging_config" {
     for_each = var.logging_enabled ? [1] : []
     content {
-      bucket          = var.logging_bucket_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
+      bucket          = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
       prefix          = "${var.logging_prefix}${each.key}/"
       include_cookies = var.logging_include_cookies
     }

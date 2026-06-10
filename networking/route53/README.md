@@ -82,7 +82,7 @@ module "dns" {
 module "app_dns" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
 
-  zone_enabled = false
+  zone_creation_enabled = false
   zone_id     = "Z1234567890ABC"
 
   records = {
@@ -218,9 +218,9 @@ output "ds_record" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| zone_enabled | If true, create a new hosted zone; if false, reference an existing zone via `zone_id` | `bool` | `true` | no |
-| zone_id | ID of an existing hosted zone to manage records in (required when `zone_enabled = false`) | `string` | `null` | conditional |
-| name | FQDN for the hosted zone (required when `zone_enabled = true`) | `string` | `null` | conditional |
+| zone_creation_enabled | If true, create a new hosted zone; if false, reference an existing zone via `zone_id` | `bool` | `true` | no |
+| zone_id | ID of an existing hosted zone to manage records in (required when `zone_creation_enabled = false`) | `string` | `null` | conditional |
+| name | FQDN for the hosted zone (required when `zone_creation_enabled = true`) | `string` | `null` | conditional |
 | comment | Comment for the hosted zone | `string` | `"Managed by Terraform"` | no |
 | force_destroy | Destroy all records when the zone is destroyed | `bool` | `false` | no |
 | delegation_set_id | Reusable delegation set ID (public zones only) | `string` | `null` | no |
@@ -303,6 +303,6 @@ Each record supports:
   resource directly. To associate additional VPCs (including cross-account
   VPCs), use the `aws_route53_vpc_association_authorization` /
   `aws_route53_zone_association` resources outside the module.
-- When using `zone_enabled = false`, `force_destroy` has no effect and the
+- When using `zone_creation_enabled = false`, `force_destroy` has no effect and the
   upstream zone is not managed.
 - Alias records cannot specify a TTL; TTLs are inherited from the target.

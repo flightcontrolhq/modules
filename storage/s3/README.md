@@ -349,7 +349,7 @@ module "s3" {
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • use_kms_encryption = var.kms_key_id != null                                                             │   │  ║
 ║  │  │ • create_lifecycle_configuration = length(var.lifecycle_rules) > 0                                        │   │  ║
-║  │  │ • bucket_policy_enabled = length(var.policy_templates) > 0 || var.custom_policy != null                    │   │  ║
+║  │  │ • bucket_policy_creation_enabled = length(var.policy_templates) > 0 || var.custom_policy != null                    │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ POLICY PROCESSING:                                                                                         │   │  ║
 ║  │  │ • policy_template_statements = flatten(policy templates)                                                   │   │  ║

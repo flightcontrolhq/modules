@@ -374,7 +374,7 @@ variable "logging_enabled" {
   default     = false
 }
 
-variable "logging_bucket_enabled" {
+variable "logging_bucket_creation_enabled" {
   type        = bool
   description = "Whether to create a new S3 bucket for CloudFront access logs. Ignored if logging_enabled is false."
   default     = false
@@ -382,7 +382,7 @@ variable "logging_bucket_enabled" {
 
 variable "logging_bucket_domain_name" {
   type        = string
-  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when logging_enabled is true and logging_bucket_enabled is false."
+  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when logging_enabled is true and logging_bucket_creation_enabled is false."
   default     = null
 }
 
@@ -394,7 +394,7 @@ variable "logging_prefix" {
 
 variable "logging_retention_days" {
   type        = number
-  description = "Days to retain CloudFront access logs (only applies to the bucket created when logging_bucket_enabled = true)."
+  description = "Days to retain CloudFront access logs (only applies to the bucket created when logging_bucket_creation_enabled = true)."
   default     = 90
 }
 

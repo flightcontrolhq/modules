@@ -90,8 +90,8 @@ module "aurora" {
   enabled_cloudwatch_logs_exports = ["error", "slowquery"]
 
   # Security
-  security_group_enabled = true
-  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Parameter groups
   cluster_parameter_group_family = "aurora-mysql8.0"

@@ -123,7 +123,7 @@ module "iam_role" {
   trusted_services = ["ec2.amazonaws.com"]
 
   # Create an instance profile for EC2 instances
-  instance_profile_enabled = true
+  instance_profile_creation_enabled = true
 
   # Attach SSM managed policy for Session Manager access
   managed_policy_arns = [
@@ -154,7 +154,7 @@ module "autoscaling" {
   health_check_grace_period = 300
 
   # Launch template configuration
-  launch_template_enabled = true
+  launch_template_creation_enabled = true
   launch_template = {
     image_id                 = data.aws_ami.amazon_linux_2023.id
     instance_type            = "t3.micro"

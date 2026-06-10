@@ -5,10 +5,10 @@
 check "role_configuration" {
   assert {
     condition = (
-      var.role_enabled ||
+      var.role_creation_enabled ||
       var.role_arn != null
     )
-    error_message = "When role_enabled is false, role_arn must be provided."
+    error_message = "When role_creation_enabled is false, role_arn must be provided."
   }
 }
 

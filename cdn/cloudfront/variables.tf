@@ -355,7 +355,7 @@ variable "logging_include_cookies" {
   default     = false
 }
 
-variable "logging_bucket_enabled" {
+variable "logging_bucket_creation_enabled" {
   type        = bool
   description = "Whether to create a new S3 bucket for access logging."
   default     = false
@@ -376,7 +376,7 @@ variable "logging_bucket_retention_days" {
 # Origin Access Control
 ################################################################################
 
-variable "origin_access_control_enabled" {
+variable "origin_access_control_creation_enabled" {
   type        = bool
   description = "Whether to create Origin Access Control resources for S3 origins."
   default     = true

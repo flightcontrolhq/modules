@@ -87,8 +87,8 @@ module "elasticache" {
   cluster_mode_enabled = false
 
   # Security - create a security group that allows access from VPC CIDR
-  security_group_enabled = true
-  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Disable encryption for simpler testing (faster provisioning)
   transit_encryption_enabled = false

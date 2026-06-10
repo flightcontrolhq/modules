@@ -202,7 +202,7 @@ module "cdn" {
 
   # Logging
   logging_enabled        = true
-  logging_bucket_enabled = true
+  logging_bucket_creation_enabled = true
   logging_prefix        = "cloudfront/"
 
   tags = {
@@ -413,14 +413,14 @@ module "cdn" {
 | logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. | `string` | `null` | no |
 | logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. | `string` | `""` | no |
 | logging_include_cookies | Include cookies in access logs. | `bool` | `false` | no |
-| logging_bucket_enabled | Create a new S3 bucket for logging. | `bool` | `false` | no |
+| logging_bucket_creation_enabled | Create a new S3 bucket for logging. | `bool` | `false` | no |
 | logging_bucket_retention_days | Days to retain logs in the created bucket. | `number` | `90` | no |
 
 ### Origin Access Control
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| origin_access_control_enabled | Create OAC resources for S3 origins. | `bool` | `true` | no |
+| origin_access_control_creation_enabled | Create OAC resources for S3 origins. | `bool` | `true` | no |
 | origin_access_control_origin_type | OAC origin type: `s3`, `mediastore`, `mediapackagev2`, `lambda`. | `string` | `"s3"` | no |
 | origin_access_control_signing_behavior | OAC signing behavior: `always`, `never`, `no-override`. | `string` | `"always"` | no |
 | origin_access_control_signing_protocol | OAC signing protocol. | `string` | `"sigv4"` | no |
@@ -517,8 +517,8 @@ module "cdn" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐                                                 ║
 ║  │       LOGGING               │   │   ORIGIN ACCESS CONTROL         │                                                 ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤                                                 ║
-║  │ • logging_enabled            │   │ • origin_access_control_enabled  │                                                 ║
-║  │ • logging_bucket_enabled     │   │ • oac_origin_type               │                                                 ║
+║  │ • logging_enabled            │   │ • origin_access_control_creation_enabled  │                                                 ║
+║  │ • logging_bucket_creation_enabled     │   │ • oac_origin_type               │                                                 ║
 ║  │ • logging_bucket_domain_name│   │ • oac_signing_behavior          │                                                 ║
 ║  │ • logging_prefix            │   │ • oac_signing_protocol          │                                                 ║
 ║  │ • logging_include_cookies   │   └─────────────────────────────────┘                                                 ║
@@ -566,7 +566,7 @@ module "cdn" {
 ║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
 ║    │                                    Logging S3 Bucket (Optional)                                              │    ║
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
-║    │  aws_s3_bucket.logging[0]                    (count = logging_bucket_enabled ? 1 : 0)                        │    ║
+║    │  aws_s3_bucket.logging[0]                    (count = logging_bucket_creation_enabled ? 1 : 0)                        │    ║
 ║    │  aws_s3_bucket_ownership_controls.logging[0] (BucketOwnerPreferred for CF logging)                          │    ║
 ║    │  aws_s3_bucket_acl.logging[0]                (log-delivery-write)                                           │    ║
 ║    │  aws_s3_bucket_lifecycle_configuration[0]    (expiration after N days)                                       │    ║
@@ -601,7 +601,7 @@ module "cdn" {
 |----------|-------------|---------|
 | `aws_cloudfront_distribution` | 1 per entry in `var.distributions` | CloudFront distribution per domain group |
 | `aws_cloudfront_origin_access_control` | 0 to N | OAC per S3 origin (shared across distributions) |
-| `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if `logging_bucket_enabled = true`) |
+| `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if `logging_bucket_creation_enabled = true`) |
 | `aws_s3_bucket_ownership_controls` | 0 or 1 | Logging bucket ownership (if logging bucket created) |
 | `aws_s3_bucket_acl` | 0 or 1 | Logging bucket ACL (if logging bucket created) |
 | `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Log retention (if logging bucket created) |

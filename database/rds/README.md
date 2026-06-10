@@ -99,7 +99,7 @@ module "postgres_with_replicas" {
   username = "dbadmin"
 
   # Read replicas
-  read_replica_enabled  = true
+  read_replica_creation_enabled  = true
   read_replica_count   = 2
 
   allowed_security_group_ids = [module.app.security_group_id]
@@ -126,7 +126,7 @@ module "postgres" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # CloudWatch Alarms
-  cloudwatch_alarms_enabled               = true
+  cloudwatch_alarms_creation_enabled               = true
   cloudwatch_alarm_cpu_threshold         = 75
   cloudwatch_alarm_storage_threshold     = 10737418240 # 10 GiB
   cloudwatch_alarm_connections_threshold = 100
@@ -157,7 +157,7 @@ module "mysql" {
 
   # Enhanced Monitoring
   monitoring_interval     = 30
-  monitoring_role_enabled  = true
+  monitoring_role_creation_enabled  = true
 
   # Performance Insights (enabled by default)
   performance_insights_retention_period = 7
@@ -185,7 +185,7 @@ module "postgres" {
   username = "dbadmin"
 
   # Use existing security group instead of creating one
-  security_group_enabled = false
+  security_group_creation_enabled = false
   security_group_id     = aws_security_group.existing.id
 }
 ```
@@ -250,7 +250,7 @@ module "oracle" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # Option group
-  option_group_enabled = true
+  option_group_creation_enabled = true
   options = [
     {
       option_name = "STATSPACK"
@@ -321,12 +321,12 @@ module "mysql" {
 | publicly_accessible | Whether the instance is publicly accessible. | `bool` | `false` | no |
 | availability_zone | AZ for the instance (ignored if multi_az). | `string` | `null` | no |
 | ca_cert_identifier | CA certificate identifier. | `string` | `null` | no |
-| security_group_enabled | Whether to create a security group. | `bool` | `true` | no |
+| security_group_creation_enabled | Whether to create a security group. | `bool` | `true` | no |
 | security_group_id | Existing security group ID to use. | `string` | `null` | no |
 | allowed_security_group_ids | Security group IDs allowed to access the instance. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the instance. | `list(string)` | `[]` | no |
 | multi_az | Enable Multi-AZ deployment. | `bool` | `false` | no |
-| read_replica_enabled | Whether to create read replicas. | `bool` | `false` | no |
+| read_replica_creation_enabled | Whether to create read replicas. | `bool` | `false` | no |
 | read_replica_count | Number of read replicas to create. | `number` | `1` | no |
 | read_replica_instance_class | Instance class for read replicas. | `string` | `null` | no |
 | read_replica_availability_zones | AZs for read replicas. | `list(string)` | `[]` | no |
@@ -355,21 +355,21 @@ module "mysql" {
 | enabled_cloudwatch_logs_exports | Log types to export to CloudWatch. | `list(string)` | `[]` | no |
 | monitoring_interval | Enhanced Monitoring interval (0 to disable). | `number` | `0` | no |
 | monitoring_role_arn | IAM role ARN for Enhanced Monitoring. | `string` | `null` | no |
-| monitoring_role_enabled | Create IAM role for Enhanced Monitoring. | `bool` | `true` | no |
+| monitoring_role_creation_enabled | Create IAM role for Enhanced Monitoring. | `bool` | `true` | no |
 | performance_insights_enabled | Enable Performance Insights. | `bool` | `true` | no |
 | performance_insights_retention_period | Performance Insights retention (days). | `number` | `7` | no |
 | performance_insights_kms_key_id | KMS key for Performance Insights. | `string` | `null` | no |
-| cloudwatch_alarms_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
+| cloudwatch_alarms_creation_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
 | cloudwatch_alarm_cpu_threshold | CPU utilization threshold (%). | `number` | `80` | no |
 | cloudwatch_alarm_storage_threshold | Free storage threshold (bytes). | `number` | `5368709120` | no |
 | cloudwatch_alarm_connections_threshold | Database connections threshold. | `number` | `100` | no |
 | cloudwatch_alarm_actions | ARNs to notify on ALARM. | `list(string)` | `[]` | no |
 | cloudwatch_ok_actions | ARNs to notify on OK. | `list(string)` | `[]` | no |
-| parameter_group_enabled | Whether to create a parameter group. | `bool` | `true` | no |
+| parameter_group_creation_enabled | Whether to create a parameter group. | `bool` | `true` | no |
 | parameter_group_name | Existing parameter group name. | `string` | `null` | no |
 | parameter_group_family | Parameter group family. | `string` | `null` | no |
 | parameters | Parameter name/value pairs. | `list(object)` | `[]` | no |
-| option_group_enabled | Whether to create an option group. | `bool` | `false` | no |
+| option_group_creation_enabled | Whether to create an option group. | `bool` | `false` | no |
 | option_group_name | Existing option group name. | `string` | `null` | no |
 | option_group_engine_version | Option group major engine version. | `string` | `null` | no |
 | options | Options for the option group. | `list(object)` | `[]` | no |
@@ -502,8 +502,8 @@ Valid log export types depend on the database engine:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │      NETWORK                │   │      SECURITY GROUP             │   │       HIGH AVAILABILITY                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • vpc_id (required)         │   │ • security_group_enabled         │   │ • multi_az                              │  ║
-║  │ • subnet_ids (required)     │   │ • security_group_id             │   │ • read_replica_enabled                   │  ║
+║  │ • vpc_id (required)         │   │ • security_group_creation_enabled         │   │ • multi_az                              │  ║
+║  │ • subnet_ids (required)     │   │ • security_group_id             │   │ • read_replica_creation_enabled                   │  ║
 ║  │ • port                      │   │ • allowed_security_group_ids    │   │ • read_replica_count                    │  ║
 ║  │ • publicly_accessible       │   │ • allowed_cidr_blocks           │   │ • read_replica_instance_class           │  ║
 ║  │ • availability_zone         │   └─────────────────────────────────┘   │ • read_replica_availability_zones       │  ║
@@ -526,9 +526,9 @@ Valid log export types depend on the database engine:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │      MAINTENANCE            │   │         MONITORING              │   │       CLOUDWATCH ALARMS                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • maintenance_window        │   │ • monitoring_interval           │   │ • cloudwatch_alarms_enabled              │  ║
+║  │ • maintenance_window        │   │ • monitoring_interval           │   │ • cloudwatch_alarms_creation_enabled              │  ║
 ║  │ • auto_minor_version_upgrade│   │ • monitoring_role_arn           │   │ • cloudwatch_alarm_cpu_threshold        │  ║
-║  │ • allow_major_version_upgrade│  │ • monitoring_role_enabled        │   │ • cloudwatch_alarm_storage_threshold    │  ║
+║  │ • allow_major_version_upgrade│  │ • monitoring_role_creation_enabled        │   │ • cloudwatch_alarm_storage_threshold    │  ║
 ║  │ • apply_immediately         │   │ • performance_insights_enabled  │   │ • cloudwatch_alarm_connections_threshold│  ║
 ║  │ • deletion_protection_enabled       │   │ • perf_insights_retention_period│   │ • cloudwatch_alarm_actions              │  ║
 ║  └─────────────────────────────┘   │ • perf_insights_kms_key_id      │   │ • cloudwatch_ok_actions                 │  ║
@@ -538,7 +538,7 @@ Valid log export types depend on the database engine:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │    PARAMETER GROUP          │   │        OPTION GROUP             │   │         BLUE/GREEN                      │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • parameter_group_enabled    │   │ • option_group_enabled           │   │ • blue_green_update                     │  ║
+║  │ • parameter_group_creation_enabled    │   │ • option_group_creation_enabled           │   │ • blue_green_update                     │  ║
 ║  │ • parameter_group_name      │   │ • option_group_name             │   │   └─ enabled                            │  ║
 ║  │ • parameter_group_family    │   │ • option_group_engine_version   │   └─────────────────────────────────────────┘  ║
 ║  │ • parameters                │   │ • options                       │                                                 ║
@@ -660,15 +660,15 @@ Valid log export types depend on the database engine:
 ║  var.name ─────────────────────────────► aws_db_subnet_group.this                                                     ║
 ║  var.tags ─────────────────────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
-║  var.security_group_enabled ────────────► aws_security_group.this[0]                                                   ║
+║  var.security_group_creation_enabled ────────────► aws_security_group.this[0]                                                   ║
 ║  var.allowed_security_group_ids ───────►         │                                                                    ║
 ║  var.allowed_cidr_blocks ──────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
-║  var.parameter_group_enabled ───────────► aws_db_parameter_group.this[0]                                               ║
+║  var.parameter_group_creation_enabled ───────────► aws_db_parameter_group.this[0]                                               ║
 ║  var.parameter_group_family ───────────►         │                                                                    ║
 ║  var.parameters ───────────────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
-║  var.option_group_enabled ──────────────► aws_db_option_group.this[0]                                                  ║
+║  var.option_group_creation_enabled ──────────────► aws_db_option_group.this[0]                                                  ║
 ║  var.options ──────────────────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
 ║                                                  ▼                                                                    ║
@@ -693,7 +693,7 @@ Valid log export types depend on the database engine:
 ║           ┌──────────────────────────────────────────────────────┼──────────────────────────────────────┐              ║
 ║           │                                                      │                                      │              ║
 ║           ▼                                                      ▼                                      ▼              ║
-║  var.read_replica_enabled                          var.monitoring_role_enabled           var.cloudwatch_alarms_enabled   ║
+║  var.read_replica_creation_enabled                          var.monitoring_role_creation_enabled           var.cloudwatch_alarms_creation_enabled   ║
 ║  var.read_replica_count                           var.monitoring_interval              var.cloudwatch_alarm_*         ║
 ║  var.read_replica_instance_class                           │                                      │                   ║
 ║           │                                                │                                      │                   ║
@@ -715,9 +715,9 @@ Valid log export types depend on the database engine:
 | `aws_db_subnet_group` | 1 | Subnet group for Multi-AZ placement |
 | `aws_db_instance` | 1 | Primary RDS database instance |
 | `aws_db_instance` (replica) | 0 to N | Read replicas for horizontal scaling |
-| `aws_security_group` | 0 or 1 | Security group (if `security_group_enabled = true`) |
-| `aws_db_parameter_group` | 0 or 1 | Custom parameters (if `parameter_group_enabled = true`) |
-| `aws_db_option_group` | 0 or 1 | Engine options (if `option_group_enabled = true`) |
-| `aws_iam_role` | 0 or 1 | Enhanced Monitoring role (if `monitoring_role_enabled = true`) |
+| `aws_security_group` | 0 or 1 | Security group (if `security_group_creation_enabled = true`) |
+| `aws_db_parameter_group` | 0 or 1 | Custom parameters (if `parameter_group_creation_enabled = true`) |
+| `aws_db_option_group` | 0 or 1 | Engine options (if `option_group_creation_enabled = true`) |
+| `aws_iam_role` | 0 or 1 | Enhanced Monitoring role (if `monitoring_role_creation_enabled = true`) |
 | `aws_iam_role_policy_attachment` | 0 or 1 | Monitoring role policy attachment |
-| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, storage, connections alarms (if `cloudwatch_alarms_enabled = true`) |
+| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, storage, connections alarms (if `cloudwatch_alarms_creation_enabled = true`) |

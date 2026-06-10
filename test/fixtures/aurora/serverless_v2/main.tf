@@ -89,8 +89,8 @@ module "aurora" {
   master_username = "testadmin"
 
   # Security
-  security_group_enabled = true
-  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Test-friendly settings
   deletion_protection_enabled  = false

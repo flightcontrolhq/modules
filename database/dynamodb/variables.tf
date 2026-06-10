@@ -332,7 +332,7 @@ variable "autoscaling_indexes" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "cloudwatch_alarms_enabled" {
+variable "cloudwatch_alarms_creation_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for throttled requests and system errors."
   default     = false

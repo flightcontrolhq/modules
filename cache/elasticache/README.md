@@ -144,7 +144,7 @@ module "redis" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # CloudWatch Alarms
-  cloudwatch_alarms_enabled               = true
+  cloudwatch_alarms_creation_enabled               = true
   cloudwatch_alarm_cpu_threshold         = 75
   cloudwatch_alarm_memory_threshold      = 80
   cloudwatch_alarm_connections_threshold = 500
@@ -167,7 +167,7 @@ module "redis" {
   subnet_ids = module.vpc.private_subnet_ids
 
   # Use existing security group instead of creating one
-  security_group_enabled = false
+  security_group_creation_enabled = false
   security_group_id     = aws_security_group.existing.id
 }
 ```
@@ -225,7 +225,7 @@ module "redis" {
 | replicas_per_node_group | The number of replica nodes in each node group. | `number` | `0` | no |
 | cluster_mode_enabled | Enable cluster mode (sharding) for Redis/Valkey. | `bool` | `false` | no |
 | port | The port number on which the cache accepts connections. | `number` | `null` (6379 for Redis/Valkey, 11211 for Memcached) | no |
-| security_group_enabled | Whether to create a security group for the cluster. | `bool` | `true` | no |
+| security_group_creation_enabled | Whether to create a security group for the cluster. | `bool` | `true` | no |
 | security_group_id | The ID of an existing security group to use. | `string` | `null` | no |
 | allowed_security_group_ids | A list of security group IDs allowed to access the cluster. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | A list of CIDR blocks allowed to access the cluster. | `list(string)` | `[]` | no |
@@ -246,7 +246,7 @@ module "redis" {
 | parameter_group_family | The family of the parameter group. | `string` | `null` (auto-detected) | no |
 | parameters | A list of parameter name/value pairs. | `list(object)` | `[]` | no |
 | notification_topic_arn | The ARN of an SNS topic for notifications. | `string` | `null` | no |
-| cloudwatch_alarms_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
+| cloudwatch_alarms_creation_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
 | cloudwatch_alarm_cpu_threshold | CPU utilization threshold (percent). | `number` | `80` | no |
 | cloudwatch_alarm_memory_threshold | Memory utilization threshold (percent). | `number` | `80` | no |
 | cloudwatch_alarm_connections_threshold | Current connections threshold. | `number` | `1000` | no |
@@ -254,8 +254,8 @@ module "redis" {
 | cloudwatch_ok_actions | A list of ARNs to notify on OK state. | `list(string)` | `[]` | no |
 | serverless_enabled | Create an ElastiCache Serverless cache. | `bool` | `false` | no |
 | serverless_cache_usage_limits | Usage limits for Serverless (data_storage_maximum in GB, ecpu_per_second_maximum). | `object` | `{}` | no |
-| secret_enabled | Create a Secrets Manager secret containing the connection string. A secret is also created when `secret_name` is set. | `bool` | `true` | no |
-| secret_name | Name of the Secrets Manager secret. Defaults to `<name>/connection-string`. Setting this implies `secret_enabled=true`. | `string` | `null` | no |
+| secret_creation_enabled | Create a Secrets Manager secret containing the connection string. A secret is also created when `secret_name` is set. | `bool` | `true` | no |
+| secret_name | Name of the Secrets Manager secret. Defaults to `<name>/connection-string`. Setting this implies `secret_creation_enabled=true`. | `string` | `null` | no |
 | secret_kms_key_arn | KMS key ARN used to encrypt the Secrets Manager secret. | `string` | `null` | no |
 | secret_recovery_window_in_days | Recovery window in days for the secret (0 for immediate delete, else 7–30). | `number` | `7` | no |
 
