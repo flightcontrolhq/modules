@@ -61,7 +61,7 @@ module:
       description: Capacity provider used by services that do not set their own capacity provider strategy. Must be one of the enabled providers; AWS does not allow mixing Fargate and EC2 in the cluster default. Leave blank to pick automatically - EC2 when enabled, then Fargate, then Fargate Spot.
       id: default_capacity_provider_family
       label: Default capacity provider
-      placeholder: Automatic (EC2 when enabled, then Fargate, then Fargate Spot)
+      placeholder: Default priority (EC2, then Fargate, then Fargate Spot)
       type: string
       values:
         - description: Requires an EC2 instance type to be selected.
