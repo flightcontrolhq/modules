@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.0.5
-  description: unify labels and descriptions across modules
+  version: 0.0.6
+  description: add default capacity provider selection; the cluster default strategy now commits to a single provider family
 module:
   inputs:
     - id: network
@@ -57,6 +57,22 @@ module:
       placeholder: Select an instance type to enable EC2 capacity
       type: string
       values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
+    - collapsible: true
+      description: Capacity provider used by services that do not set their own capacity provider strategy. Must be one of the enabled providers; AWS does not allow mixing Fargate and EC2 in the cluster default. Leave blank to pick automatically - EC2 when enabled, then Fargate, then Fargate Spot.
+      id: default_capacity_provider_family
+      label: Default capacity provider
+      placeholder: Automatic (EC2 when enabled, then Fargate, then Fargate Spot)
+      type: string
+      values:
+        - description: Requires an EC2 instance type to be selected.
+          label: EC2
+          value: ec2
+        - description: Requires Fargate to be enabled. Also includes Fargate Spot in the default strategy when enabled.
+          label: Fargate
+          value: fargate
+        - description: Requires Fargate Spot to be enabled.
+          label: Fargate spot
+          value: fargate_spot
     - description: Configure the EC2 Auto Scaling Group and capacity provider settings used when an instance type is selected.
       id: section_ec2_capacity
       label: EC2 capacity
@@ -537,6 +553,10 @@ module:
 
     Select an **EC2 instance type** to enable EC2 capacity. Leave it blank for a Fargate-only cluster.
 
+    ### Default capacity provider
+
+    Services that do not set their own capacity provider strategy use the cluster default. AWS does not allow mixing Fargate and EC2 capacity providers in that default, so it commits to a single one. Leave **Default capacity provider** blank to pick automatically (EC2 when enabled, then Fargate, then Fargate Spot), or choose one of the enabled providers explicitly.
+
     ## Load balancers
 
     ### Public application load balancer
@@ -588,6 +608,7 @@ module:
     | Fargate               | No       | `true`               | Allow services to use Fargate capacity                        |
     | Fargate Spot          | No       | `true`               | Allow services to use lower-cost interruptible Fargate Spot   |
     | EC2 instance type     | No       | —                    | Enables EC2 capacity when selected                            |
+    | Default capacity provider | No   | Automatic            | Provider used by services without their own strategy          |
     | Public load balancer  | No       | `false`              | Create an internet-facing ALB                                 |
     | Private load balancer | No       | `false`              | Create an internal ALB                                        |
     | Public NLB            | No       | `false`              | Create an internet-facing Network Load Balancer               |
@@ -639,6 +660,7 @@ module:
       base_path: compute/ecs_cluster
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
+        default_capacity_provider_family: << module.input.default_capacity_provider_family >>
         ec2_ami_id: << module.input.ec2_ami_id >>
         ec2_enable_spot: << module.input.ec2_enable_spot >>
         ec2_instance_type: << module.input.ec2_instance_type >>
