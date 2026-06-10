@@ -215,8 +215,7 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
 
   lines.push("| Module | Current Version | New Version | Description |", "| --- | --- | --- | --- |");
   const byModule = (left: PublishPlanItem, right: PublishPlanItem) => left.type.localeCompare(right.type) || left.version.localeCompare(right.version);
-  const skippedItems = result.items.filter((item) => item.action === "skip-version");
-  for (const item of [...summarizePublishPlanTableItems(plannedChanges).sort(byModule), ...[...skippedItems].sort(byModule)]) {
+  for (const item of summarizePublishPlanTableItems(plannedChanges).sort(byModule)) {
     lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | ${formatVersionCell(item.currentVersion)} | \`${escapeMarkdownTableCell(item.version)}\` | ${escapeMarkdownTableCell(item.description || item.message)} |`);
   }
 
