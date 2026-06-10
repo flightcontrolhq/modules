@@ -49,7 +49,7 @@ module "site" {
     "staging.example.com" = "v_staging"
   }
 
-  create_deploy_role = true
+  deploy_role_enabled = true
   deploy_role_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

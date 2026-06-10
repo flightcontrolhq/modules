@@ -15,9 +15,8 @@ locals {
 
   tags = merge(local.default_tags, var.tags)
 
-  oidc_issuer       = aws_eks_cluster.this.identity[0].oidc[0].issuer
-  oidc_issuer_host  = replace(local.oidc_issuer, "https://", "")
-  oidc_provider_arn = aws_iam_openid_connect_provider.this.arn
+  oidc_issuer      = aws_eks_cluster.this.identity[0].oidc[0].issuer
+  oidc_issuer_host = replace(local.oidc_issuer, "https://", "")
 
   enable_logging = length(var.enabled_cluster_log_types) > 0
 

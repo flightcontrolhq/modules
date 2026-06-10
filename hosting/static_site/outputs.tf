@@ -61,7 +61,7 @@ output "cloudfront_function_arn" {
 }
 
 output "cache_control_function_arn" {
-  description = "ARN of the viewer-response Cache-Control writer function. Null when manage_cache_control = false."
+  description = "ARN of the viewer-response Cache-Control writer function. Null when cache_control_enabled = false."
   value       = try(aws_cloudfront_function.cache_control[0].arn, null)
 }
 
@@ -95,13 +95,13 @@ output "default_version" {
 ################################################################################
 
 output "deploy_role_arn" {
-  description = "ARN of the IAM role CI assumes to deploy. Null unless create_deploy_role = true."
-  value       = var.create_deploy_role ? aws_iam_role.deploy[0].arn : null
+  description = "ARN of the IAM role CI assumes to deploy. Null unless deploy_role_enabled = true."
+  value       = var.deploy_role_enabled ? aws_iam_role.deploy[0].arn : null
 }
 
 output "deploy_role_name" {
-  description = "Name of the IAM deploy role. Null unless create_deploy_role = true."
-  value       = var.create_deploy_role ? aws_iam_role.deploy[0].name : null
+  description = "Name of the IAM deploy role. Null unless deploy_role_enabled = true."
+  value       = var.deploy_role_enabled ? aws_iam_role.deploy[0].name : null
 }
 
 ################################################################################

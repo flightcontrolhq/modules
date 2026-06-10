@@ -43,20 +43,20 @@ variable "subject_alternative_names" {
 # DNS validation
 ################################################################################
 
-variable "create_route53_validation_records" {
+variable "route53_validation_records_enabled" {
   type        = bool
   description = "If true, create Route53 CNAME records for DNS validation in route53_zone_id."
   default     = false
 
   validation {
-    condition     = !var.create_route53_validation_records || var.route53_zone_id != null
-    error_message = "route53_zone_id is required when create_route53_validation_records is true."
+    condition     = !var.route53_validation_records_enabled || var.route53_zone_id != null
+    error_message = "route53_zone_id is required when route53_validation_records_enabled is true."
   }
 }
 
 variable "route53_zone_id" {
   type        = string
-  description = "Route53 public hosted zone ID for validation records. Required when create_route53_validation_records is true."
+  description = "Route53 public hosted zone ID for validation records. Required when route53_validation_records_enabled is true."
   default     = null
 
   validation {

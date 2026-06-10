@@ -26,12 +26,12 @@ locals {
 
   # Build capacity provider strategy based on enabled providers
   capacity_provider_strategy = concat(
-    var.enable_fargate ? [{
+    var.fargate_enabled ? [{
       capacity_provider = "FARGATE"
       weight            = var.fargate_weight
       base              = var.fargate_base
     }] : [],
-    var.enable_fargate_spot ? [{
+    var.fargate_spot_enabled ? [{
       capacity_provider = "FARGATE_SPOT"
       weight            = var.fargate_spot_weight
       base              = var.fargate_spot_base

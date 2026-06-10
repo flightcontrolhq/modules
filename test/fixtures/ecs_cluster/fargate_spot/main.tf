@@ -74,11 +74,11 @@ module "ecs_cluster" {
   private_subnet_ids = module.vpc.private_subnet_ids
 
   # Enable both Fargate and Fargate Spot capacity providers
-  enable_fargate      = true
-  enable_fargate_spot = true
+  fargate_enabled      = true
+  fargate_spot_enabled = true
 
   # Disable Container Insights to reduce costs for testing
-  enable_container_insights = false
+  container_insights_enabled = false
 
   tags = local.common_tags
 }

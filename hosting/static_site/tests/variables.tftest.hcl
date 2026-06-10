@@ -289,8 +289,8 @@ run "cache_control_defaults" {
   command = plan
 
   assert {
-    condition     = var.manage_cache_control == true
-    error_message = "manage_cache_control should default to true."
+    condition     = var.cache_control_enabled == true
+    error_message = "cache_control_enabled should default to true."
   }
 
   assert {
@@ -314,7 +314,7 @@ run "cache_control_function_created_by_default" {
 
   assert {
     condition     = length(aws_cloudfront_function.cache_control) == 1
-    error_message = "viewer-response cache-control function must be created when manage_cache_control = true."
+    error_message = "viewer-response cache-control function must be created when cache_control_enabled = true."
   }
 
   assert {
@@ -372,21 +372,21 @@ run "cache_control_custom_overrides_flow_into_function" {
   }
 }
 
-run "manage_cache_control_false_skips_function" {
+run "cache_control_disabled_skips_function" {
   command = plan
 
   variables {
-    manage_cache_control = false
+    cache_control_enabled = false
   }
 
   assert {
     condition     = length(aws_cloudfront_function.cache_control) == 0
-    error_message = "viewer-response cache-control function must NOT be created when manage_cache_control = false."
+    error_message = "viewer-response cache-control function must NOT be created when cache_control_enabled = false."
   }
 
   assert {
     condition     = length(local.cff_associations) == 1
-    error_message = "Only the viewer-request rewriter must be associated when manage_cache_control = false."
+    error_message = "Only the viewer-request rewriter must be associated when cache_control_enabled = false."
   }
 
   assert {

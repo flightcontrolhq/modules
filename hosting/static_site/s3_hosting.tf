@@ -16,8 +16,8 @@ module "hosting" {
 
   name               = var.name
   region             = var.region
-  force_destroy      = var.bucket_force_destroy
-  versioning_enabled = var.bucket_versioning
+  force_destroy      = var.bucket_force_destroy_enabled
+  versioning_enabled = var.bucket_versioning_enabled
   kms_key_id         = var.kms_key_arn
   lifecycle_rules    = var.bucket_lifecycle_rules
 

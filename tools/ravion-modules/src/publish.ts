@@ -8,9 +8,11 @@ export type PublishAction = "create-definition" | "patch-definition" | "create-v
 export interface PublishPlanItem {
   type: string;
   version: string;
+  currentVersion?: string;
   action: PublishAction;
   dryRun: boolean;
   message: string;
+  description: string;
   diff?: string;
 }
 
@@ -106,6 +108,7 @@ export async function publishDefinitions(
           "create-definition",
           dryRun,
           `Create module definition ${definition.type}.`,
+          definition.description,
           createDiff(undefined, { type: definition.type, name: definition.name, description: definition.description }),
         ),
       );
@@ -121,6 +124,7 @@ export async function publishDefinitions(
           "patch-definition",
           dryRun,
           `Patch metadata for module definition ${definition.type}.`,
+          definition.description,
           createDiff(
             { type: remoteDefinition.type, name: remoteDefinition.name, description: remoteDefinition.description },
             { type: definition.type, name: definition.name, description: definition.description },
@@ -135,7 +139,7 @@ export async function publishDefinitions(
 
     const remoteVersion = remoteDefinition ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).find((version) => version.version === definition.version) : undefined;
     if (remoteVersion) {
-      items.push(createItem(definition, "skip-version", dryRun, `Skip ${definition.type}@${definition.version}; identical version already exists.`));
+      items.push(createItem(definition, "skip-version", dryRun, `Skip ${definition.type}@${definition.version}; identical version already exists.`, remoteVersion.description, undefined, remoteVersion.version));
       continue;
     }
 
@@ -146,7 +150,9 @@ export async function publishDefinitions(
         "create-version",
         dryRun,
         `Create module version ${definition.type}@${definition.version}.`,
+        definition.releaseDescription,
         createDiff(latestRemoteVersion?.config, definition.module),
+        latestRemoteVersion?.version,
       ),
     );
     if (!dryRun) {
@@ -180,7 +186,7 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
   ];
 
   if (result.errors && result.errors.length > 0) {
-    lines.push("### Release Config Conflicts", "", "These module versions already exist remotely with different compiled config. Publish a new version, or make the local definition match the existing remote version.", "");
+    lines.push("### 🚨 Release Config Conflicts 🚨", "", "These module versions already exist remotely with different compiled config. Publish a new version, or make the local definition match the existing remote version.", "");
     lines.push("| Module | Release Version | Latest Remote Version | Problem |", "| --- | --- | --- | --- |");
     for (const error of result.errors) {
       lines.push(`| \`${escapeMarkdownTableCell(error.type)}\` | \`${escapeMarkdownTableCell(error.version)}\` | ${error.latestVersion ? `\`${escapeMarkdownTableCell(error.latestVersion)}\`` : "n/a"} | ${escapeMarkdownTableCell(error.message)} |`);
@@ -190,16 +196,7 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
     if (errorsWithDiffs.length > 0) {
       lines.push("", "### Latest Remote vs Compiled", "");
       for (const error of errorsWithDiffs) {
-        lines.push(
-          `<details><summary>${escapeHtml(error.type)} ${escapeHtml(error.latestVersion ?? "no remote version")} -> ${escapeHtml(error.version)}</summary>`,
-          "",
-          "```diff",
-          truncateDiff(error.diff ?? ""),
-          "```",
-          "",
-          "</details>",
-          "",
-        );
+        lines.push(`#### ${error.type} ${error.latestVersion ?? "n/a"} -> ${error.version}`, "", "```diff", truncateDiff(error.diff ?? ""), "```", "");
       }
     }
 
@@ -213,20 +210,21 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
 
   if (plannedChanges.length === 0) {
     lines.push("No publish changes are required. All local versions already exist remotely with identical config.", "");
+    return lines.join("\n");
   }
 
-  lines.push("| Module | Version | Action | Summary |", "| --- | --- | --- | --- |");
+  lines.push("| Module | Current Version | New Version | Description |", "| --- | --- | --- | --- |");
   const byModule = (left: PublishPlanItem, right: PublishPlanItem) => left.type.localeCompare(right.type) || left.version.localeCompare(right.version);
   const skippedItems = result.items.filter((item) => item.action === "skip-version");
-  for (const item of [...[...plannedChanges].sort(byModule), ...[...skippedItems].sort(byModule)]) {
-    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${formatAction(item.action)} | ${escapeMarkdownTableCell(item.message)} |`);
+  for (const item of [...summarizePublishPlanTableItems(plannedChanges).sort(byModule), ...[...skippedItems].sort(byModule)]) {
+    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | ${formatVersionCell(item.currentVersion)} | \`${escapeMarkdownTableCell(item.version)}\` | ${escapeMarkdownTableCell(item.description || item.message)} |`);
   }
 
   const itemsWithDiffs = plannedChanges.filter((item) => item.diff);
   if (itemsWithDiffs.length > 0) {
     lines.push("", "### Diffs", "");
     for (const item of itemsWithDiffs) {
-      lines.push(`<details><summary>${escapeHtml(item.type)}@${escapeHtml(item.version)} ${escapeHtml(formatAction(item.action))}</summary>`, "", "```diff", truncateDiff(item.diff ?? ""), "```", "", "</details>", "");
+      lines.push(`#### ${item.type} ${item.currentVersion ?? "n/a"} -> ${item.version}`, "", "```diff", truncateDiff(item.diff ?? ""), "```", "");
     }
   }
 
@@ -295,8 +293,21 @@ async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, mo
   }
 }
 
-function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string, diff?: string): PublishPlanItem {
-  return { type: definition.type, version: definition.version, action, dryRun, message, diff };
+function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string, description: string, diff?: string, currentVersion?: string): PublishPlanItem {
+  return { type: definition.type, version: definition.version, currentVersion, action, dryRun, message, description, diff };
+}
+
+function summarizePublishPlanTableItems(items: PublishPlanItem[]): PublishPlanItem[] {
+  const rows: PublishPlanItem[] = [];
+  for (const item of items) {
+    const existingIndex = rows.findIndex((row) => row.type === item.type && row.version === item.version);
+    if (existingIndex === -1) {
+      rows.push(item);
+    } else if (rows[existingIndex].action !== "create-version" && item.action === "create-version") {
+      rows[existingIndex] = item;
+    }
+  }
+  return rows;
 }
 
 function createDiff(remote: unknown, local: unknown): string | undefined {
@@ -410,19 +421,12 @@ function parseSemver(version: string): { numbers: [number, number, number]; prer
   return { numbers: [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0], prerelease };
 }
 
-function formatAction(action: PublishAction): string {
-  return action
-    .split("-")
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(" ");
+function formatVersionCell(version: string | undefined): string {
+  return version ? `\`${escapeMarkdownTableCell(version)}\`` : "n/a";
 }
 
 function escapeMarkdownTableCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\n/g, "<br>");
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
 }
 
 function truncateDiff(diff: string): string {

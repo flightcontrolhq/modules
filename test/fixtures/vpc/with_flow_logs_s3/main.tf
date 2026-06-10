@@ -45,7 +45,7 @@ module "vpc" {
   subnet_count = 2
 
   # VPC Flow Logs to S3
-  enable_flow_logs         = true
+  flow_logs_enabled        = true
   flow_logs_destination    = "s3"
   flow_logs_retention_days = 30
 

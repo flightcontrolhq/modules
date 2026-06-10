@@ -136,7 +136,7 @@ resource "aws_iam_role" "task" {
 
 # ECS Exec support
 data "aws_iam_policy_document" "task_exec_command" {
-  count = local.create_task_role && var.enable_execute_command ? 1 : 0
+  count = local.create_task_role && var.execute_command_enabled ? 1 : 0
 
   statement {
     effect = "Allow"
@@ -159,7 +159,7 @@ data "aws_iam_policy_document" "task_exec_command" {
 }
 
 resource "aws_iam_role_policy" "task_exec_command" {
-  count = local.create_task_role && var.enable_execute_command ? 1 : 0
+  count = local.create_task_role && var.execute_command_enabled ? 1 : 0
 
   name   = "ecs-exec"
   role   = aws_iam_role.task[0].id

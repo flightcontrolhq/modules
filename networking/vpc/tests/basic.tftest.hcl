@@ -120,13 +120,13 @@ run "nat_gateway_single" {
   command = plan
 
   variables {
-    enable_nat_gateway            = true
-    nat_gateway_high_availability = false
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = false
   }
 
   assert {
     condition     = length(aws_nat_gateway.this) == 1
-    error_message = "Should create 1 NAT Gateway when nat_gateway_high_availability is false"
+    error_message = "Should create 1 NAT Gateway when nat_gateway_high_availability_enabled is false"
   }
 
   assert {
@@ -140,14 +140,14 @@ run "nat_gateway_ha" {
   command = plan
 
   variables {
-    enable_nat_gateway            = true
-    nat_gateway_high_availability = true
-    subnet_count                  = 3
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = true
+    subnet_count                          = 3
   }
 
   assert {
     condition     = length(aws_nat_gateway.this) == 3
-    error_message = "Should create 3 NAT Gateways when nat_gateway_high_availability is true"
+    error_message = "Should create 3 NAT Gateways when nat_gateway_high_availability_enabled is true"
   }
 
   assert {
@@ -161,9 +161,9 @@ run "nat_gateway_empty_eip_list" {
   command = plan
 
   variables {
-    enable_nat_gateway             = true
-    nat_gateway_high_availability  = false
-    nat_gateway_eip_allocation_ids = []
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = false
+    nat_gateway_eip_allocation_ids        = []
   }
 
   assert {
@@ -182,10 +182,10 @@ run "nat_gateway_empty_eip_list_ha" {
   command = plan
 
   variables {
-    enable_nat_gateway             = true
-    nat_gateway_high_availability  = true
-    subnet_count                   = 3
-    nat_gateway_eip_allocation_ids = []
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = true
+    subnet_count                          = 3
+    nat_gateway_eip_allocation_ids        = []
   }
 
   assert {
@@ -204,9 +204,9 @@ run "nat_gateway_supplied_eips" {
   command = plan
 
   variables {
-    enable_nat_gateway             = true
-    nat_gateway_high_availability  = false
-    nat_gateway_eip_allocation_ids = ["eipalloc-0123456789abcdef0"]
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = false
+    nat_gateway_eip_allocation_ids        = ["eipalloc-0123456789abcdef0"]
   }
 
   assert {
@@ -225,10 +225,10 @@ run "nat_gateway_supplied_eips_wrong_count" {
   command = plan
 
   variables {
-    enable_nat_gateway             = true
-    nat_gateway_high_availability  = true
-    subnet_count                   = 3
-    nat_gateway_eip_allocation_ids = ["eipalloc-0123456789abcdef0"]
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = true
+    subnet_count                          = 3
+    nat_gateway_eip_allocation_ids        = ["eipalloc-0123456789abcdef0"]
   }
 
   expect_failures = [
@@ -241,7 +241,7 @@ run "nat_gateway_disabled" {
   command = plan
 
   variables {
-    enable_nat_gateway = false
+    nat_gateway_enabled = false
   }
 
   assert {
@@ -256,11 +256,11 @@ run "nat_gateway_disabled" {
 }
 
 # Test 7: IPv6 enabled
-run "enable_ipv6" {
+run "ipv6_enabled" {
   command = plan
 
   variables {
-    enable_ipv6 = true
+    ipv6_enabled = true
   }
 
   override_resource {
@@ -286,7 +286,7 @@ run "ipv6_disabled" {
   command = plan
 
   variables {
-    enable_ipv6 = false
+    ipv6_enabled = false
   }
 
   assert {
@@ -305,7 +305,7 @@ run "flow_logs_cloudwatch" {
   command = plan
 
   variables {
-    enable_flow_logs         = true
+    flow_logs_enabled        = true
     flow_logs_destination    = "cloudwatch"
     flow_logs_retention_days = 30
   }
@@ -336,7 +336,7 @@ run "flow_logs_s3_new_bucket" {
   command = plan
 
   variables {
-    enable_flow_logs      = true
+    flow_logs_enabled     = true
     flow_logs_destination = "s3"
   }
 
@@ -361,7 +361,7 @@ run "flow_logs_s3_existing_bucket" {
   command = plan
 
   variables {
-    enable_flow_logs        = true
+    flow_logs_enabled       = true
     flow_logs_destination   = "s3"
     flow_logs_s3_bucket_arn = "arn:aws:s3:::my-existing-bucket"
   }
@@ -382,7 +382,7 @@ run "flow_logs_disabled" {
   command = plan
 
   variables {
-    enable_flow_logs = false
+    flow_logs_enabled = false
   }
 
   assert {
@@ -484,12 +484,12 @@ run "route_tables" {
   command = plan
 
   variables {
-    nat_gateway_high_availability = false
+    nat_gateway_high_availability_enabled = false
   }
 
   assert {
     condition     = length(aws_route_table.private) == 1
-    error_message = "Should create 1 private route table when nat_gateway_high_availability is false"
+    error_message = "Should create 1 private route table when nat_gateway_high_availability_enabled is false"
   }
 }
 
@@ -498,13 +498,13 @@ run "route_tables_ha" {
   command = plan
 
   variables {
-    nat_gateway_high_availability = true
-    subnet_count                  = 3
+    nat_gateway_high_availability_enabled = true
+    subnet_count                          = 3
   }
 
   assert {
     condition     = length(aws_route_table.private) == 3
-    error_message = "Should create 3 private route tables when nat_gateway_high_availability is true"
+    error_message = "Should create 3 private route tables when nat_gateway_high_availability_enabled is true"
   }
 }
 
@@ -513,8 +513,8 @@ run "dns_disabled" {
   command = plan
 
   variables {
-    enable_dns_support   = false
-    enable_dns_hostnames = false
+    dns_support_enabled   = false
+    dns_hostnames_enabled = false
   }
 
   assert {
@@ -596,7 +596,7 @@ run "cloudwatch_retention" {
   command = plan
 
   variables {
-    enable_flow_logs         = true
+    flow_logs_enabled        = true
     flow_logs_destination    = "cloudwatch"
     flow_logs_retention_days = 90
   }
@@ -612,7 +612,7 @@ run "s3_security" {
   command = plan
 
   variables {
-    enable_flow_logs      = true
+    flow_logs_enabled     = true
     flow_logs_destination = "s3"
   }
 
@@ -657,8 +657,8 @@ run "vpc_peering_single" {
   command = plan
 
   variables {
-    enable_nat_gateway            = true
-    nat_gateway_high_availability = false
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = false
     vpc_peering_connections = {
       shared = {
         peer_vpc_id      = "vpc-0123456789abcdef0"
@@ -703,9 +703,9 @@ run "vpc_peering_multi_private_route_tables" {
   command = plan
 
   variables {
-    subnet_count                  = 3
-    enable_nat_gateway            = true
-    nat_gateway_high_availability = true
+    subnet_count                          = 3
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = true
     vpc_peering_connections = {
       shared = {
         peer_vpc_id      = "vpc-0123456789abcdef0"
@@ -782,16 +782,16 @@ run "vpc_peering_no_routes" {
   variables {
     vpc_peering_connections = {
       private-only = {
-        peer_vpc_id                 = "vpc-0123456789abcdef0"
-        peer_cidr_blocks            = ["10.50.0.0/16"]
-        add_to_public_route_table   = false
-        add_to_private_route_tables = true
+        peer_vpc_id                        = "vpc-0123456789abcdef0"
+        peer_cidr_blocks                   = ["10.50.0.0/16"]
+        public_route_table_routes_enabled  = false
+        private_route_table_routes_enabled = true
       }
       none = {
-        peer_vpc_id                 = "vpc-0123456789abcdee0"
-        peer_cidr_blocks            = ["10.60.0.0/16"]
-        add_to_public_route_table   = false
-        add_to_private_route_tables = false
+        peer_vpc_id                        = "vpc-0123456789abcdee0"
+        peer_cidr_blocks                   = ["10.60.0.0/16"]
+        public_route_table_routes_enabled  = false
+        private_route_table_routes_enabled = false
       }
     }
   }
@@ -814,9 +814,9 @@ run "vpc_peering_dns_resolution" {
   variables {
     vpc_peering_connections = {
       shared = {
-        peer_vpc_id                     = "vpc-0123456789abcdef0"
-        peer_cidr_blocks                = ["10.50.0.0/16"]
-        allow_remote_vpc_dns_resolution = true
+        peer_vpc_id                       = "vpc-0123456789abcdef0"
+        peer_cidr_blocks                  = ["10.50.0.0/16"]
+        remote_vpc_dns_resolution_enabled = true
       }
     }
   }

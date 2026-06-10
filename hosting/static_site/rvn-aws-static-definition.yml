@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.0.4
-  description: unify labels and descriptions across modules
+  version: 0.1.0
+  description: "breaking change: TF variables renamed for readability"
 module:
   build:
     builder: >-
@@ -182,7 +182,7 @@ module:
       type: section
     - default: true
       description: Attach a CloudFront Function that sets Cache-Control headers for HTML and asset responses.
-      id: manage_cache_control
+      id: cache_control_enabled
       label: Manage Cache-Control headers
       type: boolean
     - collapsible: true
@@ -191,14 +191,14 @@ module:
       id: html_cache_control
       label: HTML Cache-Control
       show_when:
-        manage_cache_control: true
+        cache_control_enabled: true
       type: string
     - collapsible: true
       description: Cache-Control header for versioned static assets such as JavaScript, CSS, images, and fonts. Defaults to public, max-age=31536000, immutable
       id: assets_cache_control
       label: Asset Cache-Control
       show_when:
-        manage_cache_control: true
+        cache_control_enabled: true
       type: string
     - add_button_label: Add path override
       collapsible: true
@@ -206,7 +206,7 @@ module:
       id: html_path_overrides
       label: HTML cache path overrides
       show_when:
-        manage_cache_control: true
+        cache_control_enabled: true
       type: string_array
     - collapsible: true
       description: Optional externally managed CloudFront response headers policy ID for security headers, CORS, or custom headers.
@@ -241,7 +241,7 @@ module:
       type: section
     - default: false
       description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
-      id: enable_logging
+      id: logging_enabled
       label: CloudFront access logging
       type: boolean
     - default: 90
@@ -250,7 +250,7 @@ module:
       label: Logging retention days
       min: 1
       show_when:
-        enable_logging: true
+        logging_enabled: true
       type: number
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
@@ -438,7 +438,7 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         assets_cache_control: << module.input.assets_cache_control >>
         cache_policy_id: << module.input.cache_policy_id >>
-        create_logging_bucket: << module.input.enable_logging >>
+        logging_bucket_enabled: << module.input.logging_enabled >>
         default_root_object: << module.input.default_root_object >>
         default_version: << module.input.default_version >>
         distributions:
@@ -449,7 +449,7 @@ module:
               << module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ?
               module.input.distribution_aliases[0] : nil >>
             enabled: true
-        enable_logging: << module.input.enable_logging >>
+        logging_enabled: << module.input.logging_enabled >>
         geo_restriction_locations: << module.input.geo_restriction_locations >>
         geo_restriction_type: << module.input.geo_restriction_type >>
         html_cache_control: << module.input.html_cache_control >>
@@ -457,7 +457,7 @@ module:
         logging_bucket_domain_name: null
         logging_prefix: ""
         logging_retention_days: << module.input.logging_retention_days >>
-        manage_cache_control: << module.input.manage_cache_control >>
+        cache_control_enabled: << module.input.cache_control_enabled >>
         name: << module.input.name >>
         no_cache_paths: << module.input.no_cache_paths >>
         origin_request_policy_id: << module.input.origin_request_policy_id >>

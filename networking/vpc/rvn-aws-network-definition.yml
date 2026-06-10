@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.0.7
-  description: treat empty nat_gateway_eip_allocation_ids as auto-allocate
+  version: 0.1.0
+  description: "breaking change: TF variables renamed for readability"
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -34,12 +34,12 @@ module:
       type: section
     - default: true
       description: Needed if you want to access the internet from within private subnets
-      id: enable_nat_gateway
+      id: nat_gateway_enabled
       label: NAT gateway
       type: boolean
     - default: false
       description: High availability adds NAT Gateway to every AZ. Otherwise single NAT gateway serves all AZs.
-      id: nat_gateway_high_availability
+      id: nat_gateway_high_availability_enabled
       label: NAT gateway high availability
       type: boolean
     - collapsible: true
@@ -50,8 +50,8 @@ module:
         or empty (default), the module allocates new EIPs internally.
 
         The list length must match the number of NAT Gateways the module will create:
-          - 1 when nat_gateway_high_availability = false
-          - 3 when nat_gateway_high_availability = true
+          - 1 when nat_gateway_high_availability_enabled = false
+          - 3 when nat_gateway_high_availability_enabled = true
 
         Supplied EIPs must already exist with domain = "vpc". This is useful for
         keeping NAT public IPs stable across VPC replacements (e.g. for partner
@@ -65,8 +65,8 @@ module:
       type: section
     - default: false
       description: Enable VPC Flow Logs for network traffic monitoring. Required for SOC 2.
-      id: enable_flow_logs
-      label: Enable flow logs
+      id: flow_logs_enabled
+      label: Flow logs
       type: boolean
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
@@ -105,20 +105,20 @@ module:
         - collapsible: true
           default: false
           description: Allow DNS resolution of private hostnames in the peer VPC from this VPC. Only valid for same-account, same-region peerings.
-          id: allow_remote_vpc_dns_resolution
-          label: Allow remote VPC DNS resolution
+          id: remote_vpc_dns_resolution_enabled
+          label: Remote VPC DNS resolution
           type: boolean
         - collapsible: true
           default: true
           description: Add routes for peer_cidr_blocks to this VPC's public route table.
-          id: add_to_public_route_table
-          label: Add to public route table
+          id: public_route_table_routes_enabled
+          label: Public route table routes
           type: boolean
         - collapsible: true
           default: true
           description: Add routes for peer_cidr_blocks to this VPC's private route table(s).
-          id: add_to_private_route_tables
-          label: Add to private route tables
+          id: private_route_table_routes_enabled
+          label: Private route table routes
           type: boolean
         - collapsible: true
           description: Optional list of route table IDs in the peer VPC to add return routes to (destination = this VPC's CIDR, target = the peering connection). Only supported for same-account, same-region peerings, since the AWS provider used by this module must have access to the peer's route tables. For cross-account or cross-region peerings, manage the return routes from the peer side instead.
@@ -167,7 +167,7 @@ module:
 
     ### Public subnets
 
-    Public subnets have direct internet access via a free Internet Gateway. Resources in public subnets receive public IP addresses automatically. Use these for:
+    Public subnets have direct internet access via a free Internet Gateway. Resources in public subnets do not receive public IP addresses automatically; attach public IPs explicitly when needed. Use these for:
 
     - Load balancers (ALB, NLB)
     - Bastion hosts
@@ -212,7 +212,7 @@ module:
     | NAT Gateway                    | No       | `true`               | Enable outbound internet from private subnets                          |
     | NAT Gateway High Availability  | No       | `false`              | Deploy one NAT per AZ instead of a single shared NAT                   |
     | NAT Gateway EIP Allocation IDs | No       | —                    | Pre-allocated EIPs for stable NAT public IPs                           |
-    | Enable Flow Logs               | No       | `false`              | Enable VPC Flow Logs (required for SOC 2)                              |
+    | Flow Logs                      | No       | `false`              | Enable VPC Flow Logs (required for SOC 2)                              |
     | Tags                           | No       | Environment, Project | Custom tags applied to all resources                                   |
 
     ## VPC Peering
@@ -271,11 +271,11 @@ module:
       base_path: networking/vpc
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
-        enable_flow_logs: << module.input.enable_flow_logs >>
-        enable_nat_gateway: << module.input.enable_nat_gateway >>
+        flow_logs_enabled: << module.input.flow_logs_enabled >>
+        nat_gateway_enabled: << module.input.nat_gateway_enabled >>
         name: << module.input.name >>
         nat_gateway_eip_allocation_ids: << module.input.nat_gateway_eip_allocation_ids >>
-        nat_gateway_high_availability: << module.input.nat_gateway_high_availability >>
+        nat_gateway_high_availability_enabled: << module.input.nat_gateway_high_availability_enabled >>
         region: << module.input.aws_region >>
         tags:
           $include: ../stack/ravion-tags.yml

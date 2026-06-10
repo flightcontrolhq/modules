@@ -33,13 +33,13 @@ variable "vpc_cidr" {
   }
 }
 
-variable "enable_dns_support" {
+variable "dns_support_enabled" {
   type        = bool
   description = "Enable DNS support in the VPC."
   default     = true
 }
 
-variable "enable_dns_hostnames" {
+variable "dns_hostnames_enabled" {
   type        = bool
   description = "Enable DNS hostnames in the VPC."
   default     = true
@@ -107,13 +107,13 @@ variable "private_subnet_cidrs" {
 # NAT Gateway
 ################################################################################
 
-variable "enable_nat_gateway" {
+variable "nat_gateway_enabled" {
   type        = bool
   description = "Enable NAT Gateway(s) to allow private subnets to access the internet."
   default     = false
 }
 
-variable "nat_gateway_high_availability" {
+variable "nat_gateway_high_availability_enabled" {
   type        = bool
   description = "Deploy one NAT Gateway per AZ for high availability. Set to false (default) to use a single NAT Gateway for all private subnets (cost-effective)."
   default     = false
@@ -122,12 +122,12 @@ variable "nat_gateway_high_availability" {
 variable "single_nat_gateway" {
   type        = bool
   description = <<-EOT
-    DEPRECATED: use `nat_gateway_high_availability` instead. This variable will
+    DEPRECATED: use `nat_gateway_high_availability_enabled` instead. This variable will
     be removed in a future major version. The semantics are inverted:
-      - single_nat_gateway = true  → nat_gateway_high_availability = false
-      - single_nat_gateway = false → nat_gateway_high_availability = true
+      - single_nat_gateway = true  → nat_gateway_high_availability_enabled = false
+      - single_nat_gateway = false → nat_gateway_high_availability_enabled = true
     When set (non-null), this variable takes precedence over
-    nat_gateway_high_availability.
+    nat_gateway_high_availability_enabled.
   EOT
   default     = null
 }
@@ -140,8 +140,8 @@ variable "nat_gateway_eip_allocation_ids" {
     empty (default), the module allocates new EIPs internally.
 
     The list length must match the number of NAT Gateways the module will create:
-      - 1 when nat_gateway_high_availability = false
-      - subnet_count when nat_gateway_high_availability = true
+      - 1 when nat_gateway_high_availability_enabled = false
+      - subnet_count when nat_gateway_high_availability_enabled = true
 
     Supplied EIPs must already exist with domain = "vpc". This is useful for
     keeping NAT public IPs stable across VPC replacements (e.g. for partner
@@ -163,15 +163,15 @@ variable "nat_gateway_eip_allocation_ids" {
   validation {
     condition = (
       var.nat_gateway_eip_allocation_ids == null ||
+      !var.nat_gateway_enabled ||
       length(var.nat_gateway_eip_allocation_ids) == 0 ||
-      !var.enable_nat_gateway ||
       length(var.nat_gateway_eip_allocation_ids) == (
-        (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability)
+        (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled)
         ? var.subnet_count
         : 1
       )
     )
-    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 for single-NAT mode, or subnet_count for HA mode (nat_gateway_high_availability = true, or deprecated single_nat_gateway = false)."
+    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 for single-NAT mode, or subnet_count for HA mode (nat_gateway_high_availability_enabled = true, or deprecated single_nat_gateway = false)."
   }
 }
 
@@ -179,7 +179,7 @@ variable "nat_gateway_eip_allocation_ids" {
 # IPv6
 ################################################################################
 
-variable "enable_ipv6" {
+variable "ipv6_enabled" {
   type        = bool
   description = "Enable IPv6 support for the VPC. An Amazon-provided IPv6 CIDR block will be assigned."
   default     = false
@@ -189,7 +189,7 @@ variable "enable_ipv6" {
 # VPC Flow Logs
 ################################################################################
 
-variable "enable_flow_logs" {
+variable "flow_logs_enabled" {
   type        = bool
   description = "Enable VPC Flow Logs for network traffic monitoring."
   default     = false
@@ -265,16 +265,16 @@ variable "flow_logs_versioning_enabled" {
 
 variable "vpc_peering_connections" {
   type = map(object({
-    peer_vpc_id                     = string
-    peer_cidr_blocks                = list(string)
-    peer_owner_id                   = optional(string)
-    peer_region                     = optional(string)
-    auto_accept                     = optional(bool, true)
-    allow_remote_vpc_dns_resolution = optional(bool, false)
-    add_to_public_route_table       = optional(bool, true)
-    add_to_private_route_tables     = optional(bool, true)
-    peer_route_table_ids            = optional(list(string), [])
-    tags                            = optional(map(string), {})
+    peer_vpc_id                        = string
+    peer_cidr_blocks                   = list(string)
+    peer_owner_id                      = optional(string)
+    peer_region                        = optional(string)
+    auto_accept                        = optional(bool, true)
+    remote_vpc_dns_resolution_enabled  = optional(bool, false)
+    public_route_table_routes_enabled  = optional(bool, true)
+    private_route_table_routes_enabled = optional(bool, true)
+    peer_route_table_ids               = optional(list(string), [])
+    tags                               = optional(map(string), {})
   }))
   description = <<-EOT
     A map of VPC peering connections to create from this VPC to existing VPCs.
@@ -291,11 +291,11 @@ variable "vpc_peering_connections" {
       - auto_accept: Whether to auto-accept the peering. Only valid for same-account,
         same-region peerings. For cross-account or cross-region, the peering must be
         accepted on the peer side.
-      - allow_remote_vpc_dns_resolution: Allow DNS resolution of private hostnames in
+      - remote_vpc_dns_resolution_enabled: Allow DNS resolution of private hostnames in
         the peer VPC from this VPC. Only valid for same-account, same-region peerings.
-      - add_to_public_route_table: Add routes for peer_cidr_blocks to this VPC's public
+      - public_route_table_routes_enabled: Add routes for peer_cidr_blocks to this VPC's public
         route table.
-      - add_to_private_route_tables: Add routes for peer_cidr_blocks to this VPC's
+      - private_route_table_routes_enabled: Add routes for peer_cidr_blocks to this VPC's
         private route table(s).
       - peer_route_table_ids: Optional list of route table IDs in the peer VPC to add
         return routes to (destination = this VPC's CIDR, target = the peering

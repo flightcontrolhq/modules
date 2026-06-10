@@ -18,7 +18,7 @@ variable "tags" {
   default     = {}
 }
 
-variable "deletion_protection" {
+variable "load_balancer_deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers (public/private ALB and NLB) created by this module. Safe-by-default."
   default     = true
@@ -53,14 +53,14 @@ variable "private_subnet_ids" {
   }
 
   validation {
-    condition     = !var.enable_private_alb || length(var.private_subnet_ids) >= 2
-    error_message = "At least 2 private_subnet_ids are required when enable_private_alb is true. ALBs require subnets in at least 2 availability zones for high availability."
+    condition     = !var.private_alb_enabled || length(var.private_subnet_ids) >= 2
+    error_message = "At least 2 private_subnet_ids are required when private_alb_enabled is true. ALBs require subnets in at least 2 availability zones for high availability."
   }
 }
 
 variable "public_subnet_ids" {
   type        = list(string)
-  description = "A list of public subnet IDs for the public ALB/NLB. Required if enable_public_alb or enable_public_nlb is true."
+  description = "A list of public subnet IDs for the public ALB/NLB. Required if public_alb_enabled or public_nlb_enabled is true."
   default     = []
 
   validation {
@@ -69,13 +69,13 @@ variable "public_subnet_ids" {
   }
 
   validation {
-    condition     = !var.enable_public_alb || length(var.public_subnet_ids) >= 2
-    error_message = "At least 2 public_subnet_ids are required when enable_public_alb is true. ALBs require subnets in at least 2 availability zones for high availability."
+    condition     = !var.public_alb_enabled || length(var.public_subnet_ids) >= 2
+    error_message = "At least 2 public_subnet_ids are required when public_alb_enabled is true. ALBs require subnets in at least 2 availability zones for high availability."
   }
 
   validation {
-    condition     = !var.enable_public_nlb || length(var.public_subnet_ids) >= 1
-    error_message = "At least 1 public_subnet_id is required when enable_public_nlb is true."
+    condition     = !var.public_nlb_enabled || length(var.public_subnet_ids) >= 1
+    error_message = "At least 1 public_subnet_id is required when public_nlb_enabled is true."
   }
 }
 
@@ -83,7 +83,7 @@ variable "public_subnet_ids" {
 # ECS Cluster
 ################################################################################
 
-variable "enable_container_insights" {
+variable "container_insights_enabled" {
   type        = bool
   description = "Enable CloudWatch Container Insights for the ECS cluster."
   default     = true
@@ -93,7 +93,7 @@ variable "enable_container_insights" {
 # Fargate Capacity Provider
 ################################################################################
 
-variable "enable_fargate" {
+variable "fargate_enabled" {
   type        = bool
   description = "Enable the Fargate capacity provider."
   default     = true
@@ -125,7 +125,7 @@ variable "fargate_base" {
 # Fargate Spot Capacity Provider
 ################################################################################
 
-variable "enable_fargate_spot" {
+variable "fargate_spot_enabled" {
   type        = bool
   description = "Enable the Fargate Spot capacity provider."
   default     = false
@@ -213,7 +213,7 @@ variable "ec2_desired_capacity" {
   }
 }
 
-variable "ec2_enable_spot" {
+variable "ec2_spot_enabled" {
   type        = bool
   description = "Enable Spot instances in the EC2 Auto Scaling Group using mixed instances policy."
   default     = false
@@ -221,13 +221,13 @@ variable "ec2_enable_spot" {
 
 variable "ec2_spot_instance_types" {
   type        = list(string)
-  description = "Additional instance types for Spot instances. Used when ec2_enable_spot is true."
+  description = "Additional instance types for Spot instances. Used when ec2_spot_enabled is true."
   default     = []
 }
 
 variable "ec2_on_demand_base_capacity" {
   type        = number
-  description = "The minimum number of On-Demand instances in the ASG. Used when ec2_enable_spot is true."
+  description = "The minimum number of On-Demand instances in the ASG. Used when ec2_spot_enabled is true."
   default     = 0
 
   validation {
@@ -238,7 +238,7 @@ variable "ec2_on_demand_base_capacity" {
 
 variable "ec2_on_demand_percentage_above_base" {
   type        = number
-  description = "Percentage of On-Demand instances above base capacity. Used when ec2_enable_spot is true."
+  description = "Percentage of On-Demand instances above base capacity. Used when ec2_spot_enabled is true."
   default     = 0
 
   validation {
@@ -275,7 +275,7 @@ variable "ec2_user_data" {
   default     = ""
 }
 
-variable "ec2_enable_imdsv2" {
+variable "ec2_imdsv2_enabled" {
   type        = bool
   description = "Require IMDSv2 for EC2 instance metadata. Recommended for security."
   default     = true
@@ -351,13 +351,13 @@ variable "ec2_security_group_ids" {
 # Public ALB
 ################################################################################
 
-variable "enable_public_alb" {
+variable "public_alb_enabled" {
   type        = bool
   description = "Enable a public (internet-facing) Application Load Balancer."
   default     = false
 }
 
-variable "public_alb_enable_https" {
+variable "public_alb_https_enabled" {
   type        = bool
   description = "Enable HTTPS listener on the public ALB."
   default     = false
@@ -402,7 +402,7 @@ variable "public_alb_ingress_cidr_blocks" {
   }
 }
 
-variable "public_alb_enable_access_logs" {
+variable "public_alb_access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the public ALB."
   default     = false
@@ -434,13 +434,13 @@ variable "public_alb_web_acl_arn" {
 # Private ALB
 ################################################################################
 
-variable "enable_private_alb" {
+variable "private_alb_enabled" {
   type        = bool
   description = "Enable a private (internal) Application Load Balancer."
   default     = false
 }
 
-variable "private_alb_enable_https" {
+variable "private_alb_https_enabled" {
   type        = bool
   description = "Enable HTTPS listener on the private ALB."
   default     = false
@@ -485,7 +485,7 @@ variable "private_alb_ingress_cidr_blocks" {
   }
 }
 
-variable "private_alb_enable_access_logs" {
+variable "private_alb_access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the private ALB."
   default     = false
@@ -506,13 +506,13 @@ variable "private_alb_access_logs_bucket_arn" {
 # Public NLB
 ################################################################################
 
-variable "enable_public_nlb" {
+variable "public_nlb_enabled" {
   type        = bool
   description = "Enable a public (internet-facing) Network Load Balancer."
   default     = false
 }
 
-variable "public_nlb_enable_cross_zone_load_balancing" {
+variable "public_nlb_cross_zone_load_balancing_enabled" {
   type        = bool
   description = "Enable cross-zone load balancing for the public NLB."
   default     = false
@@ -529,7 +529,7 @@ variable "public_nlb_security_group_ids" {
   }
 }
 
-variable "public_nlb_enable_access_logs" {
+variable "public_nlb_access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the public NLB."
   default     = false
@@ -546,7 +546,7 @@ variable "public_nlb_access_logs_bucket_arn" {
   }
 }
 
-variable "public_nlb_enable_elastic_ips" {
+variable "public_nlb_elastic_ips_enabled" {
   type        = bool
   description = "Enable static IP addresses for the public NLB using Elastic IPs."
   default     = false
@@ -567,13 +567,13 @@ variable "public_nlb_elastic_ip_allocation_ids" {
 # Private NLB
 ################################################################################
 
-variable "enable_private_nlb" {
+variable "private_nlb_enabled" {
   type        = bool
   description = "Enable a private (internal) Network Load Balancer."
   default     = false
 }
 
-variable "private_nlb_enable_cross_zone_load_balancing" {
+variable "private_nlb_cross_zone_load_balancing_enabled" {
   type        = bool
   description = "Enable cross-zone load balancing for the private NLB."
   default     = false
@@ -590,7 +590,7 @@ variable "private_nlb_security_group_ids" {
   }
 }
 
-variable "private_nlb_enable_access_logs" {
+variable "private_nlb_access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the private NLB."
   default     = false
@@ -607,7 +607,7 @@ variable "private_nlb_access_logs_bucket_arn" {
   }
 }
 
-variable "private_nlb_enable_elastic_ips" {
+variable "private_nlb_elastic_ips_enabled" {
   type        = bool
   description = "Enable static IP addresses for the private NLB using Elastic IPs."
   default     = false

@@ -45,8 +45,8 @@ module "vpc" {
   vpc_cidr     = "10.0.0.0/16"
   subnet_count = 3
 
-  enable_nat_gateway            = true
-  nat_gateway_high_availability = false
+  nat_gateway_enabled                   = true
+  nat_gateway_high_availability_enabled = false
 
   tags = merge(
     {

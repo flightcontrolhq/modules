@@ -94,8 +94,10 @@ describe("publish", () => {
             message: "Release version already exists remotely with different compiled config.",
           },
         ]);
-        assert.match(formatPublishPlanMarkdown(error.result), /### Release Config Conflicts/);
+        assert.match(formatPublishPlanMarkdown(error.result), /### 🚨 Release Config Conflicts 🚨/);
         assert.match(formatPublishPlanMarkdown(error.result), /Latest Remote vs Compiled/);
+        assert.match(formatPublishPlanMarkdown(error.result), /#### ravion-aws-vpc 1\.2\.4 -> 1\.2\.3/);
+        assert.doesNotMatch(formatPublishPlanMarkdown(error.result), /<details>/);
         assert.match(formatPublishPlanMarkdown(error.result), /```diff/);
         assert.match(formatPublishPlanMarkdown(error.result), /-  - id: latest/);
         assert.match(formatPublishPlanMarkdown(error.result), /\+  - id: name/);
@@ -132,14 +134,32 @@ describe("publish", () => {
 
     assert.match(markdown, /<!-- ravion-module-publish-plan -->/);
     assert.match(markdown, /Dry run only/);
-    assert.match(markdown, /Create Definition/);
-    assert.match(markdown, /Create Version/);
+    assert.match(markdown, /\| Module \| Current Version \| New Version \| Description \|/);
+    assert.match(markdown, /\| `ravion-aws-vpc` \| n\/a \| `1\.2\.3` \| Add subnet options\. \|/);
+    assert.doesNotMatch(markdown, /\| `ravion-aws-vpc` \| n\/a \| `1\.2\.3` \| AWS VPC and subnets\. \|/);
+    assert.match(markdown, /#### ravion-aws-vpc n\/a -> 1\.2\.3/);
+    assert.doesNotMatch(markdown, /<details>/);
     assert.match(markdown, /```diff/);
     assert.match(markdown, /\+type: ravion-aws-vpc/);
   });
 
+  it("omits unchanged modules from the markdown plan", async () => {
+    const client = new MockRavionClient({
+      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
+      versionsByDefinitionId: { vpc: [createRemoteVersion({ config: createCompiledDefinition().module })] },
+    });
+
+    const result = await publishDefinitions([createCompiledDefinition()], client);
+    const markdown = formatPublishPlanMarkdown(result);
+
+    assert.match(markdown, /No publish changes are required/);
+    assert.doesNotMatch(markdown, /\| Module \| Current Version \| New Version \| Description \|/);
+    assert.doesNotMatch(markdown, /\| Module \| Version \| Action \| Summary \|/);
+    assert.doesNotMatch(markdown, /Skip ravion-aws-vpc@1\.2\.3/);
+  });
+
   it("lists planned changes first in the markdown table, then skips, each sorted by module", () => {
-    const item = (type: string, action: "create-version" | "skip-version") => ({ type, version: "1.0.0", action, dryRun: true, message: `${action} ${type}` });
+    const item = (type: string, action: "create-version" | "skip-version") => ({ type, version: "1.0.0", action, dryRun: true, message: `${action} ${type}`, description: `${action} ${type}` });
     const markdown = formatPublishPlanMarkdown({
       dryRun: true,
       items: [item("aaa-skipped", "skip-version"), item("zzz-changed", "create-version"), item("bbb-changed", "create-version"), item("yyy-skipped", "skip-version")],

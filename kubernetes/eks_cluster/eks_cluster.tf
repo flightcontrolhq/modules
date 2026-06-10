@@ -42,6 +42,13 @@ resource "aws_eks_cluster" "this" {
     Name = var.name
   })
 
+  lifecycle {
+    precondition {
+      condition     = alltrue([for subnet in data.aws_subnet.selected : subnet.vpc_id == var.vpc_id])
+      error_message = "All subnet_ids must belong to vpc_id."
+    }
+  }
+
   depends_on = [
     aws_cloudwatch_log_group.cluster,
     module.cluster_role,

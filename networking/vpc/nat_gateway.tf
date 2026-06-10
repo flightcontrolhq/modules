@@ -8,7 +8,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(local.tags, {
-    Name = local.nat_gateway_high_availability ? "${var.name}-nat-${local.azs[count.index]}" : "${var.name}-nat"
+    Name = local.nat_gateway_high_availability_enabled ? "${var.name}-nat-${local.azs[count.index]}" : "${var.name}-nat"
   })
 
   depends_on = [aws_internet_gateway.this]
@@ -21,7 +21,7 @@ resource "aws_nat_gateway" "this" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(local.tags, {
-    Name = local.nat_gateway_high_availability ? "${var.name}-nat-${local.azs[count.index]}" : "${var.name}-nat"
+    Name = local.nat_gateway_high_availability_enabled ? "${var.name}-nat-${local.azs[count.index]}" : "${var.name}-nat"
   })
 
   depends_on = [aws_internet_gateway.this]
@@ -34,7 +34,6 @@ resource "aws_route" "private_nat" {
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.this[count.index].id
 }
-
 
 
 

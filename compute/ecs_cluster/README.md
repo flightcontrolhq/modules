@@ -45,13 +45,13 @@ module "ecs" {
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
   # Enable Fargate Spot for cost savings
-  enable_fargate_spot = true
+  fargate_spot_enabled = true
   fargate_weight      = 1
   fargate_spot_weight = 3
 
   # Public ALB with HTTPS
-  enable_public_alb          = true
-  public_alb_enable_https    = true
+  public_alb_enabled          = true
+  public_alb_https_enabled    = true
   public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 }
 ```
@@ -69,7 +69,7 @@ module "ecs" {
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
   # Disable Fargate, use EC2 only
-  enable_fargate = false
+  fargate_enabled = false
 
   # EC2 capacity provider
   ec2_instance_type    = "t3.medium"
@@ -78,13 +78,13 @@ module "ecs" {
   ec2_desired_capacity = 2
 
   # Enable Spot instances
-  ec2_enable_spot             = true
+  ec2_spot_enabled             = true
   ec2_spot_instance_types     = ["t3.large", "t3a.medium", "t3a.large"]
   ec2_on_demand_base_capacity = 1
   ec2_on_demand_percentage_above_base = 25
 
   # Public ALB
-  enable_public_alb = true
+  public_alb_enabled = true
 }
 ```
 
@@ -101,8 +101,8 @@ module "ecs" {
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
   # Enable all capacity providers
-  enable_fargate      = true
-  enable_fargate_spot = true
+  fargate_enabled      = true
+  fargate_spot_enabled = true
   fargate_weight      = 1
   fargate_spot_weight = 2
 
@@ -115,12 +115,12 @@ module "ecs" {
   ec2_base             = 2  # Always run 2 tasks on EC2
 
   # Both ALBs
-  enable_public_alb           = true
-  public_alb_enable_https     = true
+  public_alb_enabled           = true
+  public_alb_https_enabled     = true
   public_alb_certificate_arns  = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 
-  enable_private_alb           = true
-  private_alb_enable_https     = true
+  private_alb_enabled           = true
+  private_alb_https_enabled     = true
   private_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/xyz789"]
 
   tags = {
@@ -143,7 +143,7 @@ module "ecs" {
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
   # Public NLB (listeners and target groups created by service modules)
-  enable_public_nlb = true
+  public_nlb_enabled = true
 }
 ```
 
@@ -160,8 +160,8 @@ module "ecs" {
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
   # Public NLB (listeners and target groups created by service modules)
-  enable_public_nlb = true
-  public_nlb_enable_cross_zone_load_balancing = true
+  public_nlb_enabled = true
+  public_nlb_cross_zone_load_balancing_enabled = true
 }
 
 # Service modules create their own listeners and target groups
@@ -200,7 +200,7 @@ module "api_service" {
 |------|-------------|------|---------|----------|
 | name | Name prefix for all resources | `string` | n/a | yes |
 | tags | Map of tags to assign to resources | `map(string)` | `{}` | no |
-| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false. Applied to all load balancers created by this module | `bool` | `true` | no |
+| load_balancer_deletion_protection_enabled | If true, load balancers created by this module cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
 | vpc_id | VPC ID for ECS resources | `string` | n/a | yes |
 | private_subnet_ids | Private subnet IDs for ECS tasks | `list(string)` | n/a | yes |
 | public_subnet_ids | Public subnet IDs for public ALB | `list(string)` | `[]` | no |
@@ -209,13 +209,13 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_container_insights | Enable CloudWatch Container Insights | `bool` | `true` | no |
+| container_insights_enabled | Enable CloudWatch Container Insights | `bool` | `true` | no |
 
 ### Fargate Capacity Provider
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_fargate | Enable Fargate capacity provider | `bool` | `true` | no |
+| fargate_enabled | Enable Fargate capacity provider | `bool` | `true` | no |
 | fargate_weight | Fargate weight in default strategy | `number` | `1` | no |
 | fargate_base | Base tasks on Fargate | `number` | `0` | no |
 
@@ -223,7 +223,7 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_fargate_spot | Enable Fargate Spot capacity provider | `bool` | `false` | no |
+| fargate_spot_enabled | Enable Fargate Spot capacity provider | `bool` | `false` | no |
 | fargate_spot_weight | Fargate Spot weight in default strategy | `number` | `1` | no |
 | fargate_spot_base | Base tasks on Fargate Spot | `number` | `0` | no |
 
@@ -237,14 +237,14 @@ module "api_service" {
 | ec2_min_size | ASG minimum size | `number` | `0` | no |
 | ec2_max_size | ASG maximum size | `number` | `10` | no |
 | ec2_desired_capacity | ASG desired capacity | `number` | `1` | no |
-| ec2_enable_spot | Enable Spot instances | `bool` | `false` | no |
+| ec2_spot_enabled | Enable Spot instances | `bool` | `false` | no |
 | ec2_spot_instance_types | Additional instance types for Spot | `list(string)` | `[]` | no |
 | ec2_on_demand_base_capacity | On-Demand base capacity | `number` | `0` | no |
 | ec2_on_demand_percentage_above_base | On-Demand percentage above base | `number` | `0` | no |
 | ec2_root_volume_size | Root volume size in GB | `number` | `30` | no |
 | ec2_root_volume_type | Root volume type | `string` | `"gp3"` | no |
 | ec2_user_data | Additional user data script | `string` | `""` | no |
-| ec2_enable_imdsv2 | Require IMDSv2 | `bool` | `true` | no |
+| ec2_imdsv2_enabled | Require IMDSv2 | `bool` | `true` | no |
 | ec2_weight | EC2 weight in default strategy | `number` | `1` | no |
 | ec2_base | Base tasks on EC2 | `number` | `0` | no |
 | ec2_managed_termination_protection | Managed termination protection | `string` | `"ENABLED"` | no |
@@ -256,13 +256,13 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_public_alb | Enable public ALB | `bool` | `false` | no |
-| public_alb_enable_https | Enable HTTPS listener | `bool` | `false` | no |
+| public_alb_enabled | Enable public ALB | `bool` | `false` | no |
+| public_alb_https_enabled | Enable HTTPS listener | `bool` | `false` | no |
 | public_alb_certificate_arns | ACM certificate ARNs for HTTPS. First ARN is the default certificate; the rest are attached for SNI | `list(string)` | `[]` | no |
 | public_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | public_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | public_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["0.0.0.0/0"]` | no |
-| public_alb_enable_access_logs | Enable access logs | `bool` | `false` | no |
+| public_alb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | public_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 | public_alb_web_acl_arn | WAFv2 Web ACL ARN | `string` | `null` | no |
 
@@ -270,37 +270,37 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_private_alb | Enable private ALB | `bool` | `false` | no |
-| private_alb_enable_https | Enable HTTPS listener | `bool` | `false` | no |
+| private_alb_enabled | Enable private ALB | `bool` | `false` | no |
+| private_alb_https_enabled | Enable HTTPS listener | `bool` | `false` | no |
 | private_alb_certificate_arns | ACM certificate ARNs for HTTPS. First ARN is the default certificate; the rest are attached for SNI | `list(string)` | `[]` | no |
 | private_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | private_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | private_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]` | no |
-| private_alb_enable_access_logs | Enable access logs | `bool` | `false` | no |
+| private_alb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | private_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 
 ### Public NLB
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_public_nlb | Enable public NLB | `bool` | `false` | no |
-| public_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
+| public_nlb_enabled | Enable public NLB | `bool` | `false` | no |
+| public_nlb_cross_zone_load_balancing_enabled | Enable cross-zone load balancing | `bool` | `false` | no |
 | public_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
-| public_nlb_enable_access_logs | Enable access logs | `bool` | `false` | no |
+| public_nlb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | public_nlb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
-| public_nlb_enable_elastic_ips | Enable static IPs | `bool` | `false` | no |
+| public_nlb_elastic_ips_enabled | Enable static IPs | `bool` | `false` | no |
 | public_nlb_elastic_ip_allocation_ids | Elastic IP allocation IDs | `list(string)` | `[]` | no |
 
 ### Private NLB
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_private_nlb | Enable private NLB | `bool` | `false` | no |
-| private_nlb_enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
+| private_nlb_enabled | Enable private NLB | `bool` | `false` | no |
+| private_nlb_cross_zone_load_balancing_enabled | Enable cross-zone load balancing | `bool` | `false` | no |
 | private_nlb_security_group_ids | Security groups to attach | `list(string)` | `[]` | no |
-| private_nlb_enable_access_logs | Enable access logs | `bool` | `false` | no |
+| private_nlb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | private_nlb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
-| private_nlb_enable_elastic_ips | Enable static IPs | `bool` | `false` | no |
+| private_nlb_elastic_ips_enabled | Enable static IPs | `bool` | `false` | no |
 | private_nlb_elastic_ip_allocation_ids | Elastic IP allocation IDs | `list(string)` | `[]` | no |
 
 ## Outputs
@@ -438,7 +438,7 @@ module "api_service" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │        NETWORK                  │   │      ECS CLUSTER                        │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • enable_container_insights             │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • container_insights_enabled             │  ║
 ║  │ • tags                      │   │ • private_subnet_ids (required) │   └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘   │ • public_subnet_ids             │                                                 ║
 ║                                    └─────────────────────────────────┘                                                 ║
@@ -446,17 +446,17 @@ module "api_service" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │   FARGATE CAPACITY          │   │   FARGATE SPOT CAPACITY         │   │      EC2 CAPACITY PROVIDER              │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • enable_fargate            │   │ • enable_fargate_spot           │   │ • ec2_instance_type                     │  ║
+║  │ • fargate_enabled            │   │ • fargate_spot_enabled           │   │ • ec2_instance_type                     │  ║
 ║  │ • fargate_weight            │   │ • fargate_spot_weight           │   │ • ec2_ami_id                            │  ║
 ║  │ • fargate_base              │   │ • fargate_spot_base             │   │ • ec2_key_name                          │  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • ec2_min_size, ec2_max_size            │  ║
 ║                                                                          │ • ec2_desired_capacity                  │  ║
-║                                                                          │ • ec2_enable_spot                       │  ║
+║                                                                          │ • ec2_spot_enabled                       │  ║
 ║                                                                          │ • ec2_spot_instance_types               │  ║
 ║                                                                          │ • ec2_on_demand_base_capacity           │  ║
 ║                                                                          │ • ec2_on_demand_percentage_above_base   │  ║
 ║                                                                          │ • ec2_root_volume_size/type             │  ║
-║                                                                          │ • ec2_user_data, ec2_enable_imdsv2      │  ║
+║                                                                          │ • ec2_user_data, ec2_imdsv2_enabled      │  ║
 ║                                                                          │ • ec2_weight, ec2_base                  │  ║
 ║                                                                          │ • ec2_managed_termination_protection    │  ║
 ║                                                                          │ • ec2_managed_scaling_status            │  ║
@@ -469,24 +469,24 @@ module "api_service" {
 ║  ├────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────┤  ║
 ║  │           PUBLIC ALB                       │                    PRIVATE ALB                                      │  ║
 ║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
-║  │ • enable_public_alb                        │ • enable_private_alb                                                │  ║
-║  │ • public_alb_enable_https                  │ • private_alb_enable_https                                          │  ║
+║  │ • public_alb_enabled                        │ • private_alb_enabled                                                │  ║
+║  │ • public_alb_https_enabled                  │ • private_alb_https_enabled                                          │  ║
 ║  │ • public_alb_certificate_arns              │ • private_alb_certificate_arns                                      │  ║
 ║  │ • public_alb_ssl_policy                    │ • private_alb_ssl_policy                                            │  ║
 ║  │ • public_alb_idle_timeout                  │ • private_alb_idle_timeout                                          │  ║
 ║  │ • public_alb_ingress_cidr_blocks           │ • private_alb_ingress_cidr_blocks                                   │  ║
-║  │ • public_alb_enable_access_logs            │ • private_alb_enable_access_logs                                    │  ║
+║  │ • public_alb_access_logs_enabled            │ • private_alb_access_logs_enabled                                    │  ║
 ║  │ • public_alb_access_logs_bucket_arn        │ • private_alb_access_logs_bucket_arn                                │  ║
 ║  │ • public_alb_web_acl_arn                   │                                                                     │  ║
 ║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
 ║  │           PUBLIC NLB                       │                    PRIVATE NLB                                      │  ║
 ║  ├────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────┤  ║
-║  │ • enable_public_nlb                        │ • enable_private_nlb                                                │  ║
-║  │ • public_nlb_enable_cross_zone_load_bal... │ • private_nlb_enable_cross_zone_load_balancing                      │  ║
+║  │ • public_nlb_enabled                        │ • private_nlb_enabled                                                │  ║
+║  │ • public_nlb_enable_cross_zone_load_bal... │ • private_nlb_cross_zone_load_balancing_enabled                      │  ║
 ║  │ • public_nlb_security_group_ids            │ • private_nlb_security_group_ids                                    │  ║
-║  │ • public_nlb_enable_access_logs            │ • private_nlb_enable_access_logs                                    │  ║
+║  │ • public_nlb_access_logs_enabled            │ • private_nlb_access_logs_enabled                                    │  ║
 ║  │ • public_nlb_access_logs_bucket_arn        │ • private_nlb_access_logs_bucket_arn                                │  ║
-║  │ • public_nlb_enable_elastic_ips            │ • private_nlb_enable_elastic_ips                                    │  ║
+║  │ • public_nlb_elastic_ips_enabled            │ • private_nlb_elastic_ips_enabled                                    │  ║
 ║  │ • public_nlb_elastic_ip_allocation_ids     │ • private_nlb_elastic_ip_allocation_ids                             │  ║
 ║  └────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
@@ -688,8 +688,8 @@ module "api_service" {
 ║              │                   └────────────┬─────────────┘                      │                                   ║
 ║              │                                │                                    │                                   ║
 ║              │                                ▼                                    ▼                                   ║
-║              │    var.enable_fargate ────►┌──────────────────────────────────────────────┐                             ║
-║              │    var.enable_fargate_spot►│   aws_ecs_cluster_capacity_providers.this   │                             ║
+║              │    var.fargate_enabled ────►┌──────────────────────────────────────────────┐                             ║
+║              │    var.fargate_spot_enabled►│   aws_ecs_cluster_capacity_providers.this   │                             ║
 ║              │    local.enable_ec2 ──────►│   (FARGATE + FARGATE_SPOT + EC2 strategy)   │                             ║
 ║              │                            └──────────────────────────────────────────────┘                             ║
 ║              │                                                                                                         ║
@@ -710,7 +710,7 @@ module "api_service" {
 ║              │                                           ▼                                                             ║
 ║              │    var.ec2_min/max_size ────►┌──────────────────────────┐                                               ║
 ║              │    var.ec2_desired_capacity ►│ module.ecs_autoscaling   │                                               ║
-║              │    var.ec2_enable_spot ─────►│ (compute/autoscaling)    │                                               ║
+║              │    var.ec2_spot_enabled ─────►│ (compute/autoscaling)    │                                               ║
 ║              │    var.private_subnet_ids ──►└────────────┬─────────────┘                                               ║
 ║              │                                           │                                                             ║
 ║              │                                           ▼                                                             ║
@@ -722,19 +722,19 @@ module "api_service" {
 ║              │                        │                 LOAD BALANCERS                     │                           ║
 ║              │                        └────────────────────────────────────────────────────┘                           ║
 ║              │                                                                                                         ║
-║              │    var.enable_public_alb ────►┌──────────────────────────┐                                              ║
+║              │    var.public_alb_enabled ────►┌──────────────────────────┐                                              ║
 ║              │    var.public_alb_* ─────────►│ module.public_alb        │                                              ║
 ║              │    var.public_subnet_ids ────►└──────────────────────────┘                                              ║
 ║              │                                                                                                         ║
-║              │    var.enable_private_alb ───►┌──────────────────────────┐                                              ║
+║              │    var.private_alb_enabled ───►┌──────────────────────────┐                                              ║
 ║              │    var.private_alb_* ────────►│ module.private_alb       │                                              ║
 ║              └──────────────────────────────►└──────────────────────────┘                                              ║
 ║              │                                                                                                         ║
-║              │    var.enable_public_nlb ────►┌──────────────────────────┐                                              ║
+║              │    var.public_nlb_enabled ────►┌──────────────────────────┐                                              ║
 ║              │    var.public_nlb_* ─────────►│ module.public_nlb        │                                              ║
 ║              │    var.public_subnet_ids ────►└──────────────────────────┘                                              ║
 ║              │                                                                                                         ║
-║              │    var.enable_private_nlb ───►┌──────────────────────────┐                                              ║
+║              │    var.private_nlb_enabled ───►┌──────────────────────────┐                                              ║
 ║              │    var.private_nlb_* ────────►│ module.private_nlb       │                                              ║
 ║              └──────────────────────────────►└──────────────────────────┘                                              ║
 ║                                                                                                                        ║
@@ -792,8 +792,8 @@ ECS supports three types of capacity providers, each with distinct trade-offs:
 module "ecs" {
   source = "..."
 
-  enable_fargate      = false    # Disable standard Fargate
-  enable_fargate_spot = true     # Use Fargate Spot for overflow
+  fargate_enabled      = false    # Disable standard Fargate
+  fargate_spot_enabled = true     # Use Fargate Spot for overflow
   fargate_spot_weight = 1
 
   ec2_instance_type = "m5.large"
@@ -828,7 +828,7 @@ The **base** and **weight** parameters control how ECS distributes tasks across 
 
 | Scenario | Configuration | Result |
 |----------|---------------|--------|
-| Fargate only | `enable_fargate=true` | All tasks on Fargate |
+| Fargate only | `fargate_enabled=true` | All tasks on Fargate |
 | Cost savings | `fargate_weight=1, fargate_spot_weight=3` | 25% Fargate, 75% Fargate Spot |
 | EC2 baseline | `ec2_base=5, ec2_weight=0, fargate_weight=1` | First 5 on EC2, rest on Fargate |
 
@@ -875,13 +875,13 @@ module "ecs" {
   source = "..."
 
   # ALB for HTTP/HTTPS traffic with path-based routing
-  enable_public_alb          = true
-  public_alb_enable_https    = true
+  public_alb_enabled          = true
+  public_alb_https_enabled    = true
   public_alb_certificate_arns = ["arn:aws:acm:..."]
 
   # NLB for TCP/UDP traffic or static IPs
-  enable_public_nlb           = true
-  public_nlb_enable_elastic_ips = true
+  public_nlb_enabled           = true
+  public_nlb_elastic_ips_enabled = true
   public_nlb_elastic_ip_allocation_ids = ["eipalloc-abc123", "eipalloc-def456"]
 }
 ```
@@ -904,7 +904,7 @@ module "ecs" {
   source = "..."
 
   ec2_instance_type    = "m5.large"       # Primary instance type
-  ec2_enable_spot      = true
+  ec2_spot_enabled      = true
 
   # Additional Spot instance types for diversity
   ec2_spot_instance_types = [
@@ -942,8 +942,8 @@ The module automatically creates a security group for EC2 instances that:
 │  │  Egress: 0.0.0.0/0 (all traffic)                                    │    │
 │  │                                                                      │    │
 │  │  Ingress (dynamic):                                                  │    │
-│  │    ├─ From Public ALB SG (if enable_public_alb = true)              │    │
-│  │    └─ From Private ALB SG (if enable_private_alb = true)            │    │
+│  │    ├─ From Public ALB SG (if public_alb_enabled = true)              │    │
+│  │    └─ From Private ALB SG (if private_alb_enabled = true)            │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
 │  Additional security groups can be attached via:                             │

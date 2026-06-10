@@ -44,7 +44,7 @@ export interface GenerateDefinitionsResult {
 
 const REPO_URL = "https://github.com/flightcontrolhq/modules";
 const DEFAULT_MODULE_PATHS: Record<string, string> = {
-  "rvn-aws-acm-certificate": "security/acm_certificate",
+  "rvn-acm-certificate": "security/acm_certificate",
   "rvn-aws-network": "networking/vpc",
   "rvn-aws-rds": "database/rds",
   "rvn-ecs-cluster": "compute/ecs_cluster",
