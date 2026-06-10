@@ -644,7 +644,7 @@ module:
       base_path: compute/ecs_cluster
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
-        default_capacity_provider_family: << module.input.default_capacity_provider_family >>
+        capacity_provider_default: << module.input.capacity_provider_default >>
         ec2_ami_id: << module.input.ec2_ami_id >>
         ec2_enable_spot: << module.input.ec2_enable_spot >>
         ec2_instance_type: << module.input.ec2_instance_type >>

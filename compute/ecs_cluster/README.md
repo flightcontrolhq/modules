@@ -103,7 +103,7 @@ module "ecs" {
   # Attach all capacity providers. AWS does not allow mixing Fargate and EC2
   # providers in the cluster's default strategy, so the default strategy
   # commits to a single family — EC2 here, since EC2 wins when enabled
-  # (override with default_capacity_provider_family). Services can still
+  # (override with capacity_provider_default). Services can still
   # target FARGATE/FARGATE_SPOT via their own capacity_provider_strategies.
   enable_fargate      = true
   enable_fargate_spot = true
@@ -210,7 +210,7 @@ module "api_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_container_insights | Enable CloudWatch Container Insights | `bool` | `true` | no |
-| default_capacity_provider_family | Family for the cluster default strategy: `ec2`, `fargate` (includes Fargate Spot when enabled), or `fargate_spot`. AWS forbids mixing Fargate and EC2 providers in one strategy. Defaults to `ec2` if EC2 is enabled, then `fargate`, then `fargate_spot` | `string` | `null` | no |
+| capacity_provider_default | Family for the cluster default strategy: `ec2`, `fargate` (includes Fargate Spot when enabled), or `fargate_spot`. AWS forbids mixing Fargate and EC2 providers in one strategy. Defaults to `ec2` if EC2 is enabled, then `fargate`, then `fargate_spot` | `string` | `null` | no |
 
 ### Fargate Capacity Provider
 
@@ -508,7 +508,7 @@ module "api_service" {
 ║  │ • ec2_capacity_provider_name = enable_ec2 ? "${var.name}-ec2" : null                                             │  ║
 ║  │                                                                                                                   │  ║
 ║  │ CAPACITY PROVIDER STRATEGY:                                                                                       │  ║
-║  │ • capacity_provider_strategy = single family via default_capacity_provider_family                                │  ║
+║  │ • capacity_provider_strategy = single family via capacity_provider_default                                │  ║
 ║  │                                                                                                                   │  ║
 ║  │ EC2 CONFIGURATION:                                                                                                │  ║
 ║  │ • ecs_user_data = base64encode(ECS_CLUSTER config + custom user_data)                                            │  ║
@@ -790,7 +790,7 @@ ECS supports three types of capacity providers, each with distinct trade-offs:
 
 AWS does not allow a single capacity provider strategy to mix Fargate and EC2
 (Auto Scaling group) providers, so the cluster's default strategy commits to
-one family (`default_capacity_provider_family`). To mix families across
+one family (`capacity_provider_default`). To mix families across
 workloads, attach both to the cluster and pick the family per service:
 
 ```hcl
@@ -848,7 +848,7 @@ The **base** and **weight** parameters control how ECS distributes tasks across 
 
 Note: base/weight only combine providers within the same family (Fargate +
 Fargate Spot). A strategy cannot mix Fargate and EC2 providers — the cluster
-default commits to one family via `default_capacity_provider_family`.
+default commits to one family via `capacity_provider_default`.
 
 ### How does EC2 managed scaling work?
 
@@ -973,7 +973,7 @@ The module automatically creates a security group for EC2 instances that:
 ## Notes
 
 - The EC2 capacity provider is only created when `ec2_instance_type` is specified
-- The cluster default capacity provider strategy commits to a single family (AWS forbids mixing Fargate and EC2 providers in one strategy); control it with `default_capacity_provider_family`
+- The cluster default capacity provider strategy commits to a single family (AWS forbids mixing Fargate and EC2 providers in one strategy); control it with `capacity_provider_default`
 - By default, uses the latest ECS-optimized Amazon Linux 2023 AMI
 - EC2 instances automatically register with the ECS cluster via user data
 - IMDSv2 is enforced by default for enhanced security

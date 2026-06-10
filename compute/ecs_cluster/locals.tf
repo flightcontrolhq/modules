@@ -27,19 +27,19 @@ locals {
   # Family used for the cluster default strategy. AWS rejects default
   # strategies that mix Fargate and EC2 (ASG) capacity providers, so the
   # default strategy must commit to a single family.
-  default_capacity_provider_family = coalesce(
-    var.default_capacity_provider_family,
+  capacity_provider_default = coalesce(
+    var.capacity_provider_default,
     local.enable_ec2 ? "ec2" : var.enable_fargate ? "fargate" : "fargate_spot"
   )
 
   # Build the default capacity provider strategy from the selected family.
   # FARGATE and FARGATE_SPOT may share a strategy; EC2 must stand alone.
-  capacity_provider_strategy = local.default_capacity_provider_family == "ec2" ? [{
+  capacity_provider_strategy = local.capacity_provider_default == "ec2" ? [{
     capacity_provider = aws_ecs_capacity_provider.ec2[0].name
     weight            = var.ec2_weight
     base              = var.ec2_base
     }] : concat(
-    local.default_capacity_provider_family == "fargate" && var.enable_fargate ? [{
+    local.capacity_provider_default == "fargate" && var.enable_fargate ? [{
       capacity_provider = "FARGATE"
       weight            = var.fargate_weight
       base              = var.fargate_base

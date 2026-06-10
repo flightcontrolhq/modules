@@ -3,7 +3,7 @@
 # AWS rejects default capacity provider strategies that mix Fargate and EC2
 # (Auto Scaling group) capacity providers. These tests verify that the default
 # strategy always commits to a single family, controlled by
-# default_capacity_provider_family.
+# capacity_provider_default.
 #
 # Run with: tofu test
 
@@ -67,7 +67,7 @@ variables {
 }
 
 ################################################################################
-# Implicit family selection (default_capacity_provider_family = null)
+# Implicit family selection (capacity_provider_default = null)
 ################################################################################
 
 # Fargate only (module defaults): default strategy is FARGATE only
@@ -170,8 +170,8 @@ run "explicit_fargate_family_with_ec2_enabled" {
   command = plan
 
   variables {
-    ec2_instance_type                = "t3.medium"
-    default_capacity_provider_family = "fargate"
+    ec2_instance_type         = "t3.medium"
+    capacity_provider_default = "fargate"
   }
 
   assert {
@@ -195,9 +195,9 @@ run "explicit_spot_family" {
   command = plan
 
   variables {
-    enable_fargate                   = true
-    enable_fargate_spot              = true
-    default_capacity_provider_family = "fargate_spot"
+    enable_fargate            = true
+    enable_fargate_spot       = true
+    capacity_provider_default = "fargate_spot"
   }
 
   assert {
@@ -219,40 +219,40 @@ run "invalid_family_value" {
   command = plan
 
   variables {
-    default_capacity_provider_family = "bogus"
+    capacity_provider_default = "bogus"
   }
 
-  expect_failures = [var.default_capacity_provider_family]
+  expect_failures = [var.capacity_provider_default]
 }
 
 run "ec2_family_requires_ec2_enabled" {
   command = plan
 
   variables {
-    default_capacity_provider_family = "ec2"
+    capacity_provider_default = "ec2"
   }
 
-  expect_failures = [var.default_capacity_provider_family]
+  expect_failures = [var.capacity_provider_default]
 }
 
 run "fargate_family_requires_fargate_enabled" {
   command = plan
 
   variables {
-    enable_fargate                   = false
-    enable_fargate_spot              = true
-    default_capacity_provider_family = "fargate"
+    enable_fargate            = false
+    enable_fargate_spot       = true
+    capacity_provider_default = "fargate"
   }
 
-  expect_failures = [var.default_capacity_provider_family]
+  expect_failures = [var.capacity_provider_default]
 }
 
 run "spot_family_requires_spot_enabled" {
   command = plan
 
   variables {
-    default_capacity_provider_family = "fargate_spot"
+    capacity_provider_default = "fargate_spot"
   }
 
-  expect_failures = [var.default_capacity_provider_family]
+  expect_failures = [var.capacity_provider_default]
 }
