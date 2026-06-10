@@ -177,6 +177,28 @@ run "nat_gateway_empty_eip_list" {
   }
 }
 
+# Test 5a-ha: Empty EIP allocation list also auto-allocates in HA mode
+run "nat_gateway_empty_eip_list_ha" {
+  command = plan
+
+  variables {
+    enable_nat_gateway             = true
+    nat_gateway_high_availability  = true
+    subnet_count                   = 3
+    nat_gateway_eip_allocation_ids = []
+  }
+
+  assert {
+    condition     = length(aws_nat_gateway.this) == 3
+    error_message = "Should create 3 NAT Gateways in HA mode with an empty EIP allocation list"
+  }
+
+  assert {
+    condition     = length(aws_eip.nat) == 3
+    error_message = "Empty nat_gateway_eip_allocation_ids should fall back to 3 module-created EIPs in HA mode"
+  }
+}
+
 # Test 5b: Supplied EIP allocation IDs are used instead of creating EIPs
 run "nat_gateway_supplied_eips" {
   command = plan
