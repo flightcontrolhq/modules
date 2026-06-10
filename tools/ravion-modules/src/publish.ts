@@ -184,7 +184,7 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
   ];
 
   if (result.errors && result.errors.length > 0) {
-    lines.push("### Release Config Conflicts", "", "These module versions already exist remotely with different compiled config. Publish a new version, or make the local definition match the existing remote version.", "");
+    lines.push("### 🚨 Release Config Conflicts 🚨", "", "These module versions already exist remotely with different compiled config. Publish a new version, or make the local definition match the existing remote version.", "");
     lines.push("| Module | Release Version | Latest Remote Version | Problem |", "| --- | --- | --- | --- |");
     for (const error of result.errors) {
       lines.push(`| \`${escapeMarkdownTableCell(error.type)}\` | \`${escapeMarkdownTableCell(error.version)}\` | ${error.latestVersion ? `\`${escapeMarkdownTableCell(error.latestVersion)}\`` : "n/a"} | ${escapeMarkdownTableCell(error.message)} |`);

@@ -8,7 +8,7 @@ resource "aws_subnet" "public" {
   vpc_id                          = aws_vpc.this.id
   cidr_block                      = local.public_subnet_cidrs[count.index]
   availability_zone               = local.azs[count.index]
-  map_public_ip_on_launch         = true
+  map_public_ip_on_launch         = false
   assign_ipv6_address_on_creation = var.ipv6_enabled
   ipv6_cidr_block                 = var.ipv6_enabled ? cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, count.index) : null
 
@@ -56,4 +56,3 @@ resource "aws_subnet" "private" {
     }
   }
 }
-

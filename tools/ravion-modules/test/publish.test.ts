@@ -94,7 +94,7 @@ describe("publish", () => {
             message: "Release version already exists remotely with different compiled config.",
           },
         ]);
-        assert.match(formatPublishPlanMarkdown(error.result), /### Release Config Conflicts/);
+        assert.match(formatPublishPlanMarkdown(error.result), /### 🚨 Release Config Conflicts 🚨/);
         assert.match(formatPublishPlanMarkdown(error.result), /Latest Remote vs Compiled/);
         assert.match(formatPublishPlanMarkdown(error.result), /```diff/);
         assert.match(formatPublishPlanMarkdown(error.result), /-  - id: latest/);

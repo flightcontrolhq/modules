@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.0.7
-  description: rename VPC config fields to noun-first enabled suffixes and treat empty nat_gateway_eip_allocation_ids as auto-allocate
+  version: 0.0.8
+  description: rename VPC config fields to noun-first enabled suffixes and disable automatic public IP assignment on public subnets
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -167,7 +167,7 @@ module:
 
     ### Public subnets
 
-    Public subnets have direct internet access via a free Internet Gateway. Resources in public subnets receive public IP addresses automatically. Use these for:
+    Public subnets have direct internet access via a free Internet Gateway. Resources in public subnets do not receive public IP addresses automatically; attach public IPs explicitly when needed. Use these for:
 
     - Load balancers (ALB, NLB)
     - Bastion hosts

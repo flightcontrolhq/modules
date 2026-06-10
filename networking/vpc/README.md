@@ -441,7 +441,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 │                                     ▼                                         │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
 │  │                       Public Subnets (1-6 AZs)                          │  │
-│  │  • Auto-assign public IPs                    • Direct internet access  │  │
+│  │  • No automatic public IPv4                  • Direct internet access  │  │
 │  │  • Shared route table (public)               • IPv6 enabled (optional) │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                     │                                         │
@@ -541,7 +541,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║    │ • Attached to VPC            │    │ • Per AZ (subnet_count)      │    │ • Per AZ (subnet_count)      │          ║
 ║    │ • Enables public internet    │    │ • Auto-calculated or custom  │    │ • Auto-calculated or custom  │          ║
 ║    │   access                     │    │   CIDR blocks                │    │   CIDR blocks                │          ║
-║    │                              │    │ • map_public_ip_on_launch    │    │ • No public IP               │          ║
+║    │                              │    │ • No automatic public IPv4   │    │ • No public IP               │          ║
 ║    │                              │    │ • IPv6 CIDR (if enabled)     │    │ • IPv6 CIDR (if enabled)     │          ║
 ║    └──────────────┬───────────────┘    └──────────────┬───────────────┘    └──────────────┬───────────────┘          ║
 ║                   │                                   │                                   │                            ║
@@ -726,7 +726,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 |----------|-------------|---------|
 | `aws_vpc` | 1 | Core VPC resource with CIDR, DNS, and optional IPv6 |
 | `aws_internet_gateway` | 1 | Enables internet access for public subnets |
-| `aws_subnet` (public) | subnet_count | Public subnets across AZs with auto-assign public IP |
+| `aws_subnet` (public) | subnet_count | Public subnets across AZs without automatic public IPv4 assignment |
 | `aws_subnet` (private) | subnet_count | Private subnets across AZs without public IP |
 | `aws_route_table` (public) | 1 | Shared route table for all public subnets |
 | `aws_route_table` (private) | 1 or subnet_count | 1 if nat_gateway_high_availability_enabled=false, N if true |
@@ -746,7 +746,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 
 | Aspect | Public Subnet | Private Subnet |
 |--------|---------------|----------------|
-| Public IP | Auto-assigned | Not assigned |
+| Public IP | Not auto-assigned by subnet | Not assigned |
 | Internet Access | Direct via Internet Gateway | Via NAT Gateway (IPv4) or EIGW (IPv6) |
 | Inbound from Internet | Allowed (with security group rules) | Not directly accessible |
 | Use Cases | Load balancers, bastion hosts, NAT Gateways | Application servers, databases, internal services |
@@ -1027,6 +1027,7 @@ The variable was renamed (and inverted) in a recent version. The old `single_nat
 - The `name` variable must be between 1 and 36 characters to ensure S3 bucket names for VPC flow logs stay within the 63 character limit
 - DNS support and hostnames are enabled by default, which is required for services like RDS, ECS, and EFS
 - When using automatic subnet CIDR allocation, public subnets use offsets 1-6 and private subnets use offsets 11-16
+- Public subnets route to the Internet Gateway but do not automatically assign public IPv4 addresses to launched instances
 - NAT Gateway requires an Internet Gateway to exist first (handled automatically via `depends_on`)
 - Elastic IPs for NAT Gateways are allocated with `domain = "vpc"` for VPC usage. To reuse pre-allocated EIPs (e.g. from the `networking/eips` module), set `nat_gateway_eip_allocation_ids`; the module will skip creating internal EIPs.
 - The Egress-Only Internet Gateway only routes IPv6 traffic and only allows outbound connections
