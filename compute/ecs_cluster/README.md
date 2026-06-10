@@ -100,19 +100,19 @@ module "ecs" {
   private_subnet_ids = ["subnet-private-1", "subnet-private-2"]
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
-  # Enable all capacity providers
+  # Attach all capacity providers. AWS does not allow mixing Fargate and EC2
+  # providers in the cluster's default strategy, so the default strategy
+  # commits to a single family — EC2 here, since EC2 wins when enabled
+  # (override with default_capacity_provider_family). Services can still
+  # target FARGATE/FARGATE_SPOT via their own capacity_provider_strategies.
   enable_fargate      = true
   enable_fargate_spot = true
-  fargate_weight      = 1
-  fargate_spot_weight = 2
 
   # EC2 for baseline capacity
   ec2_instance_type    = "t3.large"
   ec2_min_size         = 2
   ec2_max_size         = 20
   ec2_desired_capacity = 2
-  ec2_weight           = 1
-  ec2_base             = 2  # Always run 2 tasks on EC2
 
   # Both ALBs
   enable_public_alb           = true
@@ -210,6 +210,7 @@ module "api_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | enable_container_insights | Enable CloudWatch Container Insights | `bool` | `true` | no |
+| default_capacity_provider_family | Family for the cluster default strategy: `ec2`, `fargate` (includes Fargate Spot when enabled), or `fargate_spot`. AWS forbids mixing Fargate and EC2 providers in one strategy. Defaults to `ec2` if EC2 is enabled, then `fargate`, then `fargate_spot` | `string` | `null` | no |
 
 ### Fargate Capacity Provider
 
@@ -507,7 +508,7 @@ module "api_service" {
 ║  │ • ec2_capacity_provider_name = enable_ec2 ? "${var.name}-ec2" : null                                             │  ║
 ║  │                                                                                                                   │  ║
 ║  │ CAPACITY PROVIDER STRATEGY:                                                                                       │  ║
-║  │ • capacity_provider_strategy = concat(fargate_strategy, fargate_spot_strategy, ec2_strategy)                     │  ║
+║  │ • capacity_provider_strategy = single family via default_capacity_provider_family                                │  ║
 ║  │                                                                                                                   │  ║
 ║  │ EC2 CONFIGURATION:                                                                                                │  ║
 ║  │ • ecs_user_data = base64encode(ECS_CLUSTER config + custom user_data)                                            │  ║
@@ -690,7 +691,7 @@ module "api_service" {
 ║              │                                ▼                                    ▼                                   ║
 ║              │    var.enable_fargate ────►┌──────────────────────────────────────────────┐                             ║
 ║              │    var.enable_fargate_spot►│   aws_ecs_cluster_capacity_providers.this   │                             ║
-║              │    local.enable_ec2 ──────►│   (FARGATE + FARGATE_SPOT + EC2 strategy)   │                             ║
+║              │    local.enable_ec2 ──────►│   (single-family default strategy)          │                             ║
 ║              │                            └──────────────────────────────────────────────┘                             ║
 ║              │                                                                                                         ║
 ║              │                        ┌────────────────────────────────────────────────────┐                           ║
@@ -785,20 +786,33 @@ ECS supports three types of capacity providers, each with distinct trade-offs:
 - You need specific instance types or kernel configurations
 - You require persistent local storage
 
-**Example: Cost-optimized mixed strategy**
+**Example: Cost-optimized mixed cluster**
+
+AWS does not allow a single capacity provider strategy to mix Fargate and EC2
+(Auto Scaling group) providers, so the cluster's default strategy commits to
+one family (`default_capacity_provider_family`). To mix families across
+workloads, attach both to the cluster and pick the family per service:
 
 ```hcl
-# Use EC2 for baseline, Fargate Spot for burst capacity
+# EC2 is the cluster default; specific services opt into Fargate Spot
 module "ecs" {
   source = "..."
 
   enable_fargate      = false    # Disable standard Fargate
-  enable_fargate_spot = true     # Use Fargate Spot for overflow
-  fargate_spot_weight = 1
+  enable_fargate_spot = true     # Attached for services that want Spot
 
-  ec2_instance_type = "m5.large"
-  ec2_base          = 5          # Always run 5 tasks on EC2
-  ec2_weight        = 1
+  ec2_instance_type = "m5.large" # EC2 wins the default strategy when enabled
+}
+
+module "batch_service" {
+  source = ".../compute/ecs_service"
+
+  # ... service configuration ...
+
+  # Override the cluster default for this service only
+  capacity_provider_strategies = [
+    { capacity_provider = "FARGATE_SPOT", weight = 1 }
+  ]
 }
 ```
 
@@ -813,8 +827,8 @@ The **base** and **weight** parameters control how ECS distributes tasks across 
 │                                                                              │
 │  1. First, satisfy BASE requirements (guaranteed tasks per provider)         │
 │                                                                              │
-│     Example: fargate_base=2, ec2_base=3                                      │
-│     → First 5 tasks: 2 on Fargate, 3 on EC2                                  │
+│     Example: fargate_base=2, fargate_spot_weight=1                           │
+│     → First 2 tasks on Fargate, then split with Fargate Spot                 │
 │                                                                              │
 │  2. Then, distribute remaining tasks by WEIGHT ratio                         │
 │                                                                              │
@@ -830,7 +844,11 @@ The **base** and **weight** parameters control how ECS distributes tasks across 
 |----------|---------------|--------|
 | Fargate only | `enable_fargate=true` | All tasks on Fargate |
 | Cost savings | `fargate_weight=1, fargate_spot_weight=3` | 25% Fargate, 75% Fargate Spot |
-| EC2 baseline | `ec2_base=5, ec2_weight=0, fargate_weight=1` | First 5 on EC2, rest on Fargate |
+| EC2 default | `ec2_instance_type="m5.large"` | Default strategy is EC2; services may target Fargate via their own strategy |
+
+Note: base/weight only combine providers within the same family (Fargate +
+Fargate Spot). A strategy cannot mix Fargate and EC2 providers — the cluster
+default commits to one family via `default_capacity_provider_family`.
 
 ### How does EC2 managed scaling work?
 
@@ -955,6 +973,7 @@ The module automatically creates a security group for EC2 instances that:
 ## Notes
 
 - The EC2 capacity provider is only created when `ec2_instance_type` is specified
+- The cluster default capacity provider strategy commits to a single family (AWS forbids mixing Fargate and EC2 providers in one strategy); control it with `default_capacity_provider_family`
 - By default, uses the latest ECS-optimized Amazon Linux 2023 AMI
 - EC2 instances automatically register with the ECS cluster via user data
 - IMDSv2 is enforced by default for enhanced security

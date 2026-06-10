@@ -90,6 +90,36 @@ variable "enable_container_insights" {
 }
 
 ################################################################################
+# Default Capacity Provider Strategy
+################################################################################
+
+variable "default_capacity_provider_family" {
+  type        = string
+  description = "Capacity provider family used for the cluster's default strategy. AWS rejects default strategies that mix Fargate and EC2 (Auto Scaling group) capacity providers, so the default strategy must commit to a single family; services can still target any attached capacity provider via their own strategy. Valid values: 'ec2', 'fargate' (also includes Fargate Spot when enabled), 'fargate_spot'. When null, defaults to 'ec2' if the EC2 capacity provider is enabled, then 'fargate' if enabled, and finally 'fargate_spot'."
+  default     = null
+
+  validation {
+    condition     = var.default_capacity_provider_family == null || contains(["ec2", "fargate", "fargate_spot"], coalesce(var.default_capacity_provider_family, "null"))
+    error_message = "The default_capacity_provider_family must be 'ec2', 'fargate', or 'fargate_spot'."
+  }
+
+  validation {
+    condition     = var.default_capacity_provider_family != "ec2" || var.ec2_instance_type != null
+    error_message = "The default_capacity_provider_family 'ec2' requires ec2_instance_type to be set."
+  }
+
+  validation {
+    condition     = var.default_capacity_provider_family != "fargate" || var.enable_fargate
+    error_message = "The default_capacity_provider_family 'fargate' requires enable_fargate to be true."
+  }
+
+  validation {
+    condition     = var.default_capacity_provider_family != "fargate_spot" || var.enable_fargate_spot
+    error_message = "The default_capacity_provider_family 'fargate_spot' requires enable_fargate_spot to be true."
+  }
+}
+
+################################################################################
 # Fargate Capacity Provider
 ################################################################################
 
