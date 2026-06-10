@@ -4,7 +4,7 @@ definition:
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
   version: 0.0.7
-  description: rename VPC config fields to noun-first enabled suffixes
+  description: rename VPC config fields to noun-first enabled suffixes and treat empty nat_gateway_eip_allocation_ids as auto-allocate
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -47,7 +47,7 @@ module:
       description: |-
         A list of pre-allocated Elastic IP allocation IDs (for example from the
         networking/eips module) to associate with the NAT Gateway(s). When null
-        (default), the module allocates new EIPs internally.
+        or empty (default), the module allocates new EIPs internally.
 
         The list length must match the number of NAT Gateways the module will create:
           - 1 when nat_gateway_high_availability_enabled = false

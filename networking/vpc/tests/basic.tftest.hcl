@@ -156,6 +156,86 @@ run "nat_gateway_ha" {
   }
 }
 
+# Test 5a: Empty EIP allocation list is treated as "allocate internally"
+run "nat_gateway_empty_eip_list" {
+  command = plan
+
+  variables {
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = false
+    nat_gateway_eip_allocation_ids        = []
+  }
+
+  assert {
+    condition     = length(aws_nat_gateway.this) == 1
+    error_message = "Should create 1 NAT Gateway with an empty EIP allocation list"
+  }
+
+  assert {
+    condition     = length(aws_eip.nat) == 1
+    error_message = "Empty nat_gateway_eip_allocation_ids should fall back to module-created EIPs"
+  }
+}
+
+# Test 5a-ha: Empty EIP allocation list also auto-allocates in HA mode
+run "nat_gateway_empty_eip_list_ha" {
+  command = plan
+
+  variables {
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = true
+    subnet_count                          = 3
+    nat_gateway_eip_allocation_ids        = []
+  }
+
+  assert {
+    condition     = length(aws_nat_gateway.this) == 3
+    error_message = "Should create 3 NAT Gateways in HA mode with an empty EIP allocation list"
+  }
+
+  assert {
+    condition     = length(aws_eip.nat) == 3
+    error_message = "Empty nat_gateway_eip_allocation_ids should fall back to 3 module-created EIPs in HA mode"
+  }
+}
+
+# Test 5b: Supplied EIP allocation IDs are used instead of creating EIPs
+run "nat_gateway_supplied_eips" {
+  command = plan
+
+  variables {
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = false
+    nat_gateway_eip_allocation_ids        = ["eipalloc-0123456789abcdef0"]
+  }
+
+  assert {
+    condition     = length(aws_eip.nat) == 0
+    error_message = "Should not create EIPs when allocation IDs are supplied"
+  }
+
+  assert {
+    condition     = aws_nat_gateway.this[0].allocation_id == "eipalloc-0123456789abcdef0"
+    error_message = "NAT Gateway should use the supplied EIP allocation ID"
+  }
+}
+
+# Test 5c: Supplied EIP count must match NAT Gateway count
+run "nat_gateway_supplied_eips_wrong_count" {
+  command = plan
+
+  variables {
+    nat_gateway_enabled                   = true
+    nat_gateway_high_availability_enabled = true
+    subnet_count                          = 3
+    nat_gateway_eip_allocation_ids        = ["eipalloc-0123456789abcdef0"]
+  }
+
+  expect_failures = [
+    var.nat_gateway_eip_allocation_ids,
+  ]
+}
+
 # Test 6: NAT Gateway disabled
 run "nat_gateway_disabled" {
   command = plan

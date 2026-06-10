@@ -220,9 +220,11 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
     return lines.join("\n");
   }
 
-  lines.push("| Module | Version | Description |", "| --- | --- | --- |");
-  for (const item of summarizePublishPlanTableItems(plannedChanges)) {
-    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${escapeMarkdownTableCell(item.description || item.message)} |`);
+  lines.push("| Module | Version | Action | Summary |", "| --- | --- | --- | --- |");
+  const byModule = (left: PublishPlanItem, right: PublishPlanItem) => left.type.localeCompare(right.type) || left.version.localeCompare(right.version);
+  const skippedItems = result.items.filter((item) => item.action === "skip-version");
+  for (const item of [...summarizePublishPlanTableItems(plannedChanges).sort(byModule), ...[...skippedItems].sort(byModule)]) {
+    lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${formatAction(item.action)} | ${escapeMarkdownTableCell(item.description || item.message)} |`);
   }
 
   const itemsWithDiffs = plannedChanges.filter((item) => item.diff);
@@ -424,6 +426,13 @@ function parseSemver(version: string): { numbers: [number, number, number]; prer
   const [core, prerelease] = version.split("-", 2);
   const parts = core.split(".").map((part) => Number.parseInt(part, 10));
   return { numbers: [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0], prerelease };
+}
+
+function formatAction(action: PublishAction): string {
+  return action
+    .split("-")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function escapeMarkdownTableCell(value: string): string {

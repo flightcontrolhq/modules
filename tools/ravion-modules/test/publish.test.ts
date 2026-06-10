@@ -132,10 +132,9 @@ describe("publish", () => {
 
     assert.match(markdown, /<!-- ravion-module-publish-plan -->/);
     assert.match(markdown, /Dry run only/);
-    assert.match(markdown, /\| Module \| Version \| Description \|/);
-    assert.match(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| Add subnet options\. \|/);
-    assert.doesNotMatch(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| AWS VPC and subnets\. \|/);
-    assert.doesNotMatch(markdown, /\| Module \| Version \| Action \| Summary \|/);
+    assert.match(markdown, /\| Module \| Version \| Action \| Summary \|/);
+    assert.match(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| Create Version \| Add subnet options\. \|/);
+    assert.doesNotMatch(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| Create Definition \| AWS VPC and subnets\. \|/);
     assert.match(markdown, /```diff/);
     assert.match(markdown, /\+type: ravion-aws-vpc/);
   });
@@ -151,7 +150,22 @@ describe("publish", () => {
 
     assert.match(markdown, /No publish changes are required/);
     assert.doesNotMatch(markdown, /\| Module \| Version \| Description \|/);
+    assert.doesNotMatch(markdown, /\| Module \| Version \| Action \| Summary \|/);
     assert.doesNotMatch(markdown, /Skip ravion-aws-vpc@1\.2\.3/);
+  });
+
+  it("lists planned changes first in the markdown table, then skips, each sorted by module", () => {
+    const item = (type: string, action: "create-version" | "skip-version") => ({ type, version: "1.0.0", action, dryRun: true, message: `${action} ${type}`, description: `${action} ${type}` });
+    const markdown = formatPublishPlanMarkdown({
+      dryRun: true,
+      items: [item("aaa-skipped", "skip-version"), item("zzz-changed", "create-version"), item("bbb-changed", "create-version"), item("yyy-skipped", "skip-version")],
+    });
+
+    const rows = markdown.split("\n").filter((line) => line.startsWith("| `"));
+    assert.deepEqual(
+      rows.map((row) => row.split("|")[1].trim()),
+      ["`bbb-changed`", "`zzz-changed`", "`aaa-skipped`", "`yyy-skipped`"],
+    );
   });
 
   it("requires a Ravion API token by default", async () => {

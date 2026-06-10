@@ -136,8 +136,8 @@ variable "nat_gateway_eip_allocation_ids" {
   type        = list(string)
   description = <<-EOT
     A list of pre-allocated Elastic IP allocation IDs (for example from the
-    networking/eips module) to associate with the NAT Gateway(s). When null
-    (default), the module allocates new EIPs internally.
+    networking/eips module) to associate with the NAT Gateway(s). When null or
+    empty (default), the module allocates new EIPs internally.
 
     The list length must match the number of NAT Gateways the module will create:
       - 1 when nat_gateway_high_availability_enabled = false
@@ -164,6 +164,7 @@ variable "nat_gateway_eip_allocation_ids" {
     condition = (
       var.nat_gateway_eip_allocation_ids == null ||
       !var.nat_gateway_enabled ||
+      length(var.nat_gateway_eip_allocation_ids) == 0 ||
       length(var.nat_gateway_eip_allocation_ids) == (
         (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled)
         ? var.subnet_count
