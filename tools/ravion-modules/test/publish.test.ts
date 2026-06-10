@@ -96,6 +96,8 @@ describe("publish", () => {
         ]);
         assert.match(formatPublishPlanMarkdown(error.result), /### 🚨 Release Config Conflicts 🚨/);
         assert.match(formatPublishPlanMarkdown(error.result), /Latest Remote vs Compiled/);
+        assert.match(formatPublishPlanMarkdown(error.result), /#### ravion-aws-vpc 1\.2\.4 -> 1\.2\.3/);
+        assert.doesNotMatch(formatPublishPlanMarkdown(error.result), /<details>/);
         assert.match(formatPublishPlanMarkdown(error.result), /```diff/);
         assert.match(formatPublishPlanMarkdown(error.result), /-  - id: latest/);
         assert.match(formatPublishPlanMarkdown(error.result), /\+  - id: name/);
@@ -132,9 +134,11 @@ describe("publish", () => {
 
     assert.match(markdown, /<!-- ravion-module-publish-plan -->/);
     assert.match(markdown, /Dry run only/);
-    assert.match(markdown, /\| Module \| Version \| Action \| Summary \|/);
-    assert.match(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| Create Version \| Add subnet options\. \|/);
-    assert.doesNotMatch(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| Create Definition \| AWS VPC and subnets\. \|/);
+    assert.match(markdown, /\| Module \| Current Version \| New Version \| Description \|/);
+    assert.match(markdown, /\| `ravion-aws-vpc` \| n\/a \| `1\.2\.3` \| Add subnet options\. \|/);
+    assert.doesNotMatch(markdown, /\| `ravion-aws-vpc` \| n\/a \| `1\.2\.3` \| AWS VPC and subnets\. \|/);
+    assert.match(markdown, /#### ravion-aws-vpc n\/a -> 1\.2\.3/);
+    assert.doesNotMatch(markdown, /<details>/);
     assert.match(markdown, /```diff/);
     assert.match(markdown, /\+type: ravion-aws-vpc/);
   });
@@ -149,7 +153,7 @@ describe("publish", () => {
     const markdown = formatPublishPlanMarkdown(result);
 
     assert.match(markdown, /No publish changes are required/);
-    assert.doesNotMatch(markdown, /\| Module \| Version \| Description \|/);
+    assert.doesNotMatch(markdown, /\| Module \| Current Version \| New Version \| Description \|/);
     assert.doesNotMatch(markdown, /\| Module \| Version \| Action \| Summary \|/);
     assert.doesNotMatch(markdown, /Skip ravion-aws-vpc@1\.2\.3/);
   });
