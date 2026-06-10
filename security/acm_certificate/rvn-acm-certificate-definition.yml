@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.0.6
-  description: rename Route53 validation records toggle to noun-first enabled format
+  version: 0.1.0
+  description: "breaking change: TF variables renamed for readability"
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

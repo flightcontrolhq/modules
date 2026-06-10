@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.1.4
-  description: rename ECS web boolean inputs to noun-first enabled format
+  version: 0.2.0
+  description: "breaking change: TF variables renamed for readability"
 module:
   inputs:
     - id: section_service
