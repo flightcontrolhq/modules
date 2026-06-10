@@ -216,7 +216,9 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
   }
 
   lines.push("| Module | Version | Action | Summary |", "| --- | --- | --- | --- |");
-  for (const item of result.items) {
+  const byModule = (left: PublishPlanItem, right: PublishPlanItem) => left.type.localeCompare(right.type) || left.version.localeCompare(right.version);
+  const skippedItems = result.items.filter((item) => item.action === "skip-version");
+  for (const item of [...[...plannedChanges].sort(byModule), ...[...skippedItems].sort(byModule)]) {
     lines.push(`| \`${escapeMarkdownTableCell(item.type)}\` | \`${escapeMarkdownTableCell(item.version)}\` | ${formatAction(item.action)} | ${escapeMarkdownTableCell(item.message)} |`);
   }
 

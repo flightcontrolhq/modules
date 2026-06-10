@@ -138,6 +138,20 @@ describe("publish", () => {
     assert.match(markdown, /\+type: ravion-aws-vpc/);
   });
 
+  it("lists planned changes first in the markdown table, then skips, each sorted by module", () => {
+    const item = (type: string, action: "create-version" | "skip-version") => ({ type, version: "1.0.0", action, dryRun: true, message: `${action} ${type}` });
+    const markdown = formatPublishPlanMarkdown({
+      dryRun: true,
+      items: [item("aaa-skipped", "skip-version"), item("zzz-changed", "create-version"), item("bbb-changed", "create-version"), item("yyy-skipped", "skip-version")],
+    });
+
+    const rows = markdown.split("\n").filter((line) => line.startsWith("| `"));
+    assert.deepEqual(
+      rows.map((row) => row.split("|")[1].trim()),
+      ["`bbb-changed`", "`zzz-changed`", "`aaa-skipped`", "`yyy-skipped`"],
+    );
+  });
+
   it("requires a Ravion API token by default", async () => {
     await assert.rejects(() => createDefaultRavionApiClient({ token: "" }), {
       name: "PublishError",
