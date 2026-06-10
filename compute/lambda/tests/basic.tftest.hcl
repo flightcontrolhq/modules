@@ -42,7 +42,7 @@ variables {
   handler      = "index.handler"
   s3_bucket    = "artifact-bucket"
   s3_key       = "lambda.zip"
-  create_role  = false
+  role_enabled = false
   role_arn     = "arn:aws:iam::123456789012:role/existing-lambda-role"
 }
 
@@ -74,13 +74,13 @@ run "existing_role_no_create" {
   command = plan
 
   variables {
-    create_role = false
-    role_arn    = "arn:aws:iam::123456789012:role/existing-lambda-role-2"
+    role_enabled = false
+    role_arn     = "arn:aws:iam::123456789012:role/existing-lambda-role-2"
   }
 
   assert {
     condition     = length(aws_iam_role.this) == 0
-    error_message = "IAM role should not be created when create_role is false."
+    error_message = "IAM role should not be created when role_enabled is false."
   }
 }
 
@@ -107,7 +107,7 @@ run "lambda_at_edge_valid_configuration" {
   command = plan
 
   variables {
-    is_lambda_at_edge      = true
+    lambda_at_edge_enabled = true
     publish                = true
     architectures          = ["x86_64"]
     timeout                = 30

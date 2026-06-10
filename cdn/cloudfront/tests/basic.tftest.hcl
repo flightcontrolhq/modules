@@ -825,8 +825,8 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.is_ipv6_enabled == true
-    error_message = "is_ipv6_enabled should default to true."
+    condition     = var.ipv6_enabled == true
+    error_message = "ipv6_enabled should default to true."
   }
 
   assert {
@@ -870,13 +870,13 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.enable_logging == false
-    error_message = "enable_logging should default to false."
+    condition     = var.logging_enabled == false
+    error_message = "logging_enabled should default to false."
   }
 
   assert {
-    condition     = var.create_logging_bucket == false
-    error_message = "create_logging_bucket should default to false."
+    condition     = var.logging_bucket_enabled == false
+    error_message = "logging_bucket_enabled should default to false."
   }
 
   assert {
@@ -890,8 +890,8 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.create_origin_access_control == true
-    error_message = "create_origin_access_control should default to true."
+    condition     = var.origin_access_control_enabled == true
+    error_message = "origin_access_control_enabled should default to true."
   }
 
   assert {

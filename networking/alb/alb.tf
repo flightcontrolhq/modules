@@ -9,17 +9,17 @@ resource "aws_lb" "this" {
   security_groups    = [module.security_group.security_group_id]
   subnets            = var.subnet_ids
 
-  enable_deletion_protection = var.deletion_protection
+  enable_deletion_protection = var.deletion_protection_enabled
   idle_timeout               = var.idle_timeout
-  enable_http2               = var.enable_http2
+  enable_http2               = var.http2_enabled
   drop_invalid_header_fields = var.drop_invalid_header_fields
   desync_mitigation_mode     = var.desync_mitigation_mode
   preserve_host_header       = var.preserve_host_header
   xff_header_processing_mode = var.xff_header_processing_mode
-  enable_waf_fail_open       = var.enable_waf_fail_open
+  enable_waf_fail_open       = var.waf_fail_open_enabled
 
   dynamic "access_logs" {
-    for_each = var.enable_access_logs ? [1] : []
+    for_each = var.access_logs_enabled ? [1] : []
     content {
       bucket  = local.access_logs_bucket_name
       prefix  = var.access_logs_prefix
@@ -37,8 +37,8 @@ resource "aws_lb" "this" {
 
   lifecycle {
     precondition {
-      condition     = !var.enable_https_listener || length(var.certificate_arns) > 0
-      error_message = "At least one entry in certificate_arns is required when enable_https_listener is true."
+      condition     = !var.https_listener_enabled || length(var.certificate_arns) > 0
+      error_message = "At least one entry in certificate_arns is required when https_listener_enabled is true."
     }
   }
 }

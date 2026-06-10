@@ -12,7 +12,7 @@ variable "tags" {
 # Hosted Zone
 ################################################################################
 
-variable "create_zone" {
+variable "zone_enabled" {
   type        = bool
   description = "If true, create a new Route53 hosted zone. If false, reference an existing zone via zone_id."
   default     = true
@@ -20,7 +20,7 @@ variable "create_zone" {
 
 variable "zone_id" {
   type        = string
-  description = "The ID of an existing Route53 hosted zone to manage records in. Required when create_zone is false."
+  description = "The ID of an existing Route53 hosted zone to manage records in. Required when zone_enabled is false."
   default     = null
 
   validation {
@@ -31,7 +31,7 @@ variable "zone_id" {
 
 variable "name" {
   type        = string
-  description = "The fully qualified domain name for the hosted zone (e.g. example.com). Required when create_zone is true."
+  description = "The fully qualified domain name for the hosted zone (e.g. example.com). Required when zone_enabled is true."
   default     = null
 
   validation {
@@ -154,7 +154,7 @@ variable "records" {
 # Query Logging
 ################################################################################
 
-variable "enable_query_logging" {
+variable "query_logging_enabled" {
   type        = bool
   description = "Enable query logging for the hosted zone. Requires a CloudWatch log group ARN in us-east-1 for public zones."
   default     = false
@@ -162,7 +162,7 @@ variable "enable_query_logging" {
 
 variable "query_log_group_arn" {
   type        = string
-  description = "The ARN of an existing CloudWatch log group to stream Route53 query logs to. Required when enable_query_logging is true."
+  description = "The ARN of an existing CloudWatch log group to stream Route53 query logs to. Required when query_logging_enabled is true."
   default     = null
 
   validation {
@@ -175,7 +175,7 @@ variable "query_log_group_arn" {
 # DNSSEC
 ################################################################################
 
-variable "enable_dnssec" {
+variable "dnssec_enabled" {
   type        = bool
   description = "Enable DNSSEC signing for the hosted zone. Requires dnssec_kms_key_arn (a KMS key in us-east-1 with the correct key policy)."
   default     = false
@@ -183,7 +183,7 @@ variable "enable_dnssec" {
 
 variable "dnssec_kms_key_arn" {
   type        = string
-  description = "The ARN of a customer-managed KMS key used for DNSSEC signing. The key must be in us-east-1. Required when enable_dnssec is true."
+  description = "The ARN of a customer-managed KMS key used for DNSSEC signing. The key must be in us-east-1. Required when dnssec_enabled is true."
   default     = null
 
   validation {

@@ -56,7 +56,7 @@ module "edge_lambda" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
   name              = "edge-rewrite"
-  is_lambda_at_edge = true
+  lambda_at_edge_enabled = true
 
   package_type = "Zip"
   publish      = true
@@ -149,16 +149,16 @@ module "lambda_with_integrations" {
 | file_system_configs | EFS mount configs | `list(object)` | `[]` | no |
 | snap_start_apply_on | SnapStart mode (`PublishedVersions`) | `string` | `null` | no |
 | code_signing_config_arn | Code signing config ARN | `string` | `null` | no |
-| create_role | Create IAM role | `bool` | `true` | no |
+| role_enabled | Create IAM role | `bool` | `true` | no |
 | role_arn | Existing IAM role ARN | `string` | `null` | no |
 | role_name | IAM role name override | `string` | `null` | no |
 | role_path | IAM role path | `string` | `"/"` | no |
 | role_permissions_boundary | IAM permissions boundary ARN | `string` | `null` | no |
-| attach_basic_execution_policy | Attach AWS basic execution policy | `bool` | `true` | no |
-| attach_vpc_execution_policy | Attach AWS VPC execution policy when vpc_config is set | `bool` | `true` | no |
+| basic_execution_policy_enabled | Attach AWS basic execution policy | `bool` | `true` | no |
+| vpc_execution_policy_enabled | Attach AWS VPC execution policy when vpc_config is set | `bool` | `true` | no |
 | role_managed_policy_arns | Additional managed policy ARNs | `list(string)` | `[]` | no |
 | role_inline_policies | Inline IAM policies map (`name => json`) | `map(string)` | `{}` | no |
-| create_log_group | Create CloudWatch log group | `bool` | `true` | no |
+| log_group_enabled | Create CloudWatch log group | `bool` | `true` | no |
 | log_group_name | Custom log group name | `string` | `null` | no |
 | log_retention_days | Log retention in days | `number` | `30` | no |
 | log_kms_key_id | KMS key for log group | `string` | `null` | no |
@@ -169,7 +169,7 @@ module "lambda_with_integrations" {
 | function_url_auth_type | Function URL auth type (`NONE` or `AWS_IAM`) | `string` | `"AWS_IAM"` | no |
 | function_url_invoke_mode | Function URL invoke mode (`BUFFERED` or `RESPONSE_STREAM`) | `string` | `"BUFFERED"` | no |
 | function_url_cors | Function URL CORS object | `object` | `null` | no |
-| is_lambda_at_edge | Enable Lambda@Edge compatibility validations | `bool` | `false` | no |
+| lambda_at_edge_enabled | Enable Lambda@Edge compatibility validations | `bool` | `false` | no |
 
 ## Outputs
 
@@ -192,6 +192,6 @@ module "lambda_with_integrations" {
 ## Notes
 
 - Lambda@Edge deployments must be created in `us-east-1`.
-- The module enforces key Lambda@Edge constraints when `is_lambda_at_edge = true`.
+- The module enforces key Lambda@Edge constraints when `lambda_at_edge_enabled = true`.
 - For `Zip` package type, provide either `filename` or (`s3_bucket` + `s3_key`).
 - For `Image` package type, provide `image_uri`.

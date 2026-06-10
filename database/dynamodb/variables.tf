@@ -221,7 +221,7 @@ variable "point_in_time_recovery_enabled" {
   default     = true
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
   default     = true
@@ -332,7 +332,7 @@ variable "autoscaling_indexes" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "create_cloudwatch_alarms" {
+variable "cloudwatch_alarms_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for throttled requests and system errors."
   default     = false

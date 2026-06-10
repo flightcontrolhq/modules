@@ -538,15 +538,15 @@ run "test_security_group_id_invalid" {
   command = plan
 
   variables {
-    name                  = "test-db"
-    engine                = "postgres"
-    instance_class        = "db.t3.micro"
-    allocated_storage     = 20
-    vpc_id                = "vpc-12345678"
-    subnet_ids            = ["subnet-11111111", "subnet-22222222"]
-    username              = "admin"
-    create_security_group = false
-    security_group_id     = "invalid-sg"
+    name                   = "test-db"
+    engine                 = "postgres"
+    instance_class         = "db.t3.micro"
+    allocated_storage      = 20
+    vpc_id                 = "vpc-12345678"
+    subnet_ids             = ["subnet-11111111", "subnet-22222222"]
+    username               = "admin"
+    security_group_enabled = false
+    security_group_id      = "invalid-sg"
   }
 
   expect_failures = [
@@ -857,7 +857,7 @@ run "test_storage_encrypted_default" {
   }
 }
 
-# Test: deletion_protection defaults to true
+# Test: deletion_protection_enabled defaults to true
 run "test_deletion_protection_default" {
   command = plan
 
@@ -872,8 +872,8 @@ run "test_deletion_protection_default" {
   }
 
   assert {
-    condition     = var.deletion_protection == true
-    error_message = "deletion_protection should default to true."
+    condition     = var.deletion_protection_enabled == true
+    error_message = "deletion_protection_enabled should default to true."
   }
 }
 
@@ -1173,25 +1173,25 @@ run "test_security_group_created_by_default" {
   }
 }
 
-# Test: Security group is not created when create_security_group is false
+# Test: Security group is not created when security_group_enabled is false
 run "test_security_group_not_created" {
   command = plan
 
   variables {
-    name                  = "test-db"
-    engine                = "postgres"
-    instance_class        = "db.t3.micro"
-    allocated_storage     = 20
-    vpc_id                = "vpc-12345678"
-    subnet_ids            = ["subnet-11111111", "subnet-22222222"]
-    username              = "admin"
-    create_security_group = false
-    security_group_id     = "sg-12345678"
+    name                   = "test-db"
+    engine                 = "postgres"
+    instance_class         = "db.t3.micro"
+    allocated_storage      = 20
+    vpc_id                 = "vpc-12345678"
+    subnet_ids             = ["subnet-11111111", "subnet-22222222"]
+    username               = "admin"
+    security_group_enabled = false
+    security_group_id      = "sg-12345678"
   }
 
   assert {
     condition     = local.create_security_group == false
-    error_message = "Security group should not be created when create_security_group is false."
+    error_message = "Security group should not be created when security_group_enabled is false."
   }
 }
 
@@ -1220,15 +1220,15 @@ run "test_option_group_created_for_oracle" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "oracle-ee"
-    license_model       = "bring-your-own-license"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_option_group = true
+    name                 = "test-db"
+    engine               = "oracle-ee"
+    license_model        = "bring-your-own-license"
+    instance_class       = "db.t3.micro"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+    option_group_enabled = true
   }
 
   assert {
@@ -1242,15 +1242,15 @@ run "test_option_group_created_for_sqlserver" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "sqlserver-se"
-    license_model       = "license-included"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_option_group = true
+    name                 = "test-db"
+    engine               = "sqlserver-se"
+    license_model        = "license-included"
+    instance_class       = "db.t3.micro"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+    option_group_enabled = true
   }
 
   assert {
@@ -1264,14 +1264,14 @@ run "test_option_group_not_created_for_postgres" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_option_group = true
+    name                 = "test-db"
+    engine               = "postgres"
+    instance_class       = "db.t3.micro"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+    option_group_enabled = true
   }
 
   assert {
@@ -1356,15 +1356,15 @@ run "test_read_replicas_created_when_enabled" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_read_replica = true
-    read_replica_count  = 2
+    name                 = "test-db"
+    engine               = "postgres"
+    instance_class       = "db.t3.micro"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+    read_replica_enabled = true
+    read_replica_count   = 2
   }
 
   assert {
@@ -1383,14 +1383,14 @@ run "test_read_replica_instance_class_default" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.r6g.large"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_read_replica = true
+    name                 = "test-db"
+    engine               = "postgres"
+    instance_class       = "db.r6g.large"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+    read_replica_enabled = true
   }
 
   assert {
@@ -1411,7 +1411,7 @@ run "test_read_replica_instance_class_override" {
     vpc_id                      = "vpc-12345678"
     subnet_ids                  = ["subnet-11111111", "subnet-22222222"]
     username                    = "admin"
-    create_read_replica         = true
+    read_replica_enabled        = true
     read_replica_instance_class = "db.t3.medium"
   }
 

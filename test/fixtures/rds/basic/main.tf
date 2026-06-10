@@ -83,11 +83,11 @@ module "rds" {
   username = "dbadmin"
   db_name  = "testdb"
 
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_enabled = true
+  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
 
   # Test-friendly lifecycle settings.
-  deletion_protection          = false
+  deletion_protection_enabled  = false
   skip_final_snapshot          = true
   backup_retention_period      = 1
   apply_immediately            = true

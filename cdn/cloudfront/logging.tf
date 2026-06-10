@@ -1,12 +1,12 @@
 resource "aws_s3_bucket" "logging" {
-  count = var.create_logging_bucket ? 1 : 0
+  count = var.logging_bucket_enabled ? 1 : 0
 
   bucket = "${var.name}-cf-logs-${data.aws_caller_identity.current.account_id}-${local.region}"
   tags   = merge(local.tags, { Name = "${var.name}-cf-logs" })
 }
 
 resource "aws_s3_bucket_ownership_controls" "logging" {
-  count = var.create_logging_bucket ? 1 : 0
+  count = var.logging_bucket_enabled ? 1 : 0
 
   bucket = aws_s3_bucket.logging[0].id
 
@@ -16,7 +16,7 @@ resource "aws_s3_bucket_ownership_controls" "logging" {
 }
 
 resource "aws_s3_bucket_acl" "logging" {
-  count = var.create_logging_bucket ? 1 : 0
+  count = var.logging_bucket_enabled ? 1 : 0
 
   bucket     = aws_s3_bucket.logging[0].id
   acl        = "log-delivery-write"
@@ -24,7 +24,7 @@ resource "aws_s3_bucket_acl" "logging" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "logging" {
-  count = var.create_logging_bucket ? 1 : 0
+  count = var.logging_bucket_enabled ? 1 : 0
 
   bucket = aws_s3_bucket.logging[0].id
 

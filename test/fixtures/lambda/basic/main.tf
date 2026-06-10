@@ -87,7 +87,7 @@ module "lambda" {
   timeout     = 10
   memory_size = 128
 
-  create_role = true
+  role_enabled = true
 
   function_url_enabled   = true
   function_url_auth_type = "AWS_IAM"

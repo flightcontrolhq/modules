@@ -213,7 +213,7 @@ variable "http_version" {
   }
 }
 
-variable "is_ipv6_enabled" {
+variable "ipv6_enabled" {
   type        = bool
   description = "Whether IPv6 is enabled for the distribution."
   default     = true
@@ -331,7 +331,7 @@ variable "web_acl_id" {
 # Logging
 ################################################################################
 
-variable "enable_logging" {
+variable "logging_enabled" {
   type        = bool
   description = "Enable access logging for the CloudFront distribution."
   default     = false
@@ -355,7 +355,7 @@ variable "logging_include_cookies" {
   default     = false
 }
 
-variable "create_logging_bucket" {
+variable "logging_bucket_enabled" {
   type        = bool
   description = "Whether to create a new S3 bucket for access logging."
   default     = false
@@ -376,7 +376,7 @@ variable "logging_bucket_retention_days" {
 # Origin Access Control
 ################################################################################
 
-variable "create_origin_access_control" {
+variable "origin_access_control_enabled" {
   type        = bool
   description = "Whether to create Origin Access Control resources for S3 origins."
   default     = true

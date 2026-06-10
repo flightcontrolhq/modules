@@ -35,7 +35,7 @@ variable "region" {
   default     = null
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
   default     = true
@@ -225,7 +225,7 @@ variable "cluster_log_retention_in_days" {
 # Encryption
 ################################################################################
 
-variable "enable_secrets_encryption" {
+variable "secrets_encryption_enabled" {
   type        = bool
   description = "Enable envelope encryption for Kubernetes secrets using KMS. When secrets_kms_key_arn is null, a new symmetric key is created via the security/kms module."
   default     = true
@@ -233,7 +233,7 @@ variable "enable_secrets_encryption" {
 
 variable "secrets_kms_key_arn" {
   type        = string
-  description = "ARN of an existing KMS key to use for Kubernetes secrets envelope encryption. When null and enable_secrets_encryption is true, the module creates one."
+  description = "ARN of an existing KMS key to use for Kubernetes secrets envelope encryption. When null and secrets_encryption_enabled is true, the module creates one."
   default     = null
 
   validation {
@@ -282,7 +282,7 @@ variable "kube_proxy_addon_configuration_values" {
   default     = null
 }
 
-variable "enable_ebs_csi_driver" {
+variable "ebs_csi_driver_enabled" {
   type        = bool
   description = "Install the aws-ebs-csi-driver add-on and create its Pod Identity role."
   default     = false
@@ -300,7 +300,7 @@ variable "ebs_csi_addon_configuration_values" {
   default     = null
 }
 
-variable "enable_pod_identity_agent" {
+variable "pod_identity_agent_enabled" {
   type        = bool
   description = "Install the eks-pod-identity-agent add-on. Required for any Pod Identity associations to take effect at runtime."
   default     = true
@@ -312,7 +312,7 @@ variable "pod_identity_agent_addon_version" {
   default     = null
 }
 
-variable "enable_lb_controller_pod_identity" {
+variable "lb_controller_pod_identity_enabled" {
   type        = bool
   description = "Create an IAM role and Pod Identity association for the AWS Load Balancer Controller (Helm-installed by the consumer)."
   default     = true

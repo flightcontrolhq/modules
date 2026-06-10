@@ -90,7 +90,7 @@ output "autoscaling_gsi_target_arns" {
 
 output "cloudwatch_alarm_arns" {
   description = "Map of CloudWatch alarm ARNs created by this module."
-  value = var.create_cloudwatch_alarms ? {
+  value = var.cloudwatch_alarms_enabled ? {
     read_throttle  = aws_cloudwatch_metric_alarm.read_throttle[0].arn
     write_throttle = aws_cloudwatch_metric_alarm.write_throttle[0].arn
     system_errors  = aws_cloudwatch_metric_alarm.system_errors[0].arn

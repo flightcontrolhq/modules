@@ -3,14 +3,14 @@
 ################################################################################
 
 resource "aws_rds_global_cluster" "this" {
-  count = var.create_global_cluster ? 1 : 0
+  count = var.global_cluster_enabled ? 1 : 0
 
   global_cluster_identifier = var.global_cluster_identifier
   engine                    = var.engine
   engine_version            = var.engine_version
   storage_encrypted         = var.storage_encrypted
   database_name             = var.database_name
-  deletion_protection       = var.deletion_protection
+  deletion_protection       = var.deletion_protection_enabled
 }
 
 ################################################################################
@@ -62,15 +62,15 @@ resource "aws_rds_cluster" "this" {
   preferred_maintenance_window = var.preferred_maintenance_window
   allow_major_version_upgrade  = var.allow_major_version_upgrade
   apply_immediately            = var.apply_immediately
-  deletion_protection          = var.deletion_protection
+  deletion_protection          = var.deletion_protection_enabled
 
   # Monitoring
   enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
 
   # Aurora features
-  enable_http_endpoint           = var.enable_http_endpoint
-  enable_local_write_forwarding  = local.is_mysql ? var.enable_local_write_forwarding : null
-  enable_global_write_forwarding = local.is_postgres ? var.enable_global_write_forwarding : null
+  enable_http_endpoint           = var.http_endpoint_enabled
+  enable_local_write_forwarding  = local.is_mysql ? var.local_write_forwarding_enabled : null
+  enable_global_write_forwarding = local.is_postgres ? var.global_write_forwarding_enabled : null
 
   # Global database
   global_cluster_identifier = var.global_cluster_identifier
@@ -107,8 +107,8 @@ resource "aws_rds_cluster" "this" {
     ]
 
     precondition {
-      condition     = var.create_security_group || var.security_group_id != null || length(var.security_group_ids) > 0
-      error_message = "At least one security group must be provided: set create_security_group = true, provide security_group_id, or provide security_group_ids."
+      condition     = var.security_group_enabled || var.security_group_id != null || length(var.security_group_ids) > 0
+      error_message = "At least one security group must be provided: set security_group_enabled = true, provide security_group_id, or provide security_group_ids."
     }
 
     precondition {
@@ -117,18 +117,18 @@ resource "aws_rds_cluster" "this" {
     }
 
     precondition {
-      condition     = var.create_cluster_parameter_group || var.cluster_parameter_group_name != null
-      error_message = "cluster_parameter_group_name is required when create_cluster_parameter_group is false."
+      condition     = var.cluster_parameter_group_enabled || var.cluster_parameter_group_name != null
+      error_message = "cluster_parameter_group_name is required when cluster_parameter_group_enabled is false."
     }
 
     precondition {
-      condition     = var.create_db_parameter_group || var.db_parameter_group_name != null
-      error_message = "db_parameter_group_name is required when create_db_parameter_group is false."
+      condition     = var.db_parameter_group_enabled || var.db_parameter_group_name != null
+      error_message = "db_parameter_group_name is required when db_parameter_group_enabled is false."
     }
 
     precondition {
       condition     = var.monitoring_interval == 0 || local.create_monitoring_role || var.monitoring_role_arn != null
-      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and create_monitoring_role is false."
+      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_enabled is false."
     }
 
     precondition {
@@ -137,13 +137,13 @@ resource "aws_rds_cluster" "this" {
     }
 
     precondition {
-      condition     = !var.enable_local_write_forwarding || local.is_mysql
-      error_message = "enable_local_write_forwarding is only supported on Aurora MySQL."
+      condition     = !var.local_write_forwarding_enabled || local.is_mysql
+      error_message = "local_write_forwarding_enabled is only supported on Aurora MySQL."
     }
 
     precondition {
-      condition     = !var.enable_global_write_forwarding || local.is_postgres
-      error_message = "enable_global_write_forwarding is only supported on Aurora PostgreSQL."
+      condition     = !var.global_write_forwarding_enabled || local.is_postgres
+      error_message = "global_write_forwarding_enabled is only supported on Aurora PostgreSQL."
     }
 
     precondition {
@@ -152,8 +152,8 @@ resource "aws_rds_cluster" "this" {
     }
 
     precondition {
-      condition     = !var.enable_activity_stream || var.activity_stream_kms_key_id != null
-      error_message = "activity_stream_kms_key_id is required when enable_activity_stream is true."
+      condition     = !var.activity_stream_enabled || var.activity_stream_kms_key_id != null
+      error_message = "activity_stream_kms_key_id is required when activity_stream_enabled is true."
     }
   }
 

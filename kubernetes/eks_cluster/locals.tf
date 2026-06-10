@@ -23,7 +23,7 @@ locals {
   secrets_kms_key_arn = (
     var.secrets_kms_key_arn != null
     ? var.secrets_kms_key_arn
-    : (var.enable_secrets_encryption ? module.secrets_kms[0].key_arn : null)
+    : (var.secrets_encryption_enabled ? module.secrets_kms[0].key_arn : null)
   )
 
   pod_identity_trust_policy = jsonencode({

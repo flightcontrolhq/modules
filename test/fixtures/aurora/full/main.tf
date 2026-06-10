@@ -84,17 +84,17 @@ module "aurora" {
   database_name   = "testdb"
 
   # Security
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_enabled = true
+  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
 
   # Monitoring — Enhanced Monitoring + CloudWatch Logs
   monitoring_interval             = 60
-  create_monitoring_role          = true
+  monitoring_role_enabled         = true
   performance_insights_enabled    = true
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
   # CloudWatch Alarms
-  create_cloudwatch_alarms = true
+  cloudwatch_alarms_enabled = true
 
   # Parameter groups with custom parameters
   cluster_parameter_group_family = "aurora-postgresql16"
@@ -109,7 +109,7 @@ module "aurora" {
   db_parameter_group_family = "aurora-postgresql16"
 
   # Auto-scaling
-  enable_autoscaling             = true
+  autoscaling_enabled            = true
   autoscaling_min_capacity       = 1
   autoscaling_max_capacity       = 3
   autoscaling_target_cpu         = 70
@@ -124,10 +124,10 @@ module "aurora" {
   }
 
   # Test-friendly settings
-  deletion_protection     = false
-  skip_final_snapshot     = true
-  backup_retention_period = 1
-  apply_immediately       = true
+  deletion_protection_enabled = false
+  skip_final_snapshot         = true
+  backup_retention_period     = 1
+  apply_immediately           = true
 
   tags = local.common_tags
 }

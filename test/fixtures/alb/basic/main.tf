@@ -73,11 +73,11 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   # Basic HTTP-only configuration
-  enable_http_listener  = true
-  enable_https_listener = false
+  http_listener_enabled  = true
+  https_listener_enabled = false
 
   # Disable deletion protection for test cleanup
-  deletion_protection = false
+  deletion_protection_enabled = false
 
   tags = local.common_tags
 }

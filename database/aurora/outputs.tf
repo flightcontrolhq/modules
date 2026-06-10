@@ -137,7 +137,7 @@ output "cluster_parameter_group_name" {
 
 output "cluster_parameter_group_arn" {
   description = "The ARN of the cluster parameter group."
-  value       = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].arn : null
+  value       = var.cluster_parameter_group_enabled ? aws_rds_cluster_parameter_group.this[0].arn : null
 }
 
 output "db_parameter_group_name" {
@@ -147,7 +147,7 @@ output "db_parameter_group_name" {
 
 output "db_parameter_group_arn" {
   description = "The ARN of the DB parameter group."
-  value       = var.create_db_parameter_group ? aws_db_parameter_group.this[0].arn : null
+  value       = var.db_parameter_group_enabled ? aws_db_parameter_group.this[0].arn : null
 }
 
 ################################################################################
@@ -174,12 +174,12 @@ output "cloudwatch_alarm_arns" {
 
 output "global_cluster_id" {
   description = "The ID of the global cluster."
-  value       = var.create_global_cluster ? aws_rds_global_cluster.this[0].id : null
+  value       = var.global_cluster_enabled ? aws_rds_global_cluster.this[0].id : null
 }
 
 output "global_cluster_arn" {
   description = "The ARN of the global cluster."
-  value       = var.create_global_cluster ? aws_rds_global_cluster.this[0].arn : null
+  value       = var.global_cluster_enabled ? aws_rds_global_cluster.this[0].arn : null
 }
 
 ################################################################################
@@ -188,12 +188,12 @@ output "global_cluster_arn" {
 
 output "activity_stream_kinesis_stream_name" {
   description = "The name of the Kinesis data stream used for the database activity stream."
-  value       = var.enable_activity_stream ? aws_rds_cluster_activity_stream.this[0].kinesis_stream_name : null
+  value       = var.activity_stream_enabled ? aws_rds_cluster_activity_stream.this[0].kinesis_stream_name : null
 }
 
 output "activity_stream_kms_key_id" {
   description = "The KMS key ID used for the database activity stream."
-  value       = var.enable_activity_stream ? aws_rds_cluster_activity_stream.this[0].kms_key_id : null
+  value       = var.activity_stream_enabled ? aws_rds_cluster_activity_stream.this[0].kms_key_id : null
 }
 
 ################################################################################
@@ -202,7 +202,7 @@ output "activity_stream_kms_key_id" {
 
 output "autoscaling_target_arn" {
   description = "The ARN of the Application Auto Scaling target."
-  value       = var.enable_autoscaling ? aws_appautoscaling_target.this[0].arn : null
+  value       = var.autoscaling_enabled ? aws_appautoscaling_target.this[0].arn : null
 }
 
 ################################################################################

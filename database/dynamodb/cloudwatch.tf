@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_cloudwatch_metric_alarm" "read_throttle" {
-  count = var.create_cloudwatch_alarms ? 1 : 0
+  count = var.cloudwatch_alarms_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-dynamodb-read-throttle"
   alarm_description   = "DynamoDB read throttle events for ${var.name}"
@@ -27,7 +27,7 @@ resource "aws_cloudwatch_metric_alarm" "read_throttle" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "write_throttle" {
-  count = var.create_cloudwatch_alarms ? 1 : 0
+  count = var.cloudwatch_alarms_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-dynamodb-write-throttle"
   alarm_description   = "DynamoDB write throttle events for ${var.name}"
@@ -51,7 +51,7 @@ resource "aws_cloudwatch_metric_alarm" "write_throttle" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "system_errors" {
-  count = var.create_cloudwatch_alarms ? 1 : 0
+  count = var.cloudwatch_alarms_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-dynamodb-system-errors"
   alarm_description   = "DynamoDB system errors for ${var.name}"

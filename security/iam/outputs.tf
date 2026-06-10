@@ -38,22 +38,22 @@ output "role_create_date" {
 
 output "instance_profile_arn" {
   description = "The ARN of the IAM instance profile (null if not created)."
-  value       = var.create_instance_profile ? aws_iam_instance_profile.this[0].arn : null
+  value       = var.instance_profile_enabled ? aws_iam_instance_profile.this[0].arn : null
 }
 
 output "instance_profile_name" {
   description = "The name of the IAM instance profile (null if not created)."
-  value       = var.create_instance_profile ? aws_iam_instance_profile.this[0].name : null
+  value       = var.instance_profile_enabled ? aws_iam_instance_profile.this[0].name : null
 }
 
 output "instance_profile_id" {
   description = "The ID of the IAM instance profile (null if not created)."
-  value       = var.create_instance_profile ? aws_iam_instance_profile.this[0].id : null
+  value       = var.instance_profile_enabled ? aws_iam_instance_profile.this[0].id : null
 }
 
 output "instance_profile_unique_id" {
   description = "The unique ID assigned by AWS to the IAM instance profile (null if not created)."
-  value       = var.create_instance_profile ? aws_iam_instance_profile.this[0].unique_id : null
+  value       = var.instance_profile_enabled ? aws_iam_instance_profile.this[0].unique_id : null
 }
 
 ################################################################################

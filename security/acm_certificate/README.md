@@ -90,7 +90,7 @@ module "alb" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 
-  enable_https_listener = true
+  https_listener_enabled = true
   certificate_arn       = module.cert.certificate_arn
 
   tags = {

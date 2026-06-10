@@ -121,8 +121,8 @@ run "existing_zone_with_records" {
   command = plan
 
   variables {
-    create_zone = false
-    zone_id     = "Z1EXISTING00000000"
+    zone_enabled = false
+    zone_id      = "Z1EXISTING00000000"
     records = {
       www = {
         name    = "www.existing.example.com"
@@ -141,7 +141,7 @@ run "existing_zone_with_records" {
 
   assert {
     condition     = length(aws_route53_zone.public) == 0
-    error_message = "No zone should be created when create_zone = false"
+    error_message = "No zone should be created when zone_enabled = false"
   }
 
   assert {
@@ -186,9 +186,9 @@ run "query_logging" {
   command = plan
 
   variables {
-    name                 = "example.com"
-    enable_query_logging = true
-    query_log_group_arn  = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/route53/example.com:*"
+    name                  = "example.com"
+    query_logging_enabled = true
+    query_log_group_arn   = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/route53/example.com:*"
   }
 
   assert {
@@ -206,7 +206,7 @@ run "dnssec" {
 
   variables {
     name               = "example.com"
-    enable_dnssec      = true
+    dnssec_enabled     = true
     dnssec_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/11111111-2222-3333-4444-555555555555"
   }
 

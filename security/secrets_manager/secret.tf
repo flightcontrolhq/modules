@@ -21,7 +21,7 @@ resource "aws_secretsmanager_secret" "this" {
 }
 
 resource "aws_secretsmanager_secret_version" "this" {
-  count = var.create_version ? 1 : 0
+  count = var.secret_version_enabled ? 1 : 0
 
   secret_id     = aws_secretsmanager_secret.this.id
   secret_string = local.secret_value

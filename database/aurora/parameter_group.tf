@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_rds_cluster_parameter_group" "this" {
-  count = var.create_cluster_parameter_group ? 1 : 0
+  count = var.cluster_parameter_group_enabled ? 1 : 0
 
   name        = var.name
   family      = coalesce(var.cluster_parameter_group_family, local.default_parameter_group_family)
@@ -32,7 +32,7 @@ resource "aws_rds_cluster_parameter_group" "this" {
 ################################################################################
 
 resource "aws_db_parameter_group" "this" {
-  count = var.create_db_parameter_group ? 1 : 0
+  count = var.db_parameter_group_enabled ? 1 : 0
 
   name        = var.name
   family      = coalesce(var.db_parameter_group_family, local.default_parameter_group_family)

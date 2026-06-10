@@ -47,17 +47,17 @@ output "origin_access_control_ids" {
 
 output "logging_bucket_id" {
   description = "The ID of the logging S3 bucket."
-  value       = var.create_logging_bucket ? aws_s3_bucket.logging[0].id : null
+  value       = var.logging_bucket_enabled ? aws_s3_bucket.logging[0].id : null
 }
 
 output "logging_bucket_arn" {
   description = "The ARN of the logging S3 bucket."
-  value       = var.create_logging_bucket ? aws_s3_bucket.logging[0].arn : null
+  value       = var.logging_bucket_enabled ? aws_s3_bucket.logging[0].arn : null
 }
 
 output "logging_bucket_domain_name" {
   description = "The domain name of the logging S3 bucket."
-  value       = var.create_logging_bucket ? aws_s3_bucket.logging[0].bucket_domain_name : null
+  value       = var.logging_bucket_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : null
 }
 
 ################################################################################

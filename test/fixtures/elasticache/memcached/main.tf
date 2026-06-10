@@ -83,8 +83,8 @@ module "elasticache" {
   num_cache_nodes = 1
 
   # Security - create a security group that allows access from VPC CIDR
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_enabled = true
+  allowed_cidr_blocks    = [module.vpc.vpc_cidr_block]
 
   # Apply changes immediately for testing
   apply_immediately = true

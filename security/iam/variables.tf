@@ -321,7 +321,7 @@ variable "permission_boundary_arn" {
 # Instance Profile
 ################################################################################
 
-variable "create_instance_profile" {
+variable "instance_profile_enabled" {
   type        = bool
   description = "Whether to create an IAM instance profile for this role."
   default     = false

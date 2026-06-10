@@ -82,7 +82,7 @@ module "dns" {
 module "app_dns" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
 
-  create_zone = false
+  zone_enabled = false
   zone_id     = "Z1234567890ABC"
 
   records = {
@@ -174,7 +174,7 @@ module "dns" {
   source = "..."
 
   name                 = "example.com"
-  enable_query_logging = true
+  query_logging_enabled = true
   query_log_group_arn  = aws_cloudwatch_log_group.dns_queries.arn
 }
 ```
@@ -190,7 +190,7 @@ module "dns" {
   source = "..."
 
   name               = "example.com"
-  enable_dnssec      = true
+  dnssec_enabled      = true
   dnssec_kms_key_arn = aws_kms_key.dnssec.arn
 }
 
@@ -218,9 +218,9 @@ output "ds_record" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| create_zone | If true, create a new hosted zone; if false, reference an existing zone via `zone_id` | `bool` | `true` | no |
-| zone_id | ID of an existing hosted zone to manage records in (required when `create_zone = false`) | `string` | `null` | conditional |
-| name | FQDN for the hosted zone (required when `create_zone = true`) | `string` | `null` | conditional |
+| zone_enabled | If true, create a new hosted zone; if false, reference an existing zone via `zone_id` | `bool` | `true` | no |
+| zone_id | ID of an existing hosted zone to manage records in (required when `zone_enabled = false`) | `string` | `null` | conditional |
+| name | FQDN for the hosted zone (required when `zone_enabled = true`) | `string` | `null` | conditional |
 | comment | Comment for the hosted zone | `string` | `"Managed by Terraform"` | no |
 | force_destroy | Destroy all records when the zone is destroyed | `bool` | `false` | no |
 | delegation_set_id | Reusable delegation set ID (public zones only) | `string` | `null` | no |
@@ -267,14 +267,14 @@ Each record supports:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_query_logging | Enable Route53 query logging | `bool` | `false` | no |
+| query_logging_enabled | Enable Route53 query logging | `bool` | `false` | no |
 | query_log_group_arn | ARN of the destination CloudWatch log group | `string` | `null` | conditional |
 
 ### DNSSEC
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_dnssec | Enable DNSSEC signing | `bool` | `false` | no |
+| dnssec_enabled | Enable DNSSEC signing | `bool` | `false` | no |
 | dnssec_kms_key_arn | KMS key ARN in `us-east-1` used for signing | `string` | `null` | conditional |
 | dnssec_signing_status | `SIGNING` or `NOT_SIGNING` | `string` | `"SIGNING"` | no |
 
@@ -303,6 +303,6 @@ Each record supports:
   resource directly. To associate additional VPCs (including cross-account
   VPCs), use the `aws_route53_vpc_association_authorization` /
   `aws_route53_zone_association` resources outside the module.
-- When using `create_zone = false`, `force_destroy` has no effect and the
+- When using `zone_enabled = false`, `force_destroy` has no effect and the
   upstream zone is not managed.
 - Alias records cannot specify a TTL; TTLs are inherited from the target.

@@ -7,7 +7,7 @@
 ################################################################################
 
 module "lb_controller_role" {
-  count = var.enable_lb_controller_pod_identity ? 1 : 0
+  count = var.lb_controller_pod_identity_enabled ? 1 : 0
 
   source = "../../security/iam"
 
@@ -24,7 +24,7 @@ module "lb_controller_role" {
 }
 
 resource "aws_eks_pod_identity_association" "lb_controller" {
-  count = var.enable_lb_controller_pod_identity ? 1 : 0
+  count = var.lb_controller_pod_identity_enabled ? 1 : 0
 
   cluster_name    = aws_eks_cluster.this.name
   namespace       = var.lb_controller_namespace

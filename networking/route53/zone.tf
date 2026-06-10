@@ -15,7 +15,7 @@ resource "aws_route53_zone" "public" {
   lifecycle {
     precondition {
       condition     = var.name != null
-      error_message = "var.name is required when create_zone is true."
+      error_message = "var.name is required when zone_enabled is true."
     }
   }
 }
@@ -25,7 +25,7 @@ resource "aws_route53_zone" "public" {
 ################################################################################
 
 resource "aws_route53_zone" "private" {
-  count = var.create_zone && var.private_zone ? 1 : 0
+  count = var.zone_enabled && var.private_zone ? 1 : 0
 
   name          = var.name
   comment       = var.comment
@@ -44,7 +44,7 @@ resource "aws_route53_zone" "private" {
   lifecycle {
     precondition {
       condition     = var.name != null
-      error_message = "var.name is required when create_zone is true."
+      error_message = "var.name is required when zone_enabled is true."
     }
     precondition {
       condition     = length(var.vpc_associations) > 0

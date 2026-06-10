@@ -52,7 +52,7 @@ output "log_group_name" {
 
 output "log_group_arn" {
   description = "The CloudWatch log group ARN, or null if not created by this module."
-  value       = var.create_log_group ? aws_cloudwatch_log_group.this[0].arn : null
+  value       = var.log_group_enabled ? aws_cloudwatch_log_group.this[0].arn : null
 }
 
 ################################################################################

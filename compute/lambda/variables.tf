@@ -268,7 +268,7 @@ variable "code_signing_config_arn" {
 # IAM Role
 ################################################################################
 
-variable "create_role" {
+variable "role_enabled" {
   type        = bool
   description = "Whether to create an IAM role for the Lambda function."
   default     = true
@@ -276,7 +276,7 @@ variable "create_role" {
 
 variable "role_arn" {
   type        = string
-  description = "Existing IAM role ARN to use when create_role is false."
+  description = "Existing IAM role ARN to use when role_enabled is false."
   default     = null
 
   validation {
@@ -287,7 +287,7 @@ variable "role_arn" {
 
 variable "role_name" {
   type        = string
-  description = "Custom IAM role name. If null and create_role is true, defaults to '<name>-lambda-role'."
+  description = "Custom IAM role name. If null and role_enabled is true, defaults to '<name>-lambda-role'."
   default     = null
 }
 
@@ -303,13 +303,13 @@ variable "role_permissions_boundary" {
   default     = null
 }
 
-variable "attach_basic_execution_policy" {
+variable "basic_execution_policy_enabled" {
   type        = bool
   description = "Attach AWSLambdaBasicExecutionRole when creating the role."
   default     = true
 }
 
-variable "attach_vpc_execution_policy" {
+variable "vpc_execution_policy_enabled" {
   type        = bool
   description = "Attach AWSLambdaVPCAccessExecutionRole when creating the role and vpc_config is set."
   default     = true
@@ -331,7 +331,7 @@ variable "role_inline_policies" {
 # CloudWatch Logs
 ################################################################################
 
-variable "create_log_group" {
+variable "log_group_enabled" {
   type        = bool
   description = "Whether to create the CloudWatch log group for the function."
   default     = true
@@ -478,7 +478,7 @@ variable "function_url_cors" {
 # Lambda@Edge
 ################################################################################
 
-variable "is_lambda_at_edge" {
+variable "lambda_at_edge_enabled" {
   type        = bool
   description = "Enable Lambda@Edge compatibility validations."
   default     = false

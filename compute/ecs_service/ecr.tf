@@ -19,5 +19,5 @@ module "ecr" {
   scan_on_push         = var.ecr_scan_on_push_enabled
   force_delete         = var.ecr_force_delete
 
-  enable_default_lifecycle_policy = var.ecr_default_lifecycle_policy_enabled
+  default_lifecycle_policy_enabled = var.ecr_default_lifecycle_policy_enabled
 }
