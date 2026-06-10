@@ -54,8 +54,10 @@ resource "aws_vpc_security_group_ingress_rule" "this" {
   security_group_id = aws_security_group.this.id
   description       = each.value.description
 
-  from_port   = each.value.from_port
-  to_port     = each.value.to_port
+  # For ip_protocol="-1" (all protocols), AWS rejects explicit ports, so
+  # omit them regardless of what the caller passed.
+  from_port   = contains(["-1", "all"], lower(each.value.ip_protocol)) ? null : each.value.from_port
+  to_port     = contains(["-1", "all"], lower(each.value.ip_protocol)) ? null : each.value.to_port
   ip_protocol = each.value.ip_protocol
 
   # Source types - only one will be set
@@ -79,8 +81,10 @@ resource "aws_vpc_security_group_egress_rule" "this" {
   security_group_id = aws_security_group.this.id
   description       = each.value.description
 
-  from_port   = each.value.from_port
-  to_port     = each.value.to_port
+  # For ip_protocol="-1" (all protocols), AWS rejects explicit ports, so
+  # omit them regardless of what the caller passed.
+  from_port   = contains(["-1", "all"], lower(each.value.ip_protocol)) ? null : each.value.from_port
+  to_port     = contains(["-1", "all"], lower(each.value.ip_protocol)) ? null : each.value.to_port
   ip_protocol = each.value.ip_protocol
 
   # Destination types - only one will be set
