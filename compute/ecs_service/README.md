@@ -583,7 +583,7 @@ The `service_discovery` object includes:
 ║  │     · predefined_metric     │                                                                                      ║
 ║  │     · custom_metric{}       │                                                                                      ║
 ║  │     · scale_in/out_cooldown │                                                                                      ║
-║  │     · disable_scale_in      │                                                                                      ║
+║  │     · scale_in_enabled      │                                                                                      ║
 ║  │   - scheduled[]:            │                                                                                      ║
 ║  │     · name, schedule (cron) │                                                                                      ║
 ║  │     · min/max_capacity      │                                                                                      ║

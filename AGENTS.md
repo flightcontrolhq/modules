@@ -269,6 +269,8 @@ Follow [Semantic Versioning](https://semver.org/):
 | **MINOR** | New features | New module, new optional variable, new output |
 | **PATCH** | Bug fixes | Documentation fix, validation fix, non-breaking default change |
 
+For local development publishes, do **not** bump `release.version` just to publish a new local copy. The local publish tooling automatically appends the next numeric prerelease suffix to the authored version, such as `0.2.1-1`, `0.2.1-2`, and so on.
+
 ## Testing Requirements
 
 ### Minimum Validation

@@ -633,7 +633,7 @@ module "asg" {
 ║  │   - adjustment_type (ChangeInCapacity/ExactCapacity/PercentChangeInCapacity)                                     │  ║
 ║  │   - min_adjustment_magnitude, cooldown, scaling_adjustment                                                        │  ║
 ║  │   - metric_aggregation_type, step_adjustments[]                                                                   │  ║
-║  │   - target_tracking_configuration: target_value, disable_scale_in, predefined/customized_metric_specification   │  ║
+║  │   - target_tracking_configuration: target_value, scale_in_enabled, predefined/customized_metric_specification   │  ║
 ║  │   - predictive_scaling_configuration: mode, scheduling_buffer_time, max_capacity_breach_behavior,                │  ║
 ║  │                                       metric_specifications[]                                                     │  ║
 ║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║

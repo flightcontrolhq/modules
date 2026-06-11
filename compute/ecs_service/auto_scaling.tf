@@ -33,7 +33,7 @@ resource "aws_appautoscaling_policy" "target_tracking" {
     target_value       = each.value.target_value
     scale_in_cooldown  = each.value.scale_in_cooldown
     scale_out_cooldown = each.value.scale_out_cooldown
-    disable_scale_in   = each.value.disable_scale_in
+    disable_scale_in   = !each.value.scale_in_enabled
 
     # Predefined metric
     dynamic "predefined_metric_specification" {
@@ -100,5 +100,4 @@ locals {
     var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn_suffix : aws_lb_target_group.tg_1[0].arn_suffix
   ) : ""
 }
-
 

@@ -260,7 +260,7 @@ function rejectLeakedCompilerSyntax(value: unknown, filePath: string, yamlPath: 
   }
 }
 
-async function findDefinitionFiles(rootPath: string): Promise<string[]> {
+export async function findDefinitionFiles(rootPath: string): Promise<string[]> {
   const files: string[] = [];
   for (const category of MODULE_CATEGORIES) {
     await collectDefinitionFiles(join(rootPath, category), files);
