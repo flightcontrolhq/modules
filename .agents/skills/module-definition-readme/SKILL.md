@@ -46,6 +46,8 @@ Keep the README useful for someone choosing settings in the Ravion UI. Avoid Ter
 
 After writing or revising `module.readme`, copy the README's first sentence back into `definition.description` so the catalog summary and embedded README stay aligned. Keep it as a concise plain sentence without markdown formatting.
 
+Keep `module.readme` as the final field inside `module`. The repository field order is `inputs`, `stack`, `build`, `deploy`, `ui`, then `readme` last.
+
 ## Config Alignment Rules
 
 - Include only fields exposed by `module.inputs`, plus high-level behavior implied by the stack mapping.
@@ -92,6 +94,7 @@ Before finishing, verify:
 
 - The first sentence matches the module's current purpose and `definition.description`.
 - `definition.description` has been updated to the README's first sentence after README edits.
+- `module.readme` is the final field inside `module`, after any `inputs`, `stack`, `build`, `deploy`, or `ui` fields.
 - Every `Configuration` table row maps to an existing `module.inputs` field or a clearly explained nested field.
 - Defaults and required flags match the current definition file.
 - Major feature sections correspond to actual exposed inputs or always-on behavior.
