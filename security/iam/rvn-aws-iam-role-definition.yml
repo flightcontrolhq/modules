@@ -4,7 +4,7 @@ definition:
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
   version: 0.1.1
-  description: Form fixes and improvements
+  description: Expand IAM condition operator choices
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -89,23 +89,9 @@ module:
           description: STS condition checks that restrict which OIDC identities can assume the role.
           id: conditions
           item_inputs:
-            - default: StringEquals
-              description: IAM operator used to compare the condition key and values.
-              id: test
-              label: Condition operator
-              required: true
-              type: string
-              values:
-                - label: String equals
-                  value: StringEquals
-                - label: String like
-                  value: StringLike
-                - label: ARN equals
-                  value: ArnEquals
-                - label: ARN like
-                  value: ArnLike
-                - label: Boolean
-                  value: Bool
+            - $template: ../../partials/templates/iam-condition-operator-input.yml
+              with:
+                default: StringEquals
             - description: IAM context key evaluated by the condition.
               id: variable
               label: Condition key
@@ -141,23 +127,9 @@ module:
       description: STS condition checks added to every generated trust policy statement.
       id: assume_role_conditions
       item_inputs:
-        - default: Bool
-          description: IAM operator used to compare the condition key and values.
-          id: test
-          label: Condition operator
-          required: true
-          type: string
-          values:
-            - label: String equals
-              value: StringEquals
-            - label: String like
-              value: StringLike
-            - label: ARN equals
-              value: ArnEquals
-            - label: ARN like
-              value: ArnLike
-            - label: Boolean
-              value: Bool
+        - $template: ../../partials/templates/iam-condition-operator-input.yml
+          with:
+            default: Bool
         - description: IAM context key evaluated by the condition.
           id: variable
           label: Condition key
@@ -244,23 +216,9 @@ module:
           description: Optional IAM conditions for this statement.
           id: conditions
           item_inputs:
-            - default: StringEquals
-              description: IAM operator used to compare the condition key and values.
-              id: test
-              label: Condition operator
-              required: true
-              type: string
-              values:
-                - label: String equals
-                  value: StringEquals
-                - label: String like
-                  value: StringLike
-                - label: ARN equals
-                  value: ArnEquals
-                - label: ARN like
-                  value: ArnLike
-                - label: Boolean
-                  value: Bool
+            - $template: ../../partials/templates/iam-condition-operator-input.yml
+              with:
+                default: StringEquals
             - description: IAM context key evaluated by the condition.
               id: variable
               label: Condition key
