@@ -1,10 +1,10 @@
 definition:
   type: rvn-aws-iam-role
-  name: IAM Role
+  name: AWS IAM Role
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
-  version: 0.1.0
-  description: Initial module definition.
+  version: 0.1.1
+  description: Form fixes and improvements
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -79,6 +79,9 @@ module:
         - description: IAM OIDC provider that issues tokens for this trust relationship.
           id: provider_arn
           label: OIDC provider ARN
+          patterns:
+            - message: Use a valid IAM OIDC provider ARN.
+              pattern: ^arn:aws(-cn|-us-gov)?:iam::\d{12}:oidc-provider/.+$
           placeholder: arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com
           required: true
           type: string
@@ -242,20 +245,31 @@ module:
           id: conditions
           item_inputs:
             - default: StringEquals
-              description: IAM condition operator.
+              description: IAM operator used to compare the condition key and values.
               id: test
-              label: Test
+              label: Condition operator
               required: true
               type: string
-            - description: IAM condition variable.
+              values:
+                - label: String equals
+                  value: StringEquals
+                - label: String like
+                  value: StringLike
+                - label: ARN equals
+                  value: ArnEquals
+                - label: ARN like
+                  value: ArnLike
+                - label: Boolean
+                  value: Bool
+            - description: IAM context key evaluated by the condition.
               id: variable
-              label: Variable
+              label: Condition key
               required: true
               type: string
-            - add_button_label: Add value
-              description: Values matched by the condition.
+            - add_button_label: Add condition value
+              description: Allowed or matched values for the condition key.
               id: values
-              label: Values
+              label: Condition values
               required: true
               type: string_array
           item_label: Condition
@@ -292,8 +306,7 @@ module:
       show_when:
         instance_profile_creation_enabled: true
       type: string
-    - default: /
-      description: IAM path for the instance profile. Defaults to the role path when empty.
+    - description: IAM path for the instance profile. Defaults to the role path when empty.
       id: instance_profile_path
       label: Instance profile path
       patterns:
@@ -386,7 +399,7 @@ module:
     | AWS account | Yes | None | AWS account where the IAM role is created. |
     | Region | Yes | None | Runner region for the stack. IAM resources are global, but Terraform still runs with an AWS region. |
     | Role name | Yes | Project, environment, and module given IDs | IAM role name. Must be unique in the AWS account. |
-    | Description | No | Managed by Ravion | Description stored on the IAM role. |
+    | Description | No | Managed by Terraform | Description stored on the IAM role. |
     | Path | No | / | IAM path for the role. |
     | Maximum session duration seconds | No | 3600 | STS session duration, from 3600 to 43200 seconds. |
     | Force detach policies on destroy | No | true | Detaches managed policies before destroying the role. |

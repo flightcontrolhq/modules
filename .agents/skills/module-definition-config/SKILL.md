@@ -15,17 +15,27 @@ Do not create or update module definitions directly with executor or Ravion Loca
 
 Within `module`, keep executable config before documentation in this order when present: `inputs`, `stack`, `build`, `deploy`, `ui`, `readme`. Always place `readme` last.
 
-## Reference Modules
+## Sourcing Reference Definitions
 
-- VPC Network: `definition.type: rvn-aws-network`, source `networking/vpc`, direct AWS account/region inputs, and `module.stack.type: opentofu`.
-- ECS Cluster: `definition.type: rvn-ecs-cluster`, depends on `network` via `type: $ref:rvn-aws-network`, source `compute/ecs_cluster`, and exposes cluster/load-balancer metrics.
-- ECS Web Server: `definition.type: rvn-ecs-web`, depends on `cluster` via `type: $ref:rvn-ecs-cluster`, source `compute/ecs_service`, and adds `module.build` plus `module.deploy.type: aws:ecs`.
-- Static Site: `definition.type: rvn-aws-static`, source `hosting/static_site`, and provides a deployable hosting example.
-- ACM Certificate: `definition.type: rvn-acm-certificate`, source `security/acm_certificate`, and provides a focused dependency/resource module example.
+Find active reference definitions by filename instead of relying on a fixed list:
+
+```text
+**/*-definition.yml
+```
+
+Exclude test fixtures and generated files, especially paths under `tools/ravion-modules/test/fixtures`.
+
+When a definition uses or mentions a module type, source that reference module by filename:
+
+```text
+**/<definition.type>-definition.yml
+```
+
+For `$ref:<module-type>` inputs, remove the `$ref:` prefix and inspect the active file matching `**/<module-type>-definition.yml`. Use that file to verify mapped inputs, stack outputs, inherited account/region behavior, and any dependency-specific conventions.
 
 ## Similar Definition Review
 
-Before authoring or reviewing config, search for active `*-definition.yml` files outside `tools/ravion-modules/test/fixtures` and inspect the closest examples. Choose examples by category, AWS service family, dependency model, runtime/deploy model, stack type, and UI complexity.
+Before authoring or reviewing config, search for active `*-definition.yml` files outside `tools/ravion-modules/test/fixtures` and inspect the closest examples. Choose examples by category, AWS service family, dependency model, runtime/deploy model, stack type, and UI complexity. If a dependency is expressed as `$ref:<module-type>`, inspect `**/<module-type>-definition.yml` before designing or reviewing the dependent inputs.
 
 Use examples to match repository conventions for:
 
@@ -111,9 +121,9 @@ Common dynamic value sources:
 
 Dependency patterns:
 
-- Network root modules expose direct `aws_account_id` and `aws_region` inputs.
-- Cluster modules should prefer `network` with `type: $ref:rvn-aws-network` instead of asking for VPC/subnet/account fields again.
-- Service modules should prefer `cluster` with `type: $ref:rvn-ecs-cluster` instead of asking for cluster, load balancer, subnet, or capacity provider outputs again.
+- Root infrastructure modules expose direct `aws_account_id` and `aws_region` inputs.
+- Dependent modules should prefer a `$ref:<module-type>` input over asking for values already produced by the referenced module.
+- Source the referenced module with `**/<module-type>-definition.yml` before mapping inherited inputs or stack outputs.
 
 Use `collapsible: true` for advanced settings. Use `show_when` for build-type, EC2-only, load-balancer-only, autoscaling-only, replica-only, alarm-only, custom-credentials-only, existing-resource-only, and engine-specific fields.
 
