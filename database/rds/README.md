@@ -313,7 +313,7 @@ module "mysql" {
 | subnet_ids | A list of subnet IDs for the DB subnet group. | `list(string)` | n/a | yes |
 | username | The master username for the database. | `string` | n/a | yes |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
-| engine_major_version | The major version of the database engine. | `string` | `null` | no |
+| engine_major_version | The major version of the database engine. Examples: 15 for PostgreSQL or SQL Server, 8.0 for MySQL, 19 for Oracle. | `string` | `null` | no |
 | engine_minor_version | The optional minor version of the database engine. | `string` | `null` | no |
 | license_model | The license model for Oracle/SQL Server. | `string` | `null` | no |
 | max_allocated_storage | Upper limit for storage autoscaling (0 to disable). AWS can grow storage up to this limit, but storage cannot be reduced in place. | `number` | `0` | no |

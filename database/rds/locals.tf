@@ -21,6 +21,12 @@ locals {
   is_oracle    = startswith(var.engine, "oracle-")
   is_sqlserver = startswith(var.engine, "sqlserver-")
 
+  sqlserver_engine_version_parts = var.engine_major_version != null ? split(".", var.engine_major_version) : []
+  sqlserver_engine_major         = var.engine_major_version != null ? local.sqlserver_engine_version_parts[0] : null
+  sqlserver_engine_minor         = var.engine_major_version != null && length(local.sqlserver_engine_version_parts) > 1 ? local.sqlserver_engine_version_parts[1] : "0"
+  sqlserver_parameter_version    = var.engine_major_version != null ? "${local.sqlserver_engine_major}.${substr("${local.sqlserver_engine_minor}0", 0, 1)}" : null
+  sqlserver_option_version       = var.engine_major_version != null ? "${local.sqlserver_engine_major}.${substr("${local.sqlserver_engine_minor}00", 0, 2)}" : null
+
   # Port defaults based on engine
   default_port = (
     local.is_mysql || local.is_mariadb ? 3306 :
@@ -46,7 +52,7 @@ locals {
       local.is_postgres ? "postgres${split(".", var.engine_major_version)[0]}" :
       local.is_mariadb ? "mariadb${regex("^[0-9]+\\.[0-9]+", var.engine_major_version)}" :
       local.is_oracle ? "${var.engine}-${split(".", var.engine_major_version)[0]}" :
-      local.is_sqlserver ? "${var.engine}-${regex("^[0-9]+\\.[0-9]+", var.engine_major_version)}" :
+      local.is_sqlserver ? "${var.engine}-${local.sqlserver_parameter_version}" :
       null
       ) : (
       local.is_mysql ? "mysql8.0" :
@@ -69,7 +75,7 @@ locals {
   default_option_group_engine_version = (
     var.engine_major_version != null ? (
       local.is_oracle ? split(".", var.engine_major_version)[0] :
-      local.is_sqlserver ? regex("^[0-9]+\\.[0-9]+", var.engine_major_version) :
+      local.is_sqlserver ? local.sqlserver_option_version :
       split(".", var.engine_major_version)[0]
       ) : (
       local.is_oracle ? "19" :

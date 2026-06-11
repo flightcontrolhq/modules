@@ -50,7 +50,7 @@ variable "engine" {
 
 variable "engine_major_version" {
   type        = string
-  description = "The major version of the database engine. If not specified, the latest available version will be used. Examples: 15, 8.0, 19."
+  description = "The major version of the database engine. If not specified, the latest available version will be used. Examples: 15 for PostgreSQL or SQL Server, 8.0 for MySQL, 19 for Oracle."
   default     = null
 }
 

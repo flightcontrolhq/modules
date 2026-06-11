@@ -186,7 +186,7 @@ module:
           value: sqlserver-ex
         - label: SQL Server Web
           value: sqlserver-web
-    - description: "Examples: 15 for PostgreSQL, 8.0 for MySQL, 19 for Oracle."
+    - description: "Examples: 15 for PostgreSQL or SQL Server, 8.0 for MySQL, 19 for Oracle."
       id: engine_major_version
       immutable: true
       label: Engine major version
@@ -534,7 +534,7 @@ module:
     - id: section_backup
       label: Backups
       type: section
-    - default: 30
+    - default: 7
       id: backup_retention_period
       label: Backup retention days
       max: 35
