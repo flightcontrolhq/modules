@@ -4,7 +4,7 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.0.10
+  version: 0.1.0
   description: Align RDS README opening sentence
 module:
   inputs:
