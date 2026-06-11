@@ -51,6 +51,7 @@ export interface RavionApiClientOptions {
 
 export interface PublishOptions {
   dryRun?: boolean;
+  localDev?: boolean;
   logger?: (message: string) => void;
 }
 
@@ -89,8 +90,9 @@ export async function publishDefinitions(
   const dryRun = options.dryRun ?? true;
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
-  const statuses = getReleaseStatuses(compiledDefinitions, { inventory });
-  const errors = createPublishPlanErrors(statuses, compiledDefinitions, inventory);
+  const definitionsToPublish = options.localDev ? applyLocalDevVersions(compiledDefinitions, inventory) : compiledDefinitions;
+  const statuses = getReleaseStatuses(definitionsToPublish, { inventory });
+  const errors = createPublishPlanErrors(statuses, definitionsToPublish, inventory);
   if (errors.length > 0) {
     throw new PublishPlanError("Release metadata validation failed.", { dryRun, items: [], errors });
   }
@@ -99,7 +101,7 @@ export async function publishDefinitions(
   const definitionsByType = new Map(inventory.definitions.map((definition) => [definition.type, definition]));
   const items: PublishPlanItem[] = [];
 
-  for (const definition of [...compiledDefinitions].sort((left, right) => left.type.localeCompare(right.type))) {
+  for (const definition of [...definitionsToPublish].sort((left, right) => left.type.localeCompare(right.type))) {
     let remoteDefinition = definitionsByType.get(definition.type);
     if (!remoteDefinition) {
       items.push(
@@ -167,12 +169,30 @@ export async function publishDefinitions(
 }
 
 export async function createDefaultRavionApiClient(options: RavionApiClientOptions = {}): Promise<RavionModuleApiClient> {
-  const baseUrl = options.baseUrl ?? DEFAULT_RAVION_API_URL;
+  const baseUrl = options.baseUrl ?? process.env.RAVION_API_URL ?? DEFAULT_RAVION_API_URL;
   const token = options.token ?? process.env.RAVION_API_TOKEN;
   if ((options.requireToken ?? true) && !token) {
     throw new PublishError("RAVION_API_TOKEN must be set to read or publish module definitions through the Ravion API.");
   }
   return new HttpRavionModuleApiClient(baseUrl, token);
+}
+
+export function applyLocalDevVersions(compiledDefinitions: CompiledDefinition[], inventory: RemoteModuleInventory): CompiledDefinition[] {
+  const definitionsByType = new Map(inventory.definitions.map((definition) => [definition.type, definition]));
+  return compiledDefinitions.map((definition) => {
+    const remoteDefinition = definitionsByType.get(definition.type);
+    const remoteVersions = remoteDefinition ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []) : [];
+    const selectedVersion = selectLocalDevVersion(definition, remoteVersions);
+    if (selectedVersion === definition.version) {
+      return definition;
+    }
+
+    return {
+      ...definition,
+      version: selectedVersion,
+      module: replaceModuleTag(definition.module, `${definition.type}@${definition.version}`, `${definition.type}@${selectedVersion}`) as Record<string, unknown>,
+    };
+  });
 }
 
 export function formatPublishPlanMarkdown(result: PublishResult): string {
@@ -290,6 +310,30 @@ async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, mo
       throw new PublishError(`${definition.type}@${definition.version} already exists remotely with different compiled config.`);
     }
   }
+}
+
+function selectLocalDevVersion(definition: CompiledDefinition, remoteVersions: RemoteModuleVersion[]): string {
+  for (let suffix = 1; ; suffix += 1) {
+    const candidate = `${definition.version}-${suffix}`;
+    const remoteVersion = remoteVersions.find((version) => version.version === candidate);
+    const candidateModule = replaceModuleTag(definition.module, `${definition.type}@${definition.version}`, `${definition.type}@${candidate}`);
+    if (!remoteVersion || stableStringify(remoteVersion.config) === stableStringify(candidateModule)) {
+      return candidate;
+    }
+  }
+}
+
+function replaceModuleTag(value: unknown, originalTag: string, replacementTag: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceModuleTag(item, originalTag, replacementTag));
+  }
+  if (typeof value === "string") {
+    return value.replaceAll(originalTag, replacementTag);
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceModuleTag(child, originalTag, replacementTag)]));
 }
 
 function createItem(definition: CompiledDefinition, action: PublishAction, dryRun: boolean, message: string, description: string, diff?: string, currentVersion?: string): PublishPlanItem {
