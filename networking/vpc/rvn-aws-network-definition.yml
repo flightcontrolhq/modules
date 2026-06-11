@@ -17,6 +17,7 @@ module:
     - default: <<project.given_id>>-<<environment.given_id>>
       description: Name prefix for all resources created by this module.
       id: name
+      immutable: true
       label: Name slug
       patterns:
         - message: The name must be 1-36 characters, contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.
@@ -26,6 +27,7 @@ module:
     - default: 10.0.0.0/16
       description: The IPv4 CIDR block for the VPC.
       id: vpc_cidr
+      immutable: true
       label: VPC CIDR
       required: false
       type: string
@@ -35,11 +37,13 @@ module:
     - default: true
       description: Needed if you want to access the internet from within private subnets
       id: nat_gateway_enabled
+      immutable: true
       label: NAT gateway
       type: boolean
     - default: false
       description: High availability adds NAT Gateway to every AZ. Otherwise single NAT gateway serves all AZs.
       id: nat_gateway_high_availability_enabled
+      immutable: true
       label: NAT gateway high availability
       type: boolean
     - collapsible: true
@@ -57,6 +61,7 @@ module:
         keeping NAT public IPs stable across VPC replacements (e.g. for partner
         allowlists or firewall rules).
       id: nat_gateway_eip_allocation_ids
+      immutable: true
       label: NAT gateway Elastic IP allocation IDs
       required: false
       type: string_array
@@ -66,6 +71,7 @@ module:
     - default: false
       description: Enable VPC Flow Logs for network traffic monitoring. Required for SOC 2.
       id: flow_logs_enabled
+      immutable: true
       label: Flow logs
       type: boolean
     - $include: ../../partials/inputs/misc-section.yml
@@ -80,6 +86,7 @@ module:
         peer VPC's route tables. The owner of the peer VPC is responsible for adding
         return routes pointing at the peering connection.
       id: vpc_peering_connections
+      immutable: true
       item_inputs:
         - description: The ID of the existing VPC to peer with.
           id: peer_vpc_id

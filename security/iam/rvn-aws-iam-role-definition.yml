@@ -15,6 +15,7 @@ module:
     - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
       description: Name of the IAM role. AWS IAM role names must be unique in the account.
       id: name
+      immutable: true
       label: Role name
       patterns:
         - message: "Use 1-64 characters: letters, numbers, plus, equals, comma, period, at, underscore, or hyphen."
@@ -29,6 +30,7 @@ module:
       default: /
       description: IAM path for the role. Most roles should use the root path.
       id: path
+      immutable: true
       label: Path
       patterns:
         - message: Start and end with a slash, for example / or /service-roles/.
@@ -253,10 +255,12 @@ module:
     - default: false
       description: Create an IAM instance profile for EC2 instances to use this role.
       id: instance_profile_creation_enabled
+      immutable: true
       label: Create instance profile
       type: boolean
     - description: Instance profile name. Defaults to the role name when empty.
       id: instance_profile_name
+      immutable: true
       label: Instance profile name
       patterns:
         - message: "Use 1-128 characters: letters, numbers, plus, equals, comma, period, at, underscore, or hyphen."
@@ -266,6 +270,7 @@ module:
       type: string
     - description: IAM path for the instance profile. Defaults to the role path when empty.
       id: instance_profile_path
+      immutable: true
       label: Instance profile path
       patterns:
         - message: Start and end with a slash, for example / or /service-roles/.

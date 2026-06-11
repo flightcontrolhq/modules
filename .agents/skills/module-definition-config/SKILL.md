@@ -127,6 +127,29 @@ Dependency patterns:
 
 Use `collapsible: true` for advanced settings. Use `show_when` for build-type, EC2-only, load-balancer-only, autoscaling-only, replica-only, alarm-only, custom-credentials-only, existing-resource-only, and engine-specific fields.
 
+## Input Immutability
+
+Mark an input `immutable: true` when changing it after creation would replace core infrastructure, delete optional resources, move the stack to a different target, or orphan/duplicate state-managed resources. Do not mark `advanced_terraform_variables` immutable; it intentionally remains a mutable escape hatch even though it can override protected Terraform variables.
+
+Always mark these shared target/state inputs immutable when they are direct inputs or ref fallback inputs:
+
+- `aws_account_id`
+- `aws_region`
+- `execution_environment_id`
+- `ravion_state_backend_workspace`
+- Ref-derived infrastructure identity fields such as `vpc_id`, subnet IDs, cluster ARNs, listener ARNs, load balancer security group IDs, and capacity provider names.
+
+Common module-specific immutable fields:
+
+- Network/VPC modules: `name`, `vpc_cidr`, NAT gateway mode fields, supplied NAT EIP allocation IDs, flow-log creation toggle, and VPC peering maps.
+- Certificate modules: certificate domain fields, SANs, Route53 validation-record creation toggle, and validation hosted zone ID.
+- IAM role modules: role name/path, instance-profile creation toggle, instance-profile name, and instance-profile path.
+- Static hosting modules: bucket/resource name, initial/default version seed, CloudFront aliases, CloudFront ACM certificate ARN, and logging creation toggle.
+- ECS cluster modules: selected network ref, cluster/resource name, EC2 capacity enablement selector, load balancer creation toggles, and NLB static Elastic IP mode/allocation IDs.
+- ECS service modules: selected cluster ref and mapped fallback fields, service name, public/private ALB selection, build type when it controls ECR creation, container port when it feeds target group identity, and generated-vs-existing IAM role override ARNs.
+
+Do not mark normal operational tuning immutable only because it can cause downtime or a rollout. Health checks, autoscaling thresholds, cache headers, price class, IAM trust/policy documents, tags, descriptions, log retention, CPU/memory sizing, and deployment rollout settings should generally stay mutable unless the Terraform implementation proves they are resource identity or create/destroy controls.
+
 ## Field Visibility Rules
 
 Default to hiding conditional fields. If a field is irrelevant, ignored, confusing, or invalid unless another input has a specific value, give it a `show_when` condition tied to that controlling input.
@@ -254,6 +277,7 @@ The local publish path targets `RAVION_API_URL` or `http://localhost:8080` by de
 - Required inputs hidden by `show_when` are only required when visible.
 - Every dependent input has `show_when`; no replica-only, alarm-only, engine-only, existing-resource-only, or disabled-default field is visible unconditionally.
 - Fields intentionally omitted to preserve safe Terraform defaults are not also emitted in `terraform_variables`.
+- Destructive identity, target, state, and create/destroy mode inputs are marked `immutable: true`; `advanced_terraform_variables` remains mutable.
 - `aws_account_id` and `aws_region` are nulled when an execution environment is selected.
 - Source fields use the intended repo, base path, and `$local.module_tag` or explicit source ref.
 - UI metrics use stable CloudWatch namespace, metric name, dimensions, account, and region expressions.

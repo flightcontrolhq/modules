@@ -1,6 +1,7 @@
 collapsible: true
 description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
 id: execution_environment_id
+immutable: true
 label: Terraform execution environment
 required: false
 type: string

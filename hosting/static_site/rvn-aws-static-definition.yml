@@ -60,6 +60,7 @@ module:
     - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
       description: Name for the bucket and other resources' prefix. Must be globally unique.
       id: name
+      immutable: true
       label: Name slug
       patterns:
         - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
@@ -89,6 +90,7 @@ module:
       default: main
       description: Fallback version prefix and initial active KVS value.
       id: default_version
+      immutable: true
       label: Default version prefix
       required: true
       type: string
@@ -136,6 +138,7 @@ module:
       type: section
     - description: Required if using domain aliases. Must be in us-east-1.
       id: distribution_acm_certificate_arn
+      immutable: true
       label: ACM certificate ARN
       placeholder: arn:aws:acm:us-east-1:123456789012:certificate/abc-123
       required: false
@@ -144,6 +147,7 @@ module:
       default: []
       description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain.
       id: distribution_aliases
+      immutable: true
       label: Domain aliases
       type: string_array
     - default: PriceClass_All
@@ -242,6 +246,7 @@ module:
     - default: false
       description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
       id: logging_enabled
+      immutable: true
       label: CloudFront access logging
       type: boolean
     - default: 90

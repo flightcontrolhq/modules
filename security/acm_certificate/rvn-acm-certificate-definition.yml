@@ -25,6 +25,7 @@ module:
       type: string
     - description: Primary fully qualified domain name for the ACM certificate.
       id: domain_name
+      immutable: true
       label: Domain name
       placeholder: api.example.com
       required: true
@@ -32,6 +33,7 @@ module:
     - add_button_label: Add secondary domain
       description: Additional fully qualified domain names to include on the certificate.
       id: subject_alternative_names
+      immutable: true
       label: Subject alternative names
       placeholder: www.example.com
       type: string_array
@@ -41,10 +43,12 @@ module:
     - default: false
       description: Use only when the domain already has a Route53 public hosted zone and all primary/SAN validation records belong in that zone.
       id: route53_validation_records_creation_enabled
+      immutable: true
       label: Create Route53 validation records
       type: boolean
     - description: Public hosted zone used for validation records. Required when Route53 validation records are enabled.
       id: route53_zone_id
+      immutable: true
       label: Route53 hosted zone ID
       patterns:
         - message: Use a valid Route53 hosted zone ID, for example Z1234567890ABC.
