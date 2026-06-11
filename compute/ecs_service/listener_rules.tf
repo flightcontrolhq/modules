@@ -100,7 +100,7 @@ resource "aws_lb_listener_rule" "alb" {
 ################################################################################
 
 resource "aws_lb_listener_rule" "test" {
-  count = local.enable_test_listener_rule ? 1 : 0
+  count = local.green_alb_listener_rule_enabled ? 1 : 0
 
   listener_arn = var.load_balancer_attachment.test_listener_rule.listener_arn
   priority     = var.load_balancer_attachment.test_listener_rule.priority

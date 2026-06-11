@@ -45,12 +45,12 @@ locals {
   # Determine if a dedicated test listener rule should be created. Drives
   # the advanced_configuration.test_listener_rule wiring and the
   # TEST_TRAFFIC_SHIFT lifecycle stages on native traffic-shift deploys.
-  enable_test_listener_rule = local.enable_load_balancer && var.load_balancer_attachment.test_listener_rule != null
+  green_alb_listener_rule_enabled = local.enable_load_balancer && var.load_balancer_attachment.test_listener_rule != null
 
   # ARN passed to advanced_configuration.test_listener_rule and exported:
   # the module-created rule when configured, else an externally-managed
   # rule ARN supplied by the caller, else null.
-  test_listener_rule_arn = local.enable_test_listener_rule ? aws_lb_listener_rule.test[0].arn : var.test_listener_rule_arn
+  test_listener_rule_arn = local.green_alb_listener_rule_enabled ? aws_lb_listener_rule.test[0].arn : var.test_listener_rule_arn
 
   # Placeholder container name and port
   placeholder_container_name = "app"
