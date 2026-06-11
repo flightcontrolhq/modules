@@ -88,6 +88,96 @@ resource "aws_lb_listener_rule" "alb" {
 }
 
 ################################################################################
+# ALB Test Listener Rule
+#
+# Optional dedicated rule that routes test traffic to the alternate (green)
+# target group (tg-2) during native traffic-shift deployments. ECS rewrites
+# its forward action through the TEST_TRAFFIC_SHIFT lifecycle stages so the
+# green revision can be validated before production traffic shifts, hence
+# ignore_changes on action. Created only when test_listener_rule is set;
+# outside a deployment tg-2 is empty, so test traffic returns no targets
+# until a deployment registers the green revision.
+################################################################################
+
+resource "aws_lb_listener_rule" "test" {
+  count = local.enable_test_listener_rule ? 1 : 0
+
+  listener_arn = var.load_balancer_attachment.test_listener_rule.listener_arn
+  priority     = var.load_balancer_attachment.test_listener_rule.priority
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_2[0].arn
+  }
+
+  dynamic "condition" {
+    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "path-pattern"]
+    content {
+      path_pattern {
+        values = condition.value.values
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "host-header"]
+    content {
+      host_header {
+        values = condition.value.values
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "http-header"]
+    content {
+      http_header {
+        http_header_name = condition.value.values[0]
+        values           = slice(condition.value.values, 1, length(condition.value.values))
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "http-request-method"]
+    content {
+      http_request_method {
+        values = condition.value.values
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "query-string"]
+    content {
+      query_string {
+        key   = try(condition.value.values[0], null)
+        value = try(condition.value.values[1], condition.value.values[0])
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "source-ip"]
+    content {
+      source_ip {
+        values = condition.value.values
+      }
+    }
+  }
+
+  tags = merge(local.tags, {
+    Name = "${var.name}-test-rule"
+  })
+
+  # The ECS deployment controller rewrites the forward action during
+  # native traffic-shift deployments (TEST_TRAFFIC_SHIFT stages).
+  lifecycle {
+    ignore_changes = [action]
+  }
+}
+
+################################################################################
 # NLB Listeners
 # For NLB, we create the listener directly (no listener rules in NLB).
 # The ECS deployment controller rewrites the default action during

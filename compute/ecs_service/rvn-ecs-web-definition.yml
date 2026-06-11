@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.1.3
-  description: unify labels and descriptions across modules
+  version: 0.1.4
+  description: surface load-balancer advanced-config outputs (alternate target group, production + optional test listener rules, infrastructure role) for native blue/green/linear/canary deployments
 module:
   inputs:
     - id: section_service
@@ -1275,6 +1275,15 @@ module:
       ecs_cluster_arn: <<stack.output.service_cluster>>
       ecs_service_arns:
         - <<stack.output.service_arn>>
+      # Load-balancer advanced configuration for native traffic-shift
+      # strategies (blue_green / linear / canary). The deploy manager
+      # attaches these to UpdateService loadBalancers[].advancedConfiguration
+      # so ECS can shift traffic between the production and alternate target
+      # groups. Null/absent for non-load-balanced services (rolling only).
+      ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
+      ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
+      ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
+      ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
     inputs:
       - id: image_ref
         label: Image tag or digest

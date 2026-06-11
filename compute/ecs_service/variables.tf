@@ -520,6 +520,30 @@ variable "load_balancer_attachment" {
       alpn_policy     = optional(string) # For TLS: HTTP1Only, HTTP2Only, etc.
     }), null)
 
+    # ALB: Optional test listener rule (attach to an existing ALB listener).
+    #
+    # When set, the module creates a dedicated listener rule that forwards
+    # test traffic to the alternate (green) target group during native
+    # traffic-shift deployments (blue_green/linear/canary). Its ARN is
+    # wired into the service's advanced_configuration.test_listener_rule,
+    # which drives the TEST_TRAFFIC_SHIFT lifecycle stages: ECS routes
+    # test traffic to the green revision so it can be validated before
+    # production traffic shifts.
+    #
+    # Provide distinguishing conditions (e.g. an http-header or a
+    # dedicated path/host) so the test rule does not collide with the
+    # production listener rule on the same listener. Omit for services
+    # that do not need a pre-cutover test phase — most services.
+    test_listener_rule = optional(object({
+      listener_arn = string
+      priority     = optional(number, null) # null = AWS auto-assigns next available priority
+
+      conditions = list(object({
+        type   = string
+        values = list(string)
+      }))
+    }), null)
+
     container_name = optional(string, null)
     container_port = optional(number, null)
   })

@@ -159,6 +159,18 @@ output "nlb_listener_arn" {
   value       = local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : null
 }
 
+output "production_listener_rule_arn" {
+  description = "ARN of the production listener rule (ALB) or listener (NLB) the ECS deployment controller rewrites during native traffic-shift deployments. This is the value the deploy manager passes as advanced_configuration.production_listener_rule on UpdateService (null if load balancer disabled)."
+  value = local.enable_load_balancer ? (
+    local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : aws_lb_listener_rule.alb["0"].arn
+  ) : null
+}
+
+output "test_listener_rule_arn" {
+  description = "ARN of the test listener rule the ECS deployment controller rewrites during the TEST_TRAFFIC_SHIFT lifecycle stages, routing test traffic to the green revision before the production cutover. The deploy manager passes it as advanced_configuration.test_listener_rule on UpdateService. Null when no test listener rule is configured (the common case)."
+  value       = local.test_listener_rule_arn
+}
+
 ################################################################################
 # Auto Scaling
 ################################################################################

@@ -188,6 +188,23 @@ func TestEcsServiceWithAlb(t *testing.T) {
 	assert.NotEmpty(t, aws.ToString(advancedConfig.ProductionListenerRule), "production listener rule should be set")
 	assert.NotEmpty(t, aws.ToString(advancedConfig.RoleArn), "infrastructure role should be set")
 
+	// The production_listener_rule_arn output is what the deploy manager
+	// plumbs into UpdateService advancedConfiguration for native
+	// traffic-shift deployments, so it must match the rule AWS actually
+	// persisted on the service.
+	productionListenerRuleArn := terraform.Output(t, terraformOptions, "production_listener_rule_arn")
+	require.NotEmpty(t, productionListenerRuleArn, "production_listener_rule_arn should not be empty")
+	assert.Equal(t, productionListenerRuleArn, aws.ToString(advancedConfig.ProductionListenerRule), "production_listener_rule_arn output should match the rule on the service")
+
+	// The fixture configures a dedicated test listener rule, so the module
+	// must create it, export its ARN, and wire it into the service's
+	// advanced_configuration.test_listener_rule — the value the deploy
+	// manager forwards to drive the TEST_TRAFFIC_SHIFT lifecycle stages.
+	testListenerRuleArn := terraform.Output(t, terraformOptions, "test_listener_rule_arn")
+	require.NotEmpty(t, testListenerRuleArn, "test_listener_rule_arn should not be empty when a test listener rule is configured")
+	assert.NotEqual(t, productionListenerRuleArn, testListenerRuleArn, "test and production listener rules must be distinct")
+	assert.Equal(t, testListenerRuleArn, aws.ToString(advancedConfig.TestListenerRule), "test_listener_rule_arn output should match the rule on the service")
+
 	// Wait for targets to be registered in the target group
 	// The ECS service needs time to register tasks with the target group
 	t.Log("Waiting for targets to be registered with the target group...")

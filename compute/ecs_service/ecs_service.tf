@@ -104,7 +104,7 @@ resource "aws_ecs_service" "this" {
           ? aws_lb_listener.nlb[0].arn
           : aws_lb_listener_rule.alb["0"].arn
         )
-        test_listener_rule = var.test_listener_rule_arn
+        test_listener_rule = local.test_listener_rule_arn
         role_arn           = aws_iam_role.ecs_infrastructure[0].arn
       }
     }
@@ -145,6 +145,7 @@ resource "aws_ecs_service" "this" {
     aws_iam_role_policy_attachment.execution_base,
     aws_iam_role_policy_attachment.ecs_infrastructure_elb,
     aws_lb_listener_rule.alb,
+    aws_lb_listener_rule.test,
   ]
 
   # Lifecycle: desired_count is managed by autoscaling, task_definition /

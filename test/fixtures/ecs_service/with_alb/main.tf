@@ -161,6 +161,22 @@ module "ecs_service" {
         ]
       }
     ]
+
+    # Dedicated test listener rule on the same listener, distinguished by
+    # a header so it does not collide with the production path rule. ECS
+    # rewrites it to the green revision during the TEST_TRAFFIC_SHIFT
+    # lifecycle stages of a native traffic-shift deployment.
+    test_listener_rule = {
+      listener_arn = module.ecs_cluster.public_alb_http_listener_arn
+      priority     = 90
+
+      conditions = [
+        {
+          type   = "http-header"
+          values = ["X-FC-Test", "true"]
+        }
+      ]
+    }
   }
 
   # Give load balancer time to register targets
@@ -236,6 +252,16 @@ output "alternate_target_group_arn" {
 output "ecs_infrastructure_role_arn" {
   description = "The ARN of the IAM role ECS assumes to manage load-balancer wiring during native traffic-shift deployments."
   value       = module.ecs_service.ecs_infrastructure_role_arn
+}
+
+output "production_listener_rule_arn" {
+  description = "The ARN of the production listener rule wired into the service's advanced_configuration."
+  value       = module.ecs_service.production_listener_rule_arn
+}
+
+output "test_listener_rule_arn" {
+  description = "The ARN of the test listener rule wired into the service's advanced_configuration."
+  value       = module.ecs_service.test_listener_rule_arn
 }
 
 output "alb_security_group_id" {
