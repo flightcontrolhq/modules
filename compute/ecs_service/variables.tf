@@ -521,7 +521,7 @@ variable "auto_scaling" {
       }), null)
       scale_in_cooldown  = optional(number, 300)
       scale_out_cooldown = optional(number, 300)
-      disable_scale_in   = optional(bool, false)
+      scale_in_enabled   = optional(bool, true)
     })), [])
 
     scheduled = optional(list(object({

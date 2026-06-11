@@ -133,7 +133,7 @@ module "ecs_service" {
         predefined_metric  = "ECSServiceAverageCPUUtilization"
         scale_in_cooldown  = 60
         scale_out_cooldown = 60
-        disable_scale_in   = false
+        scale_in_enabled   = true
       }
     ]
   }

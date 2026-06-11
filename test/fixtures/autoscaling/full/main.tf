@@ -309,7 +309,7 @@ module "autoscaling" {
 
       target_tracking_configuration = {
         target_value     = 70.0
-        disable_scale_in = false
+        scale_in_enabled = true
 
         predefined_metric_specification = {
           predefined_metric_type = "ASGAverageCPUUtilization"

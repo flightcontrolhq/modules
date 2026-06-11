@@ -912,8 +912,8 @@ variable "scaling_policies" {
       # Target value for the metric
       target_value = number
 
-      # Whether to disable scale-in (only scale out)
-      disable_scale_in = optional(bool, false)
+      # Whether target tracking can scale in automatically
+      scale_in_enabled = optional(bool, true)
 
       # Predefined metric specification - use one of AWS's built-in metrics
       predefined_metric_specification = optional(object({
