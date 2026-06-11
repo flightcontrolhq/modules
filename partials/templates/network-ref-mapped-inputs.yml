@@ -18,7 +18,6 @@
   default: $with.execution_environment_default
   description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
   id: execution_environment_id
-  immutable: true
   label: Terraform execution environment
   type: string
   values: $values:ravion/execution_environments

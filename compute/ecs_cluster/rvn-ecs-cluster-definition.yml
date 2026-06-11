@@ -59,7 +59,6 @@ module:
       type: boolean
     - description: Enables the EC2 capacity provider when set. Leave blank to use only Fargate/Fargate Spot.
       id: ec2_instance_type
-      immutable: true
       label: EC2 instance type
       no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
       placeholder: Select an instance type to enable EC2 capacity
@@ -215,7 +214,6 @@ module:
       type: section
     - default: true
       id: public_alb_enabled
-      immutable: true
       label: Public load balancer
       type: boolean
     - default: true
@@ -285,7 +283,6 @@ module:
       type: section
     - default: false
       id: private_alb_enabled
-      immutable: true
       label: Private load balancer
       type: boolean
     - default: false
@@ -357,7 +354,6 @@ module:
     - default: false
       description: Create an internet-facing Network Load Balancer.
       id: public_nlb_enabled
-      immutable: true
       label: Public NLB
       type: boolean
     - add_button_label: Add security group ID
@@ -381,7 +377,6 @@ module:
       default: false
       description: Assign static Elastic IPs to the public NLB.
       id: public_nlb_elastic_ips_enabled
-      immutable: true
       label: Use elastic IPs
       show_when:
         public_nlb_enabled: true
@@ -390,7 +385,6 @@ module:
       collapsible: true
       description: Elastic IP allocation IDs for the public NLB, one per subnet.
       id: public_nlb_elastic_ip_allocation_ids
-      immutable: true
       label: Elastic IP allocation IDs
       placeholder: eipalloc-...
       show_when:
@@ -417,7 +411,6 @@ module:
     - default: false
       description: Create an internal Network Load Balancer.
       id: private_nlb_enabled
-      immutable: true
       label: Private NLB
       type: boolean
     - add_button_label: Add security group ID
@@ -441,7 +434,6 @@ module:
       default: false
       description: Assign static Elastic IPs to the private NLB.
       id: private_nlb_elastic_ips_enabled
-      immutable: true
       label: Use elastic IPs
       show_when:
         private_nlb_enabled: true
@@ -450,7 +442,6 @@ module:
       collapsible: true
       description: Elastic IP allocation IDs for the private NLB, one per subnet.
       id: private_nlb_elastic_ip_allocation_ids
-      immutable: true
       label: Elastic IP allocation IDs
       placeholder: eipalloc-...
       show_when:

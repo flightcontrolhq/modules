@@ -28,7 +28,6 @@ module:
           default: <<ref.input.aws_region>>
           values: $values:aws/regions
         - id: execution_environment_id
-          immutable: true
           label: Terraform execution environment
           type: string
           description: Terraform execution environment inherited from the selected ECS cluster.
@@ -147,7 +146,6 @@ module:
         - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
           pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
     - id: public_web_service_enabled
-      immutable: true
       label: Public web service
       type: boolean
       description: Expose this service through the public ALB. Turn off to use the private ALB.
@@ -161,7 +159,6 @@ module:
       label: Build config
       type: section
     - id: build_type
-      immutable: true
       label: Build type
       type: string
       required: true
@@ -719,14 +716,12 @@ module:
       label: IAM roles and policies
       type: section
     - id: execution_role_arn
-      immutable: true
       label: Execution role ARN override
       type: string
       description: Optional existing ECS task execution role ARN. Leave blank to let the module create and manage the execution role used for pulling images and writing logs.
       collapsible: true
       required: false
     - id: task_role_arn
-      immutable: true
       label: Task role ARN override
       type: string
       description: Optional existing ECS task role ARN for application AWS permissions. Leave blank to let the module create a task role and attach the policies configured below.
@@ -1155,8 +1150,8 @@ module:
                   module.input.scale_out_cooldown, scale_in_enabled: module.input.scale_in_enabled}] : []
                   >>
                 - >-
-                    ...<< module.input.custom_metric_scaling_policies != nil ?
-                    module.input.custom_metric_scaling_policies : [] >>
+                  ...<< module.input.custom_metric_scaling_policies != nil ?
+                  module.input.custom_metric_scaling_policies : [] >>
             capacity_provider_strategies:
               - >-
                 ...<< module.input.capacity_provider == "fargate" || module.input.additional_fargate_capacity_enabled ?
