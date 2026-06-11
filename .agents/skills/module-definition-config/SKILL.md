@@ -13,6 +13,8 @@ Module definitions are source-controlled beside Terraform modules as `<definitio
 
 Do not create or update module definitions directly with executor or Ravion Local API calls. Author files in this repo, validate with `tools/ravion-modules`, and use the local publishing tool when a local API publish is needed.
 
+Within `module`, keep executable config before documentation in this order when present: `inputs`, `stack`, `build`, `deploy`, `ui`, `readme`. Always place `readme` last.
+
 ## Reference Modules
 
 - VPC Network: `definition.type: rvn-aws-network`, source `networking/vpc`, direct AWS account/region inputs, and `module.stack.type: opentofu`.
@@ -33,6 +35,7 @@ Use examples to match repository conventions for:
 - `module.stack.pipelines.defaults.input` ordering, source fields, tag maps, and Terraform variable expression style.
 - Build/deploy split for deployable workloads and disabled build modes.
 - UI link and CloudWatch metric structure.
+- Overall `module` field order: `inputs`, `stack`, `build`, `deploy`, `ui`, then `readme` last.
 - Release description style for publishable config changes.
 
 Do not copy an example blindly. Reconcile it with the authoritative schema and the target Terraform module behavior. If the closest examples conflict with the schema, follow the schema and preserve only the compatible local style.
@@ -233,6 +236,7 @@ The local publish path targets `RAVION_API_URL` or `http://localhost:8080` by de
 ## Review Checklist
 
 - No analysis or instructions depend on `module.readme`.
+- `module` fields are ordered as `inputs`, `stack`, `build`, `deploy`, `ui`, `readme`, with `readme` last when present.
 - Similar active repo definitions were inspected, and any divergence from them is intentional because of schema or target Terraform behavior.
 - Every non-section input is consumed or intentionally provided for ref/dynamic-values wiring.
 - Most user-relevant Terraform variables are exposed as inputs; omissions are deliberate and explainable.

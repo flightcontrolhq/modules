@@ -41,6 +41,21 @@ module:
   inputs: []
 ```
 
+Inside `module`, keep fields in this order when present:
+
+```yaml
+module:
+  inputs: []
+  stack: {}
+  build: {}
+  deploy: {}
+  ui: {}
+  readme: |
+    ...
+```
+
+`readme` must be the final `module` field so executable config stays above documentation.
+
 ## Field Semantics
 
 - `definition.name` is the human catalog label, such as `ECS Cluster` or `ECS Web Server`.
@@ -77,9 +92,10 @@ When creating a new definition, inspect the closest examples by category, AWS se
 3. Verify no active definition already uses the requested `definition.type`.
 4. Normalize the proposed definition fields: title-case service names, keep `definition.type` lowercase kebab-case with the `rvn-` prefix for first-party Ravion modules, and keep descriptions concise.
 5. Add `<definition.type>-definition.yml` beside the Terraform module using the top-level `definition`, `release`, and `module` sections.
-6. Follow the closest examples for ordering, YAML style, release metadata, module shell shape, partial include style, and source path conventions.
-7. Add only a minimal `module` shell unless the user also asked for config or README content.
-8. Validate the authored definition with the module publishing tool.
+6. Follow the repository module field order: `inputs`, `stack`, `build`, `deploy`, `ui`, then `readme` last.
+7. Follow the closest examples for YAML style, release metadata, module shell shape, partial include style, and source path conventions.
+8. Add only a minimal `module` shell unless the user also asked for config or README content.
+9. Validate the authored definition with the module publishing tool.
 
 ## Validation And Local Publish
 
@@ -111,6 +127,7 @@ Write the description as a short catalog summary that tells users what the modul
 - No other source-controlled definition uses the same `definition.type`.
 - The requested `given id` was applied to `definition.type`, not to an instance field.
 - The name and description are catalog-level and concise.
+- `module` fields are ordered as `inputs`, `stack`, `build`, `deploy`, `ui`, `readme`, with `readme` last when present.
 - `release.version` is valid semantic versioning and should not be bumped only for local publishes.
 - No executor or direct API workflow is used for creation or local publishing.
 - Any needed config or README work is explicitly delegated to the linked skills.
