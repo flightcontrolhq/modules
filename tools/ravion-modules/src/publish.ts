@@ -52,6 +52,7 @@ export interface RavionApiClientOptions {
 export interface PublishOptions {
   dryRun?: boolean;
   localDev?: boolean;
+  localDevSourceRef?: string;
   logger?: (message: string) => void;
 }
 
@@ -90,7 +91,7 @@ export async function publishDefinitions(
   const dryRun = options.dryRun ?? true;
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
-  const definitionsToPublish = options.localDev ? applyLocalDevVersions(compiledDefinitions, inventory) : compiledDefinitions;
+  const definitionsToPublish = options.localDev ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main") : compiledDefinitions;
   const statuses = getReleaseStatuses(definitionsToPublish, { inventory });
   const errors = createPublishPlanErrors(statuses, definitionsToPublish, inventory);
   if (errors.length > 0) {
@@ -177,20 +178,21 @@ export async function createDefaultRavionApiClient(options: RavionApiClientOptio
   return new HttpRavionModuleApiClient(baseUrl, token);
 }
 
-export function applyLocalDevVersions(compiledDefinitions: CompiledDefinition[], inventory: RemoteModuleInventory): CompiledDefinition[] {
+export function applyLocalDevVersions(compiledDefinitions: CompiledDefinition[], inventory: RemoteModuleInventory, sourceRef = "main"): CompiledDefinition[] {
   const definitionsByType = new Map(inventory.definitions.map((definition) => [definition.type, definition]));
   return compiledDefinitions.map((definition) => {
     const remoteDefinition = definitionsByType.get(definition.type);
     const remoteVersions = remoteDefinition ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []) : [];
-    const selectedVersion = selectLocalDevVersion(definition, remoteVersions);
+    const selectedVersion = selectLocalDevVersion(definition, remoteVersions, sourceRef);
+    const module = replaceModuleTag(definition.module, `${definition.type}@${definition.version}`, sourceRef) as Record<string, unknown>;
     if (selectedVersion === definition.version) {
-      return definition;
+      return { ...definition, module };
     }
 
     return {
       ...definition,
       version: selectedVersion,
-      module: replaceModuleTag(definition.module, `${definition.type}@${definition.version}`, `${definition.type}@${selectedVersion}`) as Record<string, unknown>,
+      module,
     };
   });
 }
@@ -312,11 +314,11 @@ async function createVersionOrConfirmDuplicate(client: RavionModuleApiClient, mo
   }
 }
 
-function selectLocalDevVersion(definition: CompiledDefinition, remoteVersions: RemoteModuleVersion[]): string {
+function selectLocalDevVersion(definition: CompiledDefinition, remoteVersions: RemoteModuleVersion[], sourceRef: string): string {
   for (let suffix = 1; ; suffix += 1) {
     const candidate = `${definition.version}-${suffix}`;
     const remoteVersion = remoteVersions.find((version) => version.version === candidate);
-    const candidateModule = replaceModuleTag(definition.module, `${definition.type}@${definition.version}`, `${definition.type}@${candidate}`);
+    const candidateModule = replaceModuleTag(definition.module, `${definition.type}@${definition.version}`, sourceRef);
     if (!remoteVersion || stableStringify(remoteVersion.config) === stableStringify(candidateModule)) {
       return candidate;
     }

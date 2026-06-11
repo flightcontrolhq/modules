@@ -246,6 +246,7 @@ From the repository root, use the Makefile shortcuts:
 ```bash
 make publish-local-dev MODULE=rvn-aws-network
 make publish-local-dev MODULE=rvn-aws-network DRY_RUN=1
+make publish-local-dev MODULE=rvn-aws-network SOURCE_REF=my-pushed-branch
 ```
 
 The Makefile publish command automatically loads `.env.local` for that command when the file exists.
@@ -268,7 +269,9 @@ eval (make env-local-fish)
 
 `--local-dev` defaults to `http://localhost:8080`, or `RAVION_API_URL` when set. It always publishes
 a numeric prerelease suffix from the authored `release.version`, for example `0.1.0-1`, `0.1.0-2`,
-and so on. Use `--dry-run` with `--local-dev` to dry-run without API mutations.
+and so on. The module's GitHub source ref uses the current branch when that branch exists on
+`origin`; otherwise it uses `main`. Set `SOURCE_REF` or `RAVION_LOCAL_DEV_SOURCE_REF` to override
+that source ref. Use `--dry-run` with `--local-dev` to dry-run without API mutations.
 
 ### Module Release Tags
 

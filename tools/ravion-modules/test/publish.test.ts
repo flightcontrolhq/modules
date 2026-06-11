@@ -146,7 +146,7 @@ describe("publish", () => {
     assert.equal(client.createdVersions[0].version, "1.2.3-1");
   });
 
-  it("local-dev publishing chooses the next suffix after conflicting suffixed versions", async () => {
+  it("local-dev publishing chooses the next suffix and uses the source ref in compiled config", async () => {
     const compiled = createCompiledDefinition({
       module: {
         stack: {
@@ -170,14 +170,24 @@ describe("publish", () => {
 
     assert.equal(client.createdVersions[0].version, "1.2.3-3");
     assert.deepEqual(client.createdVersions[0].config, {
-      stack: { source: { ref: "ravion-aws-vpc@1.2.3-3" } },
-      readme: "Terraform source ravion-aws-vpc@1.2.3-3",
+      stack: { source: { ref: "main" } },
+      readme: "Terraform source main",
     });
+  });
+
+  it("local-dev publishing uses the provided source ref in compiled config", async () => {
+    const compiled = createCompiledDefinition({ module: { stack: { source: { ref: "ravion-aws-vpc@1.2.3" } } } });
+    const client = new MockRavionClient({ definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }] });
+
+    await publishDefinitions([compiled], client, { dryRun: false, localDev: true, localDevSourceRef: "feature-branch" });
+
+    assert.equal(client.createdVersions[0].version, "1.2.3-1");
+    assert.deepEqual(client.createdVersions[0].config, { stack: { source: { ref: "feature-branch" } } });
   });
 
   it("local-dev publishing skips an identical existing suffixed version", async () => {
     const compiled = createCompiledDefinition({ module: { stack: { source: { ref: "ravion-aws-vpc@1.2.3" } } } });
-    const suffixedConfig = { stack: { source: { ref: "ravion-aws-vpc@1.2.3-1" } } };
+    const suffixedConfig = { stack: { source: { ref: "main" } } };
     const client = new MockRavionClient({
       definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
       versionsByDefinitionId: {

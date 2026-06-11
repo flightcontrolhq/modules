@@ -12,6 +12,10 @@ LOCAL_DEV_PUBLISH_FLAGS :=
 ifeq ($(DRY_RUN),1)
 LOCAL_DEV_PUBLISH_FLAGS += --dry-run
 endif
+LOCAL_DEV_SOURCE_REF_ENV :=
+ifneq ($(SOURCE_REF),)
+LOCAL_DEV_SOURCE_REF_ENV := RAVION_LOCAL_DEV_SOURCE_REF="$(SOURCE_REF)"
+endif
 LOAD_ENV_LOCAL = if [ -f "$(ENV_LOCAL)" ]; then set -a; . "$(ENV_LOCAL)"; set +a; fi;
 
 # Test runner function: $(1)=timeout, $(2)=parallel, $(3)=test args
@@ -59,6 +63,7 @@ help:
 	@echo "  make test-single TEST=TestVpcBasic"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network DRY_RUN=1"
+	@echo "  make publish-local-dev MODULE=rvn-aws-network SOURCE_REF=my-branch"
 	@echo "  eval (make env-local-fish)       # fish"
 	@printf '%s\n' '  eval "$$(make env-local-sh)"     # sh/bash/zsh'
 
@@ -79,7 +84,7 @@ ifndef MODULE
 	$(error MODULE is required. Usage: make publish-local-dev MODULE=rvn-aws-network)
 endif
 	@echo "Publishing $(MODULE) to local dev API..."
-	@$(LOAD_ENV_LOCAL) node $(MODULE_TOOLS_DIR)/dist/src/cli.js publish $(MODULE) --local-dev $(LOCAL_DEV_PUBLISH_FLAGS)
+	@$(LOAD_ENV_LOCAL) $(LOCAL_DEV_SOURCE_REF_ENV) node $(MODULE_TOOLS_DIR)/dist/src/cli.js publish $(MODULE) --local-dev $(LOCAL_DEV_PUBLISH_FLAGS)
 
 env-local-sh:
 	@node -e 'const fs=require("node:fs"); const path=process.env.ENV_LOCAL||"$(ENV_LOCAL)"; if(!fs.existsSync(path)) process.exit(0); for (const line of fs.readFileSync(path,"utf8").split(/\r?\n/)) { const trimmed=line.trim(); if(!trimmed||trimmed.startsWith("#")) continue; const index=trimmed.indexOf("="); if(index<1) continue; const key=trimmed.slice(0,index).trim(); const value=trimmed.slice(index+1).trim().replace(/^(["'"'"'])(.*)\1$$/,"$$2"); if(!/^[A-Za-z_][A-Za-z0-9_]*$$/.test(key)) continue; console.log(`export ${key}=${JSON.stringify(value)}`); }'
