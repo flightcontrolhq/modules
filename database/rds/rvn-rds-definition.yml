@@ -1,0 +1,1143 @@
+definition:
+  type: rvn-rds
+  name: RDS Database
+  description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
+
+release:
+  version: 0.0.10
+  description: Align RDS README opening sentence
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - id: section_aws
+          label: AWS account & region
+          type: section
+        - default: << ref.input.aws_account_id >>
+          id: aws_account_id
+          immutable: true
+          label: AWS account
+          type: string
+          values: $values:ravion/aws_accounts
+        - default: << ref.input.aws_region >>
+          id: aws_region
+          immutable: true
+          label: Region
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          default: << ref.input.execution_environment_id >>
+          description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
+          id: execution_environment_id
+          label: Terraform execution environment
+          type: string
+          values: $values:ravion/execution_environments
+        - id: section_vpc
+          label: VPC
+          type: section
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          required: true
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Subnets for the RDS DB subnet group. Use private subnets for normal database deployments.
+          id: subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          required: true
+          type: string_array
+      required: true
+      type: $ref:rvn-aws-network
+    - id: section_database
+      label: Database
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>
+      description: Name prefix for all RDS resources.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: Use 1-40 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$
+      required: true
+      type: string
+    - default: none
+      id: restore_mode
+      immutable: true
+      label: Create or restore
+      required: true
+      type: string
+      values:
+        - label: New empty database
+          value: none
+        - label: Restore from snapshot
+          value: snapshot
+        - label: Point-in-time restore
+          value: point_in_time
+    - id: db_name
+      immutable: true
+      label: Database name
+      placeholder: myapp_prod
+      required: true
+      show_when:
+        restore_mode: none
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: string
+    - default: admin
+      collapsible: true
+      id: username
+      immutable: true
+      label: Username
+      required: true
+      show_when:
+        restore_mode: none
+      type: string
+    - description: Snapshot identifier or ARN to restore into this new database. The snapshot must be compatible with the selected engine and instance settings.
+      id: snapshot_identifier
+      immutable: true
+      label: Snapshot to restore
+      required: false
+      show_when:
+        restore_mode: snapshot
+      type: string
+    - default: true
+      description: Restore to the latest time AWS can recover from the selected source database backup.
+      id: point_in_time_use_latest_restorable_time
+      immutable: true
+      label: Use latest restorable time
+      show_when:
+        restore_mode: point_in_time
+      type: boolean
+    - description: Restore to this UTC timestamp instead of the latest restorable time.
+      id: point_in_time_restore_time
+      immutable: true
+      label: Restore time
+      placeholder: 2026-06-11T15:04:05Z
+      required: false
+      show_when:
+        restore_mode: point_in_time
+        point_in_time_use_latest_restorable_time: false
+      type: string
+    - description: Source DB instance identifier to restore from.
+      id: point_in_time_source_db_instance_identifier
+      immutable: true
+      label: Source DB instance identifier
+      placeholder: my-db
+      required: false
+      show_when:
+        restore_mode: point_in_time
+      type: string
+    - description: ARN of the source automated backups to restore from. Use this for cross-region or retained automated backup restores.
+      id: point_in_time_source_db_instance_automated_backups_arn
+      immutable: true
+      label: Source automated backups ARN
+      placeholder: arn:aws:rds:...
+      required: false
+      show_when:
+        restore_mode: point_in_time
+      type: string
+    - description: Source DB resource ID to restore from when using automated backups.
+      id: point_in_time_source_dbi_resource_id
+      immutable: true
+      label: Source DB resource ID
+      placeholder: db-...
+      required: false
+      show_when:
+        restore_mode: point_in_time
+      type: string
+    - id: section_version
+      label: Version
+      type: section
+    - default: postgres
+      id: engine
+      immutable: true
+      label: Engine
+      required: true
+      type: string
+      values:
+        - label: PostgreSQL
+          value: postgres
+        - label: MySQL
+          value: mysql
+        - label: MariaDB
+          value: mariadb
+        - label: Oracle Enterprise Edition
+          value: oracle-ee
+        - label: Oracle Standard Edition 2
+          value: oracle-se2
+        - label: Oracle Standard Edition 2 CDB
+          value: oracle-se2-cdb
+        - label: SQL Server Enterprise
+          value: sqlserver-ee
+        - label: SQL Server Standard
+          value: sqlserver-se
+        - label: SQL Server Express
+          value: sqlserver-ex
+        - label: SQL Server Web
+          value: sqlserver-web
+    - description: "Examples: 15 for PostgreSQL, 8.0 for MySQL, 19 for Oracle."
+      id: engine_major_version
+      immutable: true
+      label: Engine major version
+      placeholder: "15"
+      required: true
+      type: string
+    - collapsible: true
+      description: "Optional minor engine version appended to the major version. Example: major 15 and minor 4 becomes 15.4."
+      id: engine_minor_version
+      label: Engine minor version
+      placeholder: "4"
+      required: false
+      type: string
+    - collapsible: true
+      default: true
+      description: Enable automatic minor engine version upgrades during the configured maintenance window.
+      id: auto_minor_version_upgrade
+      label: Auto minor version upgrades
+      type: boolean
+    - id: section_size
+      label: Size & Storage
+      type: section
+    - description: RDS instance size, such as db.t4g.micro or db.r6g.large.
+      id: instance_class
+      label: Instance class
+      placeholder: db.t4g.micro
+      required: true
+      type: string
+    - default: 20
+      description: AWS supports increasing allocated storage after creation, but not reducing it in place.
+      id: allocated_storage
+      label: Allocated storage (GiB)
+      max: 65536
+      min: 20
+      required: true
+      type: number
+    - collapsible: true
+      default: 0
+      description: Upper limit for RDS storage autoscaling. Use 0 to disable. AWS can grow storage up to this limit, but storage cannot be reduced in place.
+      id: max_allocated_storage
+      label: Max allocated storage (GiB)
+      max: 65536
+      min: 0
+      type: number
+    - collapsible: true
+      default: gp3
+      id: storage_type
+      label: Storage type
+      type: string
+      values:
+        - label: gp3
+          value: gp3
+        - label: gp2
+          value: gp2
+        - label: io1
+          value: io1
+        - label: io2
+          value: io2
+        - label: standard
+          value: standard
+    - collapsible: true
+      id: iops
+      label: Provisioned IOPS
+      max: 256000
+      min: 1000
+      required: false
+      show_when:
+        storage_type:
+          - gp3
+          - io1
+          - io2
+      type: number
+    - collapsible: true
+      id: storage_throughput
+      label: Storage throughput (MiB/s)
+      max: 1000
+      min: 125
+      required: false
+      show_when:
+        storage_type: gp3
+      type: number
+    - collapsible: true
+      id: kms_key_id
+      immutable: true
+      label: Storage KMS key ARN
+      placeholder: arn:aws:kms:...
+      required: false
+      type: string
+    - collapsible: true
+      id: ca_cert_identifier
+      label: CA certificate identifier
+      required: false
+      type: string
+    - id: section_access
+      label: Network access
+      type: section
+    - default: false
+      description: Keep disabled for production databases unless public access is intentional.
+      id: publicly_accessible
+      label: Publicly accessible
+      type: boolean
+    - collapsible: true
+      description: Leave blank to use the engine default port.
+      id: port
+      label: Port
+      max: 65535
+      min: 1
+      required: false
+      type: number
+    - collapsible: true
+      default: true
+      id: security_group_creation_enabled
+      immutable: true
+      label: Security group creation
+      type: boolean
+    - collapsible: true
+      id: security_group_id
+      label: Existing security group ID
+      placeholder: sg-...
+      required: false
+      show_when:
+        security_group_creation_enabled: false
+      type: string
+    - add_button_label: Add security group ID
+      collapsible: true
+      id: allowed_security_group_ids
+      label: Allowed security groups
+      placeholder: sg-...
+      required: false
+      show_when:
+        security_group_creation_enabled: true
+      type: string_array
+    - add_button_label: Add CIDR block
+      collapsible: true
+      id: allowed_cidr_blocks
+      label: Allowed CIDR blocks
+      placeholder: 10.0.0.0/16
+      required: false
+      show_when:
+        security_group_creation_enabled: true
+      type: string_array
+    - id: section_availability
+      label: Availability & replicas
+      type: section
+    - default: false
+      id: multi_az
+      label: Multi-AZ
+      type: boolean
+    - collapsible: true
+      description: Single-AZ placement. Hidden when Multi-AZ is enabled because AWS chooses standby placement.
+      id: availability_zone
+      label: Availability zone
+      required: false
+      show_when:
+        multi_az: false
+      type: string
+    - default: false
+      id: read_replica_creation_enabled
+      label: Read replicas
+      show_when:
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: boolean
+    - default: 1
+      id: read_replica_count
+      label: Read replica count
+      max: 15
+      min: 0
+      show_when:
+        read_replica_creation_enabled: true
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: number
+    - collapsible: true
+      id: read_replica_instance_class
+      label: Read replica instance class
+      placeholder: db.r6g.large
+      required: false
+      show_when:
+        read_replica_creation_enabled: true
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: string
+    - add_button_label: Add availability zone
+      collapsible: true
+      id: read_replica_availability_zones
+      label: Read replica AZs
+      required: false
+      show_when:
+        read_replica_creation_enabled: true
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: string_array
+    - id: section_auth
+      label: Credentials & authentication
+      type: section
+    - collapsible: true
+      id: master_user_secret_kms_key_id
+      label: Secrets Manager KMS key ARN
+      placeholder: arn:aws:kms:...
+      required: false
+      show_when:
+        restore_mode: none
+      type: string
+    - collapsible: true
+      default: false
+      id: iam_database_authentication_enabled
+      label: IAM database authentication
+      show_when:
+        engine:
+          - mysql
+          - postgres
+      type: boolean
+    - id: section_sql_server_settings
+      label: SQL Server settings
+      show_when:
+        engine:
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: section
+    - collapsible: true
+      id: license_model_sqlserver
+      immutable: true
+      label: License model
+      required: false
+      show_when:
+        engine:
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+      values:
+        - label: license-included
+          value: license-included
+        - label: bring-your-own-license
+          value: bring-your-own-license
+    - collapsible: true
+      id: character_set_name_sqlserver
+      immutable: true
+      label: Character set
+      required: false
+      show_when:
+        engine:
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+    - collapsible: true
+      id: timezone
+      immutable: true
+      label: SQL Server time zone
+      required: false
+      show_when:
+        engine:
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+    - collapsible: true
+      id: domain
+      immutable: true
+      label: Active Directory directory ID
+      required: false
+      show_when:
+        engine:
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+    - collapsible: true
+      id: domain_iam_role_name
+      immutable: true
+      label: Active Directory IAM role name
+      required: false
+      show_when:
+        domain:
+          not: ""
+        engine:
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+    - id: section_oracle_settings
+      label: Oracle settings
+      show_when:
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: section
+    - collapsible: true
+      id: license_model_oracle
+      immutable: true
+      label: License model
+      required: false
+      show_when:
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: string
+      values:
+        - label: license-included
+          value: license-included
+        - label: bring-your-own-license
+          value: bring-your-own-license
+    - collapsible: true
+      id: character_set_name_oracle
+      immutable: true
+      label: Character set
+      required: false
+      show_when:
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+      type: string
+    - id: section_backup
+      label: Backups
+      type: section
+    - default: 30
+      id: backup_retention_period
+      label: Backup retention days
+      max: 35
+      min: 0
+      collapsible: true
+      type: number
+    - collapsible: true
+      id: backup_window
+      label: Backup window
+      placeholder: 03:00-04:00
+      required: false
+      show_when:
+        backup_retention_period:
+          not: 0
+      type: string
+    - collapsible: true
+      default: true
+      id: copy_tags_to_snapshot
+      label: Copy tags to snapshots
+      type: boolean
+    - collapsible: true
+      default: true
+      description: Delete retained automated backups when the database is deleted. Disable this to preserve automated backups after deletion.
+      id: delete_automated_backups
+      label: Delete automated backups
+      show_when:
+        backup_retention_period:
+          not: 0
+      type: boolean
+    - collapsible: true
+      default: false
+      id: skip_final_snapshot
+      label: Skip final snapshot
+      type: boolean
+    - collapsible: true
+      id: final_snapshot_identifier
+      label: Final snapshot identifier
+      required: false
+      show_when:
+        skip_final_snapshot: false
+      type: string
+    - default: true
+      id: deletion_protection_enabled
+      label: Deletion protection
+      type: boolean
+    - id: section_maintenance
+      label: Maintenance
+      type: section
+    - collapsible: true
+      id: maintenance_window
+      label: Maintenance window
+      placeholder: sun:04:00-sun:05:00
+      required: false
+      type: string
+    - collapsible: true
+      default: false
+      id: allow_major_version_upgrade
+      label: Allow major version upgrades
+      type: boolean
+    - collapsible: true
+      default: false
+      id: apply_immediately
+      label: Apply changes immediately
+      type: boolean
+    - id: section_monitoring
+      label: Monitoring
+      type: section
+    - add_button_label: Add log type
+      collapsible: true
+      id: enabled_cloudwatch_logs_exports
+      label: CloudWatch log exports
+      placeholder: postgresql
+      required: false
+      type: string_array
+    - collapsible: true
+      default: 0
+      id: monitoring_interval
+      label: Enhanced monitoring interval
+      type: number
+      values:
+        - label: "0"
+          value: 0
+        - label: "1"
+          value: 1
+        - label: "5"
+          value: 5
+        - label: "10"
+          value: 10
+        - label: "15"
+          value: 15
+        - label: "30"
+          value: 30
+        - label: "60"
+          value: 60
+    - collapsible: true
+      default: true
+      id: monitoring_role_creation_enabled
+      immutable: true
+      label: Monitoring IAM role creation
+      show_when:
+        monitoring_interval:
+          not: 0
+      type: boolean
+    - collapsible: true
+      id: monitoring_role_arn
+      label: Monitoring IAM role ARN
+      placeholder: arn:aws:iam::...
+      required: false
+      show_when:
+        monitoring_role_creation_enabled: false
+        monitoring_interval:
+          not: 0
+      type: string
+    - default: true
+      id: performance_insights_enabled
+      label: Performance insights
+      type: boolean
+      collapsible: true
+    - collapsible: true
+      default: 7
+      id: performance_insights_retention_period
+      label: Performance insights retention days
+      show_when:
+        performance_insights_enabled: true
+      type: number
+    - collapsible: true
+      id: performance_insights_kms_key_id
+      label: Performance insights KMS key ARN
+      required: false
+      show_when:
+        performance_insights_enabled: true
+      type: string
+    - id: section_cloudwatch_alarms
+      label: CloudWatch alarms
+      type: section
+    - default: true
+      id: cloudwatch_alarms_creation_enabled
+      label: Create CloudWatch alarms
+      type: boolean
+    - collapsible: true
+      default: 80
+      id: cloudwatch_alarm_cpu_threshold
+      label: CPU alarm threshold (%)
+      max: 100
+      min: 0
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 5
+      description: Displayed in GiB. Ravion converts this to bytes for Terraform.
+      id: cloudwatch_alarm_storage_threshold_gib
+      label: Free storage alarm threshold (GiB)
+      min: 0
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 100
+      id: cloudwatch_alarm_connections_threshold
+      label: Connections alarm threshold
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 2
+      id: cloudwatch_alarm_evaluation_periods
+      label: Alarm evaluation periods
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 300
+      id: cloudwatch_alarm_period
+      label: Alarm period seconds
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+      values:
+        - label: "10"
+          value: 10
+        - label: "30"
+          value: 30
+        - label: "60"
+          value: 60
+        - label: "300"
+          value: 300
+        - label: "900"
+          value: 900
+        - label: "3600"
+          value: 3600
+    - add_button_label: Add action ARN
+      collapsible: true
+      id: cloudwatch_alarm_actions
+      label: Alarm action ARNs
+      required: false
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: string_array
+    - add_button_label: Add action ARN
+      collapsible: true
+      id: cloudwatch_ok_actions
+      label: OK action ARNs
+      required: false
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: string_array
+    - id: section_parameter_group
+      description: Parameter groups are database engine settings applied to the instance, such as logging, connection, or query behavior. Leave the defaults unless you need engine-specific tuning.
+      label: Parameter group
+      type: section
+    - collapsible: true
+      default: true
+      description: Create a parameter group for this database. Disable this only when you want to attach an existing parameter group.
+      id: parameter_group_creation_enabled
+      immutable: true
+      label: Parameter group creation
+      type: boolean
+    - collapsible: true
+      description: Name of an existing parameter group to attach when this module is not creating one.
+      id: parameter_group_name
+      immutable: true
+      label: Existing parameter group name
+      required: false
+      show_when:
+        parameter_group_creation_enabled: false
+      type: string
+    - collapsible: true
+      description: Parameter group family, such as postgres15 or mysql8.0. Leave blank to derive it from the selected engine and major version.
+      id: parameter_group_family
+      immutable: true
+      label: Parameter group family
+      placeholder: postgres15
+      required: false
+      show_when:
+        parameter_group_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: []
+      description: Custom database engine parameters to apply to the created parameter group. Many changes require a database reboot depending on the parameter.
+      id: parameters
+      item_inputs:
+        - description: Engine parameter name, such as log_statement or max_connections.
+          id: name
+          label: Name
+          required: true
+          type: string
+        - description: Parameter value to set.
+          id: value
+          label: Value
+          required: true
+          type: string
+        - default: immediate
+          description: Apply immediately when supported, or wait until the next database reboot.
+          id: apply_method
+          label: Apply method
+          type: string
+          values:
+            - label: immediate
+              value: immediate
+            - label: pending-reboot
+              value: pending-reboot
+      item_label: Parameter
+      label: Parameters
+      required: false
+      show_when:
+        parameter_group_creation_enabled: true
+      type: object_array
+    - id: section_option_group
+      label: Option group
+      show_when:
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: section
+    - collapsible: true
+      default: false
+      id: option_group_creation_enabled
+      immutable: true
+      label: Option group creation
+      show_when:
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: boolean
+    - collapsible: true
+      id: option_group_name
+      immutable: true
+      label: Existing option group name
+      required: false
+      show_when:
+        option_group_creation_enabled: false
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+    - collapsible: true
+      id: option_group_engine_version
+      immutable: true
+      label: Option group engine version
+      required: false
+      show_when:
+        option_group_creation_enabled: true
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: string
+    - collapsible: true
+      default: []
+      id: options
+      label: Options
+      placeholder: "- option_name: STATSPACK"
+      required: false
+      show_when:
+        option_group_creation_enabled: true
+        engine:
+          - oracle-ee
+          - oracle-se2
+          - oracle-se2-cdb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: array
+    - id: section_blue_green
+      label: Blue/green deployments
+      show_when:
+        engine:
+          - mysql
+          - mariadb
+      type: section
+    - collapsible: true
+      default: false
+      id: blue_green_update_enabled
+      label: Blue/green updates
+      show_when:
+        engine:
+          - mysql
+          - mariadb
+      type: boolean
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: database/rds
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        allocated_storage: << module.input.allocated_storage >>
+        allow_major_version_upgrade: << module.input.allow_major_version_upgrade >>
+        allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
+        allowed_security_group_ids: << module.input.allowed_security_group_ids >>
+        apply_immediately: << module.input.apply_immediately >>
+        auto_minor_version_upgrade: << module.input.auto_minor_version_upgrade >>
+        availability_zone: << module.input.availability_zone >>
+        backup_retention_period: << module.input.backup_retention_period >>
+        backup_window: << module.input.backup_window >>
+        blue_green_update: "<< module.input.blue_green_update_enabled ? {enabled: true} : null >>"
+        ca_cert_identifier: << module.input.ca_cert_identifier >>
+        character_set_name: '<< module.input.engine == "oracle-ee" || module.input.engine == "oracle-se2" || module.input.engine == "oracle-se2-cdb" ? module.input.character_set_name_oracle : module.input.character_set_name_sqlserver >>'
+        cloudwatch_alarm_actions: << module.input.cloudwatch_alarm_actions >>
+        cloudwatch_alarm_connections_threshold: << module.input.cloudwatch_alarm_connections_threshold >>
+        cloudwatch_alarm_cpu_threshold: << module.input.cloudwatch_alarm_cpu_threshold >>
+        cloudwatch_alarm_evaluation_periods: << module.input.cloudwatch_alarm_evaluation_periods >>
+        cloudwatch_alarm_period: << module.input.cloudwatch_alarm_period >>
+        cloudwatch_alarm_storage_threshold: << int(module.input.cloudwatch_alarm_storage_threshold_gib * 1073741824) >>
+        cloudwatch_ok_actions: << module.input.cloudwatch_ok_actions >>
+        copy_tags_to_snapshot: << module.input.copy_tags_to_snapshot >>
+        cloudwatch_alarms_creation_enabled: << module.input.cloudwatch_alarms_creation_enabled >>
+        monitoring_role_creation_enabled: << module.input.monitoring_role_creation_enabled >>
+        option_group_creation_enabled: << module.input.option_group_creation_enabled >>
+        parameter_group_creation_enabled: << module.input.parameter_group_creation_enabled >>
+        read_replica_creation_enabled: << module.input.read_replica_creation_enabled >>
+        security_group_creation_enabled: << module.input.security_group_creation_enabled >>
+        db_name: '<< module.input.restore_mode == "none" ? module.input.db_name : null >>'
+        delete_automated_backups: << module.input.delete_automated_backups >>
+        deletion_protection_enabled: << module.input.deletion_protection_enabled >>
+        domain: << module.input.domain >>
+        domain_iam_role_name: << module.input.domain_iam_role_name >>
+        enabled_cloudwatch_logs_exports: << module.input.enabled_cloudwatch_logs_exports >>
+        engine: << module.input.engine >>
+        engine_major_version: << module.input.engine_major_version >>
+        engine_minor_version: << module.input.engine_minor_version >>
+        final_snapshot_identifier: << module.input.final_snapshot_identifier >>
+        iam_database_authentication_enabled: << module.input.iam_database_authentication_enabled >>
+        instance_class: << module.input.instance_class >>
+        iops: << module.input.iops >>
+        kms_key_id: << module.input.kms_key_id >>
+        license_model: '<< module.input.engine == "oracle-ee" || module.input.engine == "oracle-se2" || module.input.engine == "oracle-se2-cdb" ? module.input.license_model_oracle : module.input.license_model_sqlserver >>'
+        maintenance_window: << module.input.maintenance_window >>
+        manage_master_user_password: true
+        master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
+        max_allocated_storage: << module.input.max_allocated_storage >>
+        monitoring_interval: << module.input.monitoring_interval >>
+        monitoring_role_arn: << module.input.monitoring_role_arn >>
+        multi_az: << module.input.multi_az >>
+        name: << module.input.name >>
+        option_group_engine_version: << module.input.option_group_engine_version >>
+        option_group_name: << module.input.option_group_name >>
+        options: << module.input.options >>
+        parameter_group_family: << module.input.parameter_group_family >>
+        parameter_group_name: << module.input.parameter_group_name >>
+        parameters: << module.input.parameters >>
+        password: null
+        performance_insights_enabled: << module.input.performance_insights_enabled >>
+        performance_insights_kms_key_id: << module.input.performance_insights_kms_key_id >>
+        performance_insights_retention_period: << module.input.performance_insights_retention_period >>
+        port: << module.input.port >>
+        publicly_accessible: << module.input.publicly_accessible >>
+        read_replica_availability_zones: << module.input.read_replica_availability_zones >>
+        read_replica_count: << module.input.read_replica_count >>
+        read_replica_instance_class: << module.input.read_replica_instance_class >>
+        region: << module.input.aws_region >>
+        restore_to_point_in_time: '<< module.input.restore_mode == "point_in_time" ? { restore_time: module.input.point_in_time_use_latest_restorable_time ? null : module.input.point_in_time_restore_time, source_db_instance_identifier: module.input.point_in_time_source_db_instance_identifier, source_db_instance_automated_backups_arn: module.input.point_in_time_source_db_instance_automated_backups_arn, source_dbi_resource_id: module.input.point_in_time_source_dbi_resource_id, use_latest_restorable_time: module.input.point_in_time_use_latest_restorable_time } : null >>'
+        security_group_id: << module.input.security_group_id >>
+        skip_final_snapshot: << module.input.skip_final_snapshot >>
+        snapshot_identifier: '<< module.input.restore_mode == "snapshot" ? module.input.snapshot_identifier : null >>'
+        storage_throughput: << module.input.storage_throughput >>
+        storage_type: << module.input.storage_type >>
+        subnet_ids: << module.input.subnet_ids >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        timezone: << module.input.timezone >>
+        username: << module.input.username >>
+        vpc_id: << module.input.vpc_id >>
+  ui:
+    metrics:
+      - id: cpu_utilization
+        name: CPU utilization
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBInstanceIdentifier: << stack.output.db_instance_identifier >>
+          name: CPUUtilization
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: free_storage_space
+        name: Free storage
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBInstanceIdentifier: << stack.output.db_instance_identifier >>
+          name: FreeStorageSpace
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: database_connections
+        name: Database connections
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBInstanceIdentifier: << stack.output.db_instance_identifier >>
+          name: DatabaseConnections
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: read_iops
+        name: Read IOPS
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBInstanceIdentifier: << stack.output.db_instance_identifier >>
+          name: ReadIOPS
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: write_iops
+        name: Write IOPS
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBInstanceIdentifier: << stack.output.db_instance_identifier >>
+          name: WriteIOPS
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+  readme: |-
+    Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
+
+    ## Overview
+
+    Use this module when an application needs a managed relational database in AWS. It provisions an RDS instance with subnet placement, security group access, backups, monitoring, optional read replicas, and CloudWatch alarms.
+
+    The module supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines. Aurora uses a different AWS resource model and is not configured by this module.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Application database | Create a private RDS instance attached to an existing Ravion VPC network. |
+    | Production database | Enable Multi-AZ, deletion protection, automated backups, performance insights, and CloudWatch alarms. |
+    | Read-heavy workload | Add read replicas for supported engines. |
+    | Sensitive data | Keep public access disabled, use encryption, manage credentials in Secrets Manager, and restrict ingress. |
+
+    ## Networking
+
+    Select a VPC network first. Ravion maps the network's AWS account, region, VPC ID, and private subnet IDs into this module. The database subnet group uses the selected private subnets by default.
+
+    Publicly accessible is disabled by default. Keep it disabled for normal application databases and allow access through security group IDs from application services or controlled CIDR blocks.
+
+    ## Database engine and sizing
+
+    Choose the engine, optional engine major version, optional engine minor version, instance class, and allocated storage. If engine major version is blank, AWS selects the latest available version for that engine.
+
+    Storage type defaults to gp3. Max allocated storage controls RDS storage autoscaling; keep it at 0 to disable autoscaling. AWS supports increasing allocated storage after creation, but not reducing it in place.
+
+    ## Credentials and security
+
+    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Disable it only when you need to provide a master password yourself.
+
+    Storage encryption is enabled by default. Provide a storage KMS key ARN when you need a customer-managed key for storage. IAM database authentication is shown only for MySQL and PostgreSQL.
+
+    ## Availability, backups, and maintenance
+
+    Multi-AZ creates a standby in another availability zone for failover. The single availability zone field is hidden when Multi-AZ is enabled. Read replicas are shown only for engines that support RDS read replicas and are hidden for SQL Server.
+
+    Automated backups default to 7 days. You can set the backup window and control final snapshot behavior. Deletion protection is enabled by default.
+
+    Automatic minor engine version upgrades are configured next to the engine version fields and, when enabled, happen during the configured maintenance window. Major version upgrades and immediate changes are opt-in.
+
+    ## Observability
+
+    Performance insights is enabled by default with 7 days of retention. Enhanced monitoring can be enabled by setting a monitoring interval.
+
+    CloudWatch alarms are optional. When enabled, the module can alarm on CPU utilization, free storage space, and database connections. The free storage alarm threshold is entered in GiB in Ravion and converted to bytes for Terraform. The Ravion UI also shows RDS CloudWatch metrics for CPU, free storage, connections, read IOPS, and write IOPS.
+
+    ## Configuration
+
+    | Field | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | VPC network | Yes | None | Supplies AWS account, region, VPC ID, and private subnet IDs. |
+    | Name slug | Yes | Project and environment given IDs | Prefix for RDS resources. |
+    | Engine | Yes | postgres | PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server variants are supported. |
+    | Engine major version | Yes | None | Sets the RDS major engine version, such as 15 for PostgreSQL or 8.0 for MySQL. |
+    | Engine minor version | No | Blank | Appended to the major version when an exact version is required. |
+    | Auto minor version upgrades | No | true | Applies minor engine upgrades during the configured maintenance window. |
+    | Instance class | Yes | None | Use an RDS class such as db.t4g.micro or db.r6g.large. |
+    | Allocated storage | Yes | 20 | Storage in GiB. |
+    | Master username | Yes | admin | Master database user. |
+    | Storage KMS key ARN | No | Blank | Uses a customer-managed KMS key for storage encryption. |
+    | Initial database name | No | Blank | Creates an initial database when supported by the engine. |
+    | Publicly accessible | No | false | Leave disabled unless public database access is intentional. |
+    | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
+    | Multi-AZ | No | false | Enables high availability standby. |
+    | Read replicas | No | false | Creates read replicas when supported by the engine. |
+    | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. |
+    | Backup retention days | No | 7 | Set to 0 to disable automated backups. |
+    | Deletion protection | No | true | Helps prevent accidental deletion. |
+    | Performance insights | No | true | Enables AWS Performance Insights. |
+    | CloudWatch alarms | No | false | Adds CPU, free storage, and connection alarms. |
+    | Free storage alarm threshold | No | 5 GiB | Converted to bytes before Terraform runs. |
+    | Tags | No | Blank | Merged with Ravion standard tags. |
+
+    ## Advanced configuration
+
+    Use parameter group settings for engine parameters. Oracle settings and SQL Server settings are shown in separate engine-specific sections. Option group settings are shown only for Oracle and SQL Server engines; blue/green updates are shown only for MySQL and MariaDB. Use advanced Terraform variables for one-off overrides not represented directly in the UI. Values in advanced Terraform variables override generated variables.
+
+    Terraform settings let you override the OpenTofu version, Terraform execution environment inherited from the VPC network, and Ravion state backend workspace name.
+
+    ## Design decisions
+
+    RDS instances are placed in private subnets by default through the VPC network reference. Secrets Manager password management, encryption at rest, performance insights, and deletion protection default on because they are safer defaults for long-lived databases.
+
+    The module keeps primary database choices visible and tucks optional engine, engine-specific, storage, backup, monitoring, maintenance, parameter group, and option group details behind collapsible controls. Source repository and stack plumbing remain managed by Ravion.
+
+    ## Learn more
+
+    - [Amazon RDS documentation](https://docs.aws.amazon.com/rds/)
+    - [RDS DB instance classes](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html)
+    - [RDS security](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.html)
+    - [RDS monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Monitoring.html)
+    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/rds)

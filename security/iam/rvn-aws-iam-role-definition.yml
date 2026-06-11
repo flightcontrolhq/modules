@@ -1,6 +1,6 @@
 definition:
   type: rvn-aws-iam-role
-  name: IAM Role
+  name: AWS IAM Role
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
   version: 0.1.0

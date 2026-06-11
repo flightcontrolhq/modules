@@ -31,16 +31,22 @@ locals {
   )
   port = coalesce(var.port, local.default_port)
 
+  engine_version = (
+    var.engine_major_version != null ? (
+      var.engine_minor_version != null ? "${var.engine_major_version}.${var.engine_minor_version}" : var.engine_major_version
+    ) : null
+  )
+
   # Parameter group family derivation
   # If not provided, derive from engine and major version
   # Examples: mysql8.0, postgres15, mariadb10.6, oracle-ee-19, sqlserver-ee-15.0
   default_parameter_group_family = (
-    var.engine_version != null ? (
-      local.is_mysql ? "mysql${regex("^[0-9]+\\.[0-9]+", var.engine_version)}" :
-      local.is_postgres ? "postgres${split(".", var.engine_version)[0]}" :
-      local.is_mariadb ? "mariadb${regex("^[0-9]+\\.[0-9]+", var.engine_version)}" :
-      local.is_oracle ? "${var.engine}-${split(".", var.engine_version)[0]}" :
-      local.is_sqlserver ? "${var.engine}-${regex("^[0-9]+\\.[0-9]+", var.engine_version)}" :
+    var.engine_major_version != null ? (
+      local.is_mysql ? "mysql${regex("^[0-9]+\\.[0-9]+", var.engine_major_version)}" :
+      local.is_postgres ? "postgres${split(".", var.engine_major_version)[0]}" :
+      local.is_mariadb ? "mariadb${regex("^[0-9]+\\.[0-9]+", var.engine_major_version)}" :
+      local.is_oracle ? "${var.engine}-${split(".", var.engine_major_version)[0]}" :
+      local.is_sqlserver ? "${var.engine}-${regex("^[0-9]+\\.[0-9]+", var.engine_major_version)}" :
       null
       ) : (
       local.is_mysql ? "mysql8.0" :
@@ -61,10 +67,10 @@ locals {
   # For Oracle: 19, 21
   # For SQL Server: 15.00, 16.00
   default_option_group_engine_version = (
-    var.engine_version != null ? (
-      local.is_oracle ? split(".", var.engine_version)[0] :
-      local.is_sqlserver ? regex("^[0-9]+\\.[0-9]+", var.engine_version) :
-      split(".", var.engine_version)[0]
+    var.engine_major_version != null ? (
+      local.is_oracle ? split(".", var.engine_major_version)[0] :
+      local.is_sqlserver ? regex("^[0-9]+\\.[0-9]+", var.engine_major_version) :
+      split(".", var.engine_major_version)[0]
       ) : (
       local.is_oracle ? "19" :
       local.is_sqlserver ? "15.00" :

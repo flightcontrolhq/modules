@@ -48,10 +48,21 @@ variable "engine" {
   }
 }
 
-variable "engine_version" {
+variable "engine_major_version" {
   type        = string
-  description = "The version number of the database engine. If not specified, the latest available version will be used."
+  description = "The major version of the database engine. If not specified, the latest available version will be used. Examples: 15, 8.0, 19."
   default     = null
+}
+
+variable "engine_minor_version" {
+  type        = string
+  description = "The optional minor version of the database engine. Appended to engine_major_version when specified. Examples: 4, 35, 0.0.ru-2023-10.rur-2023-10.r1."
+  default     = null
+
+  validation {
+    condition     = var.engine_minor_version == null || var.engine_major_version != null
+    error_message = "The engine_major_version must be set when engine_minor_version is set."
+  }
 }
 
 variable "license_model" {
@@ -707,7 +718,7 @@ variable "option_group_name" {
 
 variable "option_group_engine_version" {
   type        = string
-  description = "The major engine version for the option group. If not specified, it is derived from engine_version."
+  description = "The major engine version for the option group. If not specified, it is derived from engine_major_version."
   default     = null
 }
 
