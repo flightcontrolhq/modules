@@ -12,7 +12,7 @@ resource "aws_lb_listener" "http" {
   # If HTTPS is enabled and redirect is enabled, redirect to HTTPS
   # Otherwise, return a fixed response
   dynamic "default_action" {
-    for_each = var.http_to_https_redirect && local.create_https_listener ? [1] : []
+    for_each = var.http_to_https_redirect_enabled && local.create_https_listener ? [1] : []
     content {
       type = "redirect"
       redirect {
@@ -24,7 +24,7 @@ resource "aws_lb_listener" "http" {
   }
 
   dynamic "default_action" {
-    for_each = !var.http_to_https_redirect || !local.create_https_listener ? [1] : []
+    for_each = !var.http_to_https_redirect_enabled || !local.create_https_listener ? [1] : []
     content {
       type = "fixed-response"
       fixed_response {

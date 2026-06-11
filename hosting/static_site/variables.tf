@@ -112,7 +112,7 @@ variable "web_acl_id" {
   }
 }
 
-variable "wait_for_deployment" {
+variable "deployment_wait_enabled" {
   type        = bool
   description = "Whether to wait for each distribution to be deployed before completing apply."
   default     = true
@@ -122,13 +122,13 @@ variable "wait_for_deployment" {
 # Hosting Bucket
 ################################################################################
 
-variable "bucket_versioning" {
+variable "bucket_versioning_enabled" {
   type        = bool
   description = "Enable versioning on the hosting bucket. Disable only if you know what you're doing — this is independent of the per-deploy version prefix and protects against accidental overwrites."
   default     = true
 }
 
-variable "bucket_force_destroy" {
+variable "bucket_force_destroy_enabled" {
   type        = bool
   description = "Allow `tofu destroy` to delete the hosting bucket even if it is not empty. Useful for ephemeral environments; dangerous in production."
   default     = false
@@ -322,7 +322,7 @@ variable "default_root_object" {
 # where HTML vs asset is unambiguous from the file extension.
 ################################################################################
 
-variable "manage_cache_control" {
+variable "cache_control_enabled" {
   type        = bool
   description = "Whether the module attaches a viewer-response CloudFront Function that writes Cache-Control on every response. Disable to delegate Cache-Control to S3 object metadata or to a caller-supplied response_headers_policy_id."
   default     = true
@@ -368,21 +368,21 @@ variable "kvs_initial_data" {
 # Logging
 ################################################################################
 
-variable "enable_logging" {
+variable "logging_enabled" {
   type        = bool
   description = "Enable CloudFront access logging."
   default     = false
 }
 
-variable "create_logging_bucket" {
+variable "logging_bucket_creation_enabled" {
   type        = bool
-  description = "Whether to create a new S3 bucket for CloudFront access logs. Ignored if enable_logging is false."
+  description = "Whether to create a new S3 bucket for CloudFront access logs. Ignored if logging_enabled is false."
   default     = false
 }
 
 variable "logging_bucket_domain_name" {
   type        = string
-  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when enable_logging is true and create_logging_bucket is false."
+  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when logging_enabled is true and logging_bucket_creation_enabled is false."
   default     = null
 }
 
@@ -394,7 +394,7 @@ variable "logging_prefix" {
 
 variable "logging_retention_days" {
   type        = number
-  description = "Days to retain CloudFront access logs (only applies to the bucket created when create_logging_bucket = true)."
+  description = "Days to retain CloudFront access logs (only applies to the bucket created when logging_bucket_creation_enabled = true)."
   default     = 90
 }
 
@@ -402,7 +402,7 @@ variable "logging_retention_days" {
 # Deploy Role (optional)
 ################################################################################
 
-variable "create_deploy_role" {
+variable "deploy_role_enabled" {
   type        = bool
   description = "Whether to create an IAM role that CI can assume to upload to the hosting bucket and flip the active version in KVS."
   default     = false
@@ -410,7 +410,7 @@ variable "create_deploy_role" {
 
 variable "deploy_role_trust_policy" {
   type        = string
-  description = "Trust policy JSON for the deploy role. Required when create_deploy_role = true. Typically grants sts:AssumeRoleWithWebIdentity to a GitHub OIDC provider or sts:AssumeRole to a CI account."
+  description = "Trust policy JSON for the deploy role. Required when deploy_role_enabled = true. Typically grants sts:AssumeRoleWithWebIdentity to a GitHub OIDC provider or sts:AssumeRole to a CI account."
   default     = null
 
   validation {

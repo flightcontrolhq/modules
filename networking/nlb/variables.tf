@@ -112,13 +112,13 @@ variable "internal" {
   default     = false
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
   default     = true
 }
 
-variable "enable_cross_zone_load_balancing" {
+variable "cross_zone_load_balancing_enabled" {
   type        = bool
   description = "Enable cross-zone load balancing. Distributes traffic evenly across all targets in all enabled Availability Zones."
   default     = false
@@ -150,7 +150,7 @@ variable "enforce_security_group_inbound_rules_on_private_link_traffic" {
 # Elastic IPs (Static IPs)
 ################################################################################
 
-variable "enable_elastic_ips" {
+variable "elastic_ips_enabled" {
   type        = bool
   description = "Enable static IP addresses for the NLB using Elastic IPs. When enabled, elastic_ip_allocation_ids must be provided."
   default     = false
@@ -158,7 +158,7 @@ variable "enable_elastic_ips" {
 
 variable "elastic_ip_allocation_ids" {
   type        = list(string)
-  description = "A list of Elastic IP allocation IDs for the NLB, one per subnet. Required if enable_elastic_ips is true."
+  description = "A list of Elastic IP allocation IDs for the NLB, one per subnet. Required if elastic_ips_enabled is true."
   default     = []
 
   validation {
@@ -171,7 +171,7 @@ variable "elastic_ip_allocation_ids" {
 # Access Logs
 ################################################################################
 
-variable "enable_access_logs" {
+variable "access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the NLB."
   default     = false

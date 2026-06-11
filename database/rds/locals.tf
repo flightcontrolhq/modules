@@ -78,20 +78,20 @@ locals {
   )
 
   # Resource creation flags
-  create_security_group  = var.create_security_group
-  create_parameter_group = var.create_parameter_group
-  create_option_group    = var.create_option_group && (local.is_oracle || local.is_sqlserver)
-  create_monitoring_role = var.create_monitoring_role && var.monitoring_interval > 0
+  create_security_group  = var.security_group_creation_enabled
+  create_parameter_group = var.parameter_group_creation_enabled
+  create_option_group    = var.option_group_creation_enabled && (local.is_oracle || local.is_sqlserver)
+  create_monitoring_role = var.monitoring_role_creation_enabled && var.monitoring_interval > 0
 
   # Read replica creation
-  create_read_replicas = var.create_read_replica && var.read_replica_count > 0
+  create_read_replicas = var.read_replica_creation_enabled && var.read_replica_count > 0
   read_replica_count   = local.create_read_replicas ? var.read_replica_count : 0
 
   # Read replica instance class (defaults to primary if not specified)
   read_replica_instance_class = coalesce(var.read_replica_instance_class, var.instance_class)
 
   # CloudWatch alarm creation
-  create_cloudwatch_alarms = var.create_cloudwatch_alarms
+  create_cloudwatch_alarms = var.cloudwatch_alarms_creation_enabled
 
   # CloudWatch logs validation per engine
   # MySQL: audit, error, general, slowquery

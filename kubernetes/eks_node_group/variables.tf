@@ -269,7 +269,7 @@ variable "security_group_ids" {
   }
 }
 
-variable "enable_detailed_monitoring" {
+variable "detailed_monitoring_enabled" {
   type        = bool
   description = "Enable EC2 detailed (1-minute) monitoring on instances."
   default     = false

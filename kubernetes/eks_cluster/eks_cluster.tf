@@ -7,7 +7,7 @@ resource "aws_eks_cluster" "this" {
   version  = var.kubernetes_version
   role_arn = module.cluster_role.role_arn
 
-  deletion_protection = var.deletion_protection
+  deletion_protection = var.deletion_protection_enabled
 
   enabled_cluster_log_types = var.enabled_cluster_log_types
 
@@ -41,6 +41,13 @@ resource "aws_eks_cluster" "this" {
   tags = merge(local.tags, {
     Name = var.name
   })
+
+  lifecycle {
+    precondition {
+      condition     = alltrue([for subnet in data.aws_subnet.selected : subnet.vpc_id == var.vpc_id])
+      error_message = "All subnet_ids must belong to vpc_id."
+    }
+  }
 
   depends_on = [
     aws_cloudwatch_log_group.cluster,

@@ -48,7 +48,7 @@ resource "aws_eks_addon" "kube_proxy" {
 ################################################################################
 
 resource "aws_eks_addon" "pod_identity_agent" {
-  count = var.enable_pod_identity_agent ? 1 : 0
+  count = var.pod_identity_agent_enabled ? 1 : 0
 
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = "eks-pod-identity-agent"
@@ -67,7 +67,7 @@ resource "aws_eks_addon" "pod_identity_agent" {
 ################################################################################
 
 resource "aws_eks_addon" "ebs_csi" {
-  count = var.enable_ebs_csi_driver ? 1 : 0
+  count = var.ebs_csi_driver_enabled ? 1 : 0
 
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = "aws-ebs-csi-driver"

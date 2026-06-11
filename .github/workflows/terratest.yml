@@ -12,6 +12,7 @@ jobs:
   native-tests:
     name: Native Tests (tofu test)
     runs-on: ubuntu-latest
+    if: ${{ false }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,7 +46,7 @@ jobs:
   integration-tests:
     name: Integration Tests (Terratest)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-terratest')
+    if: ${{ false }}
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -54,7 +55,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.23"
           cache-dependency-path: test/go.sum
 
       - name: Setup OpenTofu

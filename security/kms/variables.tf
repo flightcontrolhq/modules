@@ -76,7 +76,7 @@ variable "multi_region" {
   default     = false
 }
 
-variable "enable_key_rotation" {
+variable "key_rotation_enabled" {
   type        = bool
   description = "Enable annual automatic rotation of the key material. AWS only supports automatic rotation for symmetric keys (SYMMETRIC_DEFAULT + ENCRYPT_DECRYPT); the module ignores this setting for any other shape."
   default     = true

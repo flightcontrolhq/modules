@@ -48,15 +48,15 @@ locals {
   )
 
   # Resource creation flags
-  create_security_group    = var.create_security_group
-  create_monitoring_role   = var.create_monitoring_role && var.monitoring_interval > 0
-  create_cloudwatch_alarms = var.create_cloudwatch_alarms
+  create_security_group    = var.security_group_creation_enabled
+  create_monitoring_role   = var.monitoring_role_creation_enabled && var.monitoring_interval > 0
+  create_cloudwatch_alarms = var.cloudwatch_alarms_creation_enabled
   create_subnet_group      = var.db_subnet_group_name == null
 
   # Resolved resource names
   db_subnet_group_name         = local.create_subnet_group ? aws_db_subnet_group.this[0].name : var.db_subnet_group_name
-  cluster_parameter_group_name = var.create_cluster_parameter_group ? aws_rds_cluster_parameter_group.this[0].name : var.cluster_parameter_group_name
-  db_parameter_group_name      = var.create_db_parameter_group ? aws_db_parameter_group.this[0].name : var.db_parameter_group_name
+  cluster_parameter_group_name = var.cluster_parameter_group_creation_enabled ? aws_rds_cluster_parameter_group.this[0].name : var.cluster_parameter_group_name
+  db_parameter_group_name      = var.db_parameter_group_creation_enabled ? aws_db_parameter_group.this[0].name : var.db_parameter_group_name
 
   # Resolved monitoring role ARN — from created role or provided variable
   monitoring_role_arn = local.create_monitoring_role ? aws_iam_role.monitoring[0].arn : var.monitoring_role_arn

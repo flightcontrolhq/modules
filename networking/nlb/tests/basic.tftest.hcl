@@ -94,7 +94,7 @@ run "access_logs_new_bucket" {
   command = plan
 
   variables {
-    enable_access_logs         = true
+    access_logs_enabled        = true
     access_logs_retention_days = 90
   }
 
@@ -124,7 +124,7 @@ run "access_logs_existing_bucket" {
   command = plan
 
   variables {
-    enable_access_logs     = true
+    access_logs_enabled    = true
     access_logs_bucket_arn = "arn:aws:s3:::my-existing-bucket"
   }
 
@@ -139,7 +139,7 @@ run "access_logs_disabled" {
   command = plan
 
   variables {
-    enable_access_logs = false
+    access_logs_enabled = false
   }
 
   assert {
@@ -153,7 +153,7 @@ run "cross_zone_enabled" {
   command = plan
 
   variables {
-    enable_cross_zone_load_balancing = true
+    cross_zone_load_balancing_enabled = true
   }
 
   assert {
@@ -177,7 +177,7 @@ run "deletion_protection" {
   command = plan
 
   variables {
-    deletion_protection = true
+    deletion_protection_enabled = true
   }
 
   assert {

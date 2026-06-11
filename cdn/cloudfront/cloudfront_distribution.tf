@@ -5,7 +5,7 @@ resource "aws_cloudfront_distribution" "this" {
   comment             = each.value.comment != null ? each.value.comment : "${var.name}-${each.key}"
   price_class         = var.price_class
   http_version        = var.http_version
-  is_ipv6_enabled     = var.is_ipv6_enabled
+  is_ipv6_enabled     = var.ipv6_enabled
   default_root_object = var.default_root_object
   retain_on_delete    = var.retain_on_delete
   wait_for_deployment = var.wait_for_deployment
@@ -19,7 +19,7 @@ resource "aws_cloudfront_distribution" "this" {
       domain_name = origin.value.domain_name
       origin_path = origin.value.origin_path
 
-      origin_access_control_id = origin.value.s3_origin && var.create_origin_access_control ? (
+      origin_access_control_id = origin.value.s3_origin && var.origin_access_control_creation_enabled ? (
         origin.value.origin_access_control_id != null ? origin.value.origin_access_control_id : aws_cloudfront_origin_access_control.this[origin.value.origin_id].id
       ) : origin.value.origin_access_control_id
 
@@ -141,9 +141,9 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "logging_config" {
-    for_each = var.enable_logging ? [1] : []
+    for_each = var.logging_enabled ? [1] : []
     content {
-      bucket          = var.create_logging_bucket ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
+      bucket          = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
       prefix          = "${var.logging_prefix}${each.key}/"
       include_cookies = var.logging_include_cookies
     }

@@ -23,13 +23,13 @@ resource "aws_vpc_peering_connection" "this" {
 resource "aws_vpc_peering_connection_options" "requester" {
   for_each = {
     for k, v in var.vpc_peering_connections : k => v
-    if v.peer_owner_id == null && v.peer_region == null && v.auto_accept && v.allow_remote_vpc_dns_resolution
+    if v.peer_owner_id == null && v.peer_region == null && v.auto_accept && v.remote_vpc_dns_resolution_enabled
   }
 
   vpc_peering_connection_id = aws_vpc_peering_connection.this[each.key].id
 
   requester {
-    allow_remote_vpc_dns_resolution = each.value.allow_remote_vpc_dns_resolution
+    allow_remote_vpc_dns_resolution = each.value.remote_vpc_dns_resolution_enabled
   }
 }
 
@@ -45,12 +45,12 @@ locals {
         peering_key      = k
         destination_cidr = cidr
       }
-      if v.add_to_public_route_table
+      if v.public_route_table_routes_enabled
     }
   ]...)
 
   # Cartesian product of (peering route x private route table) for the private route tables.
-  # aws_route_table.private may be 1 or N depending on nat_gateway_high_availability.
+  # aws_route_table.private may be 1 or N depending on nat_gateway_high_availability_enabled.
   vpc_peering_private_routes = merge([
     for k, v in var.vpc_peering_connections : merge([
       for rt_idx in range(length(aws_route_table.private)) : {
@@ -61,7 +61,7 @@ locals {
         }
       }
     ]...)
-    if v.add_to_private_route_tables
+    if v.private_route_table_routes_enabled
   ]...)
 }
 

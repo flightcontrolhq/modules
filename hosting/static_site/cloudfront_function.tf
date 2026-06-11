@@ -46,7 +46,7 @@ resource "aws_cloudfront_function" "rewrite" {
 }
 
 resource "aws_cloudfront_function" "cache_control" {
-  count = var.manage_cache_control ? 1 : 0
+  count = var.cache_control_enabled ? 1 : 0
 
   provider = aws.us_east_1
 

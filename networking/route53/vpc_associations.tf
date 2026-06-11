@@ -2,13 +2,13 @@
 # Private Zone VPC Associations
 #
 # Additional VPC associations for an existing private hosted zone.
-# When create_zone = true, the initial VPCs are attached on the aws_route53_zone
+# When zone_creation_enabled = true, the initial VPCs are attached on the aws_route53_zone
 # resource; any subsequent associations should be managed via this resource to
 # allow cross-account / cross-region flexibility and to avoid drift.
 ################################################################################
 
 resource "aws_route53_zone_association" "this" {
-  for_each = var.create_zone ? {} : {
+  for_each = var.zone_creation_enabled ? {} : {
     for k, v in var.vpc_associations : k => v
   }
 

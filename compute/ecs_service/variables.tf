@@ -352,7 +352,7 @@ variable "deployment_maximum_percent" {
   }
 }
 
-variable "enable_execute_command" {
+variable "execute_command_enabled" {
   type        = bool
   description = "Enable ECS Exec for debugging containers."
   default     = false
@@ -381,7 +381,7 @@ variable "health_check_grace_period_seconds" {
   }
 }
 
-variable "enable_ecs_managed_tags" {
+variable "ecs_managed_tags_enabled" {
   type        = bool
   description = "Enable Amazon ECS managed tags for the tasks."
   default     = true
@@ -590,7 +590,7 @@ variable "auto_scaling" {
       }), null)
       scale_in_cooldown  = optional(number, 300)
       scale_out_cooldown = optional(number, 300)
-      disable_scale_in   = optional(bool, false)
+      scale_in_enabled   = optional(bool, true)
     })), [])
 
     scheduled = optional(list(object({
@@ -646,7 +646,7 @@ variable "deployment_circuit_breaker" {
 # ECR Repository
 ################################################################################
 
-variable "enable_ecr" {
+variable "ecr_enabled" {
   type        = bool
   description = "Create an ECR repository for this service's container image. When true, a repository is provisioned via the containers/ecr submodule."
   default     = false
@@ -669,7 +669,7 @@ variable "ecr_image_tag_mutability" {
   }
 }
 
-variable "ecr_scan_on_push" {
+variable "ecr_scan_on_push_enabled" {
   type        = bool
   description = "Scan images for vulnerabilities on push."
   default     = true
@@ -681,7 +681,7 @@ variable "ecr_force_delete" {
   default     = false
 }
 
-variable "ecr_enable_default_lifecycle_policy" {
+variable "ecr_default_lifecycle_policy_enabled" {
   type        = bool
   description = "Apply the submodule's built-in lifecycle policy (expire untagged images and cap retained tagged images)."
   default     = false

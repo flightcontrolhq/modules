@@ -177,12 +177,12 @@ output "test_listener_rule_arn" {
 
 output "autoscaling_target_arn" {
   description = "The ARN of the Application Auto Scaling target (null if auto scaling disabled)."
-  value       = local.enable_auto_scaling ? aws_appautoscaling_target.this[0].id : null
+  value       = local.auto_scaling_enabled ? aws_appautoscaling_target.this[0].id : null
 }
 
 output "autoscaling_policies" {
   description = "Map of auto scaling policy ARNs."
-  value = local.enable_auto_scaling ? {
+  value = local.auto_scaling_enabled ? {
     for name, policy in aws_appautoscaling_policy.target_tracking : name => policy.arn
   } : {}
 }
@@ -240,17 +240,17 @@ output "log_stream_prefix" {
 
 output "ecr_repository_arn" {
   description = "The ARN of the ECR repository (null if disabled)."
-  value       = var.enable_ecr ? module.ecr[0].repository_arn : null
+  value       = var.ecr_enabled ? module.ecr[0].repository_arn : null
 }
 
 output "ecr_repository_name" {
   description = "The name of the ECR repository (null if disabled)."
-  value       = var.enable_ecr ? module.ecr[0].repository_name : null
+  value       = var.ecr_enabled ? module.ecr[0].repository_name : null
 }
 
 output "ecr_repository_url" {
   description = "The URL of the ECR repository (null if disabled)."
-  value       = var.enable_ecr ? module.ecr[0].repository_url : null
+  value       = var.ecr_enabled ? module.ecr[0].repository_url : null
 }
 
 ################################################################################

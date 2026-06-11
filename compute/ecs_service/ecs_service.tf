@@ -124,7 +124,7 @@ resource "aws_ecs_service" "this" {
   }
 
   # ECS Exec
-  enable_execute_command = var.enable_execute_command
+  enable_execute_command = var.execute_command_enabled
 
   # Force new deployment
   force_new_deployment = var.force_new_deployment
@@ -133,7 +133,7 @@ resource "aws_ecs_service" "this" {
   wait_for_steady_state = var.wait_for_steady_state
 
   # Tags
-  enable_ecs_managed_tags = var.enable_ecs_managed_tags
+  enable_ecs_managed_tags = var.ecs_managed_tags_enabled
   propagate_tags          = var.propagate_tags
 
   tags = merge(local.tags, {
@@ -185,4 +185,3 @@ resource "aws_ecs_service" "this" {
     }
   }
 }
-

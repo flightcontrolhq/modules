@@ -29,7 +29,7 @@ locals {
   # default strategy must commit to a single family.
   capacity_provider_default = coalesce(
     var.capacity_provider_default,
-    local.enable_ec2 ? "ec2" : var.enable_fargate ? "fargate" : "fargate_spot"
+    local.enable_ec2 ? "ec2" : var.fargate_enabled ? "fargate" : "fargate_spot"
   )
 
   # Build the default capacity provider strategy from the selected family.
@@ -39,12 +39,12 @@ locals {
     weight            = var.ec2_weight
     base              = var.ec2_base
     }] : concat(
-    local.capacity_provider_default == "fargate" && var.enable_fargate ? [{
+    local.capacity_provider_default == "fargate" && var.fargate_enabled ? [{
       capacity_provider = "FARGATE"
       weight            = var.fargate_weight
       base              = var.fargate_base
     }] : [],
-    var.enable_fargate_spot ? [{
+    var.fargate_spot_enabled ? [{
       capacity_provider = "FARGATE_SPOT"
       weight            = var.fargate_spot_weight
       base              = var.fargate_spot_base

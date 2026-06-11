@@ -129,7 +129,7 @@ module "iam_role" {
   trusted_services = ["ec2.amazonaws.com"]
 
   # Create an instance profile for EC2 instances
-  create_instance_profile = true
+  instance_profile_creation_enabled = true
 
   # Attach SSM managed policy for Session Manager access
   managed_policy_arns = [
@@ -168,7 +168,7 @@ module "autoscaling" {
   termination_policies = ["AllocationStrategy", "OldestLaunchTemplate", "OldestInstance"]
 
   # Launch template configuration (base template)
-  create_launch_template = true
+  launch_template_creation_enabled = true
   launch_template = {
     image_id                 = data.aws_ami.amazon_linux_2023.id
     iam_instance_profile_arn = module.iam_role.instance_profile_arn
@@ -309,7 +309,7 @@ module "autoscaling" {
 
       target_tracking_configuration = {
         target_value     = 70.0
-        disable_scale_in = false
+        scale_in_enabled = true
 
         predefined_metric_specification = {
           predefined_metric_type = "ASGAverageCPUUtilization"

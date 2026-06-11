@@ -117,7 +117,7 @@ module "site" {
     "staging.example.com" = "v_staging"
   }
 
-  create_deploy_role = true
+  deploy_role_enabled = true
   deploy_role_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -172,7 +172,7 @@ aws cloudfront-keyvaluestore delete-key \
   --key pr-42.preview.example.com
 ```
 
-The deploy role created when `create_deploy_role = true` has exactly the S3 + KVS permissions to do all of this.
+The deploy role created when `deploy_role_enabled = true` has exactly the S3 + KVS permissions to do all of this.
 
 ## How the rewriter resolves a version
 
@@ -217,7 +217,7 @@ Two CloudFront Functions split responsibilities cleanly:
 | (default) | `CachingOptimized` | The rewriter pins every URL to `/<version>/...`, so each response has a version-unique cache key — safe to cache at the edge for a year regardless of HTML vs asset. |
 | `no_cache_paths` | AWS-managed `CachingDisabled` | Optional escape hatch — versioning makes per-path cache busting unnecessary in most cases. |
 
-**Browser-side `Cache-Control`** (written by the viewer-response function when `manage_cache_control = true`, the default):
+**Browser-side `Cache-Control`** (written by the viewer-response function when `cache_control_enabled = true`, the default):
 
 | Rewritten URI shape | `Cache-Control` | Why |
 |---|---|---|
@@ -226,7 +226,7 @@ Two CloudFront Functions split responsibilities cleanly:
 | No file extension or ends in `.html` / `.htm` | `s-maxage=5, stale-while-revalidate=31536000` | Catches SPA routes (`/dashboard`) after the rewriter sent them to `/<v>/index.html`, filesystem routes (`/about/`) sent to `/<v>/about/index.html`, and explicit `.html` requests. CDN edge holds HTML for 5s fresh then serves stale while it revalidates against S3 in the background, so flips of `active` propagate within ~5s without ever blocking on a cache miss — and browsers never store HTML as immutable. |
 | Any other extension (`.js`, `.css`, `.png`, `.woff2`, …) | `public, max-age=31536000, immutable` | Every asset URL is pinned to `/<version>/...` by the rewriter, so the bytes at a given URL never change between deploys. Browsers can cache these for a year and skip even conditional revalidation. |
 
-Tune the headers via `html_cache_control` and `assets_cache_control`. Add or remove always-revalidate root files via `html_path_overrides` (pass `[]` to opt out of the defaults). Set `manage_cache_control = false` to skip the function entirely and delegate `Cache-Control` to S3 object metadata or to a caller-supplied `response_headers_policy_id`. The `response_headers_policy_id` variable is for orthogonal headers (HSTS, CSP, COOP/COEP, etc.) — it coexists with the cache-control function and shouldn't carry `Cache-Control` itself.
+Tune the headers via `html_cache_control` and `assets_cache_control`. Add or remove always-revalidate root files via `html_path_overrides` (pass `[]` to opt out of the defaults). Set `cache_control_enabled = false` to skip the function entirely and delegate `Cache-Control` to S3 object metadata or to a caller-supplied `response_headers_policy_id`. The `response_headers_policy_id` variable is for orthogonal headers (HSTS, CSP, COOP/COEP, etc.) — it coexists with the cache-control function and shouldn't carry `Cache-Control` itself.
 
 > **Why the function lives in viewer-response, not viewer-request:** CloudFront resolves which cache behavior (and therefore which response-headers policy) to use from the **original viewer URI**, before any viewer-request function runs. SPA routes like `/dashboard` have no extension, so a static `*.html` ordered behavior cannot match them; the default behavior's response-headers policy is the only thing that ever gets attached. That's how [ENG-4785](https://linear.app/flightcontrol/issue/ENG-4785/) happened — the immutable assets policy on the default behavior leaked onto every HTML response. Setting `Cache-Control` in viewer-response sidesteps cache-behavior matching entirely and keys off the rewritten URI shape, where HTML vs asset is unambiguous from the file extension.
 
@@ -341,14 +341,14 @@ No external apply-time tools required.
 | geo_restriction_type | `none`, `whitelist`, `blacklist`. | `string` | `"none"` |
 | geo_restriction_locations | ISO-3166-1-alpha-2 country codes. | `list(string)` | `[]` |
 | web_acl_id | WAFv2 (global scope) Web ACL ARN. | `string` | `null` |
-| wait_for_deployment | Wait for distributions to deploy on apply. | `bool` | `true` |
+| deployment_wait_enabled | Wait for distributions to deploy on apply. | `bool` | `true` |
 
 ### Hosting Bucket
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| bucket_versioning | Enable S3 versioning on the hosting bucket. | `bool` | `true` |
-| bucket_force_destroy | Allow destroy of a non-empty bucket. | `bool` | `false` |
+| bucket_versioning_enabled | Enable S3 versioning on the hosting bucket. | `bool` | `true` |
+| bucket_force_destroy_enabled | Allow destroy of a non-empty bucket. | `bool` | `false` |
 | bucket_lifecycle_rules | Lifecycle rules. | `list(object)` | expire noncurrent after 30d, abort multipart after 7d |
 | kms_key_arn | SSE-KMS key ARN; null = SSE-S3 (AES256). | `string` | `null` |
 
@@ -369,7 +369,7 @@ No external apply-time tools required.
 | response_headers_policy | Declarative module-managed response-headers policy: HSTS, CSP, X-Frame-Options, Referrer-Policy, CORS, custom headers, removed headers. See README for the full shape and an example. | `object(...)` | `null` |
 | no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
 | default_root_object | Object name for `/` requests. | `string` | `"index.html"` |
-| manage_cache_control | Attach the viewer-response Cache-Control function. | `bool` | `true` |
+| cache_control_enabled | Attach the viewer-response Cache-Control function. | `bool` | `true` |
 | html_cache_control | Cache-Control value for HTML responses (no extension, `.html`/`.htm`, dotted segments, or `html_path_overrides`). | `string` | `"s-maxage=5, stale-while-revalidate=31536000"` |
 | assets_cache_control | Cache-Control value for hashed asset responses (any non-html file extension not in `html_path_overrides`). | `string` | `"public, max-age=31536000, immutable"` |
 | html_path_overrides | Exact-match viewer URIs that always get `html_cache_control` regardless of extension. Defaults cover service-worker/PWA/SEO files. | `list(string)` | `["/service-worker.js", "/sw.js", "/manifest.json", "/manifest.webmanifest", "/favicon.ico", "/robots.txt", "/sitemap.xml"]` |
@@ -384,8 +384,8 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| enable_logging | Enable CloudFront access logging. | `bool` | `false` |
-| create_logging_bucket | Create a new S3 bucket for logs. | `bool` | `false` |
+| logging_enabled | Enable CloudFront access logging. | `bool` | `false` |
+| logging_bucket_creation_enabled | Create a new S3 bucket for logs. | `bool` | `false` |
 | logging_bucket_domain_name | Existing logging bucket domain name. | `string` | `null` |
 | logging_prefix | Base prefix for log files. | `string` | `""` |
 | logging_retention_days | Days to retain logs in the created bucket. | `number` | `90` |
@@ -394,8 +394,8 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| create_deploy_role | Create an IAM role for CI to assume. | `bool` | `false` |
-| deploy_role_trust_policy | Trust policy JSON. Required when `create_deploy_role = true`. | `string` | `null` |
+| deploy_role_enabled | Create an IAM role for CI to assume. | `bool` | `false` |
+| deploy_role_trust_policy | Trust policy JSON. Required when `deploy_role_enabled = true`. | `string` | `null` |
 | deploy_role_name | Override role name. | `string` | `"<name>-deploy"` |
 
 ## Outputs
@@ -412,7 +412,7 @@ No external apply-time tools required.
 | distribution_domain_names | Map of distribution key -> CloudFront domain name. |
 | distribution_hosted_zone_ids | Map of distribution key -> Route53 zone ID for alias records. |
 | cloudfront_function_arn | ARN of the viewer-request rewriter function. |
-| cache_control_function_arn | ARN of the viewer-response Cache-Control writer function. Null when `manage_cache_control = false`. |
+| cache_control_function_arn | ARN of the viewer-response Cache-Control writer function. Null when `cache_control_enabled = false`. |
 | response_headers_policy_id | ID of the response-headers policy attached to the default behavior (caller-supplied id when set, otherwise the module-managed one, otherwise null). |
 | module_response_headers_policy_id | ID of the module-managed response-headers policy. Null when `var.response_headers_policy` is null. |
 | cloudfront_keyvaluestore_arn | ARN of the KeyValueStore. |
@@ -436,7 +436,7 @@ No external apply-time tools required.
 
 - **Build is your job**: this module does not run a build step. CI produces a `dist/` directory and `aws s3 sync`s it to `s3://<bucket>/<version>/`.
 - **First deploy**: with `default_version = "main"`, a fresh apply works as soon as you sync to `s3://<bucket>/main/`. No KVS edit needed for the very first cutover.
-- **First request is slow**: CloudFront distributions take 5-15 minutes to deploy globally. `wait_for_deployment = true` (default) blocks `tofu apply` until ready; set to `false` for faster iteration.
+- **First request is slow**: CloudFront distributions take 5-15 minutes to deploy globally. `deployment_wait_enabled = true` (default) blocks `tofu apply` until ready; set to `false` for faster iteration.
 - **KVS updates**: only the seed entries are managed via Terraform. Subsequent additions/deletions (preview hosts, `active` flips) belong in CI.
 - **Route53 records**: create externally with [`networking/route53`](../../networking/route53) using the `distribution_domain_names` and `distribution_hosted_zone_ids` outputs.
 - **ACM certificates**: create externally with [`security/acm_certificate`](../../security/acm_certificate) using a `us_east_1` provider alias.

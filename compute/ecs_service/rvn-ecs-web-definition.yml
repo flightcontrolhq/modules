@@ -3,32 +3,13 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.1.4
+  version: 0.4.0
   description: surface load-balancer advanced-config outputs (alternate target group, production + optional test listener rules, infrastructure role) for native blue/green/linear/canary deployments
 module:
   inputs:
-    - id: section_service
-      label: Web service
+    - id: section_cluster
+      label: ECS cluster
       type: section
-    - id: is_public
-      label: Public web service
-      type: boolean
-      description: Expose this service through the public ALB. Turn off to use the private ALB.
-      default: true
-    - id: use_private_subnets
-      label: Run in private subnets
-      type: boolean
-      description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
-      default: true
-    - id: name
-      label: Service name
-      type: string
-      description: Name for the ECS service and related resources.
-      required: true
-      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
-      patterns:
-        - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
-          pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
     - id: cluster
       label: ECS cluster
       type: $ref:rvn-ecs-cluster
@@ -134,6 +115,28 @@ module:
           type: string
           default: <<ref.stack.output.private_alb_security_group_id>>
       required: true
+    - id: section_service
+      label: Web service
+      type: section
+    - id: name
+      label: Service name
+      type: string
+      description: Name for the ECS service and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
+    - id: public_web_service_enabled
+      label: Public web service
+      type: boolean
+      description: Expose this service through the public ALB. Turn off to use the private ALB.
+      default: true
+    - id: private_subnet_placement_enabled
+      label: Run in private subnets
+      type: boolean
+      description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
+      default: true
     - id: section_build
       label: Build config
       type: section
@@ -141,33 +144,26 @@ module:
       label: Build type
       type: string
       required: true
-      default: nixpacks
+      default: dockerfile
       values:
-        - description: Automatically build an image based on your code and config
-          label: Nixpacks
-          value: nixpacks
         - description: Bring your own Dockerfile
           label: Dockerfile
           value: dockerfile
-        - description: Deploy an image from a repository configured on this module. Provide only the tag or digest at deploy time.
-          label: External image repository
-          value: external_image
+        - description: Automatically build an image based on your code and config
+          label: Nixpacks
+          value: nixpacks
+        - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
+          label: Prebuilt image from registry
+          value: prebuilt_image
     - $include: ../../partials/inputs/build-git-source.yml
-    - id: external_image_name
+    - id: image_repository
       label: Image repository
       type: string
-      description: Image repository without a tag or digest, such as nginx, ghcr.io/org/app, or 123456789012.dkr.ecr.us-east-1.amazonaws.com/app.
+      description: Image repository without a tag or digest, such as `nginx`, `ghcr.io/org/app`, or `123456789012.dkr.ecr.us-east-1.amazonaws.com/app`.
       placeholder: nginx
       required: true
       show_when:
-        build_type: external_image
-    - id: use_aws_public_mirror
-      label: Use AWS public Docker Hub mirror
-      type: boolean
-      description: Avoid Docker Hub rate limits for Docker Official Images such as nginx or node.
-      show_when:
-        build_type: external_image
-      default: false
+        build_type: prebuilt_image
     - id: image_registry_credentials_secret_arn
       label: Registry credentials secret ARN
       type: string
@@ -176,7 +172,7 @@ module:
       placeholder: arn:aws:secretsmanager:us-east-1:123456789012:secret:registry-creds
       required: false
       show_when:
-        build_type: external_image
+        build_type: prebuilt_image
     - $include: ../../partials/inputs/dockerfile-build.yml
     - $include: ../../partials/inputs/nixpacks-basic.yml
     - id: nixpacks_start_cmd
@@ -335,7 +331,7 @@ module:
           value: fargate_spot
         - label: EC2
           value: ec2
-    - id: add_fargate_capacity
+    - id: additional_fargate_capacity_enabled
       label: Also use Fargate
       type: boolean
       description: Add Fargate to the capacity provider strategy in addition to the primary provider.
@@ -344,7 +340,7 @@ module:
         capacity_provider:
           not: fargate
       default: false
-    - id: add_fargate_spot_capacity
+    - id: additional_fargate_spot_capacity_enabled
       label: Also use Fargate spot
       type: boolean
       description: Add lower-cost interruptible Fargate spot capacity in addition to the primary provider.
@@ -353,7 +349,7 @@ module:
         capacity_provider:
           not: fargate_spot
       default: false
-    - id: add_ec2_capacity
+    - id: additional_ec2_capacity_enabled
       label: Also use EC2
       type: boolean
       description: Add EC2 capacity from the selected cluster in addition to the primary provider.
@@ -415,7 +411,7 @@ module:
         - description: Often cheaper and efficient, but your image must be built for ARM64 and all native dependencies must support it.
           label: ARM64 - lower cost
           value: ARM64
-    - id: enable_execute_command
+    - id: execute_command_enabled
       label: ECS exec
       type: boolean
       description: Enable ECS Exec for interactive debugging in running containers. Leave off by default for tighter access control; turn on when operators need shell/debug access through AWS Systems Manager.
@@ -424,7 +420,7 @@ module:
     - id: section_scaling
       label: Autoscaling
       type: section
-    - id: enable_auto_scaling
+    - id: auto_scaling_enabled
       label: Autoscaling
       type: boolean
       default: true
@@ -434,14 +430,14 @@ module:
       description: Recommend at least 2 for production.
       min: 0
       show_when:
-        enable_auto_scaling: true
+        auto_scaling_enabled: true
       default: 1
     - id: max_capacity
       label: Maximum tasks
       type: number
       min: 1
       show_when:
-        enable_auto_scaling: true
+        auto_scaling_enabled: true
       default: 3
     - id: cpu_target_value
       label: CPU target (%)
@@ -450,7 +446,7 @@ module:
       max: 100
       min: 1
       show_when:
-        enable_auto_scaling: true
+        auto_scaling_enabled: true
       default: 70
     - id: memory_target_value
       label: Memory target (%)
@@ -475,12 +471,12 @@ module:
       collapsible: true
       min: 0
       default: 300
-    - id: disable_scale_in
-      label: Scale-in disabled
+    - id: scale_in_enabled
+      label: Scale in
       type: boolean
-      description: Prevent autoscaling from reducing task count automatically.
+      description: Allow autoscaling to reduce task count automatically.
       collapsible: true
-      default: false
+      default: true
     - id: scheduled_scaling
       label: Scheduled scaling actions
       type: object_array
@@ -549,7 +545,7 @@ module:
       item_label: Scheduled action
       required: false
       show_when:
-        enable_auto_scaling: true
+        auto_scaling_enabled: true
       default: []
     - id: custom_metric_scaling_policies
       label: Custom metric scaling policies
@@ -600,15 +596,15 @@ module:
           placeholder: "60"
           required: false
           default: 300
-        - id: disable_scale_in
-          label: Disable scale in
+        - id: scale_in_enabled
+          label: Scale in
           type: boolean
-          description: When enabled, the target tracking policy can scale out but will not remove running tasks.
-          default: false
+          description: Allow this target tracking policy to remove running tasks automatically.
+          default: true
       item_label: Custom metric policy
       required: false
       show_when:
-        enable_auto_scaling: true
+        auto_scaling_enabled: true
       default: []
     - id: section_app_config
       label: Environment variables
@@ -633,7 +629,7 @@ module:
       label: Logging
       type: section
       description: CloudWatch logging is enabled by default. Enable FireLens to route app stdout/stderr to additional destinations with Fluent Bit.
-    - id: enable_firelens
+    - id: firelens_enabled
       label: FireLens log routing
       type: boolean
       description: Routes the app container logs through a Fluent Bit sidecar. CloudWatch output stays enabled by default so Ravion runtime logs continue to work.
@@ -645,7 +641,7 @@ module:
       placeholder: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
       required: true
       show_when:
-        enable_firelens: true
+        firelens_enabled: true
       default: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
     - id: firelens_config
       label: Additional Fluent Bit config
@@ -659,21 +655,21 @@ module:
             delivery_stream my-stream
       required: false
       show_when:
-        enable_firelens: true
+        firelens_enabled: true
       default: ""
-    - id: firelens_enable_cloudwatch_output
+    - id: firelens_cloudwatch_output_enabled
       label: Keep CloudWatch output enabled
       type: boolean
       description: Recommended. Sends FireLens-routed app logs to the service CloudWatch log group so Ravion runtime logs continue to work. Disable only if all app logs should go exclusively to external destinations.
       show_when:
-        enable_firelens: true
+        firelens_enabled: true
       default: true
-    - id: firelens_enable_ecs_metadata
+    - id: firelens_ecs_metadata_enabled
       label: Add ECS log metadata
       type: boolean
       description: Adds ECS cluster, task, and container metadata to FireLens log records.
       show_when:
-        enable_firelens: true
+        firelens_enabled: true
       default: true
     - id: firelens_environment_variables
       label: FireLens environment variables
@@ -684,7 +680,7 @@ module:
           value: datadoghq.com
       required: false
       show_when:
-        enable_firelens: true
+        firelens_enabled: true
       default: []
     - id: firelens_secrets
       label: FireLens secrets
@@ -695,7 +691,7 @@ module:
           valueFrom: arn:aws:ssm:us-east-1:123456789012:parameter/datadog-api-key
       required: false
       show_when:
-        enable_firelens: true
+        firelens_enabled: true
       default: []
     - id: section_iam
       label: IAM roles and policies
@@ -1068,7 +1064,7 @@ module:
         build_type:
           - nixpacks
           - dockerfile
-    - id: ecr_scan_on_push
+    - id: ecr_scan_on_push_enabled
       label: Scan images on push
       type: boolean
       description: Ask ECR to run its basic vulnerability scan whenever a new image is pushed. Keep this on for early dependency and OS package findings; disable only if another scanner owns image scanning or duplicate findings are noisy.
@@ -1115,53 +1111,52 @@ module:
           terraform_variables:
             ...overrides: << module.input.advanced_terraform_variables >>
             allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
-            assign_public_ip: "<< module.input.use_private_subnets ? false : true >>"
+            assign_public_ip: "<< module.input.private_subnet_placement_enabled ? false : true >>"
             auto_scaling:
-              enabled: << module.input.enable_auto_scaling >>
+              enabled: << module.input.auto_scaling_enabled >>
               max_capacity: << module.input.max_capacity >>
               min_capacity: << module.input.min_capacity >>
               scheduled: "<< module.input.scheduled_scaling != nil ? module.input.scheduled_scaling : [] >>"
               target_tracking:
-                - disable_scale_in: << module.input.disable_scale_in >>
+                - scale_in_enabled: << module.input.scale_in_enabled >>
                   policy_name: cpu
                   predefined_metric: ECSServiceAverageCPUUtilization
                   scale_in_cooldown: << module.input.scale_in_cooldown >>
                   scale_out_cooldown: << module.input.scale_out_cooldown >>
                   target_value: << module.input.cpu_target_value >>
                 - >-
-                    ...<< module.input.memory_target_value ? [{policy_name: "memory", predefined_metric:
-                    "ECSServiceAverageMemoryUtilization", target_value: module.input.memory_target_value,
-                    scale_in_cooldown: module.input.scale_in_cooldown, scale_out_cooldown:
-                    module.input.scale_out_cooldown, disable_scale_in: module.input.disable_scale_in}] : []
-                    >>
+                  ...<< module.input.memory_target_value ? [{policy_name: "memory", predefined_metric:
+                  "ECSServiceAverageMemoryUtilization", target_value: module.input.memory_target_value,
+                  scale_in_cooldown: module.input.scale_in_cooldown, scale_out_cooldown:
+                  module.input.scale_out_cooldown, scale_in_enabled: module.input.scale_in_enabled}] : []
+                  >>
                 - >-
-                    ...<< module.input.custom_metric_scaling_policies != nil &&
-                    module.input.custom_metric_scaling_policies != [] ?
+                    ...<< module.input.custom_metric_scaling_policies != nil ?
                     module.input.custom_metric_scaling_policies : [] >>
             capacity_provider_strategies:
               - >-
-                  ...<< module.input.capacity_provider == "fargate" || module.input.add_fargate_capacity ?
-                  [{capacity_provider: module.input.fargate_capacity_provider_name, weight: 1, base: 0}] :
-                  [] >>
+                ...<< module.input.capacity_provider == "fargate" || module.input.additional_fargate_capacity_enabled ?
+                [{capacity_provider: module.input.fargate_capacity_provider_name, weight: 1, base: 0}] :
+                [] >>
               - >-
-                  ...<< module.input.capacity_provider == "fargate_spot" ||
-                  module.input.add_fargate_spot_capacity ? [{capacity_provider:
-                  module.input.fargate_spot_capacity_provider_name, weight: 1, base: 0}] : [] >>
+                ...<< module.input.capacity_provider == "fargate_spot" ||
+                module.input.additional_fargate_spot_capacity_enabled ? [{capacity_provider:
+                module.input.fargate_spot_capacity_provider_name, weight: 1, base: 0}] : [] >>
               - >-
-                  ...<< module.input.capacity_provider == "ec2" || module.input.add_ec2_capacity ?
-                  [{capacity_provider: module.input.ec2_capacity_provider_name, weight: 1, base: 0}] : [] >>
+                ...<< module.input.capacity_provider == "ec2" || module.input.additional_ec2_capacity_enabled ?
+                [{capacity_provider: module.input.ec2_capacity_provider_name, weight: 1, base: 0}] : [] >>
             cluster_arn: << module.input.cluster_arn >>
             container_port: << module.input.container_port >>
             deployment_maximum_percent: << module.input.deployment_maximum_percent >>
             deployment_minimum_healthy_percent: << module.input.deployment_minimum_healthy_percent >>
             deployment_type: rolling
             desired_count: 0
-            ecr_enable_default_lifecycle_policy: true
+            ecr_default_lifecycle_policy_enabled: true
             ecr_force_delete: << module.input.ecr_force_delete >>
             ecr_repository_name: << module.input.name >>
-            ecr_scan_on_push: << module.input.ecr_scan_on_push >>
-            enable_ecr: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
-            enable_execute_command: << module.input.enable_execute_command >>
+            ecr_scan_on_push_enabled: << module.input.ecr_scan_on_push_enabled >>
+            ecr_enabled: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
+            execute_command_enabled: << module.input.execute_command_enabled >>
             execution_role_arn: << module.input.execution_role_arn || nil >>
             execution_role_policies: << module.input.execution_role_policies >>
             force_new_deployment: << module.input.force_new_deployment >>
@@ -1173,15 +1168,15 @@ module:
               listener_rules:
                 - conditions:
                     - >-
-                        ...<< module.input.host_header_values != nil && module.input.host_header_values !=
-                        [] ? [{type: "host-header", values: module.input.host_header_values}] : [] >>
+                      ...<< module.input.host_header_values != nil && module.input.host_header_values !=
+                      [] ? [{type: "host-header", values: module.input.host_header_values}] : [] >>
                     - >-
-                        ...<< module.input.path_pattern_values != nil && module.input.path_pattern_values !=
-                        [] ? [{type: "path-pattern", values: module.input.path_pattern_values}] :
-                        module.input.host_header_values != nil && module.input.host_header_values != [] ? []
-                        : [{type: "path-pattern", values: ["/*"]}] >>
+                      ...<< module.input.path_pattern_values != nil && module.input.path_pattern_values !=
+                      [] ? [{type: "path-pattern", values: module.input.path_pattern_values}] :
+                      module.input.host_header_values != nil && module.input.host_header_values != [] ? []
+                      : [{type: "path-pattern", values: ["/*"]}] >>
                   listener_arn: >-
-                    << module.input.is_public ? (module.input.public_alb_https_listener_arn ||
+                    << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
                     module.input.public_alb_http_listener_arn) :
                     (module.input.private_alb_https_listener_arn ||
                     module.input.private_alb_http_listener_arn) >>
@@ -1205,7 +1200,7 @@ module:
                   type: << module.input.target_group_stickiness_type >>
                 target_type: ip
             load_balancer_security_group_id: >-
-              << module.input.is_public ? module.input.public_alb_security_group_id :
+              << module.input.public_web_service_enabled ? module.input.public_alb_security_group_id :
               module.input.private_alb_security_group_id >>
             name: << module.input.name >>
             network_mode: awsvpc
@@ -1215,7 +1210,7 @@ module:
               cpu_architecture: << module.input.cpu_architecture >>
               operating_system_family: LINUX
             security_group_ids: << module.input.security_group_ids >>
-            subnet_ids: "<< module.input.use_private_subnets ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
+            subnet_ids: "<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
             tags:
               $include: ../../partials/stack/ravion-tags.yml
             task_cpu: >-
@@ -1241,7 +1236,7 @@ module:
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>
   build:
-    type: '<< module.input.build_type == "external_image" ? "disabled" : "image" >>'
+    type: '<< module.input.build_type == "prebuilt_image" ? "disabled" : "image" >>'
     builder: >-
       << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
       || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
@@ -1288,22 +1283,19 @@ module:
       - id: image_ref
         label: Image tag or digest
         type: string
-        description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For external image repository mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
+        description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from registry mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
         placeholder: sha256:... or latest or <run-id>-nixpacks
         required: true
     task_definition:
       container_definitions: >-
-        << (module.input.enable_firelens ? [{"cpu": (module.input.capacity_provider == "ec2" ?
+        << (module.input.firelens_enabled ? [{"cpu": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
         "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment": ([{name:
         "PORT", value: string(module.input.container_port)}] | concat(module.input.environment_variables !=
         nil ? module.input.environment_variables : [])), "essential": true, "image":
-        (module.input.build_type == "external_image" ? (module.input.use_aws_public_mirror ?
-        (deploy.input.image_ref contains "sha256:" ? "public.ecr.aws/docker/library/" +
-        module.input.external_image_name + "@" + deploy.input.image_ref : "public.ecr.aws/docker/library/" +
-        module.input.external_image_name + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains
-        "sha256:" ? module.input.external_image_name + "@" + deploy.input.image_ref :
-        module.input.external_image_name + ":" + deploy.input.image_ref)) : (deploy.input.image_ref contains
+        (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains
+        "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref :
+        module.input.image_repository + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains
         "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
         stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
         {"init_process_enabled": true}, "log_configuration": {"log_driver": "awsfirelens"}, "memory":
@@ -1316,7 +1308,7 @@ module:
         "stop_timeout": 30}, {"name": "log_router", "image": module.input.firelens_image, "cpu": 0,
         "memory_reservation": 51, "essential": true, "environment": ([{name: "FIRELENS_CONFIG_CONTENT",
         value: "[SERVICE]\n    Flush 1\n    Grace 30\n\n" + (module.input.firelens_config ?
-        module.input.firelens_config + "\n" : "") + (module.input.firelens_enable_cloudwatch_output ?
+        module.input.firelens_config + "\n" : "") + (module.input.firelens_cloudwatch_output_enabled ?
         "\n[OUTPUT]\n    Name cloudwatch\n    Match *\n    region " + stack.output.region +
         "\n    log_group_name " + stack.output.log_group_name +
         "\n    auto_create_group true\n    log_stream_prefix " + stack.output.log_stream_prefix +
@@ -1329,17 +1321,14 @@ module:
         stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
         stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
         "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
-        "enable-ecs-log-metadata": string(module.input.firelens_enable_ecs_metadata)}}}] : [{"cpu":
+        "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"cpu":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
         int(float(module.input.fargate_size.vcpu) * 1024)), "environment": ([{name: "PORT", value:
         string(module.input.container_port)}] | concat(module.input.environment_variables != nil ?
         module.input.environment_variables : [])), "essential": true, "image": (module.input.build_type ==
-        "external_image" ? (module.input.use_aws_public_mirror ? (deploy.input.image_ref contains "sha256:"
-        ? "public.ecr.aws/docker/library/" + module.input.external_image_name + "@" + deploy.input.image_ref
-        : "public.ecr.aws/docker/library/" + module.input.external_image_name + ":" +
-        deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
-        module.input.external_image_name + "@" + deploy.input.image_ref : module.input.external_image_name +
-        ":" + deploy.input.image_ref)) : (deploy.input.image_ref contains "sha256:" ?
+        "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ?
+        module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
+        ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
         stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url +
         ":" + deploy.input.image_ref)), "linux_parameters": {"init_process_enabled": true},
         "log_configuration": {"log_driver": "awslogs", "options": {"awslogs-group":
@@ -1546,12 +1535,12 @@ module:
     | --------------- | ----------------------------------------------------------------- |
     | Nixpacks        | Let Ravion detect the app stack and build an image from source    |
     | Dockerfile      | Build from a Dockerfile in the selected repository                |
-    | Container image | Deploy an existing image from Docker Hub, GHCR, ECR, or registry |
+    | Prebuilt image from registry | Deploy an existing image from Docker Hub, GHCR, ECR, or registry |
     | Disabled        | Build outside Ravion and provide a full image URI at deploy time  |
 
     For Nixpacks and Dockerfile builds, provide Git repository, Git branch, and optionally Source base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
 
-    For Container image, provide Image repository without the tag. At deploy time, provide the tag to use. Use AWS public Docker Hub mirror is only for Docker Official Images such as nginx or node; leave it off for full repository paths, GHCR, ECR, or Docker Hub organization images. Use Registry credentials secret ARN for private registries that require ECS repository credentials.
+    For Prebuilt image from registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials.
 
     ## Routing and health checks
 
@@ -1624,7 +1613,7 @@ module:
     | Build mode             | Deploy image value                                  |
     | ---------------------- | --------------------------------------------------- |
     | Nixpacks or Dockerfile | Image digest such as sha256:...                     |
-    | Container image        | Tag for the configured repository, such as latest   |
+    | Prebuilt image from registry | Tag for the configured repository, such as latest   |
     | Disabled               | Full image URI, ideally pinned by digest            |
 
     ## Builder settings
@@ -1648,11 +1637,11 @@ module:
     | Run in private subnets          | No       | true                       | Run tasks in private subnets without public IPs    |
     | Service name                    | Yes      | {project}-{env}-{module}   | Name for the ECS service and related resources     |
     | ECS cluster                     | Yes      | -                          | Existing rvn-ecs-cluster module instance           |
-    | Build type                      | Yes      | nixpacks                   | Nixpacks, Dockerfile, Container image, or Disabled |
+    | Build type                      | Yes      | dockerfile                 | Dockerfile, Nixpacks, Prebuilt image from registry, or Disabled |
     | Git repository                  | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
     | Git branch                      | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
     | Source base path                | No       | .                          | Path from repository root to source code           |
-    | Image repository                | Yes*     | nginx                      | Required for Container image builds                |
+    | Image repository                | Yes*     | nginx                      | Required for prebuilt image deployments            |
     | Container port                  | Yes      | 80                         | Port exposed by the app container                  |
     | Health check path               | Yes      | /                          | HTTP path used by the target group health check    |
     | Domain host rules               | No       | -                          | Hostnames such as app.example.com or *.example.com |
@@ -1676,7 +1665,7 @@ module:
 
     - The module always models an HTTP web service behind an Application Load Balancer. NLB, worker, and service discovery patterns are intentionally outside this module definition.
     - Tasks default to private subnets even for public web services. The ALB is public; the tasks remain private when the VPC has NAT or equivalent egress.
-    - Built images are pushed to an ECR repository created with the service stack. Container image and disabled build modes let teams bring their own image pipeline.
+    - Built images are pushed to an ECR repository created with the service stack. Prebuilt image from registry and disabled build modes let teams bring their own image pipeline.
     - Desired count is managed through deployment and autoscaling behavior rather than by exposing a separate desired count input.
     - Advanced Terraform variables exist for exceptional lower-level overrides. Prefer the typed Ravion fields whenever possible.
 

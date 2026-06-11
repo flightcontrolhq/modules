@@ -19,7 +19,7 @@ output "vpc_cidr_block" {
 
 output "vpc_ipv6_cidr_block" {
   description = "The IPv6 CIDR block of the VPC (if IPv6 is enabled)."
-  value       = var.enable_ipv6 ? aws_vpc.this.ipv6_cidr_block : null
+  value       = var.ipv6_enabled ? aws_vpc.this.ipv6_cidr_block : null
 }
 
 ################################################################################
@@ -48,12 +48,12 @@ output "private_subnet_cidrs" {
 
 output "public_subnet_ipv6_cidrs" {
   description = "List of IPv6 CIDR blocks of public subnets (if IPv6 is enabled)."
-  value       = var.enable_ipv6 ? aws_subnet.public[*].ipv6_cidr_block : []
+  value       = var.ipv6_enabled ? aws_subnet.public[*].ipv6_cidr_block : []
 }
 
 output "private_subnet_ipv6_cidrs" {
   description = "List of IPv6 CIDR blocks of private subnets (if IPv6 is enabled)."
-  value       = var.enable_ipv6 ? aws_subnet.private[*].ipv6_cidr_block : []
+  value       = var.ipv6_enabled ? aws_subnet.private[*].ipv6_cidr_block : []
 }
 
 output "public_subnet_arns" {
@@ -124,7 +124,7 @@ output "private_route_table_ids" {
 
 output "egress_only_internet_gateway_id" {
   description = "The ID of the Egress-Only Internet Gateway (if IPv6 is enabled)."
-  value       = var.enable_ipv6 ? aws_egress_only_internet_gateway.this[0].id : null
+  value       = var.ipv6_enabled ? aws_egress_only_internet_gateway.this[0].id : null
 }
 
 ################################################################################
@@ -133,7 +133,7 @@ output "egress_only_internet_gateway_id" {
 
 output "flow_log_id" {
   description = "The ID of the VPC Flow Log (if flow logs are enabled)."
-  value       = var.enable_flow_logs ? (local.create_flow_log_cloudwatch ? aws_flow_log.cloudwatch[0].id : aws_flow_log.s3[0].id) : null
+  value       = var.flow_logs_enabled ? (local.create_flow_log_cloudwatch ? aws_flow_log.cloudwatch[0].id : aws_flow_log.s3[0].id) : null
 }
 
 output "flow_log_cloudwatch_log_group_name" {

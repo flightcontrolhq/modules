@@ -23,12 +23,12 @@ output "cluster_name" {
 
 output "fargate_capacity_provider_name" {
   description = "The name of the Fargate capacity provider (null if disabled)."
-  value       = var.enable_fargate ? "FARGATE" : null
+  value       = var.fargate_enabled ? "FARGATE" : null
 }
 
 output "fargate_spot_capacity_provider_name" {
   description = "The name of the Fargate Spot capacity provider (null if disabled)."
-  value       = var.enable_fargate_spot ? "FARGATE_SPOT" : null
+  value       = var.fargate_spot_enabled ? "FARGATE_SPOT" : null
 }
 
 output "ec2_capacity_provider_name" {
@@ -86,42 +86,42 @@ output "ecs_instance_security_group_id" {
 
 output "public_alb_arn" {
   description = "The ARN of the public ALB (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].alb_arn : null
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_arn : null
 }
 
 output "public_alb_id" {
   description = "The ID of the public ALB (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].alb_id : null
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_id : null
 }
 
 output "public_alb_dns_name" {
   description = "The DNS name of the public ALB (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].alb_dns_name : null
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_dns_name : null
 }
 
 output "public_alb_zone_id" {
   description = "The canonical hosted zone ID of the public ALB (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].alb_zone_id : null
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_zone_id : null
 }
 
 output "public_alb_arn_suffix" {
   description = "The ARN suffix of the public ALB for CloudWatch Metrics (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].alb_arn_suffix : null
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_arn_suffix : null
 }
 
 output "public_alb_security_group_id" {
   description = "The ID of the public ALB security group (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].security_group_id : null
+  value       = var.public_alb_enabled ? module.public_alb[0].security_group_id : null
 }
 
 output "public_alb_http_listener_arn" {
   description = "The ARN of the public ALB HTTP listener (null if disabled)."
-  value       = var.enable_public_alb ? module.public_alb[0].http_listener_arn : null
+  value       = var.public_alb_enabled ? module.public_alb[0].http_listener_arn : null
 }
 
 output "public_alb_https_listener_arn" {
   description = "The ARN of the public ALB HTTPS listener (null if HTTPS disabled)."
-  value       = var.enable_public_alb && var.public_alb_enable_https ? module.public_alb[0].https_listener_arn : null
+  value       = var.public_alb_enabled && var.public_alb_https_enabled ? module.public_alb[0].https_listener_arn : null
 }
 
 ################################################################################
@@ -130,42 +130,42 @@ output "public_alb_https_listener_arn" {
 
 output "private_alb_arn" {
   description = "The ARN of the private ALB (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].alb_arn : null
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_arn : null
 }
 
 output "private_alb_id" {
   description = "The ID of the private ALB (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].alb_id : null
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_id : null
 }
 
 output "private_alb_dns_name" {
   description = "The DNS name of the private ALB (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].alb_dns_name : null
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_dns_name : null
 }
 
 output "private_alb_zone_id" {
   description = "The canonical hosted zone ID of the private ALB (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].alb_zone_id : null
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_zone_id : null
 }
 
 output "private_alb_arn_suffix" {
   description = "The ARN suffix of the private ALB for CloudWatch Metrics (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].alb_arn_suffix : null
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_arn_suffix : null
 }
 
 output "private_alb_security_group_id" {
   description = "The ID of the private ALB security group (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].security_group_id : null
+  value       = var.private_alb_enabled ? module.private_alb[0].security_group_id : null
 }
 
 output "private_alb_http_listener_arn" {
   description = "The ARN of the private ALB HTTP listener (null if disabled)."
-  value       = var.enable_private_alb ? module.private_alb[0].http_listener_arn : null
+  value       = var.private_alb_enabled ? module.private_alb[0].http_listener_arn : null
 }
 
 output "private_alb_https_listener_arn" {
   description = "The ARN of the private ALB HTTPS listener (null if HTTPS disabled)."
-  value       = var.enable_private_alb && var.private_alb_enable_https ? module.private_alb[0].https_listener_arn : null
+  value       = var.private_alb_enabled && var.private_alb_https_enabled ? module.private_alb[0].https_listener_arn : null
 }
 
 ################################################################################
@@ -174,27 +174,27 @@ output "private_alb_https_listener_arn" {
 
 output "public_nlb_arn" {
   description = "The ARN of the public NLB (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_arn : null
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn : null
 }
 
 output "public_nlb_id" {
   description = "The ID of the public NLB (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_id : null
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_id : null
 }
 
 output "public_nlb_dns_name" {
   description = "The DNS name of the public NLB (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_dns_name : null
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_dns_name : null
 }
 
 output "public_nlb_zone_id" {
   description = "The canonical hosted zone ID of the public NLB (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_zone_id : null
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_zone_id : null
 }
 
 output "public_nlb_arn_suffix" {
   description = "The ARN suffix of the public NLB for CloudWatch Metrics (null if disabled)."
-  value       = var.enable_public_nlb ? module.public_nlb[0].nlb_arn_suffix : null
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn_suffix : null
 }
 
 ################################################################################
@@ -203,27 +203,27 @@ output "public_nlb_arn_suffix" {
 
 output "private_nlb_arn" {
   description = "The ARN of the private NLB (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_arn : null
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn : null
 }
 
 output "private_nlb_id" {
   description = "The ID of the private NLB (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_id : null
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_id : null
 }
 
 output "private_nlb_dns_name" {
   description = "The DNS name of the private NLB (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_dns_name : null
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_dns_name : null
 }
 
 output "private_nlb_zone_id" {
   description = "The canonical hosted zone ID of the private NLB (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_zone_id : null
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_zone_id : null
 }
 
 output "private_nlb_arn_suffix" {
   description = "The ARN suffix of the private NLB for CloudWatch Metrics (null if disabled)."
-  value       = var.enable_private_nlb ? module.private_nlb[0].nlb_arn_suffix : null
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn_suffix : null
 }
 
 

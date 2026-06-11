@@ -83,22 +83,22 @@ module "aurora" {
   database_name   = "testdb"
 
   # MySQL-specific features
-  backtrack_window              = 3600 # 1 hour
-  enable_local_write_forwarding = true
+  backtrack_window               = 3600 # 1 hour
+  local_write_forwarding_enabled = true
 
   # CloudWatch Logs (MySQL types)
   enabled_cloudwatch_logs_exports = ["error", "slowquery"]
 
   # Security
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Parameter groups
   cluster_parameter_group_family = "aurora-mysql8.0"
   db_parameter_group_family      = "aurora-mysql8.0"
 
   # Test-friendly settings
-  deletion_protection          = false
+  deletion_protection_enabled  = false
   skip_final_snapshot          = true
   backup_retention_period      = 1
   apply_immediately            = true

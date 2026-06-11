@@ -90,7 +90,7 @@ run "fargate_and_spot_share_default_strategy" {
   command = plan
 
   variables {
-    enable_fargate_spot = true
+    fargate_spot_enabled = true
   }
 
   assert {
@@ -109,8 +109,8 @@ run "defaults_to_spot_when_fargate_disabled" {
   command = plan
 
   variables {
-    enable_fargate      = false
-    enable_fargate_spot = true
+    fargate_enabled      = false
+    fargate_spot_enabled = true
   }
 
   assert {
@@ -130,9 +130,9 @@ run "ec2_wins_default_strategy" {
   command = plan
 
   variables {
-    ec2_instance_type   = "t3.medium"
-    enable_fargate      = true
-    enable_fargate_spot = true
+    ec2_instance_type    = "t3.medium"
+    fargate_enabled      = true
+    fargate_spot_enabled = true
   }
 
   assert {
@@ -195,8 +195,8 @@ run "explicit_spot_family" {
   command = plan
 
   variables {
-    enable_fargate            = true
-    enable_fargate_spot       = true
+    fargate_enabled           = true
+    fargate_spot_enabled      = true
     capacity_provider_default = "fargate_spot"
   }
 
@@ -239,8 +239,8 @@ run "fargate_family_requires_fargate_enabled" {
   command = plan
 
   variables {
-    enable_fargate            = false
-    enable_fargate_spot       = true
+    fargate_enabled           = false
+    fargate_spot_enabled      = true
     capacity_provider_default = "fargate"
   }
 

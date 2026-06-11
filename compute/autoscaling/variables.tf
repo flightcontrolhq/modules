@@ -285,7 +285,7 @@ variable "propagate_tags_at_launch" {
 # Launch Template - Configuration
 ################################################################################
 
-variable "create_launch_template" {
+variable "launch_template_creation_enabled" {
   type        = bool
   description = "Whether to create a launch template. Set to false when using an external launch template."
   default     = true
@@ -293,7 +293,7 @@ variable "create_launch_template" {
 
 variable "launch_template_id" {
   type        = string
-  description = "The ID of an existing launch template to use. Required if create_launch_template is false and launch_template_name is not provided."
+  description = "The ID of an existing launch template to use. Required if launch_template_creation_enabled is false and launch_template_name is not provided."
   default     = null
 
   validation {
@@ -304,7 +304,7 @@ variable "launch_template_id" {
 
 variable "launch_template_name" {
   type        = string
-  description = "The name of an existing launch template to use. Required if create_launch_template is false and launch_template_id is not provided."
+  description = "The name of an existing launch template to use. Required if launch_template_creation_enabled is false and launch_template_id is not provided."
   default     = null
 }
 
@@ -520,7 +520,7 @@ variable "launch_template" {
     # Update Default Version
     update_default_version = optional(bool, true)
   })
-  description = "Configuration for the launch template. Only used when create_launch_template is true."
+  description = "Configuration for the launch template. Only used when launch_template_creation_enabled is true."
   default     = null
 }
 
@@ -912,8 +912,8 @@ variable "scaling_policies" {
       # Target value for the metric
       target_value = number
 
-      # Whether to disable scale-in (only scale out)
-      disable_scale_in = optional(bool, false)
+      # Whether target tracking can scale in automatically
+      scale_in_enabled = optional(bool, true)
 
       # Predefined metric specification - use one of AWS's built-in metrics
       predefined_metric_specification = optional(object({

@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_appautoscaling_target" "this" {
-  count = var.enable_autoscaling ? 1 : 0
+  count = var.autoscaling_enabled ? 1 : 0
 
   service_namespace  = "rds"
   scalable_dimension = "rds:cluster:ReadReplicaCount"
@@ -28,7 +28,7 @@ resource "aws_appautoscaling_target" "this" {
 ################################################################################
 
 resource "aws_appautoscaling_policy" "cpu" {
-  count = var.enable_autoscaling ? 1 : 0
+  count = var.autoscaling_enabled ? 1 : 0
 
   name               = coalesce(var.autoscaling_policy_name, "${var.name}-aurora-cpu-scaling")
   service_namespace  = aws_appautoscaling_target.this[0].service_namespace
@@ -52,7 +52,7 @@ resource "aws_appautoscaling_policy" "cpu" {
 ################################################################################
 
 resource "aws_appautoscaling_policy" "connections" {
-  count = var.enable_autoscaling && var.autoscaling_target_connections != null ? 1 : 0
+  count = var.autoscaling_enabled && var.autoscaling_target_connections != null ? 1 : 0
 
   name               = "${var.name}-aurora-connections-scaling"
   service_namespace  = aws_appautoscaling_target.this[0].service_namespace

@@ -22,7 +22,7 @@ locals {
 
   # Bucket policy configuration
   # Create bucket policy when either policy templates are specified or custom policy is provided.
-  # Callers can override via var.create_bucket_policy when custom_policy is known-after-apply
+  # Callers can override via var.bucket_policy_creation_enabled when custom_policy is known-after-apply
   # (otherwise the boolean cannot be determined at plan time).
-  create_bucket_policy = var.create_bucket_policy != null ? var.create_bucket_policy : (length(var.policy_templates) > 0 || var.custom_policy != null)
+  create_bucket_policy = var.bucket_policy_creation_enabled != null ? var.bucket_policy_creation_enabled : (length(var.policy_templates) > 0 || var.custom_policy != null)
 }

@@ -133,7 +133,7 @@ locals {
   ])
 
   # Auto scaling settings
-  enable_auto_scaling = var.auto_scaling != null && var.auto_scaling.enabled
+  auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled
 
   # Service discovery settings
   enable_service_discovery = var.service_discovery != null

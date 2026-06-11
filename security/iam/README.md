@@ -61,7 +61,7 @@ module "ec2_role" {
 
   name                    = "my-ec2-instance-role"
   trusted_services        = ["ec2.amazonaws.com"]
-  create_instance_profile = true
+  instance_profile_creation_enabled = true
 
   managed_policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -256,7 +256,7 @@ module "custom_trust_role" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| create_instance_profile | Whether to create an IAM instance profile for this role. | `bool` | `false` | no |
+| instance_profile_creation_enabled | Whether to create an IAM instance profile for this role. | `bool` | `false` | no |
 | instance_profile_name | The name of the instance profile. Defaults to the role name. | `string` | `null` | no |
 | instance_profile_path | The path to the instance profile. Defaults to the role path. | `string` | `null` | no |
 
@@ -396,7 +396,7 @@ module "custom_trust_role" {
 ║  ┌─────────────────────────────────────────────────────────┐   ┌────────────────────────────────────────────────────┐  ║
 ║  │                IAM POLICIES CONFIG                       │   │              INSTANCE PROFILE CONFIG               │  ║
 ║  ├─────────────────────────────────────────────────────────┤   ├────────────────────────────────────────────────────┤  ║
-║  │                                                          │   │ • create_instance_profile                         │  ║
+║  │                                                          │   │ • instance_profile_creation_enabled                         │  ║
 ║  │  ┌─────────────────────────┐  ┌────────────────────────┐ │   │ • instance_profile_name                           │  ║
 ║  │  │   MANAGED POLICIES      │  │   INLINE POLICIES      │ │   │ • instance_profile_path                           │  ║
 ║  │  ├─────────────────────────┤  ├────────────────────────┤ │   └────────────────────────────────────────────────────┘  ║
@@ -534,7 +534,7 @@ module "custom_trust_role" {
 ║           ┌───────────────────────────────────────────────┼───────────────────────────────────────────────┐            ║
 ║           │                                               │                                               │            ║
 ║           ▼                                               ▼                                               ▼            ║
-║  var.managed_policy_arns                    var.inline_policies                   var.create_instance_profile          ║
+║  var.managed_policy_arns                    var.inline_policies                   var.instance_profile_creation_enabled          ║
 ║           │                                 var.inline_policy_statements                    │                          ║
 ║           ▼                                               │                                 ▼                          ║
 ║  aws_iam_role_policy_                                     │                    aws_iam_instance_profile               ║
@@ -783,7 +783,7 @@ module "developer_role" {
 
 ### How do I use this role with EC2 instances?
 
-Set `create_instance_profile = true` to create an instance profile that EC2 instances can use:
+Set `instance_profile_creation_enabled = true` to create an instance profile that EC2 instances can use:
 
 ```hcl
 module "ec2_role" {
@@ -791,7 +791,7 @@ module "ec2_role" {
 
   name                    = "web-server-role"
   trusted_services        = ["ec2.amazonaws.com"]
-  create_instance_profile = true
+  instance_profile_creation_enabled = true
 
   managed_policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",

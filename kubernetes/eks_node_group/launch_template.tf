@@ -18,7 +18,7 @@ resource "aws_launch_template" "this" {
   user_data = var.user_data != null ? base64encode(var.user_data) : null
 
   monitoring {
-    enabled = var.enable_detailed_monitoring
+    enabled = var.detailed_monitoring_enabled
   }
 
   metadata_options {

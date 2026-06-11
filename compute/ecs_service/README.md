@@ -34,8 +34,8 @@ module "ecs_cluster" {
   private_subnet_ids = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
-  enable_public_alb       = true
-  public_alb_enable_https = true
+  public_alb_enabled       = true
+  public_alb_https_enabled = true
   public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 }
 
@@ -322,11 +322,11 @@ module "worker_service" {
 | test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation | `string` | `null` | no |
 | deployment_minimum_healthy_percent | Minimum healthy percent during deployment | `number` | `100` | no |
 | deployment_maximum_percent | Maximum percent during deployment | `number` | `200` | no |
-| enable_execute_command | Enable ECS Exec for debugging | `bool` | `false` | no |
+| execute_command_enabled | Enable ECS Exec for debugging | `bool` | `false` | no |
 | force_new_deployment | Force a new deployment | `bool` | `false` | no |
 | wait_for_steady_state | Wait for service to reach steady state | `bool` | `true` | no |
 | health_check_grace_period_seconds | Grace period for LB health checks | `number` | `0` | no |
-| enable_ecs_managed_tags | Enable ECS managed tags | `bool` | `true` | no |
+| ecs_managed_tags_enabled | Enable ECS managed tags | `bool` | `true` | no |
 | propagate_tags | Propagate tags from SERVICE or TASK_DEFINITION | `string` | `"SERVICE"` | no |
 | platform_version | Fargate platform version | `string` | `"LATEST"` | no |
 | capacity_provider_strategies | Capacity provider strategies | `list(object)` | `[]` | no |
@@ -533,7 +533,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled     │   │  ║
 ║  │  │ • enable_nlb_listener = enable_load_balancer && var.load_balancer_attachment.nlb_listener != null         │   │  ║
-║  │  │ • enable_auto_scaling = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
+║  │  │ • auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
 ║  │  │ • enable_service_discovery = var.service_discovery != null                                                │   │  ║
 ║  │  │ • create_execution_role = var.execution_role_arn == null                                                  │   │  ║
 ║  │  │ • create_task_role = var.task_role_arn == null                                                            │   │  ║
@@ -544,7 +544,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  │   TASK DEFINITION           │   │       SERVICE CONFIG            │   │        DEPLOYMENT                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • task_cpu                  │   │ • desired_count                 │   │ • deployment_type (strategy seed)       │  ║
-║  │ • task_memory               │   │ • enable_execute_command        │   │ • deployment_minimum_healthy_percent    │  ║
+║  │ • task_memory               │   │ • execute_command_enabled        │   │ • deployment_minimum_healthy_percent    │  ║
 ║  │ • container_port            │   │ • force_new_deployment          │   │ • deployment_maximum_percent            │  ║
 ║  │ • launch_type               │   │ • wait_for_steady_state         │   │ • deployment_circuit_breaker            │  ║
 ║  │ • network_mode              │   │ • platform_version              │   └─────────────────────────────────────────┘  ║
@@ -585,7 +585,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  │     · predefined_metric     │                                                                                      ║
 ║  │     · custom_metric{}       │                                                                                      ║
 ║  │     · scale_in/out_cooldown │                                                                                      ║
-║  │     · disable_scale_in      │                                                                                      ║
+║  │     · scale_in_enabled      │                                                                                      ║
 ║  │   - scheduled[]:            │                                                                                      ║
 ║  │     · name, schedule (cron) │                                                                                      ║
 ║  │     · min/max_capacity      │                                                                                      ║
@@ -659,7 +659,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║                                                                                                                        ║
 ║                   ┌─────────────────────────────────────────────────────────────────────────────────────┐              ║
 ║                   │                              AUTO SCALING RESOURCES                                  │              ║
-║                   │                         (conditional: enable_auto_scaling)                           │              ║
+║                   │                         (conditional: auto_scaling_enabled)                           │              ║
 ║                   ├─────────────────────────────────────────────────────────────────────────────────────┤              ║
 ║                   │                                                                                      │              ║
 ║                   │  aws_appautoscaling_target.this[0]                                                   │              ║
@@ -739,8 +739,8 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║                              └───────────────────┬────────────────────────┘                                            ║
 ║                                                  │                                                                     ║
 ║                                                  ▼                                                                     ║
-║  var.execution_role_policies ───► aws_iam_role.execution[0] ◄─── var.enable_execute_command                           ║
-║  var.task_role_policies ────────► aws_iam_role.task[0] ◄──────── var.enable_execute_command                           ║
+║  var.execution_role_policies ───► aws_iam_role.execution[0] ◄─── var.execute_command_enabled                           ║
+║  var.task_role_policies ────────► aws_iam_role.task[0] ◄──────── var.execute_command_enabled                           ║
 ║                                                  │                                                                     ║
 ║                                                  ▼                                                                     ║
 ║  var.task_cpu ─────────────────────────────────────────────────────────────┐                                           ║
@@ -930,7 +930,7 @@ Note: The placeholder task definition does not mount volumes. Your application t
 
 ### How do I enable ECS Exec for debugging?
 
-Set `enable_execute_command = true`. This will:
+Set `execute_command_enabled = true`. This will:
 
 1. Add necessary IAM permissions to the task role
 2. Enable execute command on the ECS service

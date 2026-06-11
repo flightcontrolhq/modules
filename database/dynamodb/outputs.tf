@@ -90,7 +90,7 @@ output "autoscaling_gsi_target_arns" {
 
 output "cloudwatch_alarm_arns" {
   description = "Map of CloudWatch alarm ARNs created by this module."
-  value = var.create_cloudwatch_alarms ? {
+  value = var.cloudwatch_alarms_creation_enabled ? {
     read_throttle  = aws_cloudwatch_metric_alarm.read_throttle[0].arn
     write_throttle = aws_cloudwatch_metric_alarm.write_throttle[0].arn
     system_errors  = aws_cloudwatch_metric_alarm.system_errors[0].arn
@@ -104,11 +104,6 @@ output "cloudwatch_alarm_arns" {
 output "replica_regions" {
   description = "List of regions where the global table is replicated."
   value       = [for r in var.replicas : r.region_name]
-}
-
-output "region" {
-  description = "The AWS region where the table is created."
-  value       = local.region
 }
 
 ################################################################################

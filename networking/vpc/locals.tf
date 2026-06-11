@@ -28,10 +28,10 @@ locals {
   ]
 
   # NAT Gateway HA mode (with deprecated single_nat_gateway override)
-  nat_gateway_high_availability = var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability
+  nat_gateway_high_availability_enabled = var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled
 
   # NAT Gateway count
-  nat_gateway_count = var.enable_nat_gateway ? (local.nat_gateway_high_availability ? var.subnet_count : 1) : 0
+  nat_gateway_count = var.nat_gateway_enabled ? (local.nat_gateway_high_availability_enabled ? var.subnet_count : 1) : 0
 
   # NAT Gateway EIPs
   # When the caller supplies pre-allocated EIPs, skip creating internal ones and
@@ -44,14 +44,12 @@ locals {
     ? var.nat_gateway_eip_allocation_ids
     : null
   )
-  create_nat_eips                = var.enable_nat_gateway && local.supplied_nat_eip_allocation_ids == null
+  create_nat_eips                = var.nat_gateway_enabled && local.supplied_nat_eip_allocation_ids == null
   nat_gateway_eip_allocation_ids = local.supplied_nat_eip_allocation_ids != null ? local.supplied_nat_eip_allocation_ids : aws_eip.nat[*].allocation_id
 
   # Flow Logs
-  create_flow_log_cloudwatch = var.enable_flow_logs && var.flow_logs_destination == "cloudwatch"
-  create_flow_log_s3         = var.enable_flow_logs && var.flow_logs_destination == "s3"
+  create_flow_log_cloudwatch = var.flow_logs_enabled && var.flow_logs_destination == "cloudwatch"
+  create_flow_log_s3         = var.flow_logs_enabled && var.flow_logs_destination == "s3"
   create_flow_log_s3_bucket  = local.create_flow_log_s3 && var.flow_logs_s3_bucket_arn == null
   flow_log_s3_bucket_arn     = local.create_flow_log_s3_bucket ? aws_s3_bucket.flow_logs[0].arn : var.flow_logs_s3_bucket_arn
 }
-
-

@@ -450,7 +450,7 @@ run "ecs_exec_enabled" {
   command = plan
 
   variables {
-    enable_execute_command = true
+    execute_command_enabled = true
   }
 
   assert {
