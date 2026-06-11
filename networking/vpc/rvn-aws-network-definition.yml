@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.1.0
-  description: "breaking change: TF variables renamed for readability"
+  version: 0.1.1
+  description: Mark destructive network inputs immutable
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
