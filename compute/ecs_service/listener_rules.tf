@@ -13,7 +13,14 @@ resource "aws_lb_listener_rule" "alb" {
   } : {}
 
   listener_arn = each.value.listener_arn
-  priority     = each.value.priority
+  # The mirrored rule (index 0) takes the module-managed base priority when
+  # the green test rule is enabled so the test rule can sit one slot ahead;
+  # every other rule keeps its configured priority.
+  priority = (
+    local.green_alb_listener_rule_enabled && each.key == "0"
+    ? local.green_production_priority
+    : each.value.priority
+  )
 
   action {
     type             = "forward"
@@ -88,30 +95,45 @@ resource "aws_lb_listener_rule" "alb" {
 }
 
 ################################################################################
-# ALB Test Listener Rule
+# ALB Test (Green) Listener Rule
 #
 # Optional dedicated rule that routes test traffic to the alternate (green)
-# target group (tg-2) during native traffic-shift deployments. ECS rewrites
-# its forward action through the TEST_TRAFFIC_SHIFT lifecycle stages so the
-# green revision can be validated before production traffic shifts, hence
-# ignore_changes on action. Created only when test_listener_rule is set;
-# outside a deployment tg-2 is empty, so test traffic returns no targets
-# until a deployment registers the green revision.
+# target group (tg-2) during native traffic-shift deployments. Gated by
+# var.green_alb_listener_rule_enabled. It reuses the production listener and
+# routing conditions (listener_rules[0]) but forwards to the green target
+# group; the ECS deployment controller rewrites its forward action through
+# the TEST_TRAFFIC_SHIFT lifecycle stages so the green revision can be
+# validated before production traffic shifts, hence ignore_changes on
+# action. Outside a deployment tg-2 is empty, so it returns no targets until
+# a deployment registers the green revision.
 ################################################################################
 
 resource "aws_lb_listener_rule" "test" {
   count = local.green_alb_listener_rule_enabled ? 1 : 0
 
-  listener_arn = var.load_balancer_attachment.test_listener_rule.listener_arn
-  priority     = var.load_balancer_attachment.test_listener_rule.priority
+  listener_arn = var.load_balancer_attachment.listener_rules[0].listener_arn
+  # One slot ahead of the production rule so a request carrying the test
+  # header matches this rule first; ALB routes by priority order, not by
+  # specificity, so without this it would fall through to production.
+  priority = local.green_test_priority
 
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.tg_2[0].arn
   }
 
+  # Distinguishing condition: only requests carrying the test header reach
+  # the green target group. Combined with the mirrored production
+  # conditions below, normal (header-less) traffic still matches production.
+  condition {
+    http_header {
+      http_header_name = var.test_header_name
+      values           = [var.test_header_value]
+    }
+  }
+
   dynamic "condition" {
-    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "path-pattern"]
+    for_each = [for c in var.load_balancer_attachment.listener_rules[0].conditions : c if c.type == "path-pattern"]
     content {
       path_pattern {
         values = condition.value.values
@@ -120,7 +142,7 @@ resource "aws_lb_listener_rule" "test" {
   }
 
   dynamic "condition" {
-    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "host-header"]
+    for_each = [for c in var.load_balancer_attachment.listener_rules[0].conditions : c if c.type == "host-header"]
     content {
       host_header {
         values = condition.value.values
@@ -129,7 +151,7 @@ resource "aws_lb_listener_rule" "test" {
   }
 
   dynamic "condition" {
-    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "http-header"]
+    for_each = [for c in var.load_balancer_attachment.listener_rules[0].conditions : c if c.type == "http-header"]
     content {
       http_header {
         http_header_name = condition.value.values[0]
@@ -139,7 +161,7 @@ resource "aws_lb_listener_rule" "test" {
   }
 
   dynamic "condition" {
-    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "http-request-method"]
+    for_each = [for c in var.load_balancer_attachment.listener_rules[0].conditions : c if c.type == "http-request-method"]
     content {
       http_request_method {
         values = condition.value.values
@@ -148,7 +170,7 @@ resource "aws_lb_listener_rule" "test" {
   }
 
   dynamic "condition" {
-    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "query-string"]
+    for_each = [for c in var.load_balancer_attachment.listener_rules[0].conditions : c if c.type == "query-string"]
     content {
       query_string {
         key   = try(condition.value.values[0], null)
@@ -158,7 +180,7 @@ resource "aws_lb_listener_rule" "test" {
   }
 
   dynamic "condition" {
-    for_each = [for c in var.load_balancer_attachment.test_listener_rule.conditions : c if c.type == "source-ip"]
+    for_each = [for c in var.load_balancer_attachment.listener_rules[0].conditions : c if c.type == "source-ip"]
     content {
       source_ip {
         values = condition.value.values

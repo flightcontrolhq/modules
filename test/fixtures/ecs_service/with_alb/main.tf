@@ -161,23 +161,13 @@ module "ecs_service" {
         ]
       }
     ]
-
-    # Dedicated test listener rule on the same listener, distinguished by
-    # a header so it does not collide with the production path rule. ECS
-    # rewrites it to the green revision during the TEST_TRAFFIC_SHIFT
-    # lifecycle stages of a native traffic-shift deployment.
-    test_listener_rule = {
-      listener_arn = module.ecs_cluster.public_alb_http_listener_arn
-      priority     = 90
-
-      conditions = [
-        {
-          type   = "http-header"
-          values = ["X-FC-Test", "true"]
-        }
-      ]
-    }
   }
+
+  # Create the green (test) ALB listener rule. It mirrors the production
+  # listener + conditions and forwards to the alternate target group; ECS
+  # rewrites it during the TEST_TRAFFIC_SHIFT lifecycle stages of a native
+  # traffic-shift deployment.
+  green_alb_listener_rule_enabled = true
 
   # Give load balancer time to register targets
   health_check_grace_period_seconds = 60

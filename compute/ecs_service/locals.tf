@@ -42,10 +42,34 @@ locals {
   # Determine if NLB listener should be created (vs ALB listener rules)
   enable_nlb_listener = local.enable_load_balancer && var.load_balancer_attachment.nlb_listener != null
 
-  # Determine if a dedicated test listener rule should be created. Drives
-  # the advanced_configuration.test_listener_rule wiring and the
-  # TEST_TRAFFIC_SHIFT lifecycle stages on native traffic-shift deploys.
-  green_alb_listener_rule_enabled = local.enable_load_balancer && var.load_balancer_attachment.test_listener_rule != null
+  # Determine if a dedicated test (green) ALB listener rule should be
+  # created. Drives the advanced_configuration.test_listener_rule wiring
+  # and the TEST_TRAFFIC_SHIFT lifecycle stages on native traffic-shift
+  # deploys. ALB-only — requires a production listener rule to mirror; a
+  # no-op for NLB services.
+  green_alb_listener_rule_enabled = (
+    local.enable_load_balancer
+    && !local.enable_nlb_listener
+    && var.green_alb_listener_rule_enabled
+    && length(var.load_balancer_attachment.listener_rules) > 0
+  )
+
+  # When the green rule is enabled the module owns both priorities so the
+  # test rule (production conditions + the X-Ravion-Test header) is always
+  # evaluated before the production rule — otherwise ALB, which routes by
+  # priority order and not specificity, would match production first and a
+  # header-bearing request would never reach green. The production rule's
+  # priority becomes the base (its configured priority, else the default
+  # below) and the test rule sits one slot ahead at base - 1. Both numbers
+  # must be unique across all rules on a shared listener; set an explicit
+  # Listener rule priority per service when several green services share a
+  # listener.
+  green_default_production_priority = 1000
+  green_production_priority = local.green_alb_listener_rule_enabled ? coalesce(
+    var.load_balancer_attachment.listener_rules[0].priority,
+    local.green_default_production_priority,
+  ) : null
+  green_test_priority = local.green_alb_listener_rule_enabled ? local.green_production_priority - 1 : null
 
   # ARN passed to advanced_configuration.test_listener_rule and exported:
   # the module-created rule when configured, else an externally-managed

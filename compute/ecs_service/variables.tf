@@ -326,8 +326,26 @@ variable "deployment_strategy_config" {
 
 variable "test_listener_rule_arn" {
   type        = string
-  description = "Optional ARN of an ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies."
+  description = "Optional ARN of an externally-managed ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies. Takes precedence over green_alb_listener_rule_enabled."
   default     = null
+}
+
+variable "green_alb_listener_rule_enabled" {
+  type        = bool
+  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test header (test_header_name/test_header_value) and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. No effect for NLB or rolling-only services."
+  default     = false
+}
+
+variable "test_header_name" {
+  type        = string
+  description = "HTTP header name that distinguishes test traffic for the green listener rule. Requests carrying this header (with test_header_value) match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true."
+  default     = "X-Ravion-Test"
+}
+
+variable "test_header_value" {
+  type        = string
+  description = "Value paired with test_header_name for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true."
+  default     = "1"
 }
 
 variable "deployment_minimum_healthy_percent" {
@@ -518,30 +536,6 @@ variable "load_balancer_attachment" {
       certificate_arn = optional(string) # Required for TLS protocol
       ssl_policy      = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
       alpn_policy     = optional(string) # For TLS: HTTP1Only, HTTP2Only, etc.
-    }), null)
-
-    # ALB: Optional test listener rule (attach to an existing ALB listener).
-    #
-    # When set, the module creates a dedicated listener rule that forwards
-    # test traffic to the alternate (green) target group during native
-    # traffic-shift deployments (blue_green/linear/canary). Its ARN is
-    # wired into the service's advanced_configuration.test_listener_rule,
-    # which drives the TEST_TRAFFIC_SHIFT lifecycle stages: ECS routes
-    # test traffic to the green revision so it can be validated before
-    # production traffic shifts.
-    #
-    # Provide distinguishing conditions (e.g. an http-header or a
-    # dedicated path/host) so the test rule does not collide with the
-    # production listener rule on the same listener. Omit for services
-    # that do not need a pre-cutover test phase — most services.
-    test_listener_rule = optional(object({
-      listener_arn = string
-      priority     = optional(number, null) # null = AWS auto-assigns next available priority
-
-      conditions = list(object({
-        type   = string
-        values = list(string)
-      }))
     }), null)
 
     container_name = optional(string, null)
