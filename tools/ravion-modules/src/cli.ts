@@ -9,6 +9,7 @@ import { compileAllDefinitions, compileDefinitionFile, findDefinitionFiles } fro
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from "./github-releases.js";
 import { runMigrationGuardrails } from "./guardrails.js";
+import { selectLocalDevSourceRef } from "./local-dev-source-ref.js";
 import { validateModuleConfig } from "./module-schema.js";
 import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
@@ -255,16 +256,8 @@ async function resolveDefinitionFileArgs(filePaths: string[]): Promise<string[]>
 
 async function resolveLocalDevSourceRef(): Promise<string> {
   const override = process.env.RAVION_LOCAL_DEV_SOURCE_REF || process.env.SOURCE_REF;
-  if (override) {
-    return override;
-  }
-
   const branch = await getCurrentBranch();
-  if (branch && (await originBranchExists(branch))) {
-    return branch;
-  }
-
-  return "main";
+  return selectLocalDevSourceRef({ override, branch });
 }
 
 async function getCurrentBranch(): Promise<string | undefined> {
@@ -274,15 +267,6 @@ async function getCurrentBranch(): Promise<string | undefined> {
     return branch.length > 0 ? branch : undefined;
   } catch {
     return undefined;
-  }
-}
-
-async function originBranchExists(branch: string): Promise<boolean> {
-  try {
-    await execFileAsync("git", ["ls-remote", "--exit-code", "--heads", "origin", branch]);
-    return true;
-  } catch {
-    return false;
   }
 }
 

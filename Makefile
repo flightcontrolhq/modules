@@ -95,7 +95,7 @@ ifndef MODULE
 	$(error MODULE is required. Usage: make publish-local-dev MODULE=rvn-aws-network)
 endif
 	@echo "Publishing $(MODULE) to local dev API..."
-	@$(LOAD_ENV_LOCAL) $(LOCAL_DEV_SOURCE_REF_ENV) node $(MODULE_TOOLS_DIR)/dist/src/cli.js publish $(MODULE) --local-dev $(LOCAL_DEV_PUBLISH_FLAGS)
+	@$(LOAD_ENV_LOCAL) $(LOCAL_DEV_SOURCE_REF_ENV) node $(MODULE_TOOLS_DIR)/dist/src/cli.js publish $(MODULE) --local-dev --format markdown $(LOCAL_DEV_PUBLISH_FLAGS)
 
 pull-local-definition: modules-tools-build
 	@echo "Pulling $(PULL_SOURCE_TYPE) from local dev API into $(PULL_OUTPUT) as $(PULL_TARGET_TYPE)..."
