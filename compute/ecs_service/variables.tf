@@ -213,7 +213,7 @@ variable "volumes" {
 
     s3files_volume_configuration = optional(object({
       file_system_arn         = string
-      access_point_arn        = optional(string, null)
+      access_point_arn        = string
       root_directory          = optional(string, "/")
       transit_encryption_port = optional(number, null)
     }), null)
