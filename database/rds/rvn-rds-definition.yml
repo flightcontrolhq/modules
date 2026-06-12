@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.1.0
-  description: Align RDS README opening sentence
+  version: 0.2.0
+  description: Initial version
 module:
   inputs:
     - id: network
@@ -94,11 +94,14 @@ module:
           - oracle-se2
           - oracle-se2-cdb
       type: string
-    - default: admin
+    - default: dbadmin
       collapsible: true
       id: username
       immutable: true
       label: Username
+      patterns:
+        - message: Use a valid RDS master username. Start with a letter and use only letters, numbers, and underscores.
+          pattern: ^[A-Za-z][A-Za-z0-9_]{0,62}$
       required: true
       show_when:
         restore_mode: none
@@ -213,6 +216,7 @@ module:
       id: instance_class
       label: Instance class
       placeholder: db.t4g.micro
+      default: db.t4g.micro
       required: true
       type: string
     - default: 20
@@ -1107,7 +1111,7 @@ module:
     | Auto minor version upgrades | No | true | Applies minor engine upgrades during the configured maintenance window. |
     | Instance class | Yes | None | Use an RDS class such as db.t4g.micro or db.r6g.large. |
     | Allocated storage | Yes | 20 | Storage in GiB. |
-    | Master username | Yes | admin | Master database user. |
+    | Master username | Yes | dbadmin | Master database user. Do not use reserved engine words such as admin. |
     | Storage KMS key ARN | No | Blank | Uses a customer-managed KMS key for storage encryption. |
     | Initial database name | No | Blank | Creates an initial database when supported by the engine. |
     | Publicly accessible | No | false | Leave disabled unless public database access is intentional. |
