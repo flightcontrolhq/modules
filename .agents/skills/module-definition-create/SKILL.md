@@ -24,7 +24,7 @@ Module definitions live beside existing Terraform modules:
 Example:
 
 ```text
-networking/vpc/rvn-aws-network-definition.yml
+<category>/<module-name>/<definition.type>-definition.yml
 ```
 
 Use this top-level shape:
@@ -58,32 +58,34 @@ module:
 
 ## Field Semantics
 
-- `definition.name` is the human catalog label, such as `ECS Cluster` or `ECS Web Server`.
+- `definition.name` is the human catalog label, such as `IAM Role` or `Static Hosting`.
 - `definition.type` is the stable unique module type identifier. If the user says module definition `given id`, map it to `definition.type`; `ModuleDefinition` does not have a `givenId` field.
 - `definition.description` is the short catalog summary, not README prose.
 - `release.version` is the next authored semantic version for this definition.
 - `release.description` is the changelog entry for that version.
 - `ModuleInstance.givenId` is separate and must not be used when creating a definition.
 
-## Reference Definitions
+## Sourcing Reference Definitions
 
-Use source-controlled examples as naming, file-shape, release, and identifier baselines. Prefer active first-party definitions under module directories over tool test fixtures.
+Use source-controlled definition files as naming, file-shape, release, and identifier baselines. Prefer active first-party definitions under module directories over tool test fixtures.
 
-| Purpose         | Name             | Type / given id   | Description                                                                                                      |
-| --------------- | ---------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
-| VPC network     | `VPC Network`    | `rvn-aws-network` | `Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.`        |
-| ECS cluster     | `ECS Cluster`    | `rvn-ecs-cluster` | `Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.` |
-| ECS web service | `ECS Web Server` | `rvn-ecs-web`     | `Web server ECS service`                                                                                         |
+Find active reference definitions by filename:
 
-Known active examples include:
+```text
+**/*-definition.yml
+```
 
-- `networking/vpc/rvn-aws-network-definition.yml`
-- `compute/ecs_cluster/rvn-ecs-cluster-definition.yml`
-- `compute/ecs_service/rvn-ecs-web-definition.yml`
-- `hosting/static_site/rvn-aws-static-definition.yml`
-- `security/acm_certificate/rvn-acm-certificate-definition.yml`
+Exclude test fixtures and generated files, especially paths under `tools/ravion-modules/test/fixtures`.
 
-When creating a new definition, inspect the closest examples by category, AWS service family, dependency shape, and whether the module is a root infrastructure module, dependency module, or deployable workload. Match existing conventions for `definition.type`, catalog name style, release description style, initial module shell, use of partials, source path naming, and handoff boundaries. If no close match exists, inspect at least two active examples to preserve repository style.
+When you know a module type, source its definition by filename:
+
+```text
+**/<definition.type>-definition.yml
+```
+
+For example, a referenced type `$ref:rvn-example` should be sourced from an active file matching `**/rvn-example-definition.yml`.
+
+When creating a new definition, inspect the closest active definition files by category, AWS service family, dependency shape, and whether the module is a root infrastructure module, dependency module, or deployable workload. Match existing conventions for `definition.type`, catalog name style, release description style, initial module shell, use of partials, source path naming, and handoff boundaries. If no close match exists, inspect at least two active definition files to preserve repository style.
 
 ## Creation Workflow
 

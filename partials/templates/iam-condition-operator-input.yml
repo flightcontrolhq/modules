@@ -1,0 +1,61 @@
+- default: $with.default
+  description: IAM condition operator used to compare the condition key and values. Common operators are listed, and custom IAM operators such as ForAnyValue:StringLike can be entered manually.
+  id: test
+  label: Condition operator
+  required: true
+  type: string
+  values:
+    - label: String equals
+      value: StringEquals
+    - label: String not equals
+      value: StringNotEquals
+    - label: String equals ignore case
+      value: StringEqualsIgnoreCase
+    - label: String not equals ignore case
+      value: StringNotEqualsIgnoreCase
+    - label: String like
+      value: StringLike
+    - label: String not like
+      value: StringNotLike
+    - label: Numeric equals
+      value: NumericEquals
+    - label: Numeric not equals
+      value: NumericNotEquals
+    - label: Numeric less than
+      value: NumericLessThan
+    - label: Numeric less than or equals
+      value: NumericLessThanEquals
+    - label: Numeric greater than
+      value: NumericGreaterThan
+    - label: Numeric greater than or equals
+      value: NumericGreaterThanEquals
+    - label: Date equals
+      value: DateEquals
+    - label: Date not equals
+      value: DateNotEquals
+    - label: Date less than
+      value: DateLessThan
+    - label: Date less than or equals
+      value: DateLessThanEquals
+    - label: Date greater than
+      value: DateGreaterThan
+    - label: Date greater than or equals
+      value: DateGreaterThanEquals
+    - label: Boolean
+      value: Bool
+    - label: Binary equals
+      value: BinaryEquals
+    - label: IP address
+      value: IpAddress
+    - label: Not IP address
+      value: NotIpAddress
+    - label: ARN equals
+      value: ArnEquals
+    - label: ARN not equals
+      value: ArnNotEquals
+    - label: ARN like
+      value: ArnLike
+    - label: ARN not like
+      value: ArnNotLike
+    - label: "Null"
+      value: "Null"
