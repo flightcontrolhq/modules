@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.5.0
-  description: Add S3 Files task volumes and app mount points.
+  description: Add S3 file mounts & EC2 host path task volumes.
 module:
   inputs:
     - id: section_cluster
@@ -1189,7 +1189,7 @@ module:
     - id: volumes
       label: Task volumes
       type: object_array
-      description: Optional ECS task volumes. Use EFS for persistent shared storage, S3 Files for mounting an existing Amazon S3 Files file system, and Docker volumes only for EC2 launch type tasks when data can live on the container instance. Each volume can use only one backing type.
+      description: Optional ECS task volumes. Use EFS for persistent shared storage, S3 Files for mounting an existing Amazon S3 Files file system, Docker volumes for EC2-local Docker-managed storage, or Host path for binding an EC2 container instance directory. Each volume can use only one backing type.
       item_inputs:
         - id: name
           label: Volume name
@@ -1213,6 +1213,9 @@ module:
             - description: Local Docker-managed volume for EC2 launch type tasks only.
               label: Docker
               value: docker
+            - description: Bind a directory from the EC2 container instance into the task. EC2 launch type only.
+              label: Host path
+              value: host
             - description: Amazon S3 Files file system mounted into ECS tasks.
               label: S3 Files
               value: s3files
@@ -1243,6 +1246,17 @@ module:
           required: true
           show_when:
             volume_type: docker
+        - id: host_path
+          label: Host path
+          type: string
+          description: Absolute path on the EC2 container instance to bind into the ECS task. ECS creates the directory if it does not exist. Host path volumes are not supported on Fargate.
+          placeholder: /var/lib/app-data
+          required: true
+          show_when:
+            volume_type: host
+          patterns:
+            - message: Use an absolute Linux host path.
+              pattern: ^/
         - id: s3files_file_system_arn
           label: S3 Files file system ARN
           type: string
@@ -1462,7 +1476,8 @@ module:
               #.name, "efs_volume_configuration": #.efs_volume_configuration} : #.volume_type == "s3files" ?
               {"name": #.name, "s3files_volume_configuration": {"file_system_arn": #.s3files_file_system_arn,
               "root_directory": #.s3files_root_directory || "/", "access_point_arn": #.s3files_access_point_arn
-              || nil, "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : {"name": #.name,
+              || nil, "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : #.volume_type ==
+              "host" ? {"name": #.name, "host_path": #.host_path} : {"name": #.name,
               "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
             vpc_id: << module.input.vpc_id >>
             wait_for_steady_state: false
@@ -1591,7 +1606,8 @@ module:
         "efs_volume_configuration": #.efs_volume_configuration} : #.volume_type == "s3files" ? {"name":
         #.name, "s3files_volume_configuration": {"file_system_arn": #.s3files_file_system_arn,
         "root_directory": #.s3files_root_directory || "/", "access_point_arn": #.s3files_access_point_arn
-        || nil, "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : {"name":
+        || nil, "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : #.volume_type ==
+        "host" ? {"name": #.name, "host_path": #.host_path} : {"name":
         #.name, "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
     pre_deploy: >-
       << module.input.pre_deploy_enabled && len(module.input.pre_deploy_command) > 0 ? {"container_overrides": [{"name": stack.output.container_name,
@@ -1888,8 +1904,11 @@ module:
     | EFS         | Persistent shared file storage for Fargate or EC2 Linux tasks |
     | S3 Files    | Mount an existing Amazon S3 Files file system into the task |
     | Docker      | Local Docker-managed storage for EC2 launch type tasks only |
+    | Host path   | Bind an EC2 container instance directory into the task |
 
     S3 Files volumes require the S3 Files file system ARN. Root directory, access point ARN, and transit encryption port are optional fields. The task role must include the IAM permissions required to attach the S3 Files file system to ECS tasks.
+
+    Host path volumes require EC2 capacity. The host path is an absolute Linux path on the EC2 container instance. Data remains on that instance and does not follow the task if ECS places a replacement task on a different instance.
 
     ## Deployment
 
@@ -1948,7 +1967,7 @@ module:
     | CPU architecture                | No       | X86_64                     | x86_64 compatibility or ARM64 cost optimization    |
     | ECS exec                        | No       | false                      | Enable ECS Exec for debugging containers           |
     | App mount points                | No       | []                         | Mount named task volumes into the app container    |
-    | Task volumes                    | No       | []                         | Define EFS, S3 Files, or Docker task volumes       |
+    | Task volumes                    | No       | []                         | Define EFS, S3 Files, Docker, or Host path task volumes |
     | Run pre-deploy command          | No       | false                      | Enable a task before each deployment               |
     | Pre-deploy command arguments    | Yes*     | []                         | Command arguments run before each deployment       |
     | Pre-deploy environment variables| No       | []                         | Extra environment variables for the pre-deploy task |
