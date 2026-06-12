@@ -210,9 +210,27 @@ variable "volumes" {
       driver_opts   = optional(map(string), null)
       labels        = optional(map(string), null)
     }), null)
+
+    s3files_volume_configuration = optional(object({
+      file_system_arn         = string
+      access_point_arn        = optional(string, null)
+      root_directory          = optional(string, "/")
+      transit_encryption_port = optional(number, null)
+    }), null)
   }))
   description = "List of volume definitions for the task."
   default     = []
+
+  validation {
+    condition = alltrue([
+      for volume in var.volumes : length(compact([
+        volume.efs_volume_configuration != null ? "efs" : "",
+        volume.docker_volume_configuration != null ? "docker" : "",
+        volume.s3files_volume_configuration != null ? "s3files" : ""
+      ])) == 1
+    ])
+    error_message = "Each volume must specify exactly one of efs_volume_configuration, docker_volume_configuration, or s3files_volume_configuration."
+  }
 }
 
 ################################################################################
