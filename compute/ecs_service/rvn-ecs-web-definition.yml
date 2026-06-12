@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.5.0
-  description: Add S3 file mounts & EC2 host path task volumes.
+  description: Add S3 file mounts with required access points and EC2 host path task volumes.
 module:
   inputs:
     - id: section_cluster
@@ -1283,9 +1283,9 @@ module:
         - id: s3files_access_point_arn
           label: S3 Files access point ARN
           type: string
-          description: Optional full ARN of the S3 Files access point to use. When set, the root directory must be blank or `/`.
+          description: Full ARN of the S3 Files access point to use. When set, the root directory must be blank or `/`.
           placeholder: arn:aws:s3files:us-east-1:123456789012:file-system/fs-abc123/access-point/fsap-abc123
-          required: false
+          required: true
           show_when:
             volume_type: s3files
           patterns:
@@ -1475,8 +1475,8 @@ module:
               << module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name":
               #.name, "efs_volume_configuration": #.efs_volume_configuration} : #.volume_type == "s3files" ?
               {"name": #.name, "s3files_volume_configuration": {"file_system_arn": #.s3files_file_system_arn,
-              "root_directory": #.s3files_root_directory || "/", "access_point_arn": #.s3files_access_point_arn
-              || nil, "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : #.volume_type ==
+              "root_directory": #.s3files_root_directory || "/", "access_point_arn": #.s3files_access_point_arn,
+              "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : #.volume_type ==
               "host" ? {"name": #.name, "host_path": #.host_path} : {"name": #.name,
               "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
             vpc_id: << module.input.vpc_id >>
@@ -1605,8 +1605,8 @@ module:
         << module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name": #.name,
         "efs_volume_configuration": #.efs_volume_configuration} : #.volume_type == "s3files" ? {"name":
         #.name, "s3files_volume_configuration": {"file_system_arn": #.s3files_file_system_arn,
-        "root_directory": #.s3files_root_directory || "/", "access_point_arn": #.s3files_access_point_arn
-        || nil, "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : #.volume_type ==
+        "root_directory": #.s3files_root_directory || "/", "access_point_arn": #.s3files_access_point_arn,
+        "transit_encryption_port": #.s3files_transit_encryption_port || nil}} : #.volume_type ==
         "host" ? {"name": #.name, "host_path": #.host_path} : {"name":
         #.name, "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
     pre_deploy: >-
@@ -1906,7 +1906,7 @@ module:
     | Docker      | Local Docker-managed storage for EC2 launch type tasks only |
     | Host path   | Bind an EC2 container instance directory into the task |
 
-    S3 Files volumes require the S3 Files file system ARN. Root directory, access point ARN, and transit encryption port are optional fields. The task role must include the IAM permissions required to attach the S3 Files file system to ECS tasks.
+    S3 Files volumes require the S3 Files file system ARN and access point ARN. Root directory and transit encryption port are optional fields. The task role must include the IAM permissions required to attach the S3 Files file system to ECS tasks.
 
     Host path volumes require EC2 capacity. The host path is an absolute Linux path on the EC2 container instance. Data remains on that instance and does not follow the task if ECS places a replacement task on a different instance.
 
