@@ -646,28 +646,14 @@ module:
       default: []
     - id: pre_deploy_environment_variables
       label: Pre-deploy environment variables
-      type: object_array
+      type: array
       description: Additional environment variables for the pre-deploy task. Runtime environment variables and secrets are already inherited from the app container.
+      placeholder: |-
+        - name: MIGRATION_MODE
+          value: online
       collapsible: true
       show_when:
         pre_deploy_enabled: true
-      item_inputs:
-        - id: name
-          label: Name
-          type: string
-          description: Environment variable name.
-          placeholder: MIGRATION_MODE
-          required: true
-          patterns:
-            - message: Use a valid environment variable name.
-              pattern: ^[A-Za-z_][A-Za-z0-9_]*$
-        - id: value
-          label: Value
-          type: string
-          description: Environment variable value.
-          placeholder: online
-          required: true
-      item_label: Environment variable
       required: false
       default: []
     - id: pre_deploy_cpu
@@ -724,28 +710,14 @@ module:
       default: []
     - id: post_deploy_environment_variables
       label: Post-deploy environment variables
-      type: object_array
+      type: array
       description: Additional environment variables for the post-deploy task. Runtime environment variables and secrets are already inherited from the app container.
+      placeholder: |-
+        - name: RELEASE_PHASE
+          value: postdeploy
       collapsible: true
       show_when:
         post_deploy_enabled: true
-      item_inputs:
-        - id: name
-          label: Name
-          type: string
-          description: Environment variable name.
-          placeholder: RELEASE_PHASE
-          required: true
-          patterns:
-            - message: Use a valid environment variable name.
-              pattern: ^[A-Za-z_][A-Za-z0-9_]*$
-        - id: value
-          label: Value
-          type: string
-          description: Environment variable value.
-          placeholder: postdeploy
-          required: true
-      item_label: Environment variable
       required: false
       default: []
     - id: post_deploy_cpu
