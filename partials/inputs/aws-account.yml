@@ -2,6 +2,7 @@
   label: AWS account & region
   type: section
 - id: aws_account_id
+  immutable: true
   label: AWS account
   required: true
   type: string

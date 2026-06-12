@@ -1,4 +1,5 @@
 id: aws_region
+immutable: true
 label: Region
 required: true
 type: string

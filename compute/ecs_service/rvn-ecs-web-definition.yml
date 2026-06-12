@@ -3,23 +3,26 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.4.0
-  description: Add pre- and post-deploy commands.
+  version: 0.4.1
+  description: Mark destructive ECS web inputs immutable
 module:
   inputs:
     - id: section_cluster
       label: ECS cluster
       type: section
     - id: cluster
+      immutable: true
       label: ECS cluster
       type: $ref:rvn-ecs-cluster
       mapped_inputs:
         - id: aws_account_id
+          immutable: true
           label: AWS account
           type: string
           default: <<ref.input.aws_account_id>>
           values: $values:ravion/aws_accounts
         - id: aws_region
+          immutable: true
           label: Region
           type: string
           default: <<ref.input.aws_region>>
@@ -32,16 +35,19 @@ module:
           default: << ref.input.execution_environment_id >>
           values: $values:ravion/execution_environments
         - id: cluster_arn
+          immutable: true
           label: Cluster ARN
           type: string
           required: true
           default: <<ref.stack.output.cluster_arn>>
         - id: vpc_id
+          immutable: true
           label: VPC ID
           type: string
           required: true
           default: <<ref.input.vpc_id>>
         - id: private_subnet_ids
+          immutable: true
           label: Private subnet IDs
           type: string_array
           description: Private subnets available from the selected ECS cluster network.
@@ -49,12 +55,14 @@ module:
           required: true
           default: <<ref.input.private_subnet_ids>>
         - id: public_subnet_ids
+          immutable: true
           label: Public subnet IDs
           type: string_array
           description: Public subnets available from the selected ECS cluster network.
           add_button_label: Add public subnet ID
           default: <<ref.input.public_subnet_ids>>
         - id: subnet_ids
+          immutable: true
           label: Private subnet IDs
           type: string_array
           description: Legacy service subnet override. Leave blank to derive subnets from the public/private service setting.
@@ -66,14 +74,17 @@ module:
           label: Cluster capacity providers
           type: section
         - id: fargate_capacity_provider_name
+          immutable: true
           label: Fargate capacity provider
           type: string
           default: <<ref.stack.output.fargate_capacity_provider_name>>
         - id: fargate_spot_capacity_provider_name
+          immutable: true
           label: Fargate spot capacity provider
           type: string
           default: <<ref.stack.output.fargate_spot_capacity_provider_name>>
         - id: ec2_capacity_provider_name
+          immutable: true
           label: EC2 capacity provider
           type: string
           description: EC2 capacity provider name from the selected cluster. Required only when using EC2 capacity.
@@ -85,10 +96,12 @@ module:
           label: Cluster load balancers
           type: section
         - id: public_alb_http_listener_arn
+          immutable: true
           label: Public ALB HTTP listener ARN
           type: string
           default: <<ref.stack.output.public_alb_http_listener_arn>>
         - id: public_alb_https_listener_arn
+          immutable: true
           label: Public ALB HTTPS listener ARN
           type: string
           description: HTTPS listener ARN from the selected public ALB. Ravion uses it when present, otherwise falls back to HTTP.
@@ -96,14 +109,17 @@ module:
           required: false
           default: <<ref.stack.output.public_alb_https_listener_arn>>
         - id: public_alb_security_group_id
+          immutable: true
           label: Public ALB security group ID
           type: string
           default: <<ref.stack.output.public_alb_security_group_id>>
         - id: private_alb_http_listener_arn
+          immutable: true
           label: Private ALB HTTP listener ARN
           type: string
           default: <<ref.stack.output.private_alb_http_listener_arn>>
         - id: private_alb_https_listener_arn
+          immutable: true
           label: Private ALB HTTPS listener ARN
           type: string
           description: HTTPS listener ARN from the selected private ALB. Ravion uses it when present, otherwise falls back to HTTP.
@@ -111,6 +127,7 @@ module:
           required: false
           default: <<ref.stack.output.private_alb_https_listener_arn>>
         - id: private_alb_security_group_id
+          immutable: true
           label: Private ALB security group ID
           type: string
           default: <<ref.stack.output.private_alb_security_group_id>>
@@ -119,6 +136,7 @@ module:
       label: Web service
       type: section
     - id: name
+      immutable: true
       label: Service name
       type: string
       description: Name for the ECS service and related resources.
@@ -186,6 +204,7 @@ module:
       label: Health check
       type: section
     - id: container_port
+      immutable: true
       label: Container port
       type: number
       description: Port the web container listens on.

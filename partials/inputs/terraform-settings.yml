@@ -11,6 +11,7 @@
 - collapsible: true
   description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
   id: ravion_state_backend_workspace
+  immutable: true
   label: Ravion Terraform workspace name
   type: string
 - default: {}
