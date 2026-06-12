@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.2.0
-  description: Initial version
+  version: 0.2.1
+  description: Make state backend workspace name immutable
 module:
   inputs:
     - id: network
