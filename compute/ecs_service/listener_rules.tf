@@ -22,9 +22,26 @@ resource "aws_lb_listener_rule" "alb" {
     : each.value.priority
   )
 
+  # When the target groups have target-level stickiness the forward
+  # action must carry group-level stickiness or ELBv2 rejects the
+  # weighted forward ECS writes during traffic-shift deployments — see
+  # alb_group_stickiness_enabled in locals.tf.
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.tg_1[0].arn
+    target_group_arn = local.alb_group_stickiness_enabled ? null : aws_lb_target_group.tg_1[0].arn
+
+    dynamic "forward" {
+      for_each = local.alb_group_stickiness_enabled ? [1] : []
+      content {
+        target_group {
+          arn = aws_lb_target_group.tg_1[0].arn
+        }
+        stickiness {
+          enabled  = true
+          duration = local.alb_group_stickiness_duration
+        }
+      }
+    }
   }
 
   dynamic "condition" {
@@ -117,9 +134,26 @@ resource "aws_lb_listener_rule" "test" {
   # specificity, so without this it would fall through to production.
   priority = local.green_test_priority
 
+  # Same group-stickiness requirement as the production rule: ECS
+  # rewrites this rule's forward action through the TEST_TRAFFIC_SHIFT
+  # stages, and ELBv2 rejects the rewrite when the sticky target groups
+  # are referenced without group-level stickiness on the action.
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.tg_2[0].arn
+    target_group_arn = local.alb_group_stickiness_enabled ? null : aws_lb_target_group.tg_2[0].arn
+
+    dynamic "forward" {
+      for_each = local.alb_group_stickiness_enabled ? [1] : []
+      content {
+        target_group {
+          arn = aws_lb_target_group.tg_2[0].arn
+        }
+        stickiness {
+          enabled  = true
+          duration = local.alb_group_stickiness_duration
+        }
+      }
+    }
   }
 
   # Distinguishing condition: only requests carrying the test header reach

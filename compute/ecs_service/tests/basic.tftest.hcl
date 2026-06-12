@@ -236,6 +236,64 @@ run "blue_green_deployment" {
     condition     = length(aws_iam_role.ecs_infrastructure) == 1
     error_message = "Should create the ECS infrastructure role for native traffic-shift strategies"
   }
+
+  assert {
+    condition     = length(aws_lb_listener_rule.alb["0"].action[0].forward) == 0
+    error_message = "Without target-group stickiness the rule should use a plain forward (no group-stickiness block)"
+  }
+}
+
+################################################################################
+# Test: Sticky target groups require group-level stickiness on the rules
+#
+# ECS rewrites the production/test rules into a weighted forward across
+# tg-1 + tg-2 during traffic-shift deployments; ELBv2 rejects that
+# rewrite at PRE_SCALE_UP when the target groups have target-level
+# stickiness but the rule's forward action lacks group stickiness.
+################################################################################
+
+run "sticky_target_groups_enable_group_stickiness" {
+  command = plan
+
+  variables {
+    deployment_type                 = "blue_green"
+    container_port                  = 8080
+    green_alb_listener_rule_enabled = true
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+        stickiness = {
+          enabled         = true
+          type            = "lb_cookie"
+          cookie_duration = 3600
+        }
+      }
+      listener_rules = [{
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+        priority     = 100
+        conditions = [{
+          type   = "host-header"
+          values = ["api.example.com"]
+        }]
+      }]
+    }
+  }
+
+  assert {
+    condition     = aws_lb_listener_rule.alb["0"].action[0].target_group_arn == null
+    error_message = "Sticky target groups should switch the production rule to the expanded forward block"
+  }
+
+  assert {
+    condition     = aws_lb_listener_rule.alb["0"].action[0].forward[0].stickiness[0].enabled && aws_lb_listener_rule.alb["0"].action[0].forward[0].stickiness[0].duration == 3600
+    error_message = "Production rule forward action should enable group stickiness with the target-group cookie duration"
+  }
+
+  assert {
+    condition     = aws_lb_listener_rule.test[0].action[0].forward[0].stickiness[0].enabled && aws_lb_listener_rule.test[0].action[0].forward[0].stickiness[0].duration == 3600
+    error_message = "Test (green) rule forward action should enable group stickiness with the target-group cookie duration"
+  }
 }
 
 ################################################################################

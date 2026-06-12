@@ -76,6 +76,26 @@ locals {
   # rule ARN supplied by the caller, else null.
   test_listener_rule_arn = local.green_alb_listener_rule_enabled ? aws_lb_listener_rule.test[0].arn : var.test_listener_rule_arn
 
+  # ALB rules whose forward action ECS rewrites during native
+  # traffic-shift deployments must carry group-level stickiness when the
+  # target groups have target-level stickiness: ELBv2 rejects a
+  # multi-target-group forward referencing a sticky target group unless
+  # the action itself has TargetGroupStickinessConfig enabled ("You must
+  # enable group stickiness on a rule if you enabled target stickiness
+  # on one of its target groups"), which fails the deployment's
+  # PRE_SCALE_UP stage. ALB-only — NLB listeners forward to one target
+  # group at a time.
+  alb_group_stickiness_enabled = (
+    local.enable_load_balancer
+    && !local.enable_nlb_listener
+    && var.load_balancer_attachment.target_group.stickiness != null
+    && var.load_balancer_attachment.target_group.stickiness.enabled
+  )
+  # Reuse the target-group cookie duration so a client pinned to the
+  # blue or green group stays pinned for the same window as its
+  # in-group target pinning.
+  alb_group_stickiness_duration = local.alb_group_stickiness_enabled ? var.load_balancer_attachment.target_group.stickiness.cookie_duration : null
+
   # Placeholder container name and port
   placeholder_container_name = "app"
   placeholder_container_port = var.container_port
