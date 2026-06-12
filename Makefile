@@ -1,6 +1,6 @@
 # Makefile for Ravion Modules
 
-.PHONY: help test test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev env-local-sh env-local-fish
+.PHONY: help test test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev pull-local-definition env-local-sh env-local-fish
 
 TIMEOUT ?= 180m
 PARALLEL ?= 3
@@ -9,6 +9,13 @@ FILTER ?=
 MODULE_TOOLS_DIR := tools/ravion-modules
 ENV_LOCAL ?= .env.local
 LOCAL_DEV_PUBLISH_FLAGS :=
+PULL_SOURCE_TYPE ?= rvn-aws-rds
+PULL_TARGET_TYPE ?= rvn-rds
+PULL_OUTPUT ?= database/rds/rvn-rds-definition.yml
+PULL_VERSION_FLAG :=
+ifneq ($(PULL_VERSION),)
+PULL_VERSION_FLAG := --version "$(PULL_VERSION)"
+endif
 ifeq ($(DRY_RUN),1)
 LOCAL_DEV_PUBLISH_FLAGS += --dry-run
 endif
@@ -52,6 +59,7 @@ help:
 	@echo "  list-tests           List all available tests"
 	@echo "  modules-tools-build  Build module definition tooling"
 	@echo "  publish-local-dev    Publish one module to local dev API (MODULE=module type, file name, or path required)"
+	@echo "  pull-local-definition Pull one module definition from local dev API into an authoring YAML file"
 	@echo "  env-local-sh         Print sh/bash/zsh commands for loading .env.local"
 	@echo "  env-local-fish       Print fish commands for loading .env.local"
 	@echo ""
@@ -64,6 +72,9 @@ help:
 	@echo "  make publish-local-dev MODULE=rvn-aws-network"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network DRY_RUN=1"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network SOURCE_REF=my-branch"
+	@echo "  make pull-local-definition"
+	@echo "  make pull-local-definition PULL_SOURCE_TYPE=rvn-aws-rds PULL_TARGET_TYPE=rvn-rds PULL_OUTPUT=database/rds/rvn-rds-definition.yml"
+	@echo "  make pull-local-definition PULL_VERSION=0.0.10"
 	@echo "  eval (make env-local-fish)       # fish"
 	@printf '%s\n' '  eval "$$(make env-local-sh)"     # sh/bash/zsh'
 
@@ -84,7 +95,11 @@ ifndef MODULE
 	$(error MODULE is required. Usage: make publish-local-dev MODULE=rvn-aws-network)
 endif
 	@echo "Publishing $(MODULE) to local dev API..."
-	@$(LOAD_ENV_LOCAL) $(LOCAL_DEV_SOURCE_REF_ENV) node $(MODULE_TOOLS_DIR)/dist/src/cli.js publish $(MODULE) --local-dev $(LOCAL_DEV_PUBLISH_FLAGS)
+	@$(LOAD_ENV_LOCAL) $(LOCAL_DEV_SOURCE_REF_ENV) node $(MODULE_TOOLS_DIR)/dist/src/cli.js publish $(MODULE) --local-dev --format markdown $(LOCAL_DEV_PUBLISH_FLAGS)
+
+pull-local-definition: modules-tools-build
+	@echo "Pulling $(PULL_SOURCE_TYPE) from local dev API into $(PULL_OUTPUT) as $(PULL_TARGET_TYPE)..."
+	@$(LOAD_ENV_LOCAL) node $(MODULE_TOOLS_DIR)/dist/src/cli.js pull-definition --local-dev --source-type "$(PULL_SOURCE_TYPE)" --target-type "$(PULL_TARGET_TYPE)" --output "$(PULL_OUTPUT)" $(PULL_VERSION_FLAG)
 
 env-local-sh:
 	@node -e 'const fs=require("node:fs"); const path=process.env.ENV_LOCAL||"$(ENV_LOCAL)"; if(!fs.existsSync(path)) process.exit(0); for (const line of fs.readFileSync(path,"utf8").split(/\r?\n/)) { const trimmed=line.trim(); if(!trimmed||trimmed.startsWith("#")) continue; const index=trimmed.indexOf("="); if(index<1) continue; const key=trimmed.slice(0,index).trim(); const value=trimmed.slice(index+1).trim().replace(/^(["'"'"'])(.*)\1$$/,"$$2"); if(!/^[A-Za-z_][A-Za-z0-9_]*$$/.test(key)) continue; console.log(`export ${key}=${JSON.stringify(value)}`); }'

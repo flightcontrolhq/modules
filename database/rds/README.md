@@ -23,10 +23,11 @@ Creates an Amazon RDS database instance with support for MySQL, PostgreSQL, Mari
 module "postgres" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.t4g.micro"
+  name                 = "my-postgres"
+  engine               = "postgres"
+  engine_major_version = "15"
+  engine_minor_version = "4"
+  instance_class       = "db.t4g.micro"
 
   allocated_storage = 20
 
@@ -49,10 +50,10 @@ module "postgres" {
 module "mysql" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-mysql"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.r6g.large"
+  name                 = "my-mysql"
+  engine               = "mysql"
+  engine_major_version = "8.0"
+  instance_class       = "db.r6g.large"
 
   allocated_storage     = 100
   max_allocated_storage = 500
@@ -86,10 +87,11 @@ module "mysql" {
 module "postgres_with_replicas" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.r6g.large"
+  name                 = "my-postgres"
+  engine               = "postgres"
+  engine_major_version = "15"
+  engine_minor_version = "4"
+  instance_class       = "db.r6g.large"
 
   allocated_storage = 100
 
@@ -141,10 +143,10 @@ module "postgres" {
 module "mysql" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-mysql"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.t4g.medium"
+  name                 = "my-mysql"
+  engine               = "mysql"
+  engine_major_version = "8.0"
+  instance_class       = "db.t4g.medium"
 
   allocated_storage = 50
 
@@ -196,10 +198,11 @@ module "postgres" {
 module "postgres" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.r6g.large"
+  name                 = "my-postgres"
+  engine               = "postgres"
+  engine_major_version = "15"
+  engine_minor_version = "4"
+  instance_class       = "db.r6g.large"
 
   allocated_storage = 100
 
@@ -233,11 +236,12 @@ module "postgres" {
 module "oracle" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-oracle"
-  engine         = "oracle-ee"
-  engine_version = "19.0.0.0.ru-2023-10.rur-2023-10.r1"
-  instance_class = "db.r6i.large"
-  license_model  = "bring-your-own-license"
+  name                 = "my-oracle"
+  engine               = "oracle-ee"
+  engine_major_version = "19"
+  engine_minor_version = "0.0.0.0.ru-2023-10.rur-2023-10.r1"
+  instance_class       = "db.r6i.large"
+  license_model        = "bring-your-own-license"
 
   allocated_storage = 100
 
@@ -269,10 +273,10 @@ module "oracle" {
 module "mysql" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-mysql"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.r6g.large"
+  name                 = "my-mysql"
+  engine               = "mysql"
+  engine_major_version = "8.0"
+  instance_class       = "db.r6g.large"
 
   allocated_storage = 100
 
@@ -304,14 +308,15 @@ module "mysql" {
 | name | Name prefix for all resources created by this module. | `string` | n/a | yes |
 | engine | The database engine to use. | `string` | n/a | yes |
 | instance_class | The compute and memory capacity of the DB instance. | `string` | n/a | yes |
-| allocated_storage | The allocated storage in GiB. | `number` | n/a | yes |
+| allocated_storage | The allocated storage in GiB. AWS supports increasing allocated storage after creation, but not reducing it in place. | `number` | n/a | yes |
 | vpc_id | The ID of the VPC where the RDS instance will be created. | `string` | n/a | yes |
 | subnet_ids | A list of subnet IDs for the DB subnet group. | `list(string)` | n/a | yes |
 | username | The master username for the database. | `string` | n/a | yes |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
-| engine_version | The version number of the database engine. | `string` | `null` | no |
+| engine_major_version | The major version of the database engine. Examples: 15 for PostgreSQL or SQL Server, 8.0 for MySQL, 19 for Oracle. | `string` | `null` | no |
+| engine_minor_version | The optional minor version of the database engine. | `string` | `null` | no |
 | license_model | The license model for Oracle/SQL Server. | `string` | `null` | no |
-| max_allocated_storage | Upper limit for storage autoscaling (0 to disable). | `number` | `0` | no |
+| max_allocated_storage | Upper limit for storage autoscaling (0 to disable). AWS can grow storage up to this limit, but storage cannot be reduced in place. | `number` | `0` | no |
 | storage_type | The storage type: gp2, gp3, io1, io2, or standard. | `string` | `"gp3"` | no |
 | iops | Provisioned IOPS for io1/io2, optional for gp3. | `number` | `null` | no |
 | storage_throughput | Storage throughput in MiB/s (gp3 only). | `number` | `null` | no |
@@ -492,10 +497,10 @@ Valid log export types depend on the database engine:
 ║  │       GENERAL               │   │         ENGINE                  │   │          INSTANCE & STORAGE             │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • engine (required)             │   │ • instance_class (required)             │  ║
-║  │ • tags                      │   │ • engine_version                │   │ • allocated_storage (required)          │  ║
-║  └─────────────────────────────┘   │ • license_model                 │   │ • max_allocated_storage                 │  ║
-║                                    └─────────────────────────────────┘   │ • storage_type                          │  ║
-║                                                                          │ • iops, storage_throughput              │  ║
+║  │ • tags                      │   │ • engine_major_version          │   │ • allocated_storage (required)          │  ║
+║  └─────────────────────────────┘   │ • engine_minor_version          │   │ • max_allocated_storage                 │  ║
+║                                    │ • license_model                 │   │ • storage_type                          │  ║
+║                                    └─────────────────────────────────┘   │ • iops, storage_throughput              │  ║
 ║                                                                          │ • storage_encrypted, kms_key_id         │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
@@ -674,7 +679,7 @@ Valid log export types depend on the database engine:
 ║                                                  ▼                                                                    ║
 ║              ┌───────────────────────────────────────────────────────────────────────────────────┐                     ║
 ║  var.engine ────────────────────────────►│                                                       │                     ║
-║  var.engine_version ────────────────────►│                                                       │                     ║
+║  local.engine_version ───────────────────►│                                                       │                     ║
 ║  var.instance_class ────────────────────►│                                                       │                     ║
 ║  var.allocated_storage ─────────────────►│                                                       │                     ║
 ║  var.storage_type ──────────────────────►│                                                       │                     ║

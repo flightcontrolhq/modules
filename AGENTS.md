@@ -42,6 +42,7 @@ Every module **MUST** contain the following files:
 ### Module Definitions
 
 - **Form labels and sections**: Use sentence case, not title case, for all form field labels and form section headers.
+- **Local module definition publishing**: When publishing a local development module definition, run the publish command directly. Do not run separate module-definition `validate` or `compile` commands first; publishing performs validation automatically.
 
 ### File Organization
 

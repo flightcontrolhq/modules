@@ -3,11 +3,13 @@ import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { promisify } from "node:util";
+import YAML from "yaml";
 import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile, findDefinitionFiles } from "./compiler.js";
 import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
 import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from "./github-releases.js";
 import { runMigrationGuardrails } from "./guardrails.js";
+import { selectLocalDevSourceRef } from "./local-dev-source-ref.js";
 import { validateModuleConfig } from "./module-schema.js";
 import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
@@ -125,10 +127,81 @@ if (command === "validate") {
     }
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
+} else if (command === "pull-definition") {
+  const sourceType = getArgValue(args, "--source-type");
+  const targetType = getArgValue(args, "--target-type") ?? sourceType;
+  const outputPath = getArgValue(args, "--output");
+  const requestedVersion = getArgValue(args, "--version");
+  if (!sourceType || !targetType || !outputPath) {
+    console.error("Usage: ravion-modules pull-definition --source-type <remote-type> [--target-type <local-type>] --output <path> [--version <version>] [--local-dev]");
+    process.exitCode = 1;
+    return;
+  }
+
+  const localDev = args.includes("--local-dev");
+  const client = await createDefaultRavionApiClient({ baseUrl: localDev ? (process.env.RAVION_API_URL ?? "http://localhost:8080") : undefined, requireToken: !localDev });
+  const inventory = await loadRemoteInventory(client);
+  const definition = inventory.definitions.find((item) => item.type === sourceType);
+  if (!definition) {
+    throw new Error(`Remote module definition ${sourceType} was not found.`);
+  }
+  const versions = inventory.versionsByDefinitionId[definition.id] ?? [];
+  const version = requestedVersion ? versions.find((item) => item.version === requestedVersion) : selectLatestModuleVersion(versions);
+  if (!version) {
+    throw new Error(requestedVersion ? `Remote module definition ${sourceType}@${requestedVersion} was not found.` : `Remote module definition ${sourceType} has no versions.`);
+  }
+
+  const authoringDefinition = {
+    definition: {
+      type: targetType,
+      name: definition.name,
+      description: definition.description,
+    },
+    release: {
+      version: version.version,
+      description: version.description,
+    },
+    module: version.config,
+  };
+  await writeFile(outputPath, stringifyYaml(authoringDefinition));
+  console.log(JSON.stringify({ sourceType, targetType, outputPath, version: version.version }, null, 2));
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|generate-definitions> <*-definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|generate-definitions|pull-definition> <*-definition.yml...>");
   process.exitCode = 1;
 }
+}
+
+function stringifyYaml(value: unknown): string {
+  return YAML.stringify(value, { lineWidth: 0 });
+}
+
+function selectLatestModuleVersion<T extends { version: string }>(versions: T[]): T | undefined {
+  return [...versions].sort((left, right) => compareSemver(right.version, left.version))[0];
+}
+
+function compareSemver(left: string, right: string): number {
+  const leftParsed = parseSemver(left);
+  const rightParsed = parseSemver(right);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = leftParsed.numbers[index] - rightParsed.numbers[index];
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  if (leftParsed.prerelease && !rightParsed.prerelease) {
+    return -1;
+  }
+  if (!leftParsed.prerelease && rightParsed.prerelease) {
+    return 1;
+  }
+  return left.localeCompare(right);
+}
+
+function parseSemver(version: string): { numbers: [number, number, number]; prerelease?: string } {
+  const [core, prerelease] = version.split("-", 2);
+  const parts = core.split(".").map((part) => Number.parseInt(part, 10));
+  return { numbers: [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0], prerelease };
 }
 
 function getRootArg(args: string[]): string | undefined {
@@ -183,16 +256,8 @@ async function resolveDefinitionFileArgs(filePaths: string[]): Promise<string[]>
 
 async function resolveLocalDevSourceRef(): Promise<string> {
   const override = process.env.RAVION_LOCAL_DEV_SOURCE_REF || process.env.SOURCE_REF;
-  if (override) {
-    return override;
-  }
-
   const branch = await getCurrentBranch();
-  if (branch && (await originBranchExists(branch))) {
-    return branch;
-  }
-
-  return "main";
+  return selectLocalDevSourceRef({ override, branch });
 }
 
 async function getCurrentBranch(): Promise<string | undefined> {
@@ -202,15 +267,6 @@ async function getCurrentBranch(): Promise<string | undefined> {
     return branch.length > 0 ? branch : undefined;
   } catch {
     return undefined;
-  }
-}
-
-async function originBranchExists(branch: string): Promise<boolean> {
-  try {
-    await execFileAsync("git", ["ls-remote", "--exit-code", "--heads", "origin", branch]);
-    return true;
-  } catch {
-    return false;
   }
 }
 
