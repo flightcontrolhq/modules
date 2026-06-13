@@ -315,12 +315,6 @@ module:
       collapsible: true
       max: 50000
       min: 1
-    - id: green_alb_listener_rule_enabled
-      label: Create a listener rule to test green deployments
-      type: boolean
-      description: Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during blue/green, linear, and canary deployments, so the new revision can be validated before production traffic shifts. Has no effect for rolling deployments.
-      collapsible: true
-      default: false
     - id: test_header_name
       label: Test traffic header name
       type: string
@@ -328,8 +322,6 @@ module:
       collapsible: true
       required: true
       default: X-Ravion-Test
-      show_when:
-        green_alb_listener_rule_enabled: true
     - id: test_header_value
       label: Test traffic header value
       type: string
@@ -337,8 +329,6 @@ module:
       collapsible: true
       required: true
       default: "1"
-      show_when:
-        green_alb_listener_rule_enabled: true
     - id: section_task
       label: Container resources
       type: section
@@ -1184,7 +1174,6 @@ module:
             execution_role_arn: << module.input.execution_role_arn || nil >>
             execution_role_policies: << module.input.execution_role_policies >>
             force_new_deployment: << module.input.force_new_deployment >>
-            green_alb_listener_rule_enabled: << module.input.green_alb_listener_rule_enabled >>
             test_header_name: << module.input.test_header_name >>
             test_header_value: << module.input.test_header_value >>
             health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>

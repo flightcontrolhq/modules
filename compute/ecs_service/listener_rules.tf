@@ -114,9 +114,9 @@ resource "aws_lb_listener_rule" "alb" {
 ################################################################################
 # ALB Test (Green) Listener Rule
 #
-# Optional dedicated rule that routes test traffic to the alternate (green)
-# target group (tg-2) during native traffic-shift deployments. Gated by
-# var.green_alb_listener_rule_enabled. It reuses the production listener and
+# Dedicated rule, created by default for ALB services, that routes test
+# traffic to the alternate (green) target group (tg-2) during native
+# traffic-shift deployments. It reuses the production listener and
 # routing conditions (listener_rules[0]) but forwards to the green target
 # group; the ECS deployment controller rewrites its forward action through
 # the TEST_TRAFFIC_SHIFT lifecycle stages so the green revision can be

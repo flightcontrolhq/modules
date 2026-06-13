@@ -332,8 +332,8 @@ variable "test_listener_rule_arn" {
 
 variable "green_alb_listener_rule_enabled" {
   type        = bool
-  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test header (test_header_name/test_header_value) and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. No effect for NLB or rolling-only services."
-  default     = false
+  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test header (test_header_name/test_header_value) and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. Created by default; no effect for NLB services."
+  default     = true
 }
 
 variable "test_header_name" {

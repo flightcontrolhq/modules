@@ -163,12 +163,6 @@ module "ecs_service" {
     ]
   }
 
-  # Create the green (test) ALB listener rule. It mirrors the production
-  # listener + conditions and forwards to the alternate target group; ECS
-  # rewrites it during the TEST_TRAFFIC_SHIFT lifecycle stages of a native
-  # traffic-shift deployment.
-  green_alb_listener_rule_enabled = true
-
   # Give load balancer time to register targets
   health_check_grace_period_seconds = 60
 
