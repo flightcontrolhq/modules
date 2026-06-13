@@ -42,6 +42,7 @@ Every module **MUST** contain the following files:
 ### Module Definitions
 
 - **Form labels and sections**: Use sentence case, not title case, for all form field labels and form section headers.
+- **Local module definition publishing**: When publishing a local development module definition, run the publish command directly. Do not run separate module-definition `validate` or `compile` commands first; publishing performs validation automatically.
 
 ### File Organization
 
@@ -268,6 +269,16 @@ Follow [Semantic Versioning](https://semver.org/):
 | **MAJOR** | Breaking changes | Removed variable, renamed resource, changed default that affects behavior |
 | **MINOR** | New features | New module, new optional variable, new output |
 | **PATCH** | Bug fixes | Documentation fix, validation fix, non-breaking default change |
+
+### Module Definition Release Metadata
+
+For changes to `*-definition.yml` files, update the top-level `release.version` and `release.description` according to semantic versioning when the branch has not already bumped that definition for the current change set.
+
+- Before bumping, inspect the current branch diff against its base branch and check whether `release.version` or `release.description` for that same definition has already changed.
+- If the branch already contains a release metadata bump for that definition, update the existing `release.description` only when needed to accurately summarize the combined branch changes; do not bump the version again.
+- If no bump exists yet on the branch, choose the semver bump from the authored version based on the user-facing impact: major for breaking config or behavior changes, minor for new modules/features/optional inputs/outputs, and patch for fixes or documentation-only corrections.
+- Keep `release.description` concise and user-facing. It should summarize the publishable change, not mention local publish attempts or implementation details.
+- After making module-definition changes, publish a local development version for testing unless the user explicitly says not to. Use `make publish-local-dev MODULE=<definition.type>` or the equivalent tooling path.
 
 For local development publishes, do **not** bump `release.version` just to publish a new local copy. The local publish tooling automatically appends the next numeric prerelease suffix to the authored version, such as `0.2.1-1`, `0.2.1-2`, and so on.
 

@@ -1128,6 +1128,33 @@ run "test_sqlserver_port_default" {
   }
 }
 
+# Test: SQL Server integer major version is normalized for parameter and option groups
+run "test_sqlserver_integer_major_version" {
+  command = plan
+
+  variables {
+    name                 = "test-db"
+    engine               = "sqlserver-se"
+    engine_major_version = "15"
+    license_model        = "license-included"
+    instance_class       = "db.t3.micro"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+  }
+
+  assert {
+    condition     = local.default_parameter_group_family == "sqlserver-se-15.0"
+    error_message = "SQL Server parameter group family should normalize integer major versions."
+  }
+
+  assert {
+    condition     = local.default_option_group_engine_version == "15.00"
+    error_message = "SQL Server option group engine version should normalize integer major versions."
+  }
+}
+
 # Test: Custom port overrides default
 run "test_custom_port_override" {
   command = plan

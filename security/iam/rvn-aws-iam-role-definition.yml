@@ -1,0 +1,399 @@
+definition:
+  type: rvn-aws-iam-role
+  name: AWS IAM Role
+  description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
+release:
+  version: 0.1.2
+  description: Mark destructive IAM role inputs immutable
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $include: ../../partials/inputs/aws-region.yml
+    - id: section_role
+      label: IAM role
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      description: Name of the IAM role. AWS IAM role names must be unique in the account.
+      id: name
+      immutable: true
+      label: Role name
+      patterns:
+        - message: "Use 1-64 characters: letters, numbers, plus, equals, comma, period, at, underscore, or hyphen."
+          pattern: ^[A-Za-z0-9+=,.@_-]{1,64}$
+      required: true
+      type: string
+    - description: Description stored on the IAM role.
+      id: description
+      label: Description
+      type: string
+    - collapsible: true
+      default: /
+      description: IAM path for the role. Most roles should use the root path.
+      id: path
+      immutable: true
+      label: Path
+      patterns:
+        - message: Start and end with a slash, for example / or /service-roles/.
+          pattern: ^/$|^/.*/$
+      required: true
+      type: string
+    - collapsible: true
+      default: 3600
+      description: Maximum STS session duration in seconds for this role.
+      id: max_session_duration
+      label: Maximum session duration seconds
+      max: 43200
+      min: 3600
+      type: number
+    - collapsible: true
+      default: true
+      description: Detach managed policies before destroying the role.
+      id: force_detach_policies
+      label: Force detach policies on destroy
+      type: boolean
+    - id: section_trust
+      label: Trust relationships
+      type: section
+    - add_button_label: Add service principal
+      default: []
+      description: AWS service principals that can assume this role.
+      id: trusted_services
+      label: Trusted AWS services
+      placeholder: ecs-tasks.amazonaws.com
+      patterns:
+        - message: Use an AWS service principal ending in .amazonaws.com or .amazonaws.com.cn.
+          pattern: .+\.(amazonaws\.com|amazonaws\.com\.cn)$
+      type: string_array
+    - add_button_label: Add AWS principal
+      default: []
+      description: AWS account IDs or IAM ARNs that can assume this role.
+      id: trusted_aws_principals
+      label: Trusted AWS principals
+      placeholder: arn:aws:iam::123456789012:root
+      patterns:
+        - message: Use a 12-digit account ID or IAM ARN.
+          pattern: ^(\d{12}|arn:aws(-cn|-us-gov)?:iam::.+)$
+      type: string_array
+    - default: []
+      description: OIDC identity providers that can assume this role, with STS condition checks.
+      id: trusted_oidc_providers
+      item_inputs:
+        - description: IAM OIDC provider that issues tokens for this trust relationship.
+          id: provider_arn
+          label: OIDC provider ARN
+          patterns:
+            - message: Use a valid IAM OIDC provider ARN.
+              pattern: ^arn:aws(-cn|-us-gov)?:iam::\d{12}:oidc-provider/.+$
+          placeholder: arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com
+          required: true
+          type: string
+        - default: []
+          description: STS condition checks that restrict which OIDC identities can assume the role.
+          id: conditions
+          item_inputs:
+            - $template: ../../partials/templates/iam-condition-operator-input.yml
+              with:
+                default: StringEquals
+            - description: IAM context key evaluated by the condition.
+              id: variable
+              label: Condition key
+              placeholder: token.actions.githubusercontent.com:sub
+              required: true
+              type: string
+            - add_button_label: Add condition value
+              description: Allowed or matched values for the condition key.
+              id: values
+              label: Condition values
+              placeholder: repo:org/repo:ref:refs/heads/main
+              required: true
+              type: string_array
+          item_label: Condition
+          label: Conditions
+          required: true
+          type: object_array
+      item_label: OIDC provider
+      label: Trusted OIDC providers
+      required: false
+      type: object_array
+    - add_button_label: Add SAML provider
+      default: []
+      description: SAML provider ARNs that can assume this role.
+      id: trusted_saml_providers
+      label: Trusted SAML providers
+      placeholder: arn:aws:iam::123456789012:saml-provider/MySAMLProvider
+      patterns:
+        - message: Use a valid IAM SAML provider ARN.
+          pattern: ^arn:aws(-cn|-us-gov)?:iam::\d{12}:saml-provider/.+$
+      type: string_array
+    - default: []
+      description: STS condition checks added to every generated trust policy statement.
+      id: assume_role_conditions
+      item_inputs:
+        - $template: ../../partials/templates/iam-condition-operator-input.yml
+          with:
+            default: Bool
+        - description: IAM context key evaluated by the condition.
+          id: variable
+          label: Condition key
+          placeholder: aws:MultiFactorAuthPresent
+          required: true
+          type: string
+        - add_button_label: Add condition value
+          description: Allowed or matched values for the condition key.
+          id: values
+          label: Condition values
+          placeholder: "true"
+          required: true
+          type: string_array
+      item_label: Condition
+      label: Shared trust conditions
+      required: false
+      type: object_array
+    - collapsible: true
+      description: Optional complete assume role policy JSON. When set, this overrides all trust relationship inputs above.
+      id: custom_assume_role_policy
+      label: Custom assume role policy JSON
+      placeholder: |-
+        {
+          "Version": "2012-10-17",
+          "Statement": []
+        }
+      type: text
+    - id: section_policies
+      label: Permission policies
+      type: section
+    - add_button_label: Add managed policy ARN
+      default: []
+      description: AWS managed or customer managed policy ARNs to attach to the role.
+      id: managed_policy_arns
+      label: Managed policy ARNs
+      placeholder: arn:aws:iam::aws:policy/ReadOnlyAccess
+      patterns:
+        - message: Use a valid IAM managed policy ARN.
+          pattern: ^arn:aws(-cn|-us-gov)?:iam::(aws|\d{12}):policy/.+$
+      type: string_array
+    - collapsible: true
+      default: {}
+      description: Map of inline policy names to JSON policy documents.
+      id: inline_policies
+      label: Inline JSON policies
+      placeholder: |-
+        s3-read: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::my-bucket/*"]}]}'
+      type: object
+    - default: []
+      description: Structured IAM statements combined into one inline policy.
+      id: inline_policy_statements
+      item_inputs:
+        - description: Optional IAM statement ID.
+          id: sid
+          label: SID
+          required: false
+          type: string
+        - default: Allow
+          description: Whether this statement allows or denies the listed actions.
+          id: effect
+          label: Effect
+          required: true
+          type: string
+          values:
+            - label: Allow
+              value: Allow
+            - label: Deny
+              value: Deny
+        - add_button_label: Add action
+          description: IAM actions for this statement.
+          id: actions
+          label: Actions
+          placeholder: s3:GetObject
+          required: true
+          type: string_array
+        - add_button_label: Add resource
+          description: Resource ARNs covered by this statement.
+          id: resources
+          label: Resources
+          placeholder: arn:aws:s3:::my-bucket/*
+          required: true
+          type: string_array
+        - default: []
+          description: Optional IAM conditions for this statement.
+          id: conditions
+          item_inputs:
+            - $template: ../../partials/templates/iam-condition-operator-input.yml
+              with:
+                default: StringEquals
+            - description: IAM context key evaluated by the condition.
+              id: variable
+              label: Condition key
+              required: true
+              type: string
+            - add_button_label: Add condition value
+              description: Allowed or matched values for the condition key.
+              id: values
+              label: Condition values
+              required: true
+              type: string_array
+          item_label: Condition
+          label: Conditions
+          required: false
+          type: object_array
+      item_label: Policy statement
+      label: Inline policy statements
+      required: false
+      type: object_array
+    - collapsible: true
+      description: Optional permissions boundary policy ARN for the role.
+      id: permission_boundary_arn
+      label: Permission boundary ARN
+      placeholder: arn:aws:iam::123456789012:policy/PermissionBoundary
+      patterns:
+        - message: Use a valid IAM managed policy ARN.
+          pattern: ^arn:aws(-cn|-us-gov)?:iam::(aws|\d{12}):policy/.+$
+      type: string
+    - id: section_instance_profile
+      label: Instance profile
+      type: section
+    - default: false
+      description: Create an IAM instance profile for EC2 instances to use this role.
+      id: instance_profile_creation_enabled
+      immutable: true
+      label: Create instance profile
+      type: boolean
+    - description: Instance profile name. Defaults to the role name when empty.
+      id: instance_profile_name
+      immutable: true
+      label: Instance profile name
+      patterns:
+        - message: "Use 1-128 characters: letters, numbers, plus, equals, comma, period, at, underscore, or hyphen."
+          pattern: ^[A-Za-z0-9+=,.@_-]{1,128}$
+      show_when:
+        instance_profile_creation_enabled: true
+      type: string
+    - description: IAM path for the instance profile. Defaults to the role path when empty.
+      id: instance_profile_path
+      immutable: true
+      label: Instance profile path
+      patterns:
+        - message: Start and end with a slash, for example / or /service-roles/.
+          pattern: ^/$|^/.*/$
+      show_when:
+        instance_profile_creation_enabled: true
+      type: string
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: security/iam
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        assume_role_conditions: << module.input.assume_role_conditions || [] >>
+        custom_assume_role_policy: << module.input.custom_assume_role_policy >>
+        description: << module.input.description >>
+        force_detach_policies: << module.input.force_detach_policies >>
+        inline_policies: << module.input.inline_policies || {} >>
+        inline_policy_statements: << module.input.inline_policy_statements || [] >>
+        instance_profile_creation_enabled: << module.input.instance_profile_creation_enabled >>
+        instance_profile_name: << module.input.instance_profile_name >>
+        instance_profile_path: << module.input.instance_profile_path >>
+        managed_policy_arns: << module.input.managed_policy_arns || [] >>
+        max_session_duration: << module.input.max_session_duration >>
+        name: << module.input.name >>
+        path: << module.input.path >>
+        permission_boundary_arn: << module.input.permission_boundary_arn >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        trusted_aws_principals: << module.input.trusted_aws_principals || [] >>
+        trusted_oidc_providers: << module.input.trusted_oidc_providers || [] >>
+        trusted_saml_providers: << module.input.trusted_saml_providers || [] >>
+        trusted_services: << module.input.trusted_services || [] >>
+  readme: |
+    AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
+
+    ## Overview
+
+    Use this module to create an IAM role for AWS services, cross-account access, OIDC workloads, SAML federation, or EC2 instance profiles. The module builds the trust policy from structured inputs by default, attaches managed policies, and can add inline policy documents or structured inline statements.
+
+    IAM roles are security-sensitive resources. Start with the narrowest trust relationship and policy permissions that work, then expand only when a workload needs additional access.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | ECS task or Lambda execution role | Trust an AWS service principal and attach only the policies the workload needs. |
+    | Cross-account access | Allow a specific AWS account or IAM principal to assume the role, optionally with MFA or other conditions. |
+    | GitHub Actions or EKS OIDC access | Trust an OIDC provider and constrain access with token claims. |
+    | EC2 instance role | Create an instance profile alongside the role for EC2 attachment. |
+
+    ## Trust relationships
+
+    Trusted AWS services accepts service principals such as ecs-tasks.amazonaws.com, lambda.amazonaws.com, or ec2.amazonaws.com.
+
+    Trusted AWS principals accepts 12-digit AWS account IDs or IAM ARNs for cross-account and delegated access.
+
+    Trusted OIDC providers accepts provider ARNs and condition blocks. Use conditions to restrict subjects, audiences, repositories, service accounts, or other identity claims. Without specific conditions, an OIDC trust relationship can be broader than intended.
+
+    Trusted SAML providers accepts IAM SAML provider ARNs for federated access.
+
+    Custom assume role policy JSON is an escape hatch. When set, it replaces the generated trust policy from the structured trust inputs.
+
+    ## Permission policies
+
+    Managed policy ARNs attaches existing AWS managed or customer managed policies to the role.
+
+    Inline JSON policies accepts a map where each key is the inline policy name and each value is a JSON IAM policy document.
+
+    Inline policy statements builds one inline policy from structured statement entries. Each statement includes an effect, actions, resources, and optional conditions.
+
+    Permission boundary ARN sets a maximum permissions boundary for the role. Use this when an organization requires roles to stay within a managed boundary policy.
+
+    ## Instance profiles
+
+    Enable Create instance profile when EC2 instances need to use this role. The instance profile name and path default to the role settings unless you provide specific values.
+
+    ## Configuration
+
+    | Setting | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | AWS account | Yes | None | AWS account where the IAM role is created. |
+    | Region | Yes | None | Runner region for the stack. IAM resources are global, but Terraform still runs with an AWS region. |
+    | Role name | Yes | Project, environment, and module given IDs | IAM role name. Must be unique in the AWS account. |
+    | Description | No | Managed by Terraform | Description stored on the IAM role. |
+    | Path | No | / | IAM path for the role. |
+    | Maximum session duration seconds | No | 3600 | STS session duration, from 3600 to 43200 seconds. |
+    | Force detach policies on destroy | No | true | Detaches managed policies before destroying the role. |
+    | Trusted AWS services | No | Empty list | AWS service principals allowed to assume the role. |
+    | Trusted AWS principals | No | Empty list | AWS account IDs or IAM ARNs allowed to assume the role. |
+    | Trusted OIDC providers | No | Empty list | OIDC providers and conditions for web identity trust. |
+    | Trusted SAML providers | No | Empty list | SAML provider ARNs allowed to assume the role. |
+    | Assume role conditions | No | Empty list | Conditions applied to all generated trust statements. |
+    | Custom assume role policy JSON | No | None | Replaces generated trust policy when provided. |
+    | Managed policy ARNs | No | Empty list | Existing managed policies to attach. |
+    | Inline JSON policies | No | Empty map | Inline policy names mapped to JSON policy documents. |
+    | Inline policy statements | No | Empty list | Structured statements combined into one inline policy. |
+    | Permission boundary ARN | No | None | Managed policy ARN used as the permissions boundary. |
+    | Create instance profile | No | false | Creates an IAM instance profile for EC2. |
+    | Instance profile name | No | Role name | Visible when instance profile creation is enabled. |
+    | Instance profile path | No | Role path | Visible when instance profile creation is enabled. |
+    | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
+    | Terraform execution environment | No | None | Optional runner environment override. |
+    | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
+
+    ## Design decisions
+
+    The module definition asks for an explicit role name instead of exposing name prefixes. Stable names make downstream references and audits easier to understand.
+
+    Trust relationships are structured by default so common service, cross-account, OIDC, and SAML roles can be configured without hand-writing full IAM JSON. Custom assume role policy JSON remains available for uncommon trust policies.
+
+    Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
+
+    ## Learn more
+
+    - [IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html)
+    - [IAM JSON policy elements](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html)
+    - [IAM permissions boundaries](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/iam)

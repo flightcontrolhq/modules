@@ -25,7 +25,7 @@ Before writing, inspect these sources in order:
 2. `module.inputs`, including section labels, field labels, defaults, required flags, descriptions, values providers, `show_when`, and nested `item_inputs`.
 3. `module.stack.pipelines.defaults.input`, especially `repo`, `ref`, `base_path`, and Terraform variable keys.
 4. The Terraform module source README or code only for behavior that is exposed by the module definition or needed to explain user-facing tradeoffs.
-5. Existing module-definition READMEs for nearby modules to match tone and structure.
+5. Existing module-definition READMEs from active nearby `**/*-definition.yml` files to match tone and structure.
 
 Treat `module.inputs` and the module stack mapping as the authority for what the Ravion UI exposes. Treat Terraform source docs as implementation background, not as a complete list of what users can configure in Ravion.
 
@@ -45,6 +45,8 @@ Prefer this structure unless the module clearly needs something different:
 Keep the README useful for someone choosing settings in the Ravion UI. Avoid Terraform usage examples unless the module definition exposes Terraform-oriented fields directly.
 
 After writing or revising `module.readme`, copy the README's first sentence back into `definition.description` so the catalog summary and embedded README stay aligned. Keep it as a concise plain sentence without markdown formatting.
+
+Keep `module.readme` as the final field inside `module`. The repository field order is `inputs`, `stack`, `build`, `deploy`, `ui`, then `readme` last.
 
 ## Config Alignment Rules
 
@@ -92,6 +94,7 @@ Before finishing, verify:
 
 - The first sentence matches the module's current purpose and `definition.description`.
 - `definition.description` has been updated to the README's first sentence after README edits.
+- `module.readme` is the final field inside `module`, after any `inputs`, `stack`, `build`, `deploy`, or `ui` fields.
 - Every `Configuration` table row maps to an existing `module.inputs` field or a clearly explained nested field.
 - Defaults and required flags match the current definition file.
 - Major feature sections correspond to actual exposed inputs or always-on behavior.
@@ -100,8 +103,16 @@ Before finishing, verify:
 - The README does not include stale Terraform-only inputs omitted from the module definition.
 - Validation passes after the README change.
 
-## Patterns From Existing Modules
+## Sourcing README References
 
-For the VPC Network module, the README explains public/private subnets, NAT Gateway modes, stable NAT IPs, VPC peering, SOC 2 flow logs, and design decisions. Its configuration table mirrors visible inputs such as AWS account, region, name, VPC CIDR, NAT Gateway, NAT Gateway high availability, NAT Gateway Elastic IP allocation IDs, flow logs, and tags.
+Find active module-definition README references by filename instead of relying on a fixed list:
 
-For the ECS Cluster module, the README organizes a larger input surface around capacity providers, load balancers, observability, EC2 capacity settings, and design decisions. It summarizes many detailed inputs by concept so the README remains readable while still matching the exposed configuration.
+```text
+**/*-definition.yml
+```
+
+Exclude test fixtures and generated files, especially paths under `tools/ravion-modules/test/fixtures`.
+
+When a README needs to describe behavior inherited from a referenced module, source that referenced module by filename. For a `$ref:<module-type>` input, inspect the active file matching `**/<module-type>-definition.yml` and use its `module.inputs`, stack outputs, and README tone as context.
+
+Pick nearby README references by category, AWS service family, dependency model, runtime/deploy model, stack type, and UI complexity. Match their practical tone and table-driven structure without copying stale details or documenting fields that are not exposed by the current definition.

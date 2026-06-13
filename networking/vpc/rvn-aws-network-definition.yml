@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.1.0
-  description: "breaking change: TF variables renamed for readability"
+  version: 0.1.1
+  description: Mark destructive network inputs immutable
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -17,6 +17,7 @@ module:
     - default: <<project.given_id>>-<<environment.given_id>>
       description: Name prefix for all resources created by this module.
       id: name
+      immutable: true
       label: Name slug
       patterns:
         - message: The name must be 1-36 characters, contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.
@@ -26,6 +27,7 @@ module:
     - default: 10.0.0.0/16
       description: The IPv4 CIDR block for the VPC.
       id: vpc_cidr
+      immutable: true
       label: VPC CIDR
       required: false
       type: string

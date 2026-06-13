@@ -8,6 +8,7 @@ release:
 module:
   inputs:
     - id: network
+      immutable: true
       label: VPC network
       mapped_inputs:
         - $template: ../../partials/templates/network-ref-mapped-inputs.yml
@@ -26,6 +27,7 @@ module:
     - default: <<project.given_id>>-<<environment.given_id>>
       description: Name prefix for all resources. Terraform requires 1-28 characters so generated ALB names fit AWS limits.
       id: name
+      immutable: true
       label: Name slug
       patterns:
         - message: The name must be 1-28 characters, contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.

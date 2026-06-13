@@ -7,7 +7,7 @@ resource "aws_db_instance" "this" {
 
   # Engine
   engine         = var.engine
-  engine_version = var.engine_version
+  engine_version = local.engine_version
   license_model  = var.license_model
 
   # Instance
