@@ -1435,8 +1435,8 @@ module:
       queue_size: 1
     infrastructure:
       ecs_cluster_arn: <<stack.output.service_cluster>>
-      ecs_service_arns:
-        - <<stack.output.service_arn>>
+      ecs_service_arn: <<stack.output.service_arn>>
+      ecs_target_group_arn: <<stack.output.target_group_arn>>
       # Load-balancer advanced configuration for native traffic-shift
       # strategies (blue_green / linear / canary). The deploy manager
       # attaches these to UpdateService loadBalancers[].advancedConfiguration
