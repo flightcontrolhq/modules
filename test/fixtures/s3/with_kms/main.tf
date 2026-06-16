@@ -71,10 +71,10 @@ resource "aws_kms_alias" "s3" {
 module "s3_bucket" {
   source = "../../../../storage/s3"
 
-  name               = var.name
-  force_destroy      = true # Enable for test cleanup
-  kms_key_id         = aws_kms_key.s3.arn
-  bucket_key_enabled = true
+  name                  = var.name
+  force_destroy_enabled = true # Enable for test cleanup
+  kms_key_id            = aws_kms_key.s3.arn
+  bucket_key_enabled    = true
 
   tags = local.common_tags
 }

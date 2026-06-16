@@ -97,8 +97,8 @@ locals {
 module "s3_bucket" {
   source = "../../../../storage/s3"
 
-  name          = var.name
-  force_destroy = true # Enable for test cleanup
+  name                  = var.name
+  force_destroy_enabled = true # Enable for test cleanup
 
   # Apply deny_insecure_transport policy template
   # This tests that custom_policy can be merged with policy_templates

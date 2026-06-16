@@ -15,9 +15,9 @@ module "ecr" {
   name = var.ecr_repository_name != null ? var.ecr_repository_name : var.name
   tags = var.tags
 
-  image_tag_mutability = var.ecr_image_tag_mutability
-  scan_on_push         = var.ecr_scan_on_push_enabled
-  force_delete         = var.ecr_force_deletion_enabled
+  image_tag_mutability       = var.ecr_image_tag_mutability
+  image_scan_on_push_enabled = var.ecr_scan_on_push_enabled
+  force_delete_enabled       = var.ecr_force_deletion_enabled
 
   default_lifecycle_policy_enabled = var.ecr_default_lifecycle_policy_enabled
 }

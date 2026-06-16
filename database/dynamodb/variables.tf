@@ -233,10 +233,10 @@ variable "deletion_protection_enabled" {
 
 variable "replicas" {
   type = list(object({
-    region_name            = string
-    kms_key_arn            = optional(string)
-    propagate_tags         = optional(bool, true)
-    point_in_time_recovery = optional(bool, true)
+    region_name                    = string
+    kms_key_arn                    = optional(string)
+    tag_propagation_enabled        = optional(bool, true)
+    point_in_time_recovery_enabled = optional(bool, true)
   }))
   description = "List of replica regions for a global table (v2). Requires stream_enabled = true."
   default     = []

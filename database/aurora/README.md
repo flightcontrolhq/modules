@@ -350,21 +350,21 @@ module "aurora" {
 | http_endpoint_enabled | Enable HTTP endpoint (Data API) for the Aurora cluster. | `bool` | `false` | no |
 | local_write_forwarding_enabled | Enable local write forwarding (Aurora MySQL only). | `bool` | `false` | no |
 | ca_certificate_identifier | The identifier of the CA certificate for the DB instances. | `string` | `null` | no |
-| apply_immediately | Apply cluster modifications immediately. | `bool` | `false` | no |
+| immediate_apply_enabled | Apply cluster modifications immediately. | `bool` | `false` | no |
 | deletion_protection_enabled | Enable deletion protection. | `bool` | `true` | no |
 | availability_zones | List of EC2 Availability Zones for the DB cluster. | `list(string)` | `[]` | no |
-| publicly_accessible | Whether instances are publicly accessible. | `bool` | `false` | no |
+| public_access_enabled | Whether instances are publicly accessible. | `bool` | `false` | no |
 | db_subnet_group_name | Existing DB subnet group name. | `string` | `null` | no |
 | security_group_creation_enabled | Whether to create a new security group. | `bool` | `true` | no |
 | security_group_id | Existing security group ID to use. | `string` | `null` | no |
 | security_group_ids | Additional security group IDs to attach. | `list(string)` | `[]` | no |
 | allowed_security_group_ids | Security group IDs allowed to access the cluster. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the cluster. | `list(string)` | `[]` | no |
-| master_password | Master password (required when manage_master_user_password is false). | `string` | `null` | no |
-| manage_master_user_password | Use Secrets Manager for master password. | `bool` | `true` | no |
+| master_password | Master password (required when master_user_password_management_enabled is false). | `string` | `null` | no |
+| master_user_password_management_enabled | Use Secrets Manager for master password. | `bool` | `true` | no |
 | master_user_secret_kms_key_id | KMS key ARN for the Secrets Manager secret. | `string` | `null` | no |
 | iam_database_authentication_enabled | Enable IAM database authentication. | `bool` | `false` | no |
-| storage_encrypted | Enable encryption at rest. | `bool` | `true` | no |
+| storage_encryption_enabled | Enable encryption at rest. | `bool` | `true` | no |
 | kms_key_id | KMS key ARN for storage encryption. | `string` | `null` | no |
 | reader_count | Number of reader instances (0-15). | `number` | `1` | no |
 | reader_instance_class | Instance class for readers (defaults to instance_class). | `string` | `null` | no |
@@ -373,15 +373,15 @@ module "aurora" {
 | promotion_tier | Default failover priority for instances (0-15). | `number` | `null` | no |
 | backup_retention_period | Days to retain automated backups (1-35). | `number` | `7` | no |
 | preferred_backup_window | Daily backup window (HH:MM-HH:MM in UTC). | `string` | `null` | no |
-| copy_tags_to_snapshot | Copy tags to snapshots. | `bool` | `true` | no |
-| skip_final_snapshot | Skip final snapshot on deletion. | `bool` | `false` | no |
+| snapshot_tag_copying_enabled | Copy tags to snapshots. | `bool` | `true` | no |
+| final_snapshot_creation_enabled | Create a final snapshot on deletion. | `bool` | `true` | no |
 | final_snapshot_identifier | Name for the final snapshot. | `string` | `null` | no |
 | snapshot_identifier | Snapshot ID to restore from. | `string` | `null` | no |
 | restore_to_point_in_time | Point-in-time recovery configuration. | `object` | `null` | no |
 | backtrack_window | Backtrack window in seconds (0-259200, Aurora MySQL only). | `number` | `0` | no |
 | preferred_maintenance_window | Weekly maintenance window (ddd:HH:MM-ddd:HH:MM). | `string` | `null` | no |
-| allow_major_version_upgrade | Allow major engine version upgrades. | `bool` | `false` | no |
-| auto_minor_version_upgrade | Enable automatic minor version upgrades. | `bool` | `true` | no |
+| major_version_upgrade_enabled | Allow major engine version upgrades. | `bool` | `false` | no |
+| minor_version_auto_upgrade_enabled | Enable automatic minor version upgrades. | `bool` | `true` | no |
 | cluster_parameter_group_creation_enabled | Whether to create a cluster parameter group. | `bool` | `true` | no |
 | cluster_parameter_group_name | Existing cluster parameter group name. | `string` | `null` | no |
 | cluster_parameter_group_family | Cluster parameter group family (auto-derived if not set). | `string` | `null` | no |

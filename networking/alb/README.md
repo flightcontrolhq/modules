@@ -62,7 +62,7 @@ module "alb" {
   name       = "internal"
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
-  internal   = true
+  internal_load_balancer_enabled   = true
 
   https_listener_enabled = true
   certificate_arns      = [aws_acm_certificate.internal.arn]
@@ -250,13 +250,13 @@ spec:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| internal | If true, the ALB will be internal (not internet-facing) | `bool` | `false` | no |
+| internal_load_balancer_enabled | If true, the ALB will be internal_load_balancer_enabled (not internet-facing) | `bool` | `false` | no |
 | deletion_protection_enabled | If true, the resource cannot be deleted via the AWS API until this is set to false | `bool` | `true` | no |
 | idle_timeout | The time in seconds that the connection is allowed to be idle (1-4000) | `number` | `60` | no |
 | http2_enabled | Enable HTTP/2 on the ALB | `bool` | `true` | no |
-| drop_invalid_header_fields | Drop HTTP headers with invalid header fields | `bool` | `true` | no |
+| invalid_header_drop_enabled | Drop HTTP headers with invalid header fields | `bool` | `true` | no |
 | desync_mitigation_mode | How the ALB handles HTTP desync requests (monitor/defensive/strictest) | `string` | `"defensive"` | no |
-| preserve_host_header | Preserve the Host header in the HTTP request | `bool` | `false` | no |
+| host_header_preservation_enabled | Preserve the Host header in the HTTP request | `bool` | `false` | no |
 | xff_header_processing_mode | How the ALB modifies the X-Forwarded-For header (append/preserve/remove) | `string` | `"append"` | no |
 | waf_fail_open_enabled | Allow traffic when WAF is unavailable | `bool` | `false` | no |
 
@@ -390,13 +390,13 @@ spec:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │         NETWORK                 │   │          ALB SETTINGS                   │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal_load_balancer_enabled                              │  ║
 ║  │ • tags                      │   │ • subnet_ids (required, min 2)  │   │ • deletion_protection_enabled                   │  ║
 ║  └──────────────┬──────────────┘   └─────────────────────────────────┘   │ • idle_timeout                          │  ║
 ║                 │                                                         │ • http2_enabled                          │  ║
-║                 │                                                         │ • drop_invalid_header_fields            │  ║
+║                 │                                                         │ • invalid_header_drop_enabled            │  ║
 ║                 │                                                         │ • desync_mitigation_mode                │  ║
-║                 │                                                         │ • preserve_host_header                  │  ║
+║                 │                                                         │ • host_header_preservation_enabled                  │  ║
 ║                 │                                                         │ • xff_header_processing_mode            │  ║
 ║                 │                                                         │ • waf_fail_open_enabled                  │  ║
 ║                 │                                                         └─────────────────────────────────────────┘  ║
@@ -464,10 +464,10 @@ spec:
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
 ║    │                                                                                                              │    ║
 ║    │  Attributes:                                                                                                 │    ║
-║    │  • name, internal, load_balancer_type = "application"                                                        │    ║
+║    │  • name, internal_load_balancer_enabled, load_balancer_type = "application"                                                        │    ║
 ║    │  • security_groups = [module.security_group.security_group_id]                                               │    ║
-║    │  • subnets, idle_timeout, http2_enabled, drop_invalid_header_fields                                           │    ║
-║    │  • desync_mitigation_mode, preserve_host_header, xff_header_processing_mode                                  │    ║
+║    │  • subnets, idle_timeout, http2_enabled, invalid_header_drop_enabled                                           │    ║
+║    │  • desync_mitigation_mode, host_header_preservation_enabled, xff_header_processing_mode                                  │    ║
 ║    │  • waf_fail_open_enabled, deletion_protection_enabled                                                                 │    ║
 ║    │                                                                                                              │    ║
 ║    │  ┌─────────────────────────────┐                                                                             │    ║
@@ -574,7 +574,7 @@ spec:
 ║                                                  │                                                                    ║
 ║                                                  ▼                                                                    ║
 ║                              ┌───────────────────────────────────────────────────────────┐                             ║
-║  var.internal ──────────────►│                                                           │                             ║
+║  var.internal_load_balancer_enabled ──────────────►│                                                           │                             ║
 ║  var.subnet_ids ────────────►│                                                           │                             ║
 ║  var.idle_timeout ──────────►│                                                           │                             ║
 ║  var.http2_enabled ──────────►│                                                           │                             ║
@@ -794,7 +794,7 @@ resource "aws_security_group_rule" "ecs_from_alb" {
 ## Security Considerations
 
 - **TLS 1.3**: The default SSL policy (`ELBSecurityPolicy-TLS13-1-2-2021-06`) enforces TLS 1.2 or 1.3.
-- **Invalid Headers**: `drop_invalid_header_fields` is enabled by default to prevent HTTP header injection attacks.
+- **Invalid Headers**: `invalid_header_drop_enabled` is enabled by default to prevent HTTP header injection attacks.
 - **Desync Protection**: `desync_mitigation_mode` is set to `defensive` by default to protect against HTTP desync attacks.
 - **WAF Integration**: Optionally attach a WAFv2 Web ACL for additional protection.
 - **Access Logs Encryption**: When creating access logs bucket, encryption is enabled (AES256 by default, KMS optional).

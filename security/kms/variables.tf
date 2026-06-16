@@ -70,7 +70,7 @@ variable "key_usage" {
   }
 }
 
-variable "multi_region" {
+variable "multi_region_enabled" {
   type        = bool
   description = "Whether to create the key as a multi-region primary key (replicas can later be created via aws_kms_replica_key)."
   default     = false

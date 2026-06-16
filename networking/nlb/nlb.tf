@@ -4,7 +4,7 @@
 
 resource "aws_lb" "this" {
   name               = var.name
-  internal           = var.internal
+  internal           = var.internal_load_balancer_enabled
   load_balancer_type = "network"
   subnets            = var.elastic_ips_enabled ? null : var.subnet_ids
 

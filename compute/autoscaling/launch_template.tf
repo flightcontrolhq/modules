@@ -250,8 +250,8 @@ resource "aws_launch_template" "this" {
   dynamic "private_dns_name_options" {
     for_each = var.launch_template.private_dns_name_options != null ? [var.launch_template.private_dns_name_options] : []
     content {
-      enable_resource_name_dns_aaaa_record = private_dns_name_options.value.enable_resource_name_dns_aaaa_record
-      enable_resource_name_dns_a_record    = private_dns_name_options.value.enable_resource_name_dns_a_record
+      enable_resource_name_dns_aaaa_record = private_dns_name_options.value.resource_name_dns_aaaa_record_enabled
+      enable_resource_name_dns_a_record    = private_dns_name_options.value.resource_name_dns_a_record_enabled
       hostname_type                        = private_dns_name_options.value.hostname_type
     }
   }

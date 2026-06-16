@@ -26,7 +26,7 @@ module "security_group" {
   description = "Security group for web servers"
   vpc_id      = "vpc-12345678"
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = [
     {
@@ -158,7 +158,7 @@ module "alb_sg" {
   description = "Security group for Application Load Balancer"
   vpc_id      = "vpc-12345678"
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = [
     # HTTP from anywhere (IPv4)
@@ -208,11 +208,11 @@ module "cluster_sg" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "my-cluster"
-  name_suffix = "internal"
-  description = "Security group for cluster internal communication"
+  name_suffix = "internal_load_balancer_enabled"
+  description = "Security group for cluster internal_load_balancer_enabled communication"
   vpc_id      = "vpc-12345678"
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = [
     {
@@ -241,7 +241,7 @@ module "ecs_service_sg" {
   description = "Security group for ECS service"
   vpc_id      = "vpc-12345678"
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = [
     {
@@ -294,8 +294,8 @@ module "ecs_service_sg" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | egress_rules | List of egress rules with port range, protocol, and destination | `list(object)` | `[]` | no |
-| allow_all_egress | Create default egress rules allowing all outbound traffic | `bool` | `false` | no |
-| allow_all_egress_ipv4_only | Only create IPv4 egress rule when allow_all_egress is true | `bool` | `false` | no |
+| all_egress_enabled | Create default egress rules allowing all outbound traffic | `bool` | `false` | no |
+| ipv4_only_egress_enabled | Only create IPv4 egress rule when all_egress_enabled is true | `bool` | `false` | no |
 
 ### Rule Object Attributes
 
@@ -383,8 +383,8 @@ module "ecs_service_sg" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │         NETWORK                 │   │       DEFAULT EGRESS                    │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • allow_all_egress                      │  ║
-║  │ • name_suffix               │   │                                 │   │ • allow_all_egress_ipv4_only            │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • all_egress_enabled                      │  ║
+║  │ • name_suffix               │   │                                 │   │ • ipv4_only_egress_enabled            │  ║
 ║  │ • description               │   │                                 │   │                                         │  ║
 ║  │ • tags                      │   │                                 │   │                                         │  ║
 ║  └──────────────┬──────────────┘   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
@@ -459,7 +459,7 @@ module "ecs_service_sg" {
 ║                                                                                                                        ║
 ║                   ┌───────────────────────────────────────────────────────────────────┐                                ║
 ║                   │                    DEFAULT EGRESS RULES                           │                                ║
-║                   │              (conditional: allow_all_egress = true)               │                                ║
+║                   │              (conditional: all_egress_enabled = true)               │                                ║
 ║                   └───────────────────────────────────────────────────────────────────┘                                ║
 ║                                                               │                                                        ║
 ║                   ┌───────────────────────────────────────────┴───────────────────────────────────────┐                ║
@@ -541,8 +541,8 @@ module "ecs_service_sg" {
 ║  (for_each)                                               │                                      .this (for_each)      ║
 ║           │                                               │                                               │            ║
 ║           │                                               │                                               │            ║
-║           │                              var.allow_all_egress                                             │            ║
-║           │                              var.allow_all_egress_ipv4_only                                   │            ║
+║           │                              var.all_egress_enabled                                             │            ║
+║           │                              var.ipv4_only_egress_enabled                                   │            ║
 ║           │                                               │                                               │            ║
 ║           │                                               ▼                                               │            ║
 ║           │                              ┌────────────────────────────────┐                               │            ║
@@ -633,18 +633,18 @@ ingress_rules = [
 
 This allows any instance with this security group to communicate with any other instance that also has this security group.
 
-### What is the difference between `allow_all_egress` and explicit egress rules?
+### What is the difference between `all_egress_enabled` and explicit egress rules?
 
 | Approach | Use Case |
 |----------|----------|
-| `allow_all_egress = true` | General-purpose workloads that need internet access (web servers, app servers) |
-| Explicit `egress_rules` | Locked-down resources (databases, internal services) that should only reach specific destinations |
+| `all_egress_enabled = true` | General-purpose workloads that need internet access (web servers, app servers) |
+| Explicit `egress_rules` | Locked-down resources (databases, internal_load_balancer_enabled services) that should only reach specific destinations |
 
 **Example: Locked-down database:**
 
 ```hcl
 # Database should only talk to the VPC, not the internet
-allow_all_egress = false
+all_egress_enabled = false
 
 egress_rules = [
   {
@@ -708,4 +708,4 @@ Terraform will automatically determine the correct dependency order.
 - Port values must be between -1 and 65535.
 - CIDR blocks are validated to ensure proper format.
 - Security group IDs must start with `sg-` and prefix list IDs must start with `pl-`.
-- When `allow_all_egress = true` and `allow_all_egress_ipv4_only = false`, both IPv4 and IPv6 egress rules are created.
+- When `all_egress_enabled = true` and `ipv4_only_egress_enabled = false`, both IPv4 and IPv6 egress rules are created.

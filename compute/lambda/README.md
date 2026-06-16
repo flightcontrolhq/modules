@@ -59,7 +59,7 @@ module "edge_lambda" {
   lambda_at_edge_enabled = true
 
   package_type = "Zip"
-  publish      = true
+  version_publishing_enabled      = true
   runtime      = "nodejs20.x"
   handler      = "index.handler"
   s3_bucket    = "my-lambda-artifacts"
@@ -126,7 +126,7 @@ module "lambda_with_integrations" {
 | tags | Tags to assign to all resources | `map(string)` | `{}` | no |
 | package_type | Package type (`Zip` or `Image`) | `string` | `"Zip"` | no |
 | architectures | Lambda architectures | `list(string)` | `["x86_64"]` | no |
-| publish | Publish a version on update | `bool` | `false` | no |
+| version_publishing_enabled | Publish a version on update | `bool` | `false` | no |
 | handler | Function handler (Zip only) | `string` | `null` | no |
 | runtime | Function runtime (Zip only) | `string` | `null` | no |
 | filename | Local ZIP package path | `string` | `null` | no |

@@ -11,8 +11,8 @@ module "public_alb" {
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.public_subnet_ids
-  internal   = false
+  subnet_ids                     = var.public_subnet_ids
+  internal_load_balancer_enabled = false
 
   # Listener configuration
   http_listener_enabled          = true
@@ -51,8 +51,8 @@ module "private_alb" {
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.private_subnet_ids
-  internal   = true
+  subnet_ids                     = var.private_subnet_ids
+  internal_load_balancer_enabled = true
 
   # Listener configuration
   http_listener_enabled          = true
@@ -88,8 +88,8 @@ module "public_nlb" {
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.public_subnet_ids
-  internal   = false
+  subnet_ids                     = var.public_subnet_ids
+  internal_load_balancer_enabled = false
 
   # NLB settings
   deletion_protection_enabled       = var.load_balancer_deletion_protection_enabled
@@ -120,8 +120,8 @@ module "private_nlb" {
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.private_subnet_ids
-  internal   = true
+  subnet_ids                     = var.private_subnet_ids
+  internal_load_balancer_enabled = true
 
   # NLB settings
   deletion_protection_enabled       = var.load_balancer_deletion_protection_enabled

@@ -241,8 +241,8 @@ module "redis" {
 | snapshot_window | The daily time range for automated backups (HH:MM-HH:MM). | `string` | `null` | no |
 | final_snapshot_identifier | The name of the final snapshot on deletion. | `string` | `null` | no |
 | maintenance_window | The weekly maintenance window (ddd:HH:MM-ddd:HH:MM). | `string` | `null` | no |
-| apply_immediately | Whether to apply changes immediately. | `bool` | `false` | no |
-| auto_minor_version_upgrade | Enable automatic minor version upgrades. | `bool` | `true` | no |
+| immediate_apply_enabled | Whether to apply changes immediately. | `bool` | `false` | no |
+| minor_version_auto_upgrade_enabled | Enable automatic minor version upgrades. | `bool` | `true` | no |
 | parameter_group_family | The family of the parameter group. | `string` | `null` (auto-detected) | no |
 | parameters | A list of parameter name/value pairs. | `list(object)` | `[]` | no |
 | notification_topic_arn | The ARN of an SNS topic for notifications. | `string` | `null` | no |

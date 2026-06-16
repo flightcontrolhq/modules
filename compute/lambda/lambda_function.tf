@@ -8,7 +8,7 @@ resource "aws_lambda_function" "this" {
   role          = local.lambda_role_arn
 
   package_type = var.package_type
-  publish      = var.publish
+  publish      = var.version_publishing_enabled
 
   architectures                  = var.architectures
   memory_size                    = var.memory_size
@@ -90,7 +90,7 @@ resource "aws_lambda_function" "this" {
       condition = (
         !var.lambda_at_edge_enabled ||
         (
-          var.publish &&
+          var.version_publishing_enabled &&
           var.package_type == "Zip" &&
           var.vpc_config == null &&
           length(var.environment_variables) == 0 &&

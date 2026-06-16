@@ -50,7 +50,7 @@ variable "name" {
 # Bucket Configuration
 #-------------------------------------------------------------------------------
 
-variable "force_destroy" {
+variable "force_destroy_enabled" {
   type        = bool
   description = "Whether to force destroy the bucket even if it contains objects. Use with caution."
   default     = false

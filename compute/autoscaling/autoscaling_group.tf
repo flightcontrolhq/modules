@@ -16,16 +16,16 @@ resource "aws_autoscaling_group" "this" {
   default_instance_warmup = var.default_instance_warmup
 
   # Instance protection and lifecycle
-  protect_from_scale_in = var.protect_from_scale_in
+  protect_from_scale_in = var.scale_in_protection_enabled
   max_instance_lifetime = var.max_instance_lifetime
-  force_delete          = var.force_delete
+  force_delete          = var.force_delete_enabled
 
   # Health checks
   health_check_type         = var.health_check_type
   health_check_grace_period = var.health_check_grace_period
 
   # Capacity and scaling behavior
-  capacity_rebalance   = var.capacity_rebalance
+  capacity_rebalance   = var.capacity_rebalance_enabled
   termination_policies = var.termination_policies
   suspended_processes  = var.suspended_processes
 
@@ -279,7 +279,7 @@ resource "aws_autoscaling_group" "this" {
     content {
       key                 = tag.key
       value               = tag.value
-      propagate_at_launch = var.propagate_tags_at_launch
+      propagate_at_launch = var.tag_propagation_at_launch_enabled
     }
   }
 

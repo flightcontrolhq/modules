@@ -31,7 +31,7 @@ resource "aws_eks_node_group" "this" {
     max_unavailable_percentage = var.max_unavailable == null ? var.max_unavailable_percentage : null
   }
 
-  force_update_version = var.force_update_version
+  force_update_version = var.version_force_update_enabled
 
   dynamic "launch_template" {
     for_each = local.create_launch_template ? [1] : []

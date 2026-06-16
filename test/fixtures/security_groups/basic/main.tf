@@ -93,7 +93,7 @@ module "security_group" {
   ]
 
   # Allow all outbound traffic
-  allow_all_egress = true
+  all_egress_enabled = true
 
   tags = local.common_tags
 }

@@ -87,7 +87,7 @@ module "security_group" {
   ]
 
   # Custom egress rules (not allow-all)
-  allow_all_egress = false
+  all_egress_enabled = false
 
   egress_rules = [
     {

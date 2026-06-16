@@ -51,7 +51,7 @@ locals {
       viewer_protocol_policy       = "redirect-to-https"
       allowed_methods              = ["GET", "HEAD", "OPTIONS"]
       cached_methods               = ["GET", "HEAD"]
-      compress                     = true
+      compression_enabled          = true
       cache_policy_id              = local.managed_cache_disabled_id
       origin_request_policy_id     = var.origin_request_policy_id
       response_headers_policy_id   = local.effective_response_headers_policy_id

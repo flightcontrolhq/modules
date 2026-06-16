@@ -17,7 +17,7 @@ resource "aws_rds_cluster_instance" "this" {
 
   # Network
   db_subnet_group_name = local.db_subnet_group_name
-  publicly_accessible  = coalesce(each.value.publicly_accessible, var.publicly_accessible)
+  publicly_accessible  = coalesce(each.value.public_access_enabled, var.public_access_enabled)
   availability_zone    = each.value.availability_zone
 
   # Parameter Group
@@ -33,8 +33,8 @@ resource "aws_rds_cluster_instance" "this" {
   performance_insights_kms_key_id       = coalesce(each.value.performance_insights_enabled, var.performance_insights_enabled) ? var.performance_insights_kms_key_id : null
 
   # Maintenance
-  auto_minor_version_upgrade = var.auto_minor_version_upgrade
-  apply_immediately          = var.apply_immediately
+  auto_minor_version_upgrade = var.minor_version_auto_upgrade_enabled
+  apply_immediately          = var.immediate_apply_enabled
 
   # Certificate
   ca_cert_identifier = var.ca_certificate_identifier
@@ -43,7 +43,7 @@ resource "aws_rds_cluster_instance" "this" {
   promotion_tier = coalesce(each.value.promotion_tier, var.promotion_tier, 0)
 
   # Snapshots
-  copy_tags_to_snapshot = var.copy_tags_to_snapshot
+  copy_tags_to_snapshot = var.snapshot_tag_copying_enabled
 
   tags = merge(local.tags, {
     Name = "${var.name}-${each.key}"

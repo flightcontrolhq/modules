@@ -353,13 +353,13 @@ variable "maintenance_window" {
   }
 }
 
-variable "apply_immediately" {
+variable "immediate_apply_enabled" {
   type        = bool
   description = "Whether to apply changes immediately or during the next maintenance window."
   default     = false
 }
 
-variable "auto_minor_version_upgrade" {
+variable "minor_version_auto_upgrade_enabled" {
   type        = bool
   description = "Enable automatic minor version upgrades during the maintenance window."
   default     = true
