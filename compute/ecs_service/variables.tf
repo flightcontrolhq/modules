@@ -344,7 +344,30 @@ variable "test_header_name" {
 
 variable "test_header_value" {
   type        = string
-  description = "Value paired with test_header_name for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true."
+  description = "Value paired with test_header_name for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"header\"."
+  default     = "1"
+}
+
+variable "test_traffic_condition_type" {
+  type        = string
+  description = "Which request attribute distinguishes test traffic for the green listener rule: \"header\" (matches test_header_name/test_header_value) or \"query-string\" (matches test_query_string_key/test_query_string_value). ALB AND-combines conditions within a single rule and ECS native blue/green wires exactly one test rule, so the selector is one type per service, not both at once. Only used when green_alb_listener_rule_enabled is true."
+  default     = "query-string"
+
+  validation {
+    condition     = contains(["header", "query-string"], var.test_traffic_condition_type)
+    error_message = "test_traffic_condition_type must be either \"header\" or \"query-string\"."
+  }
+}
+
+variable "test_query_string_key" {
+  type        = string
+  description = "Query-string key that distinguishes test traffic for the green listener rule (e.g. \"__x-rvn-test__\" matches ?__x-rvn-test__=...). Requests carrying this key/value match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"query-string\"."
+  default     = "__x-rvn-test__"
+}
+
+variable "test_query_string_value" {
+  type        = string
+  description = "Value paired with test_query_string_key for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"query-string\"."
   default     = "1"
 }
 

@@ -319,7 +319,13 @@ module "worker_service" {
 | desired_count | Desired number of tasks (0 for infrastructure-first) | `number` | `0` | no |
 | deployment_type | Create-time seed for the deployment strategy (rolling, blue_green, linear, canary); the strategy itself is set per deployment via UpdateService | `string` | `"rolling"` | no |
 | deployment_strategy_config | Initial bake/canary/linear tuning for native traffic-shift strategies (seed only — the deploy manager owns it per-deploy) | `object` | `{}` | no |
-| test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation | `string` | `null` | no |
+| test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation (takes precedence over green_alb_listener_rule_enabled) | `string` | `null` | no |
+| green_alb_listener_rule_enabled | Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments, so the new revision can be validated before production traffic shifts. ALB-only; no effect for NLB services | `bool` | `true` | no |
+| test_traffic_condition_type | Which request attribute distinguishes test traffic for the green rule: `header` (test_header_name/value) or `query-string` (test_query_string_key/value). One type per service — ALB AND-combines conditions and ECS wires exactly one test rule, so genuine "header OR query-string" matching is not possible natively | `string` | `"query-string"` | no |
+| test_header_name | HTTP header name that routes test traffic to the green target group when test_traffic_condition_type is `header` | `string` | `"X-Ravion-Test"` | no |
+| test_header_value | Value paired with test_header_name when test_traffic_condition_type is `header` | `string` | `"1"` | no |
+| test_query_string_key | Query-string key that routes test traffic to the green target group when test_traffic_condition_type is `query-string` (e.g. `?__x-rvn-test__=1`) | `string` | `"__x-rvn-test__"` | no |
+| test_query_string_value | Value paired with test_query_string_key when test_traffic_condition_type is `query-string` | `string` | `"1"` | no |
 | deployment_minimum_healthy_percent | Minimum healthy percent during deployment | `number` | `100` | no |
 | deployment_maximum_percent | Maximum percent during deployment | `number` | `200` | no |
 | execute_command_enabled | Enable ECS Exec for debugging | `bool` | `false` | no |

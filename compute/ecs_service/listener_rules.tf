@@ -156,13 +156,30 @@ resource "aws_lb_listener_rule" "test" {
     }
   }
 
-  # Distinguishing condition: only requests carrying the test header reach
-  # the green target group. Combined with the mirrored production
-  # conditions below, normal (header-less) traffic still matches production.
-  condition {
-    http_header {
-      http_header_name = var.test_header_name
-      values           = [var.test_header_value]
+  # Distinguishing condition: only requests carrying the configured test
+  # selector reach the green target group. The selector is a header or a
+  # query string (test_traffic_condition_type) — ALB AND-combines all
+  # conditions on a rule and ECS native blue/green drives exactly one test
+  # rule, so it is one type per service, not both at once. Combined with the
+  # mirrored production conditions below, normal traffic still matches
+  # production.
+  dynamic "condition" {
+    for_each = var.test_traffic_condition_type == "header" ? [1] : []
+    content {
+      http_header {
+        http_header_name = var.test_header_name
+        values           = [var.test_header_value]
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = var.test_traffic_condition_type == "query-string" ? [1] : []
+    content {
+      query_string {
+        key   = var.test_query_string_key
+        value = var.test_query_string_value
+      }
     }
   }
 

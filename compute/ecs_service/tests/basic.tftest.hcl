@@ -241,6 +241,60 @@ run "blue_green_deployment" {
     condition     = length(aws_lb_listener_rule.alb["0"].action[0].forward) == 0
     error_message = "Without target-group stickiness the rule should use a plain forward (no group-stickiness block)"
   }
+
+  assert {
+    condition     = length([for c in aws_lb_listener_rule.test[0].condition : c if length([for q in c.query_string : q if q.key == "__x-rvn-test__" && q.value == "1"]) > 0]) == 1
+    error_message = "Test (green) rule should distinguish traffic by the __x-rvn-test__ query string by default"
+  }
+
+  assert {
+    condition     = length([for c in aws_lb_listener_rule.test[0].condition : c if length(c.http_header) > 0]) == 0
+    error_message = "Default (query-string) selector should not emit an http_header condition on the test rule"
+  }
+}
+
+################################################################################
+# Test: Header selector for the green test rule
+#
+# test_traffic_condition_type = "header" swaps the distinguishing test
+# condition from the default query string to an HTTP header so requests
+# carrying <name>:<value> reach the green target group.
+################################################################################
+
+run "green_rule_header_selector" {
+  command = plan
+
+  variables {
+    deployment_type             = "blue_green"
+    container_port              = 8080
+    test_traffic_condition_type = "header"
+    test_header_name            = "X-Ravion-Test"
+    test_header_value           = "1"
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+      }
+      listener_rules = [{
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+        priority     = 100
+        conditions = [{
+          type   = "host-header"
+          values = ["api.example.com"]
+        }]
+      }]
+    }
+  }
+
+  assert {
+    condition     = length([for c in aws_lb_listener_rule.test[0].condition : c if length(c.http_header) > 0 && c.http_header[0].http_header_name == "X-Ravion-Test"]) == 1
+    error_message = "Test (green) rule should distinguish traffic by the X-Ravion-Test header when selector is header"
+  }
+
+  assert {
+    condition     = length([for c in aws_lb_listener_rule.test[0].condition : c if length(c.query_string) > 0]) == 0
+    error_message = "Header selector should not emit a query-string condition on the test rule"
+  }
 }
 
 ################################################################################
