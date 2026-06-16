@@ -70,13 +70,13 @@ variable "subnet_ids" {
   }
 }
 
-variable "endpoint_public_access" {
+variable "public_endpoint_access_enabled" {
   type        = bool
   description = "Whether the EKS API server endpoint is reachable from the public internet."
   default     = false
 }
 
-variable "endpoint_private_access" {
+variable "private_endpoint_access_enabled" {
   type        = bool
   description = "Whether the EKS API server endpoint is reachable from inside the VPC."
   default     = true
@@ -84,7 +84,7 @@ variable "endpoint_private_access" {
 
 variable "public_access_cidrs" {
   type        = list(string)
-  description = "CIDR blocks allowed to reach the public EKS API server endpoint. Only applies when endpoint_public_access is true."
+  description = "CIDR blocks allowed to reach the public EKS API server endpoint. Only applies when public_endpoint_access_enabled is true."
   default     = ["0.0.0.0/0"]
 
   validation {
@@ -143,7 +143,7 @@ variable "additional_cluster_security_group_ingress_sg" {
 # Access
 ################################################################################
 
-variable "bootstrap_cluster_creator_admin_permissions" {
+variable "cluster_creator_admin_permissions_enabled" {
   type        = bool
   description = "Whether to grant the IAM principal that creates the cluster the EKS cluster admin permissions automatically. AWS recommends managing access via aws_eks_access_entry instead."
   default     = true

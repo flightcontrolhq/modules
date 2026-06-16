@@ -50,7 +50,7 @@ variable "architectures" {
   }
 }
 
-variable "publish" {
+variable "version_publishing_enabled" {
   type        = bool
   description = "Whether to publish a new Lambda version on each update."
   default     = false
@@ -104,7 +104,7 @@ variable "code_bucket_name" {
   default     = null
 }
 
-variable "code_bucket_force_destroy" {
+variable "code_bucket_force_destroy_enabled" {
   type        = bool
   description = "Whether the auto-created code bucket should be force-destroyed. Use with caution."
   default     = false

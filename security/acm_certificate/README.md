@@ -7,7 +7,7 @@ Requests an AWS Certificate Manager (ACM) **public** certificate using **DNS val
 - DNS validation (`aws_acm_certificate` with `validation_method = DNS`)
 - **Default**: output `validation_records` (CNAME name, type, value per domain); no Route53 resources; no blocking wait
 - **Optional**: `route53_validation_records_creation_enabled` + `route53_zone_id` to create validation CNAMEs in a single Route53 public hosted zone
-- **Optional**: `wait_for_validation` to add `aws_acm_certificate_validation` (apply waits until the certificate is **ISSUED**)
+- **Optional**: `certificate_validation_wait_enabled` to add `aws_acm_certificate_validation` (apply waits until the certificate is **ISSUED**)
 - Optional Subject Alternative Names (SANs)
 - Tags and `create_before_destroy` lifecycle on the certificate
 
@@ -30,11 +30,11 @@ module "cert" {
   domain_name = "api.example.com"
 
   # route53_validation_records_creation_enabled = false # default
-  # wait_for_validation                          = false # default
+  # certificate_validation_wait_enabled          = false # default
 }
 
 # After apply: add module.cert.validation_records at your DNS provider, then optionally
-# set wait_for_validation = true (and/or route53_validation_records_creation_enabled) and apply again.
+# set certificate_validation_wait_enabled = true (and/or route53_validation_records_creation_enabled) and apply again.
 ```
 
 ### Full automation — Route53 records + wait for issuance
@@ -49,7 +49,7 @@ module "cert" {
   domain_name                                 = "api.example.com"
   route53_validation_records_creation_enabled = true
   route53_zone_id                             = aws_route53_zone.primary.zone_id
-  wait_for_validation                         = true
+  certificate_validation_wait_enabled         = true
 
   tags = {
     Environment = "production"
@@ -118,7 +118,7 @@ Ensure the certificate is **ISSUED** before the ALB listener depends on a fully 
 | tags | Tags for the ACM certificate | `map(string)` | `{}` | no |
 | route53_validation_records_creation_enabled | Create Route53 CNAME validation records | `bool` | `false` | no |
 | route53_zone_id | Route53 public hosted zone ID (required if `route53_validation_records_creation_enabled` is true) | `string` | `null` | no |
-| wait_for_validation | Create `aws_acm_certificate_validation` and wait until issued | `bool` | `false` | no |
+| certificate_validation_wait_enabled | Create `aws_acm_certificate_validation` and wait until issued | `bool` | `false` | no |
 
 ## Outputs
 

@@ -11,7 +11,7 @@ output "zone_arn" {
   description = "The ARN of the Route53 hosted zone (null when referencing an existing zone)."
   value = (
     local.create_public_zone ? aws_route53_zone.public[0].arn :
-    var.zone_creation_enabled && var.private_zone ? aws_route53_zone.private[0].arn :
+    var.zone_creation_enabled && var.private_zone_enabled ? aws_route53_zone.private[0].arn :
     null
   )
 }
@@ -20,7 +20,7 @@ output "zone_name" {
   description = "The name of the Route53 hosted zone."
   value = (
     local.create_public_zone ? aws_route53_zone.public[0].name :
-    var.zone_creation_enabled && var.private_zone ? aws_route53_zone.private[0].name :
+    var.zone_creation_enabled && var.private_zone_enabled ? aws_route53_zone.private[0].name :
     data.aws_route53_zone.existing[0].name
   )
 }
@@ -29,7 +29,7 @@ output "name_servers" {
   description = "The name servers assigned to the hosted zone (empty for private zones)."
   value = (
     local.create_public_zone ? aws_route53_zone.public[0].name_servers :
-    var.zone_creation_enabled && var.private_zone ? aws_route53_zone.private[0].name_servers :
+    var.zone_creation_enabled && var.private_zone_enabled ? aws_route53_zone.private[0].name_servers :
     data.aws_route53_zone.existing[0].name_servers
   )
 }
@@ -38,14 +38,14 @@ output "primary_name_server" {
   description = "The primary name server of the hosted zone."
   value = (
     local.create_public_zone ? aws_route53_zone.public[0].primary_name_server :
-    var.zone_creation_enabled && var.private_zone ? aws_route53_zone.private[0].primary_name_server :
+    var.zone_creation_enabled && var.private_zone_enabled ? aws_route53_zone.private[0].primary_name_server :
     data.aws_route53_zone.existing[0].primary_name_server
   )
 }
 
 output "is_private_zone" {
   description = "Whether the hosted zone is a private zone."
-  value       = var.zone_creation_enabled ? var.private_zone : data.aws_route53_zone.existing[0].private_zone
+  value       = var.zone_creation_enabled ? var.private_zone_enabled : data.aws_route53_zone.existing[0].private_zone
 }
 
 ################################################################################

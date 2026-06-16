@@ -35,7 +35,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -101,7 +101,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-assets.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     },
     {
       origin_id              = "alb-api"
@@ -154,7 +154,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-assets.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -230,7 +230,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -278,7 +278,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -339,7 +339,7 @@ module "cdn" {
 | origins[].connection_timeout | Connection timeout in seconds (1-10). | `number` | `null` | no |
 | origins[].custom_headers | List of custom headers to send to the origin. | `list(object({name, value}))` | `[]` | no |
 | origins[].origin_shield | Origin Shield configuration. | `object({enabled, origin_shield_region})` | `null` | no |
-| origins[].s3_origin | Whether this is an S3 origin (creates OAC). | `bool` | `false` | no |
+| origins[].s3_origin_enabled | Whether this is an S3 origin (creates OAC). | `bool` | `false` | no |
 
 ### Default Cache Behavior
 
@@ -350,12 +350,12 @@ module "cdn" {
 | default_cache_behavior.viewer_protocol_policy | Viewer protocol policy: `allow-all`, `https-only`, `redirect-to-https`. | `string` | n/a | yes |
 | default_cache_behavior.allowed_methods | HTTP methods to allow. | `list(string)` | `["GET", "HEAD"]` | no |
 | default_cache_behavior.cached_methods | HTTP methods to cache. | `list(string)` | `["GET", "HEAD"]` | no |
-| default_cache_behavior.compress | Whether to compress content. | `bool` | `true` | no |
+| default_cache_behavior.compression_enabled | Whether to compression_enabled content. | `bool` | `true` | no |
 | default_cache_behavior.cache_policy_id | Cache policy ID. | `string` | `null` | no |
 | default_cache_behavior.origin_request_policy_id | Origin request policy ID. | `string` | `null` | no |
 | default_cache_behavior.response_headers_policy_id | Response headers policy ID. | `string` | `null` | no |
 | default_cache_behavior.function_associations | CloudFront Function associations. | `list(object({event_type, function_arn}))` | `[]` | no |
-| default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, include_body}))` | `[]` | no |
+| default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, body_inclusion_enabled}))` | `[]` | no |
 | default_cache_behavior.realtime_log_config_arn | Real-time log configuration ARN. | `string` | `null` | no |
 
 ### Ordered Cache Behaviors
@@ -372,8 +372,8 @@ module "cdn" {
 | http_version | Maximum HTTP version: `http1.1`, `http2`, `http2and3`. | `string` | `"http2and3"` | no |
 | ipv6_enabled | Whether IPv6 is enabled. | `bool` | `true` | no |
 | default_root_object | Object returned for root URL requests (e.g., `index.html`). | `string` | `null` | no |
-| retain_on_delete | Retain (disable) the distribution on delete instead of removing it. | `bool` | `false` | no |
-| wait_for_deployment | Wait for the distribution to deploy before completing. | `bool` | `true` | no |
+| retain_on_delete_enabled | Retain (disable) the distribution on delete instead of removing it. | `bool` | `false` | no |
+| deployment_wait_enabled | Wait for the distribution to deploy before completing. | `bool` | `true` | no |
 
 ### SSL/TLS
 
@@ -412,7 +412,7 @@ module "cdn" {
 | logging_enabled | Enable access logging. | `bool` | `false` | no |
 | logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. | `string` | `null` | no |
 | logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. | `string` | `""` | no |
-| logging_include_cookies | Include cookies in access logs. | `bool` | `false` | no |
+| logging_cookies_enabled | Include cookies in access logs. | `bool` | `false` | no |
 | logging_bucket_creation_enabled | Create a new S3 bucket for logging. | `bool` | `false` | no |
 | logging_bucket_retention_days | Days to retain logs in the created bucket. | `number` | `90` | no |
 
@@ -490,7 +490,7 @@ module "cdn" {
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • distributions (required)      │   │ • origins (required)                    │  ║
 ║  │ • tags                      │   │   └─ aliases                    │   │   └─ origin_id, domain_name             │  ║
-║  └─────────────────────────────┘   │   └─ acm_certificate_arn        │   │   └─ s3_origin, origin_path             │  ║
+║  └─────────────────────────────┘   │   └─ acm_certificate_arn        │   │   └─ s3_origin_enabled, origin_path             │  ║
 ║                                    │   └─ comment, enabled           │   │   └─ protocol, ports, timeouts          │  ║
 ║                                    └─────────────────────────────────┘   │   └─ custom_headers, origin_shield      │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
@@ -502,8 +502,8 @@ module "cdn" {
 ║  │ • viewer_protocol_policy    │   │ • target_origin_id              │   │ • http_version                          │  ║
 ║  │ • allowed/cached_methods    │   │ • viewer_protocol_policy        │   │ • ipv6_enabled                       │  ║
 ║  │ • cache_policy_id           │   │ • cache_policy_id               │   │ • default_root_object                   │  ║
-║  │ • origin_request_policy_id  │   │ • origin_request_policy_id      │   │ • retain_on_delete                      │  ║
-║  │ • function_associations     │   │ • function_associations         │   │ • wait_for_deployment                   │  ║
+║  │ • origin_request_policy_id  │   │ • origin_request_policy_id      │   │ • retain_on_delete_enabled                      │  ║
+║  │ • function_associations     │   │ • function_associations         │   │ • deployment_wait_enabled                   │  ║
 ║  │ • lambda_fn_associations    │   │ • lambda_fn_associations        │   └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘                                                 ║
 ║                                                                                                                        ║
@@ -521,7 +521,7 @@ module "cdn" {
 ║  │ • logging_bucket_creation_enabled     │   │ • oac_origin_type               │                                                 ║
 ║  │ • logging_bucket_domain_name│   │ • oac_signing_behavior          │                                                 ║
 ║  │ • logging_prefix            │   │ • oac_signing_protocol          │                                                 ║
-║  │ • logging_include_cookies   │   └─────────────────────────────────┘                                                 ║
+║  │ • logging_cookies_enabled   │   └─────────────────────────────────┘                                                 ║
 ║  │ • logging_bucket_retention  │                                                                                       ║
 ║  └─────────────────────────────┘                                                                                       ║
 ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
@@ -533,7 +533,7 @@ module "cdn" {
 ║                                                                                                                        ║
 ║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
 ║    │                           aws_cloudfront_origin_access_control.this                                          │    ║
-║    │  • for_each over S3 origins (where s3_origin = true)                                                        │    ║
+║    │  • for_each over S3 origins (where s3_origin_enabled = true)                                                        │    ║
 ║    │  • SigV4 signing, configurable behavior and origin type                                                     │    ║
 ║    └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘    ║
 ║                                                           │                                                            ║

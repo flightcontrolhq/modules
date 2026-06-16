@@ -124,10 +124,10 @@ module "aurora" {
   }
 
   # Test-friendly settings
-  deletion_protection_enabled = false
-  skip_final_snapshot         = true
-  backup_retention_period     = 1
-  apply_immediately           = true
+  deletion_protection_enabled     = false
+  final_snapshot_creation_enabled = false
+  backup_retention_period         = 1
+  apply_immediately               = true
 
   tags = local.common_tags
 }

@@ -169,7 +169,7 @@ variable "max_unavailable_percentage" {
   }
 }
 
-variable "force_update_version" {
+variable "version_force_update_enabled" {
   type        = bool
   description = "Allow EKS to force-evict pods (ignore PDBs) during a node group version update."
   default     = false

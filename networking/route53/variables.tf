@@ -46,7 +46,7 @@ variable "comment" {
   default     = "Managed by Terraform"
 }
 
-variable "force_destroy" {
+variable "record_force_destroy_enabled" {
   type        = bool
   description = "If true, destroy all records in the hosted zone when the zone is destroyed. Only applies to created zones."
   default     = false
@@ -62,7 +62,7 @@ variable "delegation_set_id" {
 # Private Zone
 ################################################################################
 
-variable "private_zone" {
+variable "private_zone_enabled" {
   type        = bool
   description = "If true, the created hosted zone is private and must be associated with one or more VPCs."
   default     = false

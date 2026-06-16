@@ -7,8 +7,8 @@ resource "aws_cloudfront_distribution" "this" {
   http_version        = var.http_version
   is_ipv6_enabled     = var.ipv6_enabled
   default_root_object = var.default_root_object
-  retain_on_delete    = var.retain_on_delete
-  wait_for_deployment = var.wait_for_deployment
+  retain_on_delete    = var.retain_on_delete_enabled
+  wait_for_deployment = var.deployment_wait_enabled
   aliases             = each.value.aliases
   web_acl_id          = var.web_acl_id
 
@@ -19,12 +19,12 @@ resource "aws_cloudfront_distribution" "this" {
       domain_name = origin.value.domain_name
       origin_path = origin.value.origin_path
 
-      origin_access_control_id = origin.value.s3_origin && var.origin_access_control_creation_enabled ? (
+      origin_access_control_id = origin.value.s3_origin_enabled && var.origin_access_control_creation_enabled ? (
         origin.value.origin_access_control_id != null ? origin.value.origin_access_control_id : aws_cloudfront_origin_access_control.this[origin.value.origin_id].id
       ) : origin.value.origin_access_control_id
 
       dynamic "custom_origin_config" {
-        for_each = origin.value.s3_origin ? [] : [1]
+        for_each = origin.value.s3_origin_enabled ? [] : [1]
         content {
           http_port                = origin.value.http_port
           https_port               = origin.value.https_port
@@ -61,7 +61,7 @@ resource "aws_cloudfront_distribution" "this" {
     viewer_protocol_policy     = var.default_cache_behavior.viewer_protocol_policy
     allowed_methods            = var.default_cache_behavior.allowed_methods
     cached_methods             = var.default_cache_behavior.cached_methods
-    compress                   = var.default_cache_behavior.compress
+    compress                   = var.default_cache_behavior.compression_enabled
     cache_policy_id            = var.default_cache_behavior.cache_policy_id
     origin_request_policy_id   = var.default_cache_behavior.origin_request_policy_id
     response_headers_policy_id = var.default_cache_behavior.response_headers_policy_id
@@ -79,7 +79,7 @@ resource "aws_cloudfront_distribution" "this" {
       content {
         event_type   = lambda_function_association.value.event_type
         lambda_arn   = lambda_function_association.value.lambda_arn
-        include_body = lambda_function_association.value.include_body
+        include_body = lambda_function_association.value.body_inclusion_enabled
       }
     }
   }
@@ -92,7 +92,7 @@ resource "aws_cloudfront_distribution" "this" {
       viewer_protocol_policy     = ordered_cache_behavior.value.viewer_protocol_policy
       allowed_methods            = ordered_cache_behavior.value.allowed_methods
       cached_methods             = ordered_cache_behavior.value.cached_methods
-      compress                   = ordered_cache_behavior.value.compress
+      compress                   = ordered_cache_behavior.value.compression_enabled
       cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
       origin_request_policy_id   = ordered_cache_behavior.value.origin_request_policy_id
       response_headers_policy_id = ordered_cache_behavior.value.response_headers_policy_id
@@ -110,7 +110,7 @@ resource "aws_cloudfront_distribution" "this" {
         content {
           event_type   = lambda_function_association.value.event_type
           lambda_arn   = lambda_function_association.value.lambda_arn
-          include_body = lambda_function_association.value.include_body
+          include_body = lambda_function_association.value.body_inclusion_enabled
         }
       }
     }
@@ -145,7 +145,7 @@ resource "aws_cloudfront_distribution" "this" {
     content {
       bucket          = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
       prefix          = "${var.logging_prefix}${each.key}/"
-      include_cookies = var.logging_include_cookies
+      include_cookies = var.logging_cookies_enabled
     }
   }
 

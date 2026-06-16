@@ -61,7 +61,7 @@ module "ecs_instance_security_group" {
   vpc_id      = var.vpc_id
   tags        = var.tags
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = concat(
     # Allow inbound from public ALB if enabled
@@ -179,8 +179,8 @@ module "ecs_autoscaling" {
   # ECS integration
   # Note: the autoscaling submodule already ignores desired_capacity changes
   # unconditionally, so no toggle is needed for ECS managed scaling.
-  ecs_managed           = true
-  protect_from_scale_in = var.ec2_managed_termination_protection == "ENABLED"
+  ecs_managed_tag_enabled     = true
+  scale_in_protection_enabled = var.ec2_managed_termination_protection == "ENABLED"
 
   # Instance refresh
   instance_refresh = {
@@ -209,5 +209,3 @@ module "ecs_autoscaling" {
     AmazonECSManaged = "true"
   })
 }
-
-

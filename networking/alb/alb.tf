@@ -4,7 +4,7 @@
 
 resource "aws_lb" "this" {
   name               = var.name
-  internal           = var.internal
+  internal           = var.internal_load_balancer_enabled
   load_balancer_type = "application"
   security_groups    = [module.security_group.security_group_id]
   subnets            = var.subnet_ids
@@ -12,9 +12,9 @@ resource "aws_lb" "this" {
   enable_deletion_protection = var.deletion_protection_enabled
   idle_timeout               = var.idle_timeout
   enable_http2               = var.http2_enabled
-  drop_invalid_header_fields = var.drop_invalid_header_fields
+  drop_invalid_header_fields = var.invalid_header_drop_enabled
   desync_mitigation_mode     = var.desync_mitigation_mode
-  preserve_host_header       = var.preserve_host_header
+  preserve_host_header       = var.host_header_preservation_enabled
   xff_header_processing_mode = var.xff_header_processing_mode
   enable_waf_fail_open       = var.waf_fail_open_enabled
 
@@ -42,4 +42,3 @@ resource "aws_lb" "this" {
     }
   }
 }
-

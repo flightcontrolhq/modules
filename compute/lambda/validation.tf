@@ -52,7 +52,7 @@ check "lambda_at_edge_constraints" {
     condition = (
       !var.lambda_at_edge_enabled ||
       (
-        var.publish &&
+        var.version_publishing_enabled &&
         var.package_type == "Zip" &&
         length(var.environment_variables) == 0 &&
         var.vpc_config == null &&
@@ -64,6 +64,6 @@ check "lambda_at_edge_constraints" {
         var.memory_size <= 3008
       )
     )
-    error_message = "Lambda@Edge mode requires publish=true, package_type='Zip', x86_64 architecture, timeout<=30, memory_size<=3008, and no env vars, VPC config, layers, file system configs, or dead letter target."
+    error_message = "Lambda@Edge mode requires version_publishing_enabled=true, package_type='Zip', x86_64 architecture, timeout<=30, memory_size<=3008, and no env vars, VPC config, layers, file system configs, or dead letter target."
   }
 }

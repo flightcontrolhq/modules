@@ -41,9 +41,9 @@ locals {
     aurora-postgresql = ["postgresql"]
   }
 
-  # Final snapshot identifier (auto-generate if not provided and skip_final_snapshot is false)
+  # Final snapshot identifier (auto-generate if not provided and final snapshots are enabled)
   final_snapshot_identifier = (
-    var.skip_final_snapshot ? null :
+    !var.final_snapshot_creation_enabled ? null :
     coalesce(var.final_snapshot_identifier, "${var.name}-final-snapshot")
   )
 
@@ -80,7 +80,7 @@ locals {
       writer = {
         instance_class               = local.default_instance_class
         availability_zone            = null
-        publicly_accessible          = null
+        public_access_enabled        = null
         promotion_tier               = 0
         performance_insights_enabled = null
         monitoring_interval          = null
@@ -91,7 +91,7 @@ locals {
       for i in range(var.reader_count) : "reader-${i + 1}" => {
         instance_class               = local.reader_instance_class
         availability_zone            = null
-        publicly_accessible          = null
+        public_access_enabled        = null
         promotion_tier               = i + 1
         performance_insights_enabled = null
         monitoring_interval          = null

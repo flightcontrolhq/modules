@@ -28,7 +28,7 @@ data "aws_iam_policy_document" "hosting_bucket_policy" {
 # Deploy role policy: sync to the hosting bucket, update the KVS active pointer,
 # and (optionally) create CloudFront invalidations.
 data "aws_iam_policy_document" "deploy_role_policy" {
-  count = var.deploy_role_enabled ? 1 : 0
+  count = var.deploy_role_creation_enabled ? 1 : 0
 
   statement {
     sid       = "ListBucket"

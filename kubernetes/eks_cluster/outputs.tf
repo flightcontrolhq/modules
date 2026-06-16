@@ -33,7 +33,7 @@ output "cluster_version" {
 }
 
 output "cluster_platform_version" {
-  description = "The platform version of the cluster (AWS-internal versioning of EKS itself)."
+  description = "The platform version of the cluster (AWS-internal_load_balancer_enabled versioning of EKS itself)."
   value       = aws_eks_cluster.this.platform_version
 }
 

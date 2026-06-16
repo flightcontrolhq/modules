@@ -102,8 +102,8 @@ module "app_dns" {
 module "internal_dns" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
 
-  name         = "internal.example.com"
-  private_zone = true
+  name         = "internal_load_balancer_enabled.example.com"
+  private_zone_enabled = true
 
   vpc_associations = {
     primary = {
@@ -114,7 +114,7 @@ module "internal_dns" {
 
   records = {
     db = {
-      name    = "db.internal.example.com"
+      name    = "db.internal_load_balancer_enabled.example.com"
       type    = "CNAME"
       ttl     = 60
       records = [module.rds.endpoint]
@@ -182,7 +182,7 @@ module "dns" {
 ### DNSSEC
 
 DNSSEC signing requires a customer-managed KMS key in `us-east-1` with the
-appropriate key policy for Route53. After the module is applied, publish the
+appropriate key policy for Route53. After the module is applied, version_publishing_enabled the
 `dnssec_ds_record` output to the parent zone (registrar).
 
 ```hcl
@@ -222,14 +222,14 @@ output "ds_record" {
 | zone_id | ID of an existing hosted zone to manage records in (required when `zone_creation_enabled = false`) | `string` | `null` | conditional |
 | name | FQDN for the hosted zone (required when `zone_creation_enabled = true`) | `string` | `null` | conditional |
 | comment | Comment for the hosted zone | `string` | `"Managed by Terraform"` | no |
-| force_destroy | Destroy all records when the zone is destroyed | `bool` | `false` | no |
+| record_force_destroy_enabled | Destroy all records when the zone is destroyed | `bool` | `false` | no |
 | delegation_set_id | Reusable delegation set ID (public zones only) | `string` | `null` | no |
 
 ### Private Zone
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| private_zone | Whether the created zone is private | `bool` | `false` | no |
+| private_zone_enabled | Whether the created zone is private | `bool` | `false` | no |
 | vpc_associations | Map of VPCs to associate with the private zone | `map(object)` | `{}` | no |
 
 Each entry in `vpc_associations` supports:
@@ -291,7 +291,7 @@ Each record supports:
 | record_names | Map of record keys to FQDNs |
 | record_ids | Map of record keys to Route53 record IDs |
 | dnssec_key_signing_key_id | The ID of the KSK (null when DNSSEC disabled) |
-| dnssec_ds_record | The DS record to publish to the parent zone |
+| dnssec_ds_record | The DS record to version_publishing_enabled to the parent zone |
 | query_log_id | The ID of the query log configuration |
 
 ## Notes
@@ -303,6 +303,6 @@ Each record supports:
   resource directly. To associate additional VPCs (including cross-account
   VPCs), use the `aws_route53_vpc_association_authorization` /
   `aws_route53_zone_association` resources outside the module.
-- When using `zone_creation_enabled = false`, `force_destroy` has no effect and the
+- When using `zone_creation_enabled = false`, `record_force_destroy_enabled` has no effect and the
   upstream zone is not managed.
 - Alias records cannot specify a TTL; TTLs are inherited from the target.

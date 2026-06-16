@@ -55,8 +55,8 @@ locals {
 module "s3_bucket" {
   source = "../../../../storage/s3"
 
-  name          = var.name
-  force_destroy = true # Enable for test cleanup
+  name                  = var.name
+  force_destroy_enabled = true # Enable for test cleanup
 
   # Versioning required for noncurrent version rules
   versioning_enabled = true

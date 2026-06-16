@@ -112,7 +112,7 @@ module "alb_logs" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-alb-access-logs"
-  force_destroy    = true
+  force_destroy_enabled = true
   policy_templates = ["alb_access_logs", "deny_insecure_transport"]
 
   lifecycle_rules = [
@@ -148,7 +148,7 @@ module "flow_logs" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-vpc-flow-logs"
-  force_destroy    = true
+  force_destroy_enabled = true
   policy_templates = ["vpc_flow_logs", "deny_insecure_transport"]
 
   lifecycle_rules = [
@@ -173,7 +173,7 @@ module "nlb_logs" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-nlb-access-logs"
-  force_destroy    = true
+  force_destroy_enabled = true
   policy_templates = ["nlb_access_logs", "deny_insecure_transport"]
 
   lifecycle_rules = [
@@ -235,7 +235,7 @@ module "s3" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name          = "my-full-config-bucket"
-  force_destroy = false
+  force_destroy_enabled = false
 
   # Encryption
   kms_key_id         = aws_kms_key.s3.arn
@@ -335,7 +335,7 @@ module "s3" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │    BUCKET CONFIGURATION         │   │        ENCRYPTION                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • force_destroy                 │   │ • kms_key_id                            │  ║
+║  │ • name (required)           │   │ • force_destroy_enabled         │   │ • kms_key_id                            │  ║
 ║  │ • tags                      │   │                                 │   │ • bucket_key_enabled                    │  ║
 ║  └──────────────┬──────────────┘   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
 ║                 │                                                                                                      ║
@@ -393,7 +393,7 @@ module "s3" {
 ║    │                                          (CORE RESOURCE)                                                     │    ║
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
 ║    │ • bucket = var.name                                                                                          │    ║
-║    │ • force_destroy = var.force_destroy                                                                          │    ║
+║    │ • force_destroy = var.force_destroy_enabled                                                                  │    ║
 ║    │ • tags = merged tags with Name                                                                               │    ║
 ║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
 ║                                                           │                                                            ║
@@ -464,7 +464,7 @@ module "s3" {
 ║                                        └────────────┬────────────┘                                                     ║
 ║                                                     │                                                                  ║
 ║                                                     ▼                                                                  ║
-║  var.force_destroy ─────────────────────► aws_s3_bucket.this ◄───────────────────── local.tags                        ║
+║  var.force_destroy_enabled ─────────────► aws_s3_bucket.this ◄───────────────────── local.tags                        ║
 ║                                                     │                                                                  ║
 ║                                                     │                                                                  ║
 ║           ┌─────────────────────────────────────────┼─────────────────────────────────────────┐                        ║
@@ -542,7 +542,7 @@ module "s3" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| force_destroy | Whether to force destroy the bucket even if it contains objects. Use with caution. | `bool` | `false` | no |
+| force_destroy_enabled | Whether to force destroy the bucket even if it contains objects. Use with caution. | `bool` | `false` | no |
 
 ### Encryption
 
@@ -824,7 +824,7 @@ module "s3" {
 
 - Bucket names must be globally unique across all AWS accounts.
 - Bucket names must be between 3-63 characters, contain only lowercase letters, numbers, hyphens, and periods.
-- The `force_destroy` option should be used with caution in production environments.
+- The `force_destroy_enabled` option should be used with caution in production environments.
 - When using lifecycle rules with versioning, consider configuring `noncurrent_version_expiration` to manage storage costs.
 - Policy templates automatically use data sources to get the current account ID, region, and ELB service account for proper policy configuration.
 - The bucket policy resource depends on the public access block to ensure proper ordering during creation.

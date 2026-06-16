@@ -38,13 +38,13 @@ variable "image_tag_mutability" {
   }
 }
 
-variable "scan_on_push" {
+variable "image_scan_on_push_enabled" {
   type        = bool
   description = "Indicates whether images are scanned for vulnerabilities after being pushed."
   default     = true
 }
 
-variable "force_delete" {
+variable "force_delete_enabled" {
   type        = bool
   description = "If true, the repository will be deleted even if it contains images. Use with caution."
   default     = false

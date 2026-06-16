@@ -79,7 +79,7 @@ variable "origins" {
       enabled              = bool
       origin_shield_region = string
     }))
-    s3_origin = optional(bool, false)
+    s3_origin_enabled = optional(bool, false)
   }))
   description = "A list of origin configurations for the CloudFront distribution."
 
@@ -94,7 +94,7 @@ variable "origins" {
   }
 
   validation {
-    condition     = alltrue([for o in var.origins : contains(["http-only", "https-only", "match-viewer"], o.origin_protocol_policy) if !o.s3_origin])
+    condition     = alltrue([for o in var.origins : contains(["http-only", "https-only", "match-viewer"], o.origin_protocol_policy) if !o.s3_origin_enabled])
     error_message = "The origin_protocol_policy must be 'http-only', 'https-only', or 'match-viewer'."
   }
 
@@ -129,7 +129,7 @@ variable "default_cache_behavior" {
     viewer_protocol_policy     = string
     allowed_methods            = optional(list(string), ["GET", "HEAD"])
     cached_methods             = optional(list(string), ["GET", "HEAD"])
-    compress                   = optional(bool, true)
+    compression_enabled        = optional(bool, true)
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
@@ -138,9 +138,9 @@ variable "default_cache_behavior" {
       function_arn = string
     })), [])
     lambda_function_associations = optional(list(object({
-      event_type   = string
-      lambda_arn   = string
-      include_body = optional(bool, false)
+      event_type             = string
+      lambda_arn             = string
+      body_inclusion_enabled = optional(bool, false)
     })), [])
     realtime_log_config_arn = optional(string)
   })
@@ -163,7 +163,7 @@ variable "ordered_cache_behaviors" {
     viewer_protocol_policy     = string
     allowed_methods            = optional(list(string), ["GET", "HEAD"])
     cached_methods             = optional(list(string), ["GET", "HEAD"])
-    compress                   = optional(bool, true)
+    compression_enabled        = optional(bool, true)
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
@@ -172,9 +172,9 @@ variable "ordered_cache_behaviors" {
       function_arn = string
     })), [])
     lambda_function_associations = optional(list(object({
-      event_type   = string
-      lambda_arn   = string
-      include_body = optional(bool, false)
+      event_type             = string
+      lambda_arn             = string
+      body_inclusion_enabled = optional(bool, false)
     })), [])
     realtime_log_config_arn = optional(string)
   }))
@@ -225,13 +225,13 @@ variable "default_root_object" {
   default     = null
 }
 
-variable "retain_on_delete" {
+variable "retain_on_delete_enabled" {
   type        = bool
   description = "Whether to retain the distribution when the resource is deleted (disables instead of deleting)."
   default     = false
 }
 
-variable "wait_for_deployment" {
+variable "deployment_wait_enabled" {
   type        = bool
   description = "Whether to wait for the distribution to be deployed before completing."
   default     = true
@@ -349,7 +349,7 @@ variable "logging_prefix" {
   default     = ""
 }
 
-variable "logging_include_cookies" {
+variable "logging_cookies_enabled" {
   type        = bool
   description = "Whether to include cookies in access logs."
   default     = false

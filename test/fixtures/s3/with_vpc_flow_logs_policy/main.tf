@@ -55,8 +55,8 @@ locals {
 module "s3_bucket" {
   source = "../../../../storage/s3"
 
-  name          = var.name
-  force_destroy = true # Enable for test cleanup
+  name                  = var.name
+  force_destroy_enabled = true # Enable for test cleanup
 
   # Apply VPC flow logs and deny insecure transport policy templates
   policy_templates = ["vpc_flow_logs", "deny_insecure_transport"]

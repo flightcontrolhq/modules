@@ -264,15 +264,15 @@ variable "egress_rules" {
 # Default Egress
 ################################################################################
 
-variable "allow_all_egress" {
+variable "all_egress_enabled" {
   type        = bool
   description = "If true, creates a default egress rule allowing all outbound traffic to 0.0.0.0/0 and ::/0. Set to false if you want to define custom egress rules only."
   default     = false
 }
 
-variable "allow_all_egress_ipv4_only" {
+variable "ipv4_only_egress_enabled" {
   type        = bool
-  description = "If true and allow_all_egress is true, only creates the IPv4 egress rule (0.0.0.0/0). Useful for VPCs without IPv6."
+  description = "If true and all_egress_enabled is true, only creates the IPv4 egress rule (0.0.0.0/0). Useful for VPCs without IPv6."
   default     = false
 }
 

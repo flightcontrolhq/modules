@@ -11,7 +11,7 @@ module "security_group" {
   vpc_id      = var.vpc_id
   tags        = var.tags
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = concat(
     # Load balancer ingress (from LB security group if provided, else VPC CIDR)

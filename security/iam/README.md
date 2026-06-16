@@ -219,7 +219,7 @@ module "custom_trust_role" {
 | description | The description of the IAM role. | `string` | `"Managed by Terraform"` | no |
 | path | The path to the IAM role. | `string` | `"/"` | no |
 | max_session_duration | The maximum session duration (in seconds) for the IAM role (3600-43200). | `number` | `3600` | no |
-| force_detach_policies | Whether to force detaching any policies the role has before destroying it. | `bool` | `true` | no |
+| policy_force_detach_enabled | Whether to force detaching any policies the role has before destroying it. | `bool` | `true` | no |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
 
 ### Assume Role Policy - Trust Relationships
@@ -343,7 +343,7 @@ module "custom_trust_role" {
 ║  │ • name                      │   │ • description                   │   │ • permission_boundary_arn               │  ║
 ║  │ • name_prefix               │   │ • path                          │   └─────────────────────────────────────────┘  ║
 ║  │ • tags                      │   │ • max_session_duration          │                                                 ║
-║  └──────────────┬──────────────┘   │ • force_detach_policies         │                                                 ║
+║  └──────────────┬──────────────┘   │ • policy_force_detach_enabled   │                                                 ║
 ║                 │                  └─────────────────────────────────┘                                                 ║
 ║                 ▼                                                                                                      ║
 ║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
@@ -439,7 +439,7 @@ module "custom_trust_role" {
 ║  ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤   ║
 ║  │ • name / name_prefix          • assume_role_policy (from local)                                                  │   ║
 ║  │ • description                 • max_session_duration                                                             │   ║
-║  │ • path                        • force_detach_policies                                                            │   ║
+║  │ • path                        • policy_force_detach_enabled                                                      │   ║
 ║  │                               • permissions_boundary                                                             │   ║
 ║  └──────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘   ║
 ║                                                              │                                                          ║
@@ -526,7 +526,7 @@ module "custom_trust_role" {
 ║  var.description ───────────►│                                                          │                             ║
 ║  var.path ──────────────────►│              aws_iam_role.this                           │                             ║
 ║  var.max_session_duration ──►│                                                          │                             ║
-║  var.force_detach_policies ─►│                                                          │                             ║
+║  var.policy_force_detach_enabled ─►│                                                    │                             ║
 ║  var.permission_boundary_arn►│                                                          │                             ║
 ║  local.tags ────────────────►│                                                          │                             ║
 ║                              └────────────────────────────┬─────────────────────────────┘                             ║
@@ -814,7 +814,7 @@ resource "aws_instance" "web" {
 - Either `name` or `name_prefix` must be provided, but not both
 - `inline_policy_statements` are combined into a single policy named "inline-statements"
 - SAML trust policies automatically include the required `SAML:aud` condition
-- The `force_detach_policies` default of `true` ensures clean destruction of roles with attached policies
+- The `policy_force_detach_enabled` default of `true` ensures clean destruction of roles with attached policies
 - Default tags include `ManagedBy = "terraform"` and `Module = "security/iam"` for resource tracking
 
 ## License

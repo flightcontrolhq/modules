@@ -22,7 +22,7 @@ resource "aws_acm_certificate" "this" {
 ################################################################################
 
 resource "aws_acm_certificate_validation" "this" {
-  count = var.wait_for_validation ? 1 : 0
+  count = var.certificate_validation_wait_enabled ? 1 : 0
 
   region          = var.region
   certificate_arn = aws_acm_certificate.this.arn

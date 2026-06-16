@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.4.1
-  description: Mark destructive ECS web inputs immutable
+  version: 0.5.0
+  description: Rename ECS web boolean inputs to match Terraform naming conventions
 module:
   inputs:
     - id: section_cluster
@@ -1225,7 +1225,7 @@ module:
           - nixpacks
           - dockerfile
       default: true
-    - id: ecr_force_delete
+    - id: ecr_force_deletion_enabled
       label: Force delete image repository
       type: boolean
       description: Allow the ECR repository to be deleted even when it contains images. Use with care.
@@ -1236,7 +1236,7 @@ module:
           - dockerfile
       default: false
     - $include: ../../partials/inputs/misc-section.yml
-    - id: force_new_deployment
+    - id: new_deployment_forcing_enabled
       label: Force new deployment
       type: boolean
       description: Force ECS to start a new deployment when applying service configuration, even if the task definition did not change.
@@ -1262,7 +1262,7 @@ module:
           terraform_variables:
             ...overrides: << module.input.advanced_terraform_variables >>
             allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
-            assign_public_ip: "<< module.input.private_subnet_placement_enabled ? false : true >>"
+            public_ip_assignment_enabled: "<< module.input.private_subnet_placement_enabled ? false : true >>"
             auto_scaling:
               enabled: << module.input.auto_scaling_enabled >>
               max_capacity: << module.input.max_capacity >>
@@ -1303,14 +1303,14 @@ module:
             deployment_type: rolling
             desired_count: 0
             ecr_default_lifecycle_policy_enabled: true
-            ecr_force_delete: << module.input.ecr_force_delete >>
+            ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
             ecr_repository_name: << module.input.name >>
             ecr_scan_on_push_enabled: << module.input.ecr_scan_on_push_enabled >>
-            ecr_enabled: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
+            ecr_repository_creation_enabled: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
             execute_command_enabled: << module.input.execute_command_enabled >>
             execution_role_arn: << module.input.execution_role_arn || nil >>
             execution_role_policies: << module.input.execution_role_policies >>
-            force_new_deployment: << module.input.force_new_deployment >>
+            new_deployment_forcing_enabled: << module.input.new_deployment_forcing_enabled >>
             health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
             launch_type: '<< module.input.capacity_provider == "ec2" ? "EC2" : "FARGATE" >>'
             load_balancer_attachment:
@@ -1378,7 +1378,7 @@ module:
               #.name, "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name,
               "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
             vpc_id: << module.input.vpc_id >>
-            wait_for_steady_state: false
+            steady_state_wait_enabled: false
           tool: opentofu
           tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
         variant: standard
