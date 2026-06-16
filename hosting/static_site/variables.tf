@@ -402,7 +402,7 @@ variable "logging_retention_days" {
 # Deploy Role (optional)
 ################################################################################
 
-variable "deploy_role_enabled" {
+variable "deploy_role_creation_enabled" {
   type        = bool
   description = "Whether to create an IAM role that CI can assume to upload to the hosting bucket and flip the active version in KVS."
   default     = false
@@ -410,7 +410,7 @@ variable "deploy_role_enabled" {
 
 variable "deploy_role_trust_policy" {
   type        = string
-  description = "Trust policy JSON for the deploy role. Required when deploy_role_enabled = true. Typically grants sts:AssumeRoleWithWebIdentity to a GitHub OIDC provider or sts:AssumeRole to a CI account."
+  description = "Trust policy JSON for the deploy role. Required when deploy_role_creation_enabled = true. Typically grants sts:AssumeRoleWithWebIdentity to a GitHub OIDC provider or sts:AssumeRole to a CI account."
   default     = null
 
   validation {

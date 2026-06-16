@@ -52,7 +52,7 @@ variable "max_session_duration" {
   }
 }
 
-variable "force_detach_policies" {
+variable "policy_force_detach_enabled" {
   type        = bool
   description = "Whether to force detaching any policies the role has before destroying it."
   default     = true

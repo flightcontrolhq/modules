@@ -837,8 +837,8 @@ run "test_backup_retention_period_invalid" {
 # Security-First Default Tests
 #-------------------------------------------------------------------------------
 
-# Test: storage_encrypted defaults to true
-run "test_storage_encrypted_default" {
+# Test: storage_encryption_enabled defaults to true
+run "test_storage_encryption_enabled_default" {
   command = plan
 
   variables {
@@ -852,8 +852,8 @@ run "test_storage_encrypted_default" {
   }
 
   assert {
-    condition     = var.storage_encrypted == true
-    error_message = "storage_encrypted should default to true."
+    condition     = var.storage_encryption_enabled == true
+    error_message = "storage_encryption_enabled should default to true."
   }
 }
 
@@ -897,8 +897,8 @@ run "test_backup_retention_period_default" {
   }
 }
 
-# Test: manage_master_user_password defaults to true
-run "test_manage_master_user_password_default" {
+# Test: master_user_password_management_enabled defaults to true
+run "test_master_user_password_management_enabled_default" {
   command = plan
 
   variables {
@@ -912,8 +912,8 @@ run "test_manage_master_user_password_default" {
   }
 
   assert {
-    condition     = var.manage_master_user_password == true
-    error_message = "manage_master_user_password should default to true."
+    condition     = var.master_user_password_management_enabled == true
+    error_message = "master_user_password_management_enabled should default to true."
   }
 }
 
@@ -937,8 +937,8 @@ run "test_performance_insights_enabled_default" {
   }
 }
 
-# Test: publicly_accessible defaults to false
-run "test_publicly_accessible_default" {
+# Test: public_access_enabled defaults to false
+run "test_public_access_enabled_default" {
   command = plan
 
   variables {
@@ -952,13 +952,13 @@ run "test_publicly_accessible_default" {
   }
 
   assert {
-    condition     = var.publicly_accessible == false
-    error_message = "publicly_accessible should default to false."
+    condition     = var.public_access_enabled == false
+    error_message = "public_access_enabled should default to false."
   }
 }
 
-# Test: skip_final_snapshot defaults to false
-run "test_skip_final_snapshot_default" {
+# Test: final_snapshot_creation_enabled defaults to true
+run "test_final_snapshot_creation_enabled_default" {
   command = plan
 
   variables {
@@ -972,8 +972,8 @@ run "test_skip_final_snapshot_default" {
   }
 
   assert {
-    condition     = var.skip_final_snapshot == false
-    error_message = "skip_final_snapshot should default to false."
+    condition     = var.final_snapshot_creation_enabled == true
+    error_message = "final_snapshot_creation_enabled should default to true."
   }
 }
 
@@ -1567,19 +1567,19 @@ run "test_db_name_null_for_sqlserver" {
 # Final Snapshot Identifier Tests
 #-------------------------------------------------------------------------------
 
-# Test: Final snapshot identifier is auto-generated when skip_final_snapshot is false
+# Test: Final snapshot identifier is auto-generated when final_snapshot_creation_enabled is true
 run "test_final_snapshot_identifier_auto_generated" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    skip_final_snapshot = false
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    final_snapshot_creation_enabled = true
   }
 
   assert {
@@ -1588,24 +1588,24 @@ run "test_final_snapshot_identifier_auto_generated" {
   }
 }
 
-# Test: Final snapshot identifier is null when skip_final_snapshot is true
-run "test_final_snapshot_identifier_null_when_skipped" {
+# Test: Final snapshot identifier is null when final_snapshot_creation_enabled is false
+run "test_final_snapshot_identifier_null_when_disabled" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    skip_final_snapshot = true
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    final_snapshot_creation_enabled = false
   }
 
   assert {
     condition     = local.final_snapshot_identifier == null
-    error_message = "Final snapshot identifier should be null when skip_final_snapshot is true."
+    error_message = "Final snapshot identifier should be null when final_snapshot_creation_enabled is false."
   }
 }
 
@@ -1614,15 +1614,15 @@ run "test_final_snapshot_identifier_custom" {
   command = plan
 
   variables {
-    name                      = "test-db"
-    engine                    = "postgres"
-    instance_class            = "db.t3.micro"
-    allocated_storage         = 20
-    vpc_id                    = "vpc-12345678"
-    subnet_ids                = ["subnet-11111111", "subnet-22222222"]
-    username                  = "admin"
-    skip_final_snapshot       = false
-    final_snapshot_identifier = "my-custom-snapshot"
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    final_snapshot_creation_enabled = true
+    final_snapshot_identifier       = "my-custom-snapshot"
   }
 
   assert {
@@ -1799,7 +1799,7 @@ run "test_rds_instance_deletion_protection" {
 }
 
 # Test: RDS instance has multi_az disabled by default
-run "test_rds_instance_multi_az_default" {
+run "test_rds_instance_multi_az_enabled_default" {
   command = plan
 
   variables {
@@ -1830,7 +1830,7 @@ run "test_rds_instance_multi_az_enabled" {
     vpc_id            = "vpc-12345678"
     subnet_ids        = ["subnet-11111111", "subnet-22222222"]
     username          = "admin"
-    multi_az          = true
+    multi_az_enabled  = true
   }
 
   assert {

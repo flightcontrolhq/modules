@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.2.1
-  description: Mark destructive certificate inputs immutable
+  version: 1.0.0
+  description: Rename ACM validation wait input to match Terraform naming conventions
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -60,7 +60,7 @@ module:
       type: string
     - default: false
       description: Wait for ACM to issue the certificate during apply. Enable after DNS validation can complete.
-      id: wait_for_validation
+      id: certificate_validation_wait_enabled
       label: Wait for certificate issuance
       type: boolean
     - $include: ../../partials/inputs/misc-section.yml
@@ -154,4 +154,4 @@ module:
         subject_alternative_names: << module.input.subject_alternative_names || [] >>
         tags:
           $include: ../stack/ravion-tags.yml
-        wait_for_validation: << module.input.wait_for_validation >>
+        certificate_validation_wait_enabled: << module.input.certificate_validation_wait_enabled >>

@@ -47,7 +47,7 @@ variable "subnet_ids" {
   }
 }
 
-variable "assign_public_ip" {
+variable "public_ip_assignment_enabled" {
   type        = bool
   description = "Assign a public IP address to the ECS tasks. Required for Fargate tasks in public subnets without NAT."
   default     = false
@@ -323,13 +323,13 @@ variable "execute_command_enabled" {
   default     = false
 }
 
-variable "force_new_deployment" {
+variable "new_deployment_forcing_enabled" {
   type        = bool
   description = "Force a new deployment of the service."
   default     = false
 }
 
-variable "wait_for_steady_state" {
+variable "steady_state_wait_enabled" {
   type        = bool
   description = "Wait for the service to reach a steady state before completing."
   default     = true
@@ -577,7 +577,7 @@ variable "deployment_circuit_breaker" {
 # ECR Repository
 ################################################################################
 
-variable "ecr_enabled" {
+variable "ecr_repository_creation_enabled" {
   type        = bool
   description = "Create an ECR repository for this service's container image. When true, a repository is provisioned via the containers/ecr submodule."
   default     = false
@@ -606,7 +606,7 @@ variable "ecr_scan_on_push_enabled" {
   default     = true
 }
 
-variable "ecr_force_delete" {
+variable "ecr_force_deletion_enabled" {
   type        = bool
   description = "Allow the ECR repository to be deleted even when it contains images."
   default     = false

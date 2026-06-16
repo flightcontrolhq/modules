@@ -86,7 +86,7 @@ output "username" {
 
 output "master_user_secret_arn" {
   description = "The ARN of the Secrets Manager secret containing the master user credentials."
-  value       = var.manage_master_user_password ? try(aws_db_instance.this.master_user_secret[0].secret_arn, null) : null
+  value       = var.master_user_password_management_enabled ? try(aws_db_instance.this.master_user_secret[0].secret_arn, null) : null
 }
 
 ################################################################################

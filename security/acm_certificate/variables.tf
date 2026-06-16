@@ -65,7 +65,7 @@ variable "route53_zone_id" {
   }
 }
 
-variable "wait_for_validation" {
+variable "certificate_validation_wait_enabled" {
   type        = bool
   description = "If true, create aws_acm_certificate_validation and wait until the certificate is issued."
   default     = false

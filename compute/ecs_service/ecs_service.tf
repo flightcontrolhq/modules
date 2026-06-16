@@ -31,7 +31,7 @@ resource "aws_ecs_service" "this" {
     content {
       subnets          = var.subnet_ids
       security_groups  = concat([module.security_group.security_group_id], var.security_group_ids)
-      assign_public_ip = var.assign_public_ip
+      assign_public_ip = var.public_ip_assignment_enabled
     }
   }
 
@@ -90,10 +90,10 @@ resource "aws_ecs_service" "this" {
   enable_execute_command = var.execute_command_enabled
 
   # Force new deployment
-  force_new_deployment = var.force_new_deployment
+  force_new_deployment = var.new_deployment_forcing_enabled
 
   # Wait for steady state
-  wait_for_steady_state = var.wait_for_steady_state
+  wait_for_steady_state = var.steady_state_wait_enabled
 
   # Tags
   enable_ecs_managed_tags = var.ecs_managed_tags_enabled

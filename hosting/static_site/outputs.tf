@@ -95,13 +95,13 @@ output "default_version" {
 ################################################################################
 
 output "deploy_role_arn" {
-  description = "ARN of the IAM role CI assumes to deploy. Null unless deploy_role_enabled = true."
-  value       = var.deploy_role_enabled ? aws_iam_role.deploy[0].arn : null
+  description = "ARN of the IAM role CI assumes to deploy. Null unless deploy_role_creation_enabled = true."
+  value       = var.deploy_role_creation_enabled ? aws_iam_role.deploy[0].arn : null
 }
 
 output "deploy_role_name" {
-  description = "Name of the IAM deploy role. Null unless deploy_role_enabled = true."
-  value       = var.deploy_role_enabled ? aws_iam_role.deploy[0].name : null
+  description = "Name of the IAM deploy role. Null unless deploy_role_creation_enabled = true."
+  value       = var.deploy_role_creation_enabled ? aws_iam_role.deploy[0].name : null
 }
 
 ################################################################################

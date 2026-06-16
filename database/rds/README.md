@@ -61,7 +61,7 @@ module "mysql" {
   iops                  = 3000
   storage_throughput    = 125
 
-  multi_az = true
+  multi_az_enabled = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -320,23 +320,23 @@ module "mysql" {
 | storage_type | The storage type: gp2, gp3, io1, io2, or standard. | `string` | `"gp3"` | no |
 | iops | Provisioned IOPS for io1/io2, optional for gp3. | `number` | `null` | no |
 | storage_throughput | Storage throughput in MiB/s (gp3 only). | `number` | `null` | no |
-| storage_encrypted | Enable encryption at rest. | `bool` | `true` | no |
+| storage_encryption_enabled | Enable encryption at rest. | `bool` | `true` | no |
 | kms_key_id | KMS key ARN for storage encryption. | `string` | `null` | no |
 | port | Database port (defaults per engine). | `number` | `null` | no |
-| publicly_accessible | Whether the instance is publicly accessible. | `bool` | `false` | no |
-| availability_zone | AZ for the instance (ignored if multi_az). | `string` | `null` | no |
+| public_access_enabled | Whether the instance is publicly accessible. | `bool` | `false` | no |
+| availability_zone | AZ for the instance (ignored if multi_az_enabled). | `string` | `null` | no |
 | ca_cert_identifier | CA certificate identifier. | `string` | `null` | no |
 | security_group_creation_enabled | Whether to create a security group. | `bool` | `true` | no |
 | security_group_id | Existing security group ID to use. | `string` | `null` | no |
 | allowed_security_group_ids | Security group IDs allowed to access the instance. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the instance. | `list(string)` | `[]` | no |
-| multi_az | Enable Multi-AZ deployment. | `bool` | `false` | no |
+| multi_az_enabled | Enable Multi-AZ deployment. | `bool` | `false` | no |
 | read_replica_creation_enabled | Whether to create read replicas. | `bool` | `false` | no |
 | read_replica_count | Number of read replicas to create. | `number` | `1` | no |
 | read_replica_instance_class | Instance class for read replicas. | `string` | `null` | no |
 | read_replica_availability_zones | AZs for read replicas. | `list(string)` | `[]` | no |
-| password | Master password (required if manage_master_user_password is false). | `string` | `null` | no |
-| manage_master_user_password | Use Secrets Manager for master password. | `bool` | `true` | no |
+| password | Master password (required if master_user_password_management_enabled is false). | `string` | `null` | no |
+| master_user_password_management_enabled | Use Secrets Manager for master password. | `bool` | `true` | no |
 | master_user_secret_kms_key_id | KMS key for Secrets Manager secret. | `string` | `null` | no |
 | iam_database_authentication_enabled | Enable IAM database authentication. | `bool` | `false` | no |
 | db_name | Database name to create. | `string` | `null` | no |
@@ -346,16 +346,16 @@ module "mysql" {
 | domain_iam_role_name | IAM role for AD integration. | `string` | `null` | no |
 | backup_retention_period | Days to retain automated backups. | `number` | `7` | no |
 | backup_window | Daily backup window (HH:MM-HH:MM). | `string` | `null` | no |
-| copy_tags_to_snapshot | Copy tags to snapshots. | `bool` | `true` | no |
-| delete_automated_backups | Delete backups on instance deletion. | `bool` | `true` | no |
+| snapshot_tag_copying_enabled | Copy tags to snapshots. | `bool` | `true` | no |
+| automated_backups_deletion_enabled | Delete backups on instance deletion. | `bool` | `true` | no |
 | snapshot_identifier | Snapshot ID to restore from. | `string` | `null` | no |
 | final_snapshot_identifier | Name for final snapshot on deletion. | `string` | `null` | no |
-| skip_final_snapshot | Skip final snapshot on deletion. | `bool` | `false` | no |
+| final_snapshot_creation_enabled | Create a final snapshot on deletion. | `bool` | `true` | no |
 | restore_to_point_in_time | Point-in-time recovery configuration. | `object` | `null` | no |
 | maintenance_window | Weekly maintenance window. | `string` | `null` | no |
-| auto_minor_version_upgrade | Enable automatic minor version upgrades. | `bool` | `true` | no |
-| allow_major_version_upgrade | Allow major version upgrades. | `bool` | `false` | no |
-| apply_immediately | Apply changes immediately. | `bool` | `false` | no |
+| minor_version_auto_upgrade_enabled | Enable automatic minor version upgrades. | `bool` | `true` | no |
+| major_version_upgrade_enabled | Allow major version upgrades. | `bool` | `false` | no |
+| immediate_apply_enabled | Apply changes immediately. | `bool` | `false` | no |
 | deletion_protection_enabled | Enable deletion protection. | `bool` | `true` | no |
 | enabled_cloudwatch_logs_exports | Log types to export to CloudWatch. | `list(string)` | `[]` | no |
 | monitoring_interval | Enhanced Monitoring interval (0 to disable). | `number` | `0` | no |
@@ -501,16 +501,16 @@ Valid log export types depend on the database engine:
 ║  └─────────────────────────────┘   │ • engine_minor_version          │   │ • max_allocated_storage                 │  ║
 ║                                    │ • license_model                 │   │ • storage_type                          │  ║
 ║                                    └─────────────────────────────────┘   │ • iops, storage_throughput              │  ║
-║                                                                          │ • storage_encrypted, kms_key_id         │  ║
+║                                                                          │ • storage_encryption_enabled, kms_key_id│  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │      NETWORK                │   │      SECURITY GROUP             │   │       HIGH AVAILABILITY                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • vpc_id (required)         │   │ • security_group_creation_enabled         │   │ • multi_az                              │  ║
+║  │ • vpc_id (required)         │   │ • security_group_creation_enabled         │   │ • multi_az_enabled                      │  ║
 ║  │ • subnet_ids (required)     │   │ • security_group_id             │   │ • read_replica_creation_enabled                   │  ║
 ║  │ • port                      │   │ • allowed_security_group_ids    │   │ • read_replica_count                    │  ║
-║  │ • publicly_accessible       │   │ • allowed_cidr_blocks           │   │ • read_replica_instance_class           │  ║
+║  │ • public_access_enabled     │   │ • allowed_cidr_blocks           │   │ • read_replica_instance_class           │  ║
 ║  │ • availability_zone         │   └─────────────────────────────────┘   │ • read_replica_availability_zones       │  ║
 ║  │ • ca_cert_identifier        │                                         └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘                                                                                       ║
@@ -520,11 +520,11 @@ Valid log export types depend on the database engine:
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • username (required)       │   │ • db_name                       │   │ • backup_retention_period               │  ║
 ║  │ • password                  │   │ • character_set_name            │   │ • backup_window                         │  ║
-║  │ • manage_master_user_pwd    │   │ • timezone                      │   │ • copy_tags_to_snapshot                 │  ║
-║  │ • master_user_secret_kms_id │   │ • domain                        │   │ • delete_automated_backups              │  ║
+║  │ • master_user_password_mgmt │   │ • timezone                      │   │ • snapshot_tag_copying_enabled          │  ║
+║  │ • master_user_secret_kms_id │   │ • domain                        │   │ • automated_backups_deletion_enabled    │  ║
 ║  │ • iam_database_auth_enabled │   │ • domain_iam_role_name          │   │ • snapshot_identifier                   │  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • final_snapshot_identifier             │  ║
-║                                                                          │ • skip_final_snapshot                   │  ║
+║                                                                          │ • final_snapshot_creation_enabled       │  ║
 ║                                                                          │ • restore_to_point_in_time              │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
@@ -532,9 +532,9 @@ Valid log export types depend on the database engine:
 ║  │      MAINTENANCE            │   │         MONITORING              │   │       CLOUDWATCH ALARMS                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • maintenance_window        │   │ • monitoring_interval           │   │ • cloudwatch_alarms_creation_enabled              │  ║
-║  │ • auto_minor_version_upgrade│   │ • monitoring_role_arn           │   │ • cloudwatch_alarm_cpu_threshold        │  ║
-║  │ • allow_major_version_upgrade│  │ • monitoring_role_creation_enabled        │   │ • cloudwatch_alarm_storage_threshold    │  ║
-║  │ • apply_immediately         │   │ • performance_insights_enabled  │   │ • cloudwatch_alarm_connections_threshold│  ║
+║  │ • minor_version_auto_upgrade_enabled│ • monitoring_role_arn           │   │ • cloudwatch_alarm_cpu_threshold        │  ║
+║  │ • major_version_upgrade_enabled│ │ • monitoring_role_creation_enabled        │   │ • cloudwatch_alarm_storage_threshold    │  ║
+║  │ • immediate_apply_enabled   │   │ • performance_insights_enabled  │   │ • cloudwatch_alarm_connections_threshold│  ║
 ║  │ • deletion_protection_enabled       │   │ • perf_insights_retention_period│   │ • cloudwatch_alarm_actions              │  ║
 ║  └─────────────────────────────┘   │ • perf_insights_kms_key_id      │   │ • cloudwatch_ok_actions                 │  ║
 ║                                    │ • enabled_cw_logs_exports       │   └─────────────────────────────────────────┘  ║
@@ -581,14 +581,14 @@ Valid log export types depend on the database engine:
 ║    │  Attributes:                                                                                                 │    ║
 ║    │  • identifier, engine, engine_version, instance_class                                                        │    ║
 ║    │  • allocated_storage, max_allocated_storage, storage_type, iops, storage_throughput                          │    ║
-║    │  • db_subnet_group_name, vpc_security_group_ids, publicly_accessible, port                                   │    ║
-║    │  • multi_az, availability_zone                                                                               │    ║
-║    │  • username, manage_master_user_password, master_user_secret_kms_key_id                                      │    ║
+║    │  • db_subnet_group_name, vpc_security_group_ids, public_access_enabled, port                                 │    ║
+║    │  • multi_az_enabled, availability_zone                                                                       │    ║
+║    │  • username, master_user_password_management_enabled, master_user_secret_kms_key_id                          │    ║
 ║    │  • db_name, parameter_group_name, option_group_name                                                          │    ║
-║    │  • storage_encrypted, kms_key_id, iam_database_authentication_enabled                                        │    ║
+║    │  • storage_encryption_enabled, kms_key_id, iam_database_authentication_enabled                               │    ║
 ║    │  • backup_retention_period, backup_window, maintenance_window                                                │    ║
 ║    │  • monitoring_interval, monitoring_role_arn, performance_insights_enabled                                    │    ║
-║    │  • enabled_cloudwatch_logs_exports, deletion_protection_enabled, skip_final_snapshot                                 │    ║
+║    │  • enabled_cloudwatch_logs_exports, deletion_protection_enabled, final_snapshot_creation_enabled             │    ║
 ║    │                                                                                                              │    ║
 ║    │  ┌─────────────────────────────┐                                                                             │    ║
 ║    │  │ dynamic "blue_green_update" │  (enabled for MySQL/MariaDB zero-downtime updates)                          │    ║
@@ -684,11 +684,11 @@ Valid log export types depend on the database engine:
 ║  var.allocated_storage ─────────────────►│                                                       │                     ║
 ║  var.storage_type ──────────────────────►│                                                       │                     ║
 ║  var.iops ──────────────────────────────►│                                                       │                     ║
-║  var.storage_encrypted ─────────────────►│                    aws_db_instance.this               │                     ║
+║  var.storage_encryption_enabled ────────►│                    aws_db_instance.this               │                     ║
 ║  var.kms_key_id ────────────────────────►│                                                       │                     ║
-║  var.multi_az ──────────────────────────►│                                                       │                     ║
+║  var.multi_az_enabled ──────────────────►│                                                       │                     ║
 ║  var.username ──────────────────────────►│                                                       │                     ║
-║  var.manage_master_user_password ───────►│                                                       │                     ║
+║  var.master_user_password_management_enabled ─►│                                                  │                     ║
 ║  var.backup_retention_period ───────────►│                                                       │                     ║
 ║  var.deletion_protection_enabled ───────────────►│                                                       │                     ║
 ║  var.performance_insights_enabled ──────►│                                                       │                     ║

@@ -113,7 +113,7 @@ module "ecs_service" {
 
   # Don't wait for steady state to speed up tests
   # (placeholder container may not be healthy)
-  wait_for_steady_state = false
+  steady_state_wait_enabled = false
 
   # Disable circuit breaker for testing (placeholder container won't be healthy)
   deployment_circuit_breaker = {

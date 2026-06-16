@@ -117,7 +117,7 @@ module "ecs_service" {
   container_port = 80
 
   # Don't wait for steady state to speed up tests
-  wait_for_steady_state = false
+  steady_state_wait_enabled = false
 
   # Disable circuit breaker for testing (placeholder container won't be healthy)
   deployment_circuit_breaker = {
