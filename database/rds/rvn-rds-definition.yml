@@ -4,7 +4,7 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 1.0.0
+  version: 0.3.0
   description: Rename RDS boolean inputs to match Terraform naming conventions
 module:
   inputs:

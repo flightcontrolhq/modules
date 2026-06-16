@@ -3,7 +3,7 @@ definition:
   name: AWS IAM Role
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
-  version: 1.0.0
+  version: 0.2.0
   description: Rename IAM policy detach input to match Terraform naming conventions
 module:
   inputs:

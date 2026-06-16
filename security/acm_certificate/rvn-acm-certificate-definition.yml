@@ -3,7 +3,7 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 1.0.0
+  version: 0.3.0
   description: Rename ACM validation wait input to match Terraform naming conventions
 module:
   inputs:

@@ -3,7 +3,7 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 1.0.0
+  version: 0.5.0
   description: Rename ECS web boolean inputs to match Terraform naming conventions
 module:
   inputs:

@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.1.2
-  description: Mark destructive static hosting inputs immutable
+  version: 0.2.0
+  description: Rename static hosting deploy role input to match Terraform naming conventions
 module:
   build:
     builder: >-
