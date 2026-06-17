@@ -200,6 +200,131 @@ module:
       show_when:
         build_type: nixpacks
     - $include: ../../partials/inputs/nixpacks-advanced.yml
+    - id: section_deployment
+      label: Deployment
+      type: section
+    - id: deployment_strategy
+      label: Deployment strategy
+      type: string
+      required: true
+      default: rolling
+      values:
+        - label: Rolling
+          value: rolling
+        - label: Blue/green
+          value: blue_green
+        - label: Linear
+          value: linear
+        - label: Canary
+          value: canary
+    - id: deployment_bake_time_in_minutes
+      label: Bake time in minutes
+      type: number
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default: 10
+    - id: linear_step_percentage
+      label: Linear step percentage
+      type: number
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: linear
+      default: 20
+    - id: linear_step_bake_time_in_minutes
+      label: Linear step bake time in minutes
+      type: number
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: linear
+      default: 5
+    - id: canary_percent
+      label: Canary percent
+      type: number
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: canary
+      default: 5
+    - id: canary_bake_time_in_minutes
+      label: Canary bake time in minutes
+      type: number
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: canary
+      default: 10
+    - id: deployment_pause_stages
+      label: Manual approval gates
+      type: object_array
+      description: Optional gates that pause the deployment at chosen lifecycle stages until you approve it. Applies only to the blue/green, linear, and canary strategies.
+      collapsible: true
+      item_inputs:
+        - id: stage
+          label: Stage
+          type: string
+          description: Deployment lifecycle stage at which to pause and wait for manual approval.
+          default: POST_TEST_TRAFFIC_SHIFT
+          values:
+            - label: Reconcile service
+              description: Pause during service reconciliation, before ECS finalizes the deployment.
+              value: RECONCILE_SERVICE
+            - label: Pre scale up
+              description: Pause before the new task set scales up.
+              value: PRE_SCALE_UP
+            - label: Post scale up
+              description: Pause after the new task set has scaled up and become healthy.
+              value: POST_SCALE_UP
+            - label: Post test traffic shift
+              description: Pause after test traffic is shifted to the new (green) tasks, so you can validate them before production traffic moves.
+              value: POST_TEST_TRAFFIC_SHIFT
+            - label: Pre production traffic shift
+              description: Pause before production traffic begins shifting to the new tasks.
+              value: PRE_PRODUCTION_TRAFFIC_SHIFT
+            - label: Post production traffic shift
+              description: Pause after production traffic has fully shifted to the new tasks, before the old tasks are removed.
+              value: POST_PRODUCTION_TRAFFIC_SHIFT
+        - id: timeout_in_minutes
+          label: Timeout (minutes)
+          type: number
+          description: Minutes to wait for manual approval before the timeout action runs. Matches the AWS default of 1,440 minutes (24 hours).
+          max: 20160
+          min: 1
+          required: true
+          default: 1440
+        - id: timeout_action
+          label: On timeout
+          type: string
+          description: Action to take if approval is not given before the timeout elapses. Defaults to rolling back.
+          required: true
+          default: ROLLBACK
+          values:
+            - label: Roll back
+              description: Roll the deployment back to the previous revision.
+              value: ROLLBACK
+            - label: Continue
+              description: Proceed with the deployment as if it were approved.
+              value: CONTINUE
+      item_label: Pause stage
+      item_title_field: stage
+      item_summary:
+        - timeout_in_minutes
+        - timeout_action
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default:
+        - stage: POST_TEST_TRAFFIC_SHIFT
+          timeout_in_minutes: 1440
+          timeout_action: ROLLBACK
     - id: section_health
       label: Health check
       type: section
@@ -1433,6 +1558,32 @@ module:
     concurrency:
       queue_overflow: oldest
       queue_size: 1
+    strategy: |
+      <<
+      module.input.deployment_strategy == "rolling" ? nil :
+      module.input.deployment_strategy == "blue_green" ? {
+        "type": "blue_green",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages
+      } :
+      module.input.deployment_strategy == "linear" ? {
+        "type": "linear",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "linear": {
+          "step_percentage": module.input.linear_step_percentage,
+          "step_bake_time_in_minutes": module.input.linear_step_bake_time_in_minutes
+        }
+      } : {
+        "type": "canary",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "canary": {
+          "canary_percent": module.input.canary_percent,
+          "canary_bake_time_in_minutes": module.input.canary_bake_time_in_minutes
+        }
+      }
+      >>
     infrastructure:
       ecs_cluster_arn: <<stack.output.service_cluster>>
       ecs_service_arn: <<stack.output.service_arn>>
