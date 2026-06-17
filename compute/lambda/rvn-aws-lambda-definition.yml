@@ -1,0 +1,956 @@
+definition:
+  type: rvn-aws-lambda
+  name: AWS Lambda
+  description: AWS Lambda function with runtime configuration, IAM role management, CloudWatch logs, function URLs, aliases, permissions, and event sources.
+release:
+  version: 0.1.0
+  description: Add initial Lambda module definition
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $include: ../../partials/inputs/aws-region.yml
+    - id: section_function
+      label: Lambda function
+      type: section
+    - default: regional
+      id: lambda_type
+      label: Lambda type
+      required: true
+      type: string
+      values:
+        - label: Regional Lambda
+          value: regional
+        - label: CloudFront Lambda@Edge
+          value: edge
+    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      description: Name of the Lambda function. Must be unique in the selected AWS Region.
+      id: name
+      immutable: true
+      label: Function name
+      patterns:
+        - message: Use 1-64 letters, numbers, hyphens, or underscores.
+          pattern: ^[A-Za-z0-9-_]{1,64}$
+      required: true
+      type: string
+    - description: Description stored on the Lambda function.
+      id: description
+      label: Description
+      collapsible: true
+      type: string
+    - default: Zip
+      id: package_type
+      immutable: true
+      label: Package type
+      required: true
+      type: string
+      values:
+        - label: Zip
+          value: Zip
+        - label: Image
+          value: Image
+          show_when:
+            lambda_type: regional
+    - add_button_label: Add architecture
+      default:
+        - x86_64
+      description: Instruction set architectures for the Lambda function.
+      id: architectures
+      label: Architectures
+      required: true
+      show_when:
+        lambda_type: regional
+      type: string_array
+      values:
+        - label: x86_64
+          value: x86_64
+        - label: arm64
+          value: arm64
+    - default: false
+      description: Publish a new immutable Lambda version on function updates. Required for Lambda@Edge and aliases that target published versions.
+      id: version_publishing_enabled
+      label: Version publishing
+      show_when:
+        lambda_type: regional
+      type: boolean
+    - id: section_zip_package
+      label: Zip package
+      show_when:
+        package_type: Zip
+      type: section
+    - description: Lambda runtime for Zip packages.
+      default: $values:first
+      id: runtime
+      label: Runtime
+      placeholder: nodejs20.x
+      required: true
+      show_when:
+        package_type: Zip
+      type: string
+      values:
+        - label: Node.js 22.x
+          value: nodejs22.x
+        - label: Node.js 20.x
+          value: nodejs20.x
+        - label: Python 3.13
+          value: python3.13
+        - label: Python 3.12
+          value: python3.12
+        - label: Python 3.11
+          value: python3.11
+        - label: Ruby 3.4
+          value: ruby3.4
+        - label: Ruby 3.3
+          value: ruby3.3
+        - label: Java 21
+          value: java21
+        - label: Java 17
+          value: java17
+        - label: .NET 8
+          value: dotnet8
+        - label: Go provided AL2023
+          value: provided.al2023
+    - description: Function entrypoint for Zip packages.
+      id: handler
+      label: Handler
+      placeholder: index.handler
+      required: true
+      show_when:
+        package_type: Zip
+      type: string
+    - collapsible: true
+      description: S3 bucket containing the deployment package. Leave empty to create a managed placeholder code bucket.
+      id: s3_bucket
+      label: Package S3 bucket
+      show_when:
+        package_type: Zip
+      type: string
+    - collapsible: true
+      description: S3 key of the deployment package. Required when Package S3 bucket is set.
+      id: s3_key
+      label: Package S3 key
+      show_when:
+        package_type: Zip
+      type: string
+    - collapsible: true
+      description: S3 object version containing the deployment package.
+      id: s3_object_version
+      label: Package S3 object version
+      show_when:
+        package_type: Zip
+      type: string
+    - collapsible: true
+      description: Name for the managed code bucket created when no package S3 bucket is provided. Defaults to <function-name>-code-<account-id>.
+      id: code_bucket_name
+      label: Managed code bucket name
+      show_when:
+        package_type: Zip
+      type: string
+    - collapsible: true
+      default: true
+      description: Force-delete the managed code bucket and its objects during destroy. Use with caution.
+      id: code_bucket_force_destroy_enabled
+      label: Force destroy code bucket
+      show_when:
+        package_type: Zip
+      type: boolean
+    - collapsible: true
+      default: placeholder.zip
+      description: S3 key for the initial placeholder deployment package in the managed code bucket.
+      id: placeholder_object_key
+      label: Placeholder object key
+      show_when:
+        package_type: Zip
+      type: string
+    - id: section_image_package
+      label: Image package
+      show_when:
+        lambda_type: regional
+        package_type: Image
+      type: section
+    - description: Container image URI for Image package type.
+      id: image_uri
+      label: Image URI
+      placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/function:latest
+      required: true
+      show_when:
+        lambda_type: regional
+        package_type: Image
+      type: string
+    - add_button_label: Add command item
+      collapsible: true
+      default: []
+      description: Command arguments that override the container image CMD.
+      id: image_config_command
+      label: Image command
+      show_when:
+        lambda_type: regional
+        package_type: Image
+      type: string_array
+    - add_button_label: Add entry point item
+      collapsible: true
+      default: []
+      description: Entry point arguments that override the container image ENTRYPOINT.
+      id: image_config_entry_point
+      label: Image entry point
+      show_when:
+        lambda_type: regional
+        package_type: Image
+      type: string_array
+    - collapsible: true
+      description: Working directory inside the container image.
+      id: image_config_working_directory
+      label: Image working directory
+      placeholder: /var/task
+      show_when:
+        lambda_type: regional
+        package_type: Image
+      type: string
+    - id: section_runtime
+      label: Runtime configuration
+      show_when:
+        lambda_type: regional
+      type: section
+    - default: 128
+      description: Memory allocated to the function in MB. Valid range is 128-10240 MB.
+      id: memory_size
+      label: Memory size (MB)
+      max: 10240
+      min: 128
+      show_when:
+        lambda_type: regional
+      type: number
+    - default: 5
+      description: Function timeout in seconds. Valid range is 1-900 seconds.
+      id: timeout
+      label: Timeout (secs)
+      max: 900
+      min: 1
+      show_when:
+        lambda_type: regional
+      type: number
+    - collapsible: true
+      default: 512
+      description: Size of the /tmp directory in MB.
+      id: ephemeral_storage_size
+      label: Ephemeral storage (MB)
+      max: 10240
+      min: 512
+      show_when:
+        lambda_type: regional
+      type: number
+    - add_button_label: Add layer ARN
+      collapsible: true
+      default: []
+      description: Lambda layer ARNs attached to the function.
+      id: layers
+      label: Layers
+      placeholder: arn:aws:lambda:...
+      show_when:
+        lambda_type: regional
+      type: string_array
+    - collapsible: true
+      description: Reserved concurrent executions. Use -1 to remove limits.
+      id: reserved_concurrent_executions
+      label: Reserved concurrency
+      min: -1
+      show_when:
+        lambda_type: regional
+      type: number
+    - collapsible: true
+      description: KMS key ARN used to encrypt environment variables.
+      id: kms_key_arn
+      label: Environment KMS key ARN
+      placeholder: arn:aws:kms:...
+      show_when:
+        lambda_type: regional
+      type: string
+    - default: PassThrough
+      description: X-Ray tracing mode for the function.
+      id: tracing_mode
+      label: X-Ray tracing mode
+      show_when:
+        lambda_type: regional
+      type: string
+      values:
+        - label: Pass through
+          value: PassThrough
+        - label: Active
+          value: Active
+    - collapsible: true
+      description: SQS or SNS ARN used as the function dead letter queue target.
+      id: dead_letter_target_arn
+      label: Dead letter target ARN
+      placeholder: arn:aws:sqs:...
+      show_when:
+        lambda_type: regional
+      type: string
+    - collapsible: true
+      default: []
+      description: EFS access point and local mount path configurations.
+      id: file_system_configs
+      item_inputs:
+        - description: EFS access point ARN.
+          id: arn
+          label: Access point ARN
+          placeholder: arn:aws:elasticfilesystem:...
+          required: true
+          type: string
+        - description: Local mount path inside the Lambda execution environment.
+          id: local_mount_path
+          label: Local mount path
+          placeholder: /mnt/data
+          required: true
+          type: string
+      item_label: File system config
+      label: File system configs
+      required: false
+      show_when:
+        lambda_type: regional
+      type: object_array
+    - collapsible: true
+      description: Enable SnapStart for published Lambda versions.
+      id: snap_start_apply_on
+      label: SnapStart apply on
+      show_when:
+        lambda_type: regional
+      type: string
+      values:
+        - label: Published versions
+          value: PublishedVersions
+    - collapsible: true
+      description: Lambda code signing configuration ARN.
+      id: code_signing_config_arn
+      label: Code signing config ARN
+      placeholder: arn:aws:lambda:...
+      show_when:
+        lambda_type: regional
+      type: string
+    - id: section_environment
+      label: Environment variables
+      show_when:
+        lambda_type: regional
+      type: section
+    - default: {}
+      description: Plain environment variables passed to the function.
+      id: environment_variables
+      label: Environment variables
+      placeholder: |-
+        {
+          "NODE_ENV": "production",
+          "API_URL": "https://api.example.com"
+        }
+      required: false
+      show_when:
+        lambda_type: regional
+      type: object
+    - id: section_vpc
+      label: VPC config
+      show_when:
+        lambda_type: regional
+      type: section
+    - default: false
+      description: Optional. Attach the Lambda function to a VPC only when it needs private network access.
+      id: vpc_config_enabled
+      label: VPC access
+      show_when:
+        lambda_type: regional
+      type: boolean
+    - id: network
+      description: Optional VPC network for Lambda VPC access. Leave empty for a Lambda function that does not attach to a VPC.
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Private subnet IDs from the selected VPC network.
+          id: private_subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          type: string_array
+        - add_button_label: Add public subnet ID
+          default: <<ref.stack.output.public_subnet_ids>>
+          description: Public subnet IDs from the selected VPC network.
+          id: public_subnet_ids
+          immutable: true
+          label: Public subnet IDs
+          type: string_array
+      required: true
+      show_when:
+        lambda_type: regional
+        vpc_config_enabled: true
+      type: $ref:rvn-aws-network
+    - default: true
+      description: Use private subnets from the selected VPC network. Turn off to use public subnets.
+      id: private_subnet_placement_enabled
+      label: Run in private subnets
+      show_when:
+        lambda_type: regional
+        vpc_config_enabled: true
+      type: boolean
+    - add_button_label: Add security group ID
+      description: Security group IDs to attach to the Lambda function ENIs.
+      id: vpc_security_group_ids
+      label: Security group IDs
+      placeholder: sg-...
+      required: true
+      show_when:
+        lambda_type: regional
+        vpc_config_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Allow outbound IPv6 for dual-stack subnets.
+      id: vpc_ipv6_allowed_for_dual_stack
+      label: IPv6 allowed for dual stack
+      show_when:
+        lambda_type: regional
+        vpc_config_enabled: true
+      type: boolean
+    - id: section_role
+      label: IAM permissions
+      type: section
+    - default: true
+      description: Create an IAM role for the Lambda function.
+      id: role_creation_enabled
+      immutable: true
+      label: Create IAM role
+      type: boolean
+    - description: Existing IAM role ARN to use when Create IAM role is disabled.
+      id: role_arn
+      label: Existing role ARN
+      placeholder: arn:aws:iam::123456789012:role/lambda-role
+      required: true
+      show_when:
+        role_creation_enabled: false
+      type: string
+    - collapsible: true
+      description: Custom IAM role name. Defaults to <function-name>-lambda-role.
+      id: role_name
+      immutable: true
+      label: Role name
+      show_when:
+        role_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: /
+      description: IAM path for the created role.
+      id: role_path
+      immutable: true
+      label: Role path
+      show_when:
+        role_creation_enabled: true
+      type: string
+    - collapsible: true
+      description: Permissions boundary ARN for the created role.
+      id: role_permissions_boundary
+      label: Role permissions boundary ARN
+      placeholder: arn:aws:iam::123456789012:policy/Boundary
+      show_when:
+        role_creation_enabled: true
+      type: string
+    - default: true
+      collapsible: true
+      description: Attach AWSLambdaBasicExecutionRole to the created role.
+      id: basic_execution_policy_enabled
+      label: Basic execution policy
+      show_when:
+        role_creation_enabled: true
+      type: boolean
+    - default: true
+      collapsible: true
+      description: Attach AWSLambdaVPCAccessExecutionRole to the created role when VPC config is set.
+      id: vpc_execution_policy_enabled
+      label: VPC execution policy
+      show_when:
+        lambda_type: regional
+        role_creation_enabled: true
+      type: boolean
+    - add_button_label: Add managed policy ARN
+      collapsible: true
+      default: []
+      description: Additional managed policy ARNs attached to the created role.
+      id: role_managed_policy_arns
+      label: Additional managed policy ARNs
+      placeholder: arn:aws:iam::aws:policy/ReadOnlyAccess
+      show_when:
+        role_creation_enabled: true
+      type: string_array
+    - collapsible: true
+      default: {}
+      description: Map of inline policy names to JSON policy documents attached to the created role.
+      id: role_inline_policies
+      label: Inline JSON policies
+      show_when:
+        role_creation_enabled: true
+      type: object
+    - collapsible: true
+      default: []
+      description: Resource-based Lambda permission statements that allow AWS services or accounts to invoke the function.
+      id: permissions
+      item_inputs:
+        - description: Optional unique statement ID.
+          id: statement_id
+          label: Statement ID
+          required: false
+          type: string
+        - default: lambda:InvokeFunction
+          description: Lambda action allowed by this permission.
+          id: action
+          label: Action
+          required: true
+          type: string
+        - description: Principal allowed to invoke the function.
+          id: principal
+          label: Principal
+          placeholder: events.amazonaws.com
+          required: true
+          type: string
+        - description: Optional source ARN that scopes the permission.
+          id: source_arn
+          label: Source ARN
+          required: false
+          type: string
+        - description: Optional source AWS account ID that scopes the permission.
+          id: source_account
+          label: Source account
+          required: false
+          type: string
+      item_label: Permission
+      label: Invoke permissions
+      required: false
+      show_when:
+        lambda_type: regional
+      type: object_array
+    - id: section_logs
+      label: CloudWatch logs
+      type: section
+    - default: true
+      description: Create the CloudWatch log group for the function.
+      id: log_group_creation_enabled
+      label: Create log group
+      type: boolean
+    - collapsible: true
+      default: 30
+      description: CloudWatch log retention in days. Use 0 to never expire logs.
+      id: log_retention_days
+      label: Log retention days
+      show_when:
+        log_group_creation_enabled: true
+      type: number
+      values:
+        - label: Never expire
+          value: 0
+        - label: 1 day
+          value: 1
+        - label: 3 days
+          value: 3
+        - label: 5 days
+          value: 5
+        - label: 7 days
+          value: 7
+        - label: 14 days
+          value: 14
+        - label: 30 days
+          value: 30
+        - label: 60 days
+          value: 60
+        - label: 90 days
+          value: 90
+        - label: 180 days
+          value: 180
+        - label: 1 year
+          value: 365
+    - collapsible: true
+      description: Custom CloudWatch log group name. Defaults to /aws/lambda/<function-name>.
+      id: log_group_name
+      label: Log group name
+      show_when:
+        log_group_creation_enabled: true
+      type: string
+    - collapsible: true
+      description: KMS key ID or ARN for log group encryption.
+      id: log_kms_key_id
+      label: Log KMS key ID
+      show_when:
+        log_group_creation_enabled: true
+      type: string
+    - id: section_event_sources_aliases
+      label: Event sources and aliases
+      show_when:
+        lambda_type: regional
+      type: section
+    - default: []
+      description: Event source mappings for streams, queues, and self-managed sources. Use advanced Terraform variables for uncommon nested mapping options.
+      id: event_source_mappings
+      show_when:
+        lambda_type: regional
+      item_inputs:
+        - description: Event source ARN, such as SQS, Kinesis, DynamoDB Streams, or MQ.
+          id: event_source_arn
+          label: Event source ARN
+          placeholder: arn:aws:sqs:...
+          required: true
+          type: string
+        - default: true
+          description: Enable this event source mapping.
+          id: enabled
+          label: Enabled
+          type: boolean
+        - description: Number of records Lambda reads from the source per batch.
+          id: batch_size
+          label: Batch size
+          min: 1
+          required: false
+          type: number
+        - description: Maximum time in seconds to gather records before invoking the function.
+          id: maximum_batching_window_in_seconds
+          label: Maximum batching window (secs)
+          min: 0
+          required: false
+          type: number
+        - description: Starting position for stream sources.
+          id: starting_position
+          label: Starting position
+          required: false
+          type: string
+          values:
+            - label: Trim horizon
+              value: TRIM_HORIZON
+            - label: Latest
+              value: LATEST
+            - label: At timestamp
+              value: AT_TIMESTAMP
+        - collapsible: true
+          description: Destination ARN used when Lambda cannot process records.
+          id: destination_config_on_failure_arn
+          label: On-failure destination ARN
+          required: false
+          type: string
+      item_label: Event source mapping
+      label: Event source mappings
+      required: false
+      type: object_array
+    - collapsible: true
+      default: {}
+      description: Lambda aliases keyed by alias name. Use aliases when callers need a stable function ARN, when routing traffic between published versions, or when integrating with services that should not point directly at $LATEST.
+      id: aliases
+      show_when:
+        lambda_type: regional
+      item_inputs:
+        - description: Alias description.
+          id: description
+          label: Description
+          required: false
+          type: string
+        - description: Function version the alias points to.
+          id: function_version
+          label: Function version
+          placeholder: "1"
+          required: false
+          type: string
+        - collapsible: true
+          description: Additional version weights for traffic shifting.
+          id: routing_additional_version_weights
+          label: Additional version weights
+          required: false
+          type: object
+      item_label: Alias
+      key:
+        label: Alias name
+        placeholder: live
+      label: Aliases
+      required: false
+      type: object_map
+    - id: section_function_url
+      label: Function URL
+      show_when:
+        lambda_type: regional
+      type: section
+    - default: false
+      description: Create a Lambda function URL endpoint.
+      id: function_url_enabled
+      label: Function URL
+      show_when:
+        lambda_type: regional
+      type: boolean
+    - default: AWS_IAM
+      description: Authorization type for the function URL.
+      id: function_url_auth_type
+      label: Function URL auth type
+      required: true
+      show_when:
+        function_url_enabled: true
+        lambda_type: regional
+      type: string
+      values:
+        - label: AWS IAM
+          value: AWS_IAM
+        - label: None
+          value: NONE
+    - default: BUFFERED
+      description: Invoke mode for the function URL.
+      id: function_url_invoke_mode
+      label: Function URL invoke mode
+      required: true
+      show_when:
+        function_url_enabled: true
+        lambda_type: regional
+      type: string
+      values:
+        - label: Buffered
+          value: BUFFERED
+        - label: Response stream
+          value: RESPONSE_STREAM
+    - collapsible: true
+      default: false
+      description: Configure CORS headers for the function URL.
+      id: function_url_cors_enabled
+      label: Function URL CORS
+      show_when:
+        function_url_enabled: true
+        lambda_type: regional
+      type: boolean
+    - add_button_label: Add allowed origin
+      description: Origins allowed to call the function URL.
+      id: function_url_cors_allow_origins
+      label: Allowed origins
+      placeholder: https://example.com
+      required: true
+      show_when:
+        function_url_cors_enabled: true
+        function_url_enabled: true
+        lambda_type: regional
+      type: string_array
+    - add_button_label: Add allowed method
+      default:
+        - GET
+        - POST
+      description: HTTP methods allowed by function URL CORS.
+      id: function_url_cors_allow_methods
+      label: Allowed methods
+      required: true
+      show_when:
+        function_url_cors_enabled: true
+        function_url_enabled: true
+        lambda_type: regional
+      type: string_array
+      values:
+        - label: GET
+          value: GET
+        - label: POST
+          value: POST
+        - label: PUT
+          value: PUT
+        - label: PATCH
+          value: PATCH
+        - label: DELETE
+          value: DELETE
+        - label: HEAD
+          value: HEAD
+        - label: OPTIONS
+          value: OPTIONS
+    - add_button_label: Add allowed header
+      collapsible: true
+      default: []
+      description: HTTP headers allowed in CORS requests.
+      id: function_url_cors_allow_headers
+      label: Allowed headers
+      show_when:
+        function_url_cors_enabled: true
+        function_url_enabled: true
+        lambda_type: regional
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Allow browsers to include credentials in CORS requests.
+      id: function_url_cors_allow_credentials
+      label: Allow credentials
+      show_when:
+        function_url_cors_enabled: true
+        function_url_enabled: true
+        lambda_type: regional
+      type: boolean
+    - add_button_label: Add exposed header
+      collapsible: true
+      default: []
+      description: Response headers browsers may expose to client code.
+      id: function_url_cors_expose_headers
+      label: Exposed headers
+      show_when:
+        function_url_cors_enabled: true
+        function_url_enabled: true
+        lambda_type: regional
+      type: string_array
+    - collapsible: true
+      description: Seconds browsers can cache the CORS preflight response.
+      id: function_url_cors_max_age
+      label: Max age (secs)
+      min: 0
+      show_when:
+        function_url_cors_enabled: true
+        function_url_enabled: true
+        lambda_type: regional
+      type: number
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/lambda
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        aliases: >-
+          << module.input.lambda_type == "edge" ? {} : (module.input.aliases || {}) >>
+        architectures: >-
+          << module.input.lambda_type == "edge" ? ["x86_64"] : module.input.architectures >>
+        basic_execution_policy_enabled: << module.input.basic_execution_policy_enabled >>
+        code_bucket_force_destroy_enabled: << module.input.code_bucket_force_destroy_enabled >>
+        code_bucket_name: << module.input.code_bucket_name >>
+        code_signing_config_arn: >-
+          << module.input.lambda_type == "edge" ? nil : module.input.code_signing_config_arn >>
+        dead_letter_target_arn: >-
+          << module.input.lambda_type == "edge" ? nil : module.input.dead_letter_target_arn >>
+        description: << module.input.description >>
+        environment_variables: >-
+          << module.input.lambda_type == "edge" ? {} : (module.input.environment_variables || {}) >>
+        ephemeral_storage_size: >-
+          << module.input.lambda_type == "edge" ? 512 : module.input.ephemeral_storage_size >>
+        event_source_mappings: >-
+          << module.input.lambda_type == "edge" ? [] : (module.input.event_source_mappings || []) >>
+        file_system_configs: >-
+          << module.input.lambda_type == "edge" ? [] : (module.input.file_system_configs || []) >>
+        function_url_auth_type: << module.input.function_url_auth_type >>
+        function_url_cors: >-
+          << module.input.lambda_type == "edge" ? nil : (module.input.function_url_cors_enabled ? {allow_credentials:
+          module.input.function_url_cors_allow_credentials, allow_headers:
+          module.input.function_url_cors_allow_headers || [], allow_methods:
+          module.input.function_url_cors_allow_methods || [], allow_origins:
+          module.input.function_url_cors_allow_origins || [], expose_headers:
+          module.input.function_url_cors_expose_headers || [], max_age:
+          module.input.function_url_cors_max_age} : nil) >>
+        function_url_enabled: >-
+          << module.input.lambda_type == "edge" ? false : module.input.function_url_enabled >>
+        function_url_invoke_mode: << module.input.function_url_invoke_mode >>
+        handler: << module.input.handler >>
+        image_config: >-
+          << module.input.lambda_type == "edge" || module.input.package_type != "Image" ? nil : ((len(module.input.image_config_command || []) > 0 || len(module.input.image_config_entry_point
+          || []) > 0 || module.input.image_config_working_directory) ? {command:
+          (len(module.input.image_config_command || []) > 0 ? module.input.image_config_command : nil),
+          entry_point: (len(module.input.image_config_entry_point || []) > 0 ?
+          module.input.image_config_entry_point : nil), working_directory:
+          module.input.image_config_working_directory} : nil) >>
+        image_uri: >-
+          << module.input.lambda_type != "edge" && module.input.package_type == "Image" ? module.input.image_uri : nil >>
+        kms_key_arn: >-
+          << module.input.lambda_type == "edge" ? nil : module.input.kms_key_arn >>
+        lambda_at_edge_enabled: << module.input.lambda_type == "edge" >>
+        layers: >-
+          << module.input.lambda_type == "edge" ? [] : (module.input.layers || []) >>
+        log_group_creation_enabled: << module.input.log_group_creation_enabled >>
+        log_group_name: << module.input.log_group_name >>
+        log_kms_key_id: << module.input.log_kms_key_id >>
+        log_retention_days: << module.input.log_retention_days >>
+        memory_size: >-
+          << module.input.lambda_type == "edge" ? 128 : module.input.memory_size >>
+        name: << module.input.name >>
+        package_type: >-
+          << module.input.lambda_type == "edge" ? "Zip" : module.input.package_type >>
+        permissions: >-
+          << module.input.lambda_type == "edge" ? [] : (module.input.permissions || []) >>
+        placeholder_object_key: << module.input.placeholder_object_key >>
+        region: << module.input.aws_region >>
+        reserved_concurrent_executions: >-
+          << module.input.lambda_type == "edge" ? nil : module.input.reserved_concurrent_executions >>
+        role_arn: << module.input.role_arn >>
+        role_creation_enabled: << module.input.role_creation_enabled >>
+        role_inline_policies: << module.input.role_inline_policies || {} >>
+        role_managed_policy_arns: << module.input.role_managed_policy_arns || [] >>
+        role_name: << module.input.role_name >>
+        role_path: << module.input.role_path >>
+        role_permissions_boundary: << module.input.role_permissions_boundary >>
+        runtime: << module.input.runtime >>
+        s3_bucket: << module.input.s3_bucket >>
+        s3_key: << module.input.s3_key >>
+        s3_object_version: << module.input.s3_object_version >>
+        snap_start_apply_on: >-
+          << module.input.lambda_type == "edge" ? nil : module.input.snap_start_apply_on >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        timeout: >-
+          << module.input.lambda_type == "edge" ? 5 : module.input.timeout >>
+        tracing_mode: >-
+          << module.input.lambda_type == "edge" ? "PassThrough" : module.input.tracing_mode >>
+        version_publishing_enabled: >-
+          << module.input.lambda_type == "edge" ? true : module.input.version_publishing_enabled >>
+        vpc_config: >-
+          << module.input.lambda_type == "edge" ? nil : (module.input.vpc_config_enabled && module.input.vpc_id ? {subnet_ids:
+          (module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids :
+          module.input.public_subnet_ids), security_group_ids: module.input.vpc_security_group_ids,
+          ipv6_allowed_for_dual_stack: module.input.vpc_ipv6_allowed_for_dual_stack} : nil) >>
+        vpc_execution_policy_enabled: >-
+          << module.input.lambda_type == "edge" ? false : module.input.vpc_execution_policy_enabled >>
+  ui:
+    metrics:
+      - id: invocations
+        name: Invocations
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Invocations
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: errors
+        name: Errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Errors
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: duration
+        name: Duration
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Duration
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Average
+      - id: throttles
+        name: Throttles
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Throttles
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Sum
+  readme: |
+    AWS Lambda module definition documentation is coming soon.
+
+    ## Overview
+
+    This placeholder will be replaced with full Lambda module documentation after the infrastructure form fields are finalized.
