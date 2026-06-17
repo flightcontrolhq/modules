@@ -925,7 +925,7 @@ module:
     - id: allowed_cidr_blocks
       label: Allowed CIDR blocks
       type: string_array
-      description: CIDR blocks allowed direct access to ECS tasks.
+      description: CIDR blocks allowed direct access to the service in addition to load balancer traffic.
       collapsible: true
       required: false
       default: []
