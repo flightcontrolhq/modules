@@ -20,9 +20,10 @@ Creates an ElastiCache cluster with support for Redis, Valkey, Memcached, and El
 module "redis" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name      = "my-redis"
-  engine    = "redis"
-  node_type = "cache.t4g.micro"
+  name                 = "my-redis"
+  engine               = "redis"
+  engine_major_version = "7"
+  node_type            = "cache.t4g.micro"
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -41,10 +42,11 @@ module "redis" {
 module "valkey" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name           = "my-valkey"
-  engine         = "valkey"
-  engine_version = "8.0"
-  node_type      = "cache.r7g.large"
+  name                 = "my-valkey"
+  engine               = "valkey"
+  engine_major_version = "8"
+  engine_minor_version = "0"
+  node_type            = "cache.r7g.large"
 
   replicas_per_node_group    = 2
   automatic_failover_enabled = true
@@ -68,6 +70,7 @@ module "redis_cluster" {
 
   name                    = "my-redis-cluster"
   engine                  = "redis"
+  engine_major_version    = "7"
   node_type               = "cache.r7g.large"
   cluster_mode_enabled    = true
   num_node_groups         = 3
@@ -94,10 +97,11 @@ module "redis_cluster" {
 module "memcached" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name            = "my-memcached"
-  engine          = "memcached"
-  node_type       = "cache.t4g.micro"
-  num_cache_nodes = 3
+  name                 = "my-memcached"
+  engine               = "memcached"
+  engine_major_version = "1.6"
+  node_type            = "cache.t4g.micro"
+  num_cache_nodes      = 3
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -112,9 +116,10 @@ module "memcached" {
 module "redis_serverless" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name               = "my-serverless-redis"
-  engine             = "redis"
-  serverless_enabled = true
+  name                 = "my-serverless-redis"
+  engine               = "redis"
+  engine_major_version = "7"
+  serverless_enabled   = true
 
   serverless_cache_usage_limits = {
     data_storage_maximum    = 10    # GB
@@ -134,9 +139,10 @@ module "redis_serverless" {
 module "redis" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name      = "my-redis"
-  engine    = "redis"
-  node_type = "cache.t4g.small"
+  name                 = "my-redis"
+  engine               = "redis"
+  engine_major_version = "7"
+  node_type            = "cache.t4g.small"
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -159,9 +165,10 @@ module "redis" {
 module "redis" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name      = "my-redis"
-  engine    = "redis"
-  node_type = "cache.t4g.micro"
+  name                 = "my-redis"
+  engine               = "redis"
+  engine_major_version = "7"
+  node_type            = "cache.t4g.micro"
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -178,9 +185,10 @@ module "redis" {
 module "redis" {
   source = "git::https://github.com/user/ravion-modules.git//cache/elasticache?ref=v1.0.0"
 
-  name      = "my-redis"
-  engine    = "redis"
-  node_type = "cache.r7g.large"
+  name                 = "my-redis"
+  engine               = "redis"
+  engine_major_version = "7"
+  node_type            = "cache.r7g.large"
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -217,8 +225,9 @@ module "redis" {
 | vpc_id | The ID of the VPC where the ElastiCache cluster will be created. | `string` | n/a | yes |
 | subnet_ids | A list of subnet IDs for the ElastiCache subnet group. | `list(string)` | n/a | yes |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
-| engine | The cache engine to use: redis, valkey, or memcached. | `string` | `"redis"` | no |
-| engine_version | The version number of the cache engine. | `string` | `null` | no |
+| engine | The cache engine to use: redis, valkey, or memcached. | `string` | `"valkey"` | no |
+| engine_major_version | The major version number of the cache engine. Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6. | `string` | n/a | yes |
+| engine_minor_version | Optional minor or patch version appended to the major version. | `string` | `null` | no |
 | node_type | The compute and memory capacity of the nodes. | `string` | `"cache.t4g.micro"` | no |
 | num_cache_nodes | The number of cache nodes (Memcached only). | `number` | `1` | no |
 | num_node_groups | The number of node groups (shards) for Redis cluster mode. | `number` | `1` | no |

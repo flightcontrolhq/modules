@@ -92,7 +92,7 @@ output "engine" {
 output "engine_version" {
   description = "The version of the cache engine."
   value = local.create_replication_group ? aws_elasticache_replication_group.this[0].engine_version_actual : (
-    local.create_cluster ? aws_elasticache_cluster.this[0].engine_version_actual : var.engine_version
+    local.create_cluster ? aws_elasticache_cluster.this[0].engine_version_actual : local.engine_version
   )
 }
 

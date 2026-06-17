@@ -21,7 +21,7 @@ variable "tags" {
 variable "engine" {
   type        = string
   description = "The cache engine to use: redis, valkey, or memcached."
-  default     = "redis"
+  default     = "valkey"
 
   validation {
     condition     = contains(["redis", "valkey", "memcached"], var.engine)
@@ -29,9 +29,19 @@ variable "engine" {
   }
 }
 
-variable "engine_version" {
+variable "engine_major_version" {
   type        = string
-  description = "The version number of the cache engine. If not specified, the latest available version will be used."
+  description = "The major version number of the cache engine. Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6."
+
+  validation {
+    condition     = length(var.engine_major_version) > 0
+    error_message = "The engine_major_version must not be empty."
+  }
+}
+
+variable "engine_minor_version" {
+  type        = string
+  description = "Optional minor or patch version appended to the major version. Examples: major 9 and minor 0 becomes 9.0; major 1.6 and minor 22 becomes 1.6.22."
   default     = null
 }
 
