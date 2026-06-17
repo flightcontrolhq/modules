@@ -1,0 +1,77 @@
+...overrides: << module.input.advanced_terraform_variables >>
+allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
+public_ip_assignment_enabled: "<< module.input.private_subnet_placement_enabled ? false : true >>"
+auto_scaling:
+  enabled: << module.input.auto_scaling_enabled >>
+  max_capacity: << module.input.max_capacity >>
+  min_capacity: << module.input.min_capacity >>
+  scheduled: "<< module.input.scheduled_scaling != nil ? module.input.scheduled_scaling : [] >>"
+  target_tracking:
+    - scale_in_enabled: << module.input.scale_in_enabled >>
+      policy_name: cpu
+      predefined_metric: ECSServiceAverageCPUUtilization
+      scale_in_cooldown: << module.input.scale_in_cooldown >>
+      scale_out_cooldown: << module.input.scale_out_cooldown >>
+      target_value: << module.input.cpu_target_value >>
+    - >-
+      ...<< module.input.memory_target_value ? [{policy_name: "memory", predefined_metric:
+      "ECSServiceAverageMemoryUtilization", target_value: module.input.memory_target_value,
+      scale_in_cooldown: module.input.scale_in_cooldown, scale_out_cooldown:
+      module.input.scale_out_cooldown, scale_in_enabled: module.input.scale_in_enabled}] : []
+      >>
+    - >-
+      ...<< module.input.custom_metric_scaling_policies != nil ?
+      module.input.custom_metric_scaling_policies : [] >>
+capacity_provider_strategies:
+  - >-
+    ...<< module.input.capacity_provider == "fargate" || module.input.additional_fargate_capacity_enabled ?
+    [{capacity_provider: module.input.fargate_capacity_provider_name, weight: 1, base: 0}] :
+    [] >>
+  - >-
+    ...<< module.input.capacity_provider == "fargate_spot" ||
+    module.input.additional_fargate_spot_capacity_enabled ? [{capacity_provider:
+    module.input.fargate_spot_capacity_provider_name, weight: 1, base: 0}] : [] >>
+  - >-
+    ...<< module.input.capacity_provider == "ec2" || module.input.additional_ec2_capacity_enabled ?
+    [{capacity_provider: module.input.ec2_capacity_provider_name, weight: 1, base: 0}] : [] >>
+cluster_arn: << module.input.cluster_arn >>
+deployment_maximum_percent: << module.input.deployment_maximum_percent >>
+deployment_minimum_healthy_percent: << module.input.deployment_minimum_healthy_percent >>
+deployment_type: rolling
+desired_count: 0
+ecr_default_lifecycle_policy_enabled: true
+ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
+ecr_repository_name: << module.input.name >>
+ecr_scan_on_push_enabled: << module.input.ecr_scan_on_push_enabled >>
+ecr_repository_creation_enabled: << module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile" >>
+execute_command_enabled: << module.input.execute_command_enabled >>
+execution_role_arn: << module.input.execution_role_arn || nil >>
+execution_role_policies: << module.input.execution_role_policies >>
+new_deployment_forcing_enabled: << module.input.new_deployment_forcing_enabled >>
+launch_type: '<< module.input.capacity_provider == "ec2" ? "EC2" : "FARGATE" >>'
+name: << module.input.name >>
+network_mode: awsvpc
+region: << module.input.aws_region >>
+requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
+runtime_platform:
+  cpu_architecture: << module.input.cpu_architecture >>
+  operating_system_family: LINUX
+security_group_ids: << module.input.security_group_ids >>
+subnet_ids: "<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
+tags:
+  $include: ./ravion-tags.yml
+task_cpu: >-
+  << module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
+  int(float(module.input.fargate_size.vcpu) * 1024) >>
+task_memory: >-
+  << module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
+  int(float(module.input.fargate_size.memory_gb) * 1024) >>
+task_role_arn: << module.input.task_role_arn || nil >>
+task_role_inline_policies: << module.input.task_role_inline_policies >>
+task_role_policies: << module.input.task_role_policies >>
+volumes: >-
+  << module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name":
+  #.name, "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name,
+  "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
+vpc_id: << module.input.vpc_id >>
+steady_state_wait_enabled: false

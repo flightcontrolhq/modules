@@ -1,0 +1,18 @@
+cpu: >-
+  << string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
+  int(float(module.input.fargate_size.vcpu) * 1024)) >>
+execution_role_arn: <<stack.output.execution_role_arn>>
+family: <<stack.output.task_definition_family>>
+memory: >-
+  << string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
+  int(float(module.input.fargate_size.memory_gb) * 1024)) >>
+network_mode: awsvpc
+requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
+runtime_platform:
+  cpu_architecture: <<module.input.cpu_architecture>>
+  operating_system_family: LINUX
+task_role_arn: <<stack.output.task_role_arn>>
+volumes: >-
+  << module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name": #.name,
+  "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name,
+  "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
