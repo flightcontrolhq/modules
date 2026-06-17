@@ -53,7 +53,7 @@ Do not copy an example blindly. Reconcile it with the authoritative schema and t
 ## Workflow
 
 1. Inspect the target `<definition.type>-definition.yml`, nearby definitions, active similar definitions, partials, and Terraform source before changing config.
-2. Read the full authoritative module config schema from `https://api.ravion.com/docs/schema-references/module.md` before authoring or reviewing config shape. Use it to verify exact field names, required fields, allowed discriminators, template expression rules, and nested build/deploy/UI schemas.
+2. Read the full authoritative module config schema from `https://api.ravion.com/module-definitions/schema.md` before authoring or reviewing config shape. Use it to verify exact field names, required fields, allowed discriminators, template expression rules, and nested build/deploy/UI schemas.
 3. Ignore `module.readme` during config analysis; remove it from summaries and comparisons unless the task is specifically README work.
 4. Compare the closest existing definitions against the target Terraform module so new config follows repo style while still reflecting the target module's real variables and behavior.
 5. Compare Terraform module variables against `module.inputs`; expose most Terraform variables as module inputs unless they are intentionally fixed, internal, derived, or too rare for the normal UI.
@@ -69,7 +69,7 @@ Do not copy an example blindly. Reconcile it with the authoritative schema and t
 The full config schema is the source of truth for accepted module config shape:
 
 ```text
-https://api.ravion.com/docs/schema-references/module.md
+https://api.ravion.com/module-definitions/schema.md
 ```
 
 Read this schema during config work, especially when adding or changing input property types, `show_when`, dynamic values, `module.stack`, `module.build`, `module.deploy`, or `module.ui`. Do not rely only on nearby examples when the schema provides stricter required fields or discriminator-specific shapes.
@@ -89,6 +89,8 @@ Use semantic versioning for released module definitions. For local development p
 ## Input Patterns
 
 Use `section` entries to group related fields. IDs should be stable snake_case and should match Terraform variable names when practical. Form labels and section labels must use sentence case, except for service names and acronyms.
+
+Keep input validation `patterns[].message` text concise and direct. Avoid filler instructions such as "Use ..." when the constraint can stand alone, for example `1-40 lowercase letters, numbers, and hyphens. Start and end with a letter or number.` For invalid-value messages that name the field type, start with `Invalid`, for example `Invalid RDS master username. Start with a letter. Letters, numbers, and underscores only.` For reserved-name validation, use `Pick a different name, this is reserved by AWS.` Avoid lookahead/lookbehind in module-definition regex patterns because backend validation may reject them.
 
 For OpenTofu/Terraform-backed modules, put Terraform runner and escape-hatch inputs in a dedicated section included from `partials/inputs/terraform-settings.yml` when possible. This section should include inputs such as `execution_environment_id`, `opentofu_version` or other tool-version overrides, `advanced_terraform_variables`, and `ravion_state_backend_workspace`. Do not place `execution_environment_id` under the AWS account/region section, and do not leave `advanced_terraform_variables` in a generic advanced section.
 
