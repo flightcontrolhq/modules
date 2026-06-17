@@ -51,6 +51,13 @@ resource "aws_lb_target_group" "tg_1" {
 
   lifecycle {
     create_before_destroy = true
+    # Re-adopting a pre-existing target group via the moved block (old name
+    # suffix `-tg`) must not force replacement just because the configured
+    # name is now `-tg-1`: the listener rule ignores `action`, so it would
+    # never repoint to the replacement and the old TG's destroy would fail
+    # ("currently in use by a listener rule"). Ignoring `name` keeps the
+    # existing TG (and its ARN) in place; fresh services still get `-tg-1`.
+    ignore_changes = [name]
   }
 }
 
