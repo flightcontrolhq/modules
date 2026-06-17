@@ -1,0 +1,77 @@
+- id: aws_account_id
+  immutable: true
+  label: AWS account
+  type: string
+  default: <<ref.input.aws_account_id>>
+  values: $values:ravion/aws_accounts
+- id: aws_region
+  immutable: true
+  label: Region
+  type: string
+  default: <<ref.input.aws_region>>
+  values: $values:aws/regions
+- id: execution_environment_id
+  label: Terraform execution environment
+  type: string
+  description: Terraform execution environment inherited from the selected ECS cluster.
+  collapsible: true
+  default: << ref.input.execution_environment_id >>
+  values: $values:ravion/execution_environments
+- id: cluster_arn
+  immutable: true
+  label: Cluster ARN
+  type: string
+  required: true
+  default: <<ref.stack.output.cluster_arn>>
+- id: vpc_id
+  immutable: true
+  label: VPC ID
+  type: string
+  required: true
+  default: <<ref.input.vpc_id>>
+- id: private_subnet_ids
+  immutable: true
+  label: Private subnet IDs
+  type: string_array
+  description: Private subnets available from the selected ECS cluster network.
+  add_button_label: Add private subnet ID
+  required: true
+  default: <<ref.input.private_subnet_ids>>
+- id: public_subnet_ids
+  immutable: true
+  label: Public subnet IDs
+  type: string_array
+  description: Public subnets available from the selected ECS cluster network.
+  add_button_label: Add public subnet ID
+  default: <<ref.input.public_subnet_ids>>
+- id: subnet_ids
+  immutable: true
+  label: Private subnet IDs
+  type: string_array
+  description: Legacy service subnet override. Leave blank to derive subnets from the public/private service setting.
+  add_button_label: Add subnet ID
+  collapsible: true
+  required: false
+  default: <<ref.input.private_subnet_ids>>
+- id: section_cluster_capacity
+  label: Cluster capacity providers
+  type: section
+- id: fargate_capacity_provider_name
+  immutable: true
+  label: Fargate capacity provider
+  type: string
+  default: <<ref.stack.output.fargate_capacity_provider_name>>
+- id: fargate_spot_capacity_provider_name
+  immutable: true
+  label: Fargate spot capacity provider
+  type: string
+  default: <<ref.stack.output.fargate_spot_capacity_provider_name>>
+- id: ec2_capacity_provider_name
+  immutable: true
+  label: EC2 capacity provider
+  type: string
+  description: EC2 capacity provider name from the selected cluster. Required only when using EC2 capacity.
+  required: false
+  show_when:
+    capacity_provider: ec2
+  default: ""
