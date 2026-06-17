@@ -281,6 +281,7 @@ module "redis" {
 |------|-------------|
 | replication_group_id | The ID of the ElastiCache replication group (Redis/Valkey). |
 | replication_group_arn | The ARN of the ElastiCache replication group. |
+| replication_group_member_cluster_id | The ID of the first member cache cluster in the replication group. |
 | primary_endpoint_address | The address of the primary endpoint (non-cluster mode). |
 | reader_endpoint_address | The address of the reader endpoint (non-cluster mode). |
 | configuration_endpoint_address | The address of the configuration endpoint (cluster mode). |

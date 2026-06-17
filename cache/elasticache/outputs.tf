@@ -12,6 +12,11 @@ output "replication_group_arn" {
   value       = local.create_replication_group ? aws_elasticache_replication_group.this[0].arn : null
 }
 
+output "replication_group_member_cluster_id" {
+  description = "The ID of the first member cache cluster in the replication group."
+  value       = local.create_replication_group ? aws_elasticache_replication_group.this[0].member_clusters[0] : null
+}
+
 output "primary_endpoint_address" {
   description = "The address of the primary endpoint for the replication group (non-cluster mode)."
   value       = local.create_replication_group && !local.cluster_mode_enabled ? aws_elasticache_replication_group.this[0].primary_endpoint_address : null
