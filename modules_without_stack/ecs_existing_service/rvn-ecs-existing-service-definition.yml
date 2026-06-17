@@ -123,17 +123,13 @@ module:
         placeholder: sha256:... or v1.2.3
         required: true
     task_definition: >-
-      << module.input.task_definition_template | toPairs() | concat(toPairs({"container_definitions":
+      << merge(module.input.task_definition_template, {"container_definitions":
       (module.input.task_definition_template.container_definitions != nil ?
       map(module.input.task_definition_template.container_definitions, #.name ==
-      module.input.container_name ? fromPairs(concat(toPairs(#),
-      toPairs(module.input.image_registry_credentials_secret_arn ? {"image":
-      (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
-      deploy.input.image_ref : module.input.image_repository + ":" + deploy.input.image_ref),
-      "repository_credentials": {"credentials_parameter":
-      module.input.image_registry_credentials_secret_arn}} : {"image": (deploy.input.image_ref contains
-      "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref :
-      module.input.image_repository + ":" + deploy.input.image_ref)}))) : #) : [])})) | fromPairs() >>
+      module.input.container_name ? merge(#,
+      {"image": imageUri(module.input.image_repository, deploy.input.image_ref)},
+      module.input.image_registry_credentials_secret_arn ? {"repository_credentials":
+      {"credentials_parameter": module.input.image_registry_credentials_secret_arn}} : nil) : #) : [])}) >>
     timeout: 1800
   ui:
     links:
