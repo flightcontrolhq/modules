@@ -20,6 +20,14 @@
   show_when:
     auto_scaling_enabled: true
   default: 3
+- id: desired_count
+  label: Desired tasks
+  type: number
+  description: Number of tasks to keep running when autoscaling is disabled.
+  min: 1
+  show_when:
+    auto_scaling_enabled: false
+  default: 1
 - id: cpu_target_value
   label: CPU target (%)
   type: number

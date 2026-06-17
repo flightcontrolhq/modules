@@ -4,7 +4,7 @@ definition:
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
   version: 0.1.0
-  description: Initial ECS worker module definition
+  description: Initial ECS worker module definition with configurable startup count
 module:
   inputs:
     - id: section_cluster
@@ -161,7 +161,7 @@ module:
 
     ## Autoscaling
 
-    Autoscaling is enabled by default with CPU and memory target tracking. Use custom metric scaling policies for queue depth, lag, backlog, or other workload-specific metrics that better represent worker demand.
+    Autoscaling is enabled by default with CPU and memory target tracking. Use custom metric scaling policies for queue depth, lag, backlog, or other workload-specific metrics that better represent worker demand. When autoscaling is disabled, Desired tasks controls how many worker tasks the ECS service keeps running.
 
     ## Configuration
 
@@ -175,6 +175,7 @@ module:
     | Capacity provider | Yes | fargate | Primary service capacity provider |
     | App size | No | 2 vCPU, 4 GB | Fargate task CPU and memory |
     | Autoscaling | No | true | Enable CPU and optional memory target tracking |
+    | Desired tasks | Yes* | 1 | Number of worker tasks when autoscaling is disabled |
     | Custom metric scaling policies | No | [] | Queue/backlog-oriented target tracking policies |
     | Runtime environment variables | No | - | Environment variables passed to the worker container |
     | Runtime secrets | No | - | Secrets injected from SSM Parameter Store or Secrets Manager |
@@ -184,7 +185,7 @@ module:
 
     - The module intentionally creates an ECS service without load balancer attachment or primary container port mappings.
     - Sidecar port mappings are allowed for task-local communication, agents, and proxies.
-    - Desired count is managed through deployment and autoscaling behavior rather than a separate Terraform desired count input.
+    - Desired count uses the autoscaling minimum when autoscaling is enabled and the Desired tasks input when autoscaling is disabled.
     - Advanced Terraform variables exist for exceptional lower-level overrides. Prefer the typed Ravion fields whenever possible.
 
     ## Learn more

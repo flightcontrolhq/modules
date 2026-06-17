@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.5.1
-  description: Share ECS service config and hide inactive autoscaling fields
+  description: Share ECS service config and desired task count behavior
 module:
   inputs:
     - id: section_cluster
@@ -474,13 +474,14 @@ module:
 
     ## Autoscaling
 
-    Autoscaling is enabled by default with one minimum task and three maximum tasks. For production, start with at least two minimum tasks when availability matters.
+    Autoscaling is enabled by default with one minimum task and three maximum tasks. For production, start with at least two minimum tasks when availability matters. When autoscaling is disabled, Desired tasks controls how many web tasks the ECS service keeps running.
 
     | Field                    | Default | Description                                    |
     | ------------------------ | ------- | ---------------------------------------------- |
     | Autoscaling              | true    | Enables ECS service target tracking            |
     | Minimum tasks            | 1       | Lower bound for running tasks                  |
     | Maximum tasks            | 3       | Upper bound for running tasks                  |
+    | Desired tasks            | 1       | Running tasks when autoscaling is disabled     |
     | CPU target (%)           | 70      | Average CPU utilization target                 |
     | Memory target (%)        | 80      | Average memory utilization target              |
     | Scale-in cooldown (secs) | 300     | Delay before another scale-in action           |
@@ -567,6 +568,7 @@ module:
     | Post-deploy ephemeral storage   | No       | Task definition default    | Ephemeral storage override for the post-deploy task |
     | Post-deploy timeout (secs)      | No       | 1800                       | Maximum post-deploy task wait time                 |
     | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
+    | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
     | Deployment type                 | No       | rolling                    | Rolling or blue/green deployment infrastructure    |
     | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
     | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |
@@ -580,7 +582,7 @@ module:
     - The module always models an HTTP web service behind an Application Load Balancer. NLB, worker, and service discovery patterns are intentionally outside this module definition.
     - Tasks default to private subnets even for public web services. The ALB is public; the tasks remain private when the VPC has NAT or equivalent egress.
     - Built images are pushed to an ECR repository created with the service stack. Prebuilt image from registry and disabled build modes let teams bring their own image pipeline.
-    - Desired count is managed through deployment and autoscaling behavior rather than by exposing a separate desired count input.
+    - Desired count uses the autoscaling minimum when autoscaling is enabled and the Desired tasks input when autoscaling is disabled.
     - Advanced Terraform variables exist for exceptional lower-level overrides. Prefer the typed Ravion fields whenever possible.
 
     ## Learn more
