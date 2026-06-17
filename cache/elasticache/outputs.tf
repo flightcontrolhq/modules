@@ -14,7 +14,7 @@ output "replication_group_arn" {
 
 output "replication_group_member_cluster_id" {
   description = "The ID of the first member cache cluster in the replication group."
-  value       = local.create_replication_group ? aws_elasticache_replication_group.this[0].member_clusters[0] : null
+  value       = local.create_replication_group ? tolist(aws_elasticache_replication_group.this[0].member_clusters)[0] : null
 }
 
 output "primary_endpoint_address" {

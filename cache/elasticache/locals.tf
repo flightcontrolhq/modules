@@ -72,7 +72,7 @@ locals {
   create_cloudwatch_alarms = var.cloudwatch_alarms_creation_enabled && !local.is_serverless
 
   # Resource identifier for CloudWatch (used in dimensions)
-  cloudwatch_dimension_value = local.create_replication_group ? aws_elasticache_replication_group.this[0].member_clusters[0] : (
+  cloudwatch_dimension_value = local.create_replication_group ? tolist(aws_elasticache_replication_group.this[0].member_clusters)[0] : (
     local.create_cluster ? aws_elasticache_cluster.this[0].cluster_id : null
   )
 
