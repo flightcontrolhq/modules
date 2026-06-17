@@ -51,9 +51,9 @@ variable "subnet_ids" {
 # ALB Settings
 ################################################################################
 
-variable "internal" {
+variable "internal_load_balancer_enabled" {
   type        = bool
-  description = "If true, the ALB will be internal (not internet-facing)."
+  description = "If true, the ALB will be internal_load_balancer_enabled (not internet-facing)."
   default     = false
 }
 
@@ -80,7 +80,7 @@ variable "http2_enabled" {
   default     = true
 }
 
-variable "drop_invalid_header_fields" {
+variable "invalid_header_drop_enabled" {
   type        = bool
   description = "Drop HTTP headers with invalid header fields. Recommended for security."
   default     = true
@@ -97,7 +97,7 @@ variable "desync_mitigation_mode" {
   }
 }
 
-variable "preserve_host_header" {
+variable "host_header_preservation_enabled" {
   type        = bool
   description = "Preserve the Host header in the HTTP request and send it to the target without modification."
   default     = false

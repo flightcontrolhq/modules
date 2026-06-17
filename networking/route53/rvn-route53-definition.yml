@@ -1,0 +1,606 @@
+definition:
+  type: rvn-route53
+  name: Route 53 DNS
+  description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
+release:
+  version: 0.1.0
+  description: Initial Route 53 module definition with refined DNS record UI and managed query logging support.
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $include: ../../partials/inputs/aws-region.yml
+    - id: section_hosted_zone
+      label: Hosted zone and name server
+      type: section
+    - default: true
+      description: Create a new Route 53 hosted zone, which is Route 53's DNS zone and name-server setup for a domain. Disable this to manage records in an existing hosted zone.
+      id: zone_creation_enabled
+      immutable: true
+      label: Create hosted zone
+      type: boolean
+    - description: Existing Route 53 hosted zone ID to manage records in. A hosted zone is Route 53's DNS zone and name-server setup for a domain. Required when Create hosted zone is disabled.
+      id: zone_id
+      immutable: true
+      label: Hosted zone ID
+      patterns:
+        - message: Use a valid Route 53 hosted zone ID, for example Z1234567890ABC.
+          pattern: ^Z[0-9A-Z]+$
+      placeholder: Z1234567890ABC
+      required: true
+      show_when:
+        zone_creation_enabled: false
+      type: string
+    - description: Fully qualified domain name for the hosted zone.
+      id: name
+      immutable: true
+      label: Domain name
+      patterns:
+        - message: Use a valid domain name, for example example.com.
+          pattern: ^[a-zA-Z0-9]([a-zA-Z0-9-._]*[a-zA-Z0-9])?$
+      placeholder: example.com
+      required: true
+      show_when:
+        zone_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: Managed in Ravion
+      description: Comment stored on the hosted zone.
+      id: comment
+      label: Comment
+      show_when:
+        zone_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: false
+      description: Destroy all records in the hosted zone when the created zone is destroyed.
+      id: record_force_destroy_enabled
+      label: Force destroy records
+      show_when:
+        zone_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Reusable delegation set ID for a public hosted zone. Use this when you want multiple hosted zones to use the same authoritative name servers, for example to keep registrar or parent-zone delegation consistent across related domains.
+      id: delegation_set_id
+      label: Delegation set ID
+      show_when:
+        zone_creation_enabled: true
+        private_zone_enabled: false
+      type: string
+    - default: false
+      description: Create a private hosted zone associated with VPCs instead of a public hosted zone.
+      id: private_zone_enabled
+      immutable: true
+      label: Private hosted zone
+      show_when:
+        zone_creation_enabled: true
+      type: boolean
+    - description: VPCs to associate with the private hosted zone.
+      id: vpc_associations
+      item_inputs:
+        - description: VPC ID to associate with the private hosted zone.
+          id: vpc_id
+          label: VPC ID
+          patterns:
+            - message: Use a valid VPC ID starting with vpc-.
+              pattern: ^vpc-
+          placeholder: vpc-1234567890abcdef0
+          required: true
+          type: string
+        - description: AWS region for the VPC association. Defaults to the stack region when empty.
+          id: vpc_region
+          label: VPC region
+          required: false
+          type: string
+          values: $values:aws/regions
+      item_label: VPC association
+      key:
+        label: Key
+      label: VPC associations
+      required: true
+      show_when:
+        zone_creation_enabled: true
+        private_zone_enabled: true
+      type: object_map
+    - id: section_records
+      label: DNS records
+      type: section
+    - description: DNS records to create in the hosted zone.
+      id: records
+      item_inputs:
+        - description: DNS record type.
+          id: type
+          label: Record type
+          required: true
+          type: string
+          values:
+            - label: A
+              value: A
+            - label: AAAA
+              value: AAAA
+            - label: CNAME
+              value: CNAME
+            - label: CAA
+              value: CAA
+            - label: MX
+              value: MX
+            - label: NAPTR
+              value: NAPTR
+            - label: NS
+              value: NS
+            - label: PTR
+              value: PTR
+            - label: SOA
+              value: SOA
+            - label: SPF
+              value: SPF
+            - label: SRV
+              value: SRV
+            - label: TXT
+              value: TXT
+            - label: DS
+              value: DS
+        - description: Fully qualified record name.
+          id: name
+          label: Record name
+          placeholder: www.example.com
+          required: true
+          type: string
+        - default: standard
+          description: Choose standard record values with a TTL, or an AWS alias target such as a load balancer or CloudFront distribution.
+          id: target_type
+          label: Target type
+          required: true
+          show_when:
+            type:
+              - A
+              - AAAA
+          type: string
+          values:
+            - label: Standard record values
+              value: standard
+            - label: Alias target
+              description: Route an A or AAAA record to a supported AWS resource without setting a TTL.
+              value: alias
+        - add_button_label: Add record value
+          description: Values for a standard DNS record. CNAME and SOA records use a single value field instead.
+          id: record_values
+          label: Record values
+          required: true
+          show_when:
+            type:
+              not:
+                - A
+                - AAAA
+                - CNAME
+                - SOA
+          type: string_array
+        - description: Value for a single-value standard DNS record.
+          id: record_value
+          label: Record value
+          required: true
+          show_when:
+            type:
+              - CNAME
+              - SOA
+          type: string
+        - add_button_label: Add record value
+          description: Values for a standard DNS record.
+          id: record_values_a_aaaa
+          label: Record values
+          required: true
+          show_when:
+            target_type: standard
+            type:
+              - A
+              - AAAA
+          type: string_array
+        - description: DNS name of the AWS target resource. For an ALB or NLB, use the load balancer DNS name. For CloudFront, use the distribution domain name such as d111111abcdef8.cloudfront.net.
+          id: alias_name
+          label: Alias target DNS name
+          placeholder: dualstack.example-alb.us-east-1.elb.amazonaws.com
+          required: true
+          show_when:
+            target_type: alias
+            type:
+              - A
+              - AAAA
+          type: string
+        - description: Hosted zone ID of the AWS target resource, not this domain's hosted zone ID. For an ALB/NLB, use the load balancer canonical hosted zone ID from AWS. For CloudFront, use Z2FDTNDATAQYW2. Regional services such as API Gateway or S3 website endpoints have service and region-specific hosted zone IDs.
+          id: alias_zone_id
+          label: Alias target hosted zone ID
+          placeholder: Z35SXDOTRQ7X7K
+          required: true
+          show_when:
+            target_type: alias
+            type:
+              - A
+              - AAAA
+          type: string
+        - default: false
+          description: Let Route 53 consider the target resource health when answering DNS queries. This is commonly useful for load balancers. Leave disabled for targets that do not support Route 53 target health evaluation, such as CloudFront.
+          id: alias_evaluate_target_health
+          label: Evaluate target health
+          show_when:
+            target_type: alias
+            type:
+              - A
+              - AAAA
+          type: boolean
+        - collapsible: true
+          description: Route 53 health check ID for this record.
+          id: health_check_id
+          label: Health check ID
+          type: string
+        - collapsible: true
+          default: false
+          description: Allow this record to overwrite an existing Route 53 record.
+          id: allow_overwrite
+          label: Allow overwrite
+          type: boolean
+        - collapsible: true
+          default: 300
+          description: TTL in seconds for standard records. Lower values update faster but can increase DNS query volume; 300 seconds is a common default.
+          id: ttl
+          label: TTL seconds
+          min: 0
+          show_when:
+            target_type: standard
+            type:
+              - A
+              - AAAA
+          type: number
+        - collapsible: true
+          default: 300
+          description: TTL in seconds for standard records. Lower values update faster but can increase DNS query volume; 300 seconds is a common default.
+          id: standard_ttl
+          label: TTL seconds
+          min: 0
+          show_when:
+            type:
+              not:
+                - A
+                - AAAA
+          type: number
+        - collapsible: true
+          default: simple
+          description: Optional Route 53 routing policy for this record.
+          id: routing_policy
+          label: Routing policy
+          type: string
+          values:
+            - label: Simple
+              description: Return the same answer for every DNS query. Use this for normal records without traffic routing.
+              value: simple
+            - label: Weighted
+              description: Split traffic across multiple records by percentage-like weights. Use this for gradual migrations or blue/green traffic shifts.
+              value: weighted
+            - label: Failover
+              description: Route to a primary record while healthy, then to a secondary record. Use this for active-passive failover.
+              value: failover
+            - label: Latency
+              description: Route users to the AWS region with the lowest latency. Use this for multi-region applications.
+              value: latency
+            - label: Geolocation
+              description: Route users based on their geographic location. Use this for regional content, compliance, or localization.
+              value: geolocation
+            - label: Multivalue answer
+              description: Return multiple healthy records in DNS responses. Use this for simple DNS-level load distribution across several endpoints.
+              value: multivalue
+        - description: Unique identifier for a record that uses a routing policy. Required when multiple records share the same name and type.
+          id: set_identifier
+          label: Set identifier
+          required: true
+          show_when:
+            routing_policy:
+              not: simple
+          type: string
+        - description: Weight for weighted routing.
+          id: weighted_routing_policy_weight
+          label: Weight
+          min: 0
+          required: true
+          show_when:
+            routing_policy: weighted
+          type: number
+        - description: Failover role for failover routing.
+          id: failover_routing_policy_type
+          label: Failover type
+          required: true
+          show_when:
+            routing_policy: failover
+          type: string
+          values:
+            - label: Primary
+              value: PRIMARY
+            - label: Secondary
+              value: SECONDARY
+        - description: AWS region for latency routing.
+          id: latency_routing_policy_region
+          label: Latency region
+          required: true
+          show_when:
+            routing_policy: latency
+          type: string
+          values: $values:aws/regions
+        - description: Continent code for geolocation routing.
+          id: geolocation_routing_policy_continent
+          label: Continent code
+          placeholder: NA
+          show_when:
+            routing_policy: geolocation
+          type: string
+        - description: Country code for geolocation routing.
+          id: geolocation_routing_policy_country
+          label: Country code
+          placeholder: US
+          show_when:
+            routing_policy: geolocation
+          type: string
+        - description: Subdivision code for geolocation routing.
+          id: geolocation_routing_policy_subdivision
+          label: Subdivision code
+          placeholder: CA
+          show_when:
+            routing_policy: geolocation
+          type: string
+      item_label: Record
+      item_title:
+        fallback: Record {key}
+        template: "{name} {type}"
+      key:
+        from_fields:
+          - type
+          - name
+        separator: "|"
+      label: Records
+      required: false
+      type: object_map
+    - id: section_query_logging
+      label: Query logging
+      show_when:
+        private_zone_enabled: false
+      type: section
+    - default: false
+      description: Enable Route 53 query logging for the public hosted zone.
+      id: query_logging_enabled
+      label: Query logging
+      show_when:
+        private_zone_enabled: false
+      type: boolean
+    - default: true
+      description: Create the CloudWatch Logs log group and resource policy in us-east-1 for Route 53 query logs.
+      id: query_log_group_creation_enabled
+      label: Create query log group
+      show_when:
+        private_zone_enabled: false
+        query_logging_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Name for the created CloudWatch Logs log group. Defaults to /aws/route53/<hosted-zone-name>.
+      id: query_log_group_name
+      label: Query log group name
+      placeholder: /aws/route53/example.com
+      required: false
+      show_when:
+        private_zone_enabled: false
+        query_logging_enabled: true
+        query_log_group_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: 90
+      description: Number of days to retain query logs. Use 0 to retain logs indefinitely.
+      id: query_log_group_retention_days
+      label: Query log retention days
+      required: true
+      show_when:
+        private_zone_enabled: false
+        query_logging_enabled: true
+        query_log_group_creation_enabled: true
+      type: number
+      values:
+        - label: Never expire
+          value: 0
+        - label: 1 day
+          value: 1
+        - label: 3 days
+          value: 3
+        - label: 5 days
+          value: 5
+        - label: 7 days
+          value: 7
+        - label: 14 days
+          value: 14
+        - label: 30 days
+          value: 30
+        - label: 60 days
+          value: 60
+        - label: 90 days
+          value: 90
+        - label: 180 days
+          value: 180
+        - label: 1 year
+          value: 365
+        - label: 2 years
+          value: 731
+        - label: 5 years
+          value: 1827
+        - label: 10 years
+          value: 3653
+    - collapsible: true
+      description: Name for the CloudWatch Logs resource policy that allows Route 53 to write query logs. Defaults to a hosted-zone-derived name.
+      id: query_log_resource_policy_name
+      label: Query log resource policy name
+      required: false
+      show_when:
+        private_zone_enabled: false
+        query_logging_enabled: true
+      type: string
+    - description: Existing CloudWatch Logs log group ARN for Route 53 query logs. The module will still create the required Route 53 resource policy.
+      id: query_log_group_arn
+      label: Query log group ARN
+      patterns:
+        - message: Use a valid CloudWatch Logs log group ARN.
+          pattern: "^arn:aws:logs:"
+      required: true
+      show_when:
+        private_zone_enabled: false
+        query_logging_enabled: true
+        query_log_group_creation_enabled: false
+      type: string
+    - id: section_dnssec
+      label: DNSSEC
+      show_when:
+        private_zone_enabled: false
+      type: section
+    - default: false
+      description: Enable DNSSEC signing for the hosted zone.
+      id: dnssec_enabled
+      label: DNSSEC signing
+      show_when:
+        private_zone_enabled: false
+      type: boolean
+    - description: Customer-managed KMS key ARN in us-east-1 used for DNSSEC signing.
+      id: dnssec_kms_key_arn
+      label: DNSSEC KMS key ARN
+      patterns:
+        - message: Use a valid KMS key ARN in us-east-1.
+          pattern: "^arn:aws:kms:us-east-1:"
+      required: true
+      show_when:
+        dnssec_enabled: true
+        private_zone_enabled: false
+      type: string
+    - collapsible: true
+      default: SIGNING
+      description: DNSSEC key signing status.
+      id: dnssec_signing_status
+      label: DNSSEC signing status
+      show_when:
+        dnssec_enabled: true
+        private_zone_enabled: false
+      type: string
+      values:
+        - label: Signing
+          value: SIGNING
+        - label: Not signing
+          value: NOT_SIGNING
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: networking/route53
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        comment: << module.input.comment >>
+        delegation_set_id: << module.input.delegation_set_id >>
+        dnssec_enabled: << module.input.dnssec_enabled >>
+        dnssec_kms_key_arn: << module.input.dnssec_kms_key_arn >>
+        dnssec_signing_status: << module.input.dnssec_signing_status >>
+        name: << module.input.name >>
+        private_zone_enabled: << module.input.private_zone_enabled >>
+        query_logging_enabled: << module.input.query_logging_enabled >>
+        query_log_group_creation_enabled: << module.input.query_log_group_creation_enabled >>
+        query_log_group_arn: << module.input.query_log_group_arn >>
+        query_log_group_name: << module.input.query_log_group_name >>
+        query_log_group_retention_days: << module.input.query_log_group_retention_days >>
+        query_log_resource_policy_name: << module.input.query_log_resource_policy_name >>
+        record_force_destroy_enabled: << module.input.record_force_destroy_enabled >>
+        records: << module.input.records || {} >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        vpc_associations: << module.input.vpc_associations || {} >>
+        zone_creation_enabled: << module.input.zone_creation_enabled >>
+        zone_id: << module.input.zone_id >>
+  readme: |
+    Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
+
+    ## Overview
+
+    Use this module to create a Route 53 public or private hosted zone, manage DNS records in a created or existing zone, and optionally enable query logging or DNSSEC signing.
+
+    A hosted zone is Route 53's term for the DNS zone and name-server setup for a domain. If you are not familiar with the term, think of it as the place where Route 53 serves DNS records for your domain.
+
+    The module supports standard records, alias records for AWS targets, and advanced Route 53 routing policies such as weighted, failover, latency, geolocation, and multivalue answer routing.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Public domain hosting | Create a hosted zone and publish its name servers for registrar delegation. |
+    | Application DNS | Create A, AAAA, CNAME, TXT, MX, and alias records for apps and infrastructure. |
+    | Existing hosted zone | Manage records in a zone that already exists outside this module. |
+    | Private service discovery | Create a private hosted zone associated with one or more VPCs. |
+    | Advanced traffic routing | Use Route 53 routing policies for weighted, failover, latency, geolocation, or multivalue records. |
+
+    ## Hosted zone mode
+
+    Enable Create hosted zone to create a new public or private hosted zone. In practical terms, this creates the Route 53-managed DNS zone that provides the name servers for your domain. Public zones return AWS name servers that you can delegate from your registrar or parent zone. Private zones require at least one VPC association.
+
+    Disable Create hosted zone when the zone already exists and you only want this stack to manage records in it. In that mode, provide Hosted zone ID.
+
+    ## DNS records
+
+    DNS records are configured as structured entries backed by a map. Ravion derives each record key from the record name, type, and optional set identifier. Each record includes a record name, record type, and either standard record values with a TTL or an alias target.
+
+    Standard records use TTL seconds and Record values. CNAME and SOA records use a single Record value field because those record sets should contain one value. Alias targets are exposed for A and AAAA records, which is the normal pattern for routing to AWS resources such as load balancers, CloudFront distributions, API Gateway domains, and S3 website endpoints. Alias records use Alias target DNS name and Alias target hosted zone ID. The alias target hosted zone ID belongs to the AWS target resource, not this domain's hosted zone. For an ALB or NLB, use the load balancer canonical hosted zone ID. For CloudFront, use Z2FDTNDATAQYW2. Regional services such as API Gateway and S3 website endpoints have service and region-specific hosted zone IDs.
+
+    Routing policy is optional. Use Set identifier for records that share the same name and type with weighted, failover, latency, or geolocation routing.
+
+    ## Query logging
+
+    Query logging streams Route 53 DNS query logs for public hosted zones to CloudWatch Logs. By default, the module creates the log group and resource policy in us-east-1, which is where Route 53 requires query logging destinations and permissions.
+
+    Disable Create query log group only when you want to reuse an existing us-east-1 CloudWatch Logs log group. In that mode, provide Query log group ARN. The module still creates the resource policy that allows Route 53 to create log streams and write log events.
+
+    ## DNSSEC
+
+    DNSSEC signing is supported for public hosted zones and requires a customer-managed KMS key in us-east-1 with a key policy that allows Route 53 DNSSEC signing. After enabling DNSSEC, publish the DS record from the stack output in the parent zone or registrar.
+
+    ## Configuration
+
+    | Setting | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | AWS account | Yes | None | AWS account where Route 53 resources are managed. |
+    | Region | Yes | None | Runner region for the stack. Route 53 hosted zones are global, but Terraform still runs with an AWS region. |
+    | Create hosted zone | No | true | Creates a new hosted zone instead of referencing an existing one. |
+    | Hosted zone ID | When Create hosted zone is disabled | None | Existing Route 53 hosted zone ID. |
+    | Domain name | When Create hosted zone is enabled | None | Domain name for the created hosted zone. |
+    | Comment | No | Managed by Terraform | Comment stored on the created hosted zone. |
+    | Force destroy records | No | false | Deletes all records when destroying a created hosted zone. |
+    | Delegation set ID | No | None | Reusable delegation set for created public zones. |
+    | Private hosted zone | No | false | Creates a private hosted zone instead of a public zone. |
+    | VPC associations | For private zones | Empty map | VPCs associated with the private hosted zone. |
+    | DNS records | No | Empty map | Structured Route 53 records to create in the hosted zone. |
+    | Query logging | No | false | Enables Route 53 query logging for public hosted zones. |
+    | Create query log group | No | true | Creates the CloudWatch Logs log group and resource policy in us-east-1. |
+    | Query log group name | No | Generated from hosted zone name | Name for the created CloudWatch Logs log group. |
+    | Query log retention days | No | 90 | Retention period for created query logs. Use 0 to retain indefinitely. |
+    | Query log resource policy name | No | Generated from hosted zone | Name for the CloudWatch Logs resource policy. |
+    | Query log group ARN | When Query logging is enabled and Create query log group is disabled | None | Existing us-east-1 CloudWatch Logs log group ARN for query logs. |
+    | DNSSEC signing | No | false | Enables DNSSEC signing. |
+    | DNSSEC KMS key ARN | When DNSSEC signing is enabled | None | Customer-managed KMS key ARN in us-east-1. |
+    | DNSSEC signing status | No | SIGNING | Signing status for the DNSSEC key signing key. |
+    | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
+    | Terraform execution environment | No | None | Optional runner environment override. |
+    | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
+
+    ## Design decisions
+
+    Hosted zone identity inputs are immutable because changing them can move records between zones or create a different zone. Operational settings such as records, query logging, DNSSEC status, and tags remain editable.
+
+    Route 53 hosted zones are global resources. The Region input controls where the Terraform runner and AWS provider operate, and some features such as public-zone query logging and DNSSEC KMS keys still require us-east-1 resources. The module uses us-east-1 automatically for managed query log groups and resource policies.
+
+    Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
+
+    ## Learn more
+
+    - [Route 53 hosted zones](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zones-working-with.html)
+    - [Route 53 resource record sets](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/rrsets-working-with.html)
+    - [Route 53 DNSSEC signing](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-dnssec.html)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/route53)

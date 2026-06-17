@@ -22,7 +22,7 @@ locals {
     {
       Name = var.name
     },
-    var.ecs_managed ? {
+    var.ecs_managed_tag_enabled ? {
       AmazonECSManaged = "true"
     } : {}
   )

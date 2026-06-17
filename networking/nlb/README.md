@@ -63,7 +63,7 @@ module "nlb" {
   name       = "internal"
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
-  internal   = true
+  internal_load_balancer_enabled   = true
 }
 ```
 
@@ -196,7 +196,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| internal | If true, the NLB will be internal (not internet-facing) | `bool` | `false` | no |
+| internal_load_balancer_enabled | If true, the NLB will be internal_load_balancer_enabled (not internet-facing) | `bool` | `false` | no |
 | deletion_protection_enabled | If true, the resource cannot be deleted via the AWS API until this is set to false | `bool` | `true` | no |
 | cross_zone_load_balancing_enabled | Enable cross-zone load balancing | `bool` | `false` | no |
 | dns_record_client_routing_policy | How traffic is distributed among NLB AZs (any_availability_zone, availability_zone_affinity, partial_availability_zone_affinity) | `string` | `null` | no |
@@ -302,7 +302,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │      NETWORK                    │   │      NLB SETTINGS                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal_load_balancer_enabled                              │  ║
 ║  │ • tags                      │   │ • subnet_ids (required)         │   │ • deletion_protection_enabled                   │  ║
 ║  └──────────────┬──────────────┘   │ • security_group_ids            │   │ • cross_zone_load_balancing_enabled      │  ║
 ║                 │                  └─────────────────────────────────┘   │ • dns_record_client_routing_policy      │  ║
@@ -433,7 +433,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║                                                     ▼                                                                  ║
 ║  var.vpc_id ─────────────────────────────► aws_lb.this (NLB)                                                          ║
 ║  var.subnet_ids ─────────────────────────►      │                                                                     ║
-║  var.internal ───────────────────────────►      │                                                                     ║
+║  var.internal_load_balancer_enabled ───────────────────────────►      │                                                                     ║
 ║  var.security_group_ids ─────────────────►      │                                                                     ║
 ║  var.deletion_protection_enabled ────────────────►      │                                                                     ║
 ║  var.cross_zone_load_balancing_enabled ───►      │                                                                     ║

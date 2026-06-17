@@ -22,6 +22,9 @@ locals {
   # Redis and Valkey share the same resource types
   is_redis_compatible = local.is_redis || local.is_valkey
 
+  # Engine version
+  engine_version = var.engine_minor_version != null && var.engine_minor_version != "" ? "${var.engine_major_version}.${var.engine_minor_version}" : var.engine_major_version
+
   # Resource creation flags
   is_serverless            = var.serverless_enabled && local.is_redis_compatible
   create_replication_group = local.is_redis_compatible && !local.is_serverless
@@ -39,11 +42,11 @@ locals {
   # Parameter group family detection
   # If not provided, derive from engine and version
   default_parameter_group_family = local.is_redis ? (
-    var.engine_version != null ? "redis${split(".", var.engine_version)[0]}" : "redis7"
+    "redis${var.engine_major_version}"
     ) : local.is_valkey ? (
-    var.engine_version != null ? "valkey${split(".", var.engine_version)[0]}" : "valkey8"
+    "valkey${var.engine_major_version}"
     ) : (
-    var.engine_version != null ? "memcached${replace(var.engine_version, "/\\.[0-9]+$/", "")}" : "memcached1.6"
+    "memcached${var.engine_major_version}"
   )
   parameter_group_family = coalesce(var.parameter_group_family, local.default_parameter_group_family)
 
@@ -69,7 +72,7 @@ locals {
   create_cloudwatch_alarms = var.cloudwatch_alarms_creation_enabled && !local.is_serverless
 
   # Resource identifier for CloudWatch (used in dimensions)
-  cloudwatch_dimension_value = local.create_replication_group ? aws_elasticache_replication_group.this[0].id : (
+  cloudwatch_dimension_value = local.create_replication_group ? tolist(aws_elasticache_replication_group.this[0].member_clusters)[0] : (
     local.create_cluster ? aws_elasticache_cluster.this[0].cluster_id : null
   )
 

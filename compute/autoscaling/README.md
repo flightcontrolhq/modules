@@ -73,7 +73,7 @@ module "asg" {
   }
 
   # Enable capacity rebalancing for Spot
-  capacity_rebalance = true
+  capacity_rebalance_enabled = true
 }
 ```
 
@@ -225,8 +225,8 @@ module "asg" {
   max_size = 10
 
   # Mark as ECS managed for capacity provider
-  ecs_managed          = true
-  protect_from_scale_in = true
+  ecs_managed_tag_enabled          = true
+  scale_in_protection_enabled = true
 
   launch_template = {
     image_id      = data.aws_ssm_parameter.ecs_ami.value
@@ -314,9 +314,9 @@ module "asg" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| protect_from_scale_in | Protect instances from scale in | `bool` | `false` | no |
+| scale_in_protection_enabled | Protect instances from scale in | `bool` | `false` | no |
 | max_instance_lifetime | Maximum instance lifetime in seconds (0 or 86400-31536000) | `number` | `null` | no |
-| force_delete | Force delete without waiting for instances | `bool` | `false` | no |
+| force_delete_enabled | Force delete without waiting for instances | `bool` | `false` | no |
 | ignore_desired_capacity_changes | Ignore desired capacity changes | `bool` | `false` | no |
 
 ### Auto Scaling Group - Health Checks
@@ -330,7 +330,7 @@ module "asg" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| capacity_rebalance | Enable Spot capacity rebalancing | `bool` | `false` | no |
+| capacity_rebalance_enabled | Enable Spot capacity rebalancing | `bool` | `false` | no |
 | termination_policies | List of termination policies | `list(string)` | `["Default"]` | no |
 | suspended_processes | List of processes to suspend | `list(string)` | `[]` | no |
 
@@ -347,8 +347,8 @@ module "asg" {
 |------|-------------|------|---------|----------|
 | service_linked_role_arn | Custom service-linked role ARN | `string` | `null` | no |
 | target_group_arns | List of target group ARNs | `list(string)` | `[]` | no |
-| ecs_managed | Add AmazonECSManaged tag for ECS integration | `bool` | `false` | no |
-| propagate_tags_at_launch | Propagate tags to launched instances | `bool` | `true` | no |
+| ecs_managed_tag_enabled | Add AmazonECSManaged tag for ECS integration | `bool` | `false` | no |
+| tag_propagation_at_launch_enabled | Propagate tags to launched instances | `bool` | `true` | no |
 
 ### Launch Template
 
@@ -541,7 +541,7 @@ module "asg" {
 ║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
 ║  │  │ • default_tags = { ManagedBy = "terraform", Module = "compute/autoscaling" }                              │   │  ║
 ║  │  │ • tags = merge(default_tags, var.tags)                                                                    │   │  ║
-║  │  │ • asg_tags = merge(tags, { Name = var.name }, ecs_managed ? { AmazonECSManaged = "true" } : {})           │   │  ║
+║  │  │ • asg_tags = merge(tags, { Name = var.name }, ecs_managed_tag_enabled ? { AmazonECSManaged = "true" } : {})           │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • launch_template_creation_enabled = var.launch_template_creation_enabled && var.launch_template != null                      │   │  ║
@@ -556,17 +556,17 @@ module "asg" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │   INSTANCE PROTECTION       │   │       HEALTH CHECKS             │   │       CAPACITY & SCALING                │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • protect_from_scale_in     │   │ • health_check_type (EC2/ELB)   │   │ • capacity_rebalance                    │  ║
+║  │ • scale_in_protection_enabled     │   │ • health_check_type (EC2/ELB)   │   │ • capacity_rebalance_enabled                    │  ║
 ║  │ • max_instance_lifetime     │   │ • health_check_grace_period     │   │ • termination_policies                  │  ║
-║  │ • force_delete              │   └─────────────────────────────────┘   │ • suspended_processes                   │  ║
+║  │ • force_delete_enabled              │   └─────────────────────────────────┘   │ • suspended_processes                   │  ║
 ║  │ • ignore_desired_capacity   │                                         └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘                                                                                       ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │     CLOUDWATCH METRICS      │   │      SERVICE & LB               │   │        ECS & TAGS                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • enabled_metrics           │   │ • service_linked_role_arn       │   │ • ecs_managed                           │  ║
-║  │ • metrics_granularity       │   │ • target_group_arns             │   │ • propagate_tags_at_launch              │  ║
+║  │ • enabled_metrics           │   │ • service_linked_role_arn       │   │ • ecs_managed_tag_enabled                           │  ║
+║  │ • metrics_granularity       │   │ • target_group_arns             │   │ • tag_propagation_at_launch_enabled              │  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
 ║  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  ║
@@ -948,7 +948,7 @@ module "burst_asg" {
 - When using `mixed_instances_policy`, the launch template block is handled within the policy
 - IMDSv2 is enforced by default when creating a launch template (`http_tokens = "required"`)
 - EBS volumes are encrypted by default in the launch template
-- Set `ecs_managed = true` to add the `AmazonECSManaged` tag required for ECS capacity providers
+- Set `ecs_managed_tag_enabled = true` to add the `AmazonECSManaged` tag required for ECS capacity providers
 - The `ignore_desired_capacity_changes` variable exists for documentation; to ignore capacity changes, set `desired_capacity = null`
 - Warm pool instances can be in Stopped, Running, or Hibernated states
 - Lifecycle hooks support SNS topics or SQS queues as notification targets

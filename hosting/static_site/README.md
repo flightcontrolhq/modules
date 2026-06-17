@@ -117,7 +117,7 @@ module "site" {
     "staging.example.com" = "v_staging"
   }
 
-  deploy_role_enabled = true
+  deploy_role_creation_enabled = true
   deploy_role_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -172,7 +172,7 @@ aws cloudfront-keyvaluestore delete-key \
   --key pr-42.preview.example.com
 ```
 
-The deploy role created when `deploy_role_enabled = true` has exactly the S3 + KVS permissions to do all of this.
+The deploy role created when `deploy_role_creation_enabled = true` has exactly the S3 + KVS permissions to do all of this.
 
 ## How the rewriter resolves a version
 
@@ -394,8 +394,8 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| deploy_role_enabled | Create an IAM role for CI to assume. | `bool` | `false` |
-| deploy_role_trust_policy | Trust policy JSON. Required when `deploy_role_enabled = true`. | `string` | `null` |
+| deploy_role_creation_enabled | Create an IAM role for CI to assume. | `bool` | `false` |
+| deploy_role_trust_policy | Trust policy JSON. Required when `deploy_role_creation_enabled = true`. | `string` | `null` |
 | deploy_role_name | Override role name. | `string` | `"<name>-deploy"` |
 
 ## Outputs

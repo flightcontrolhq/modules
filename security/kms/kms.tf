@@ -151,7 +151,7 @@ resource "aws_kms_key" "this" {
   description              = local.description
   customer_master_key_spec = var.key_spec
   key_usage                = var.key_usage
-  multi_region             = var.multi_region
+  multi_region             = var.multi_region_enabled
   enable_key_rotation      = local.enable_key_rotation
   deletion_window_in_days  = var.deletion_window_in_days
 

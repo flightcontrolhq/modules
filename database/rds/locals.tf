@@ -127,9 +127,9 @@ locals {
     "mysql"
   )
 
-  # Final snapshot identifier (auto-generate if not provided and skip_final_snapshot is false)
+  # Final snapshot identifier (auto-generate if final_snapshot_creation_enabled is true)
   final_snapshot_identifier = (
-    var.skip_final_snapshot ? null :
+    !var.final_snapshot_creation_enabled ? null :
     coalesce(var.final_snapshot_identifier, "${var.name}-final-snapshot")
   )
 

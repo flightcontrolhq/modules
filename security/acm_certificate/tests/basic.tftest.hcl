@@ -51,7 +51,7 @@ run "defaults_no_route53_no_wait" {
 
   assert {
     condition     = length(aws_acm_certificate_validation.this) == 0
-    error_message = "aws_acm_certificate_validation should not be created when wait_for_validation is false"
+    error_message = "aws_acm_certificate_validation should not be created when certificate_validation_wait_enabled is false"
   }
 
   assert {
@@ -68,12 +68,12 @@ run "wait_for_validation_only" {
   command = plan
 
   variables {
-    wait_for_validation = true
+    certificate_validation_wait_enabled = true
   }
 
   assert {
     condition     = length(aws_acm_certificate_validation.this) == 1
-    error_message = "aws_acm_certificate_validation should be created when wait_for_validation is true"
+    error_message = "aws_acm_certificate_validation should be created when certificate_validation_wait_enabled is true"
   }
 
   assert {
@@ -92,7 +92,7 @@ run "route53_and_wait" {
   variables {
     route53_validation_records_creation_enabled = true
     route53_zone_id                             = "Z1234567890ABC"
-    wait_for_validation                         = true
+    certificate_validation_wait_enabled         = true
   }
 
   assert {
@@ -102,7 +102,7 @@ run "route53_and_wait" {
 
   assert {
     condition     = length(aws_acm_certificate_validation.this) == 1
-    error_message = "aws_acm_certificate_validation should be created when wait_for_validation is true"
+    error_message = "aws_acm_certificate_validation should be created when certificate_validation_wait_enabled is true"
   }
 }
 

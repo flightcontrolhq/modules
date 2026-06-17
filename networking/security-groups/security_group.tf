@@ -103,7 +103,7 @@ resource "aws_vpc_security_group_egress_rule" "this" {
 ################################################################################
 
 resource "aws_vpc_security_group_egress_rule" "allow_all_ipv4" {
-  count = var.allow_all_egress ? 1 : 0
+  count = var.all_egress_enabled ? 1 : 0
 
   security_group_id = aws_security_group.this.id
   description       = "Allow all outbound IPv4 traffic"
@@ -117,7 +117,7 @@ resource "aws_vpc_security_group_egress_rule" "allow_all_ipv4" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "allow_all_ipv6" {
-  count = var.allow_all_egress && !var.allow_all_egress_ipv4_only ? 1 : 0
+  count = var.all_egress_enabled && !var.ipv4_only_egress_enabled ? 1 : 0
 
   security_group_id = aws_security_group.this.id
   description       = "Allow all outbound IPv6 traffic"

@@ -21,7 +21,7 @@ variable "tags" {
 variable "engine" {
   type        = string
   description = "The cache engine to use: redis, valkey, or memcached."
-  default     = "redis"
+  default     = "valkey"
 
   validation {
     condition     = contains(["redis", "valkey", "memcached"], var.engine)
@@ -29,10 +29,24 @@ variable "engine" {
   }
 }
 
-variable "engine_version" {
+variable "engine_major_version" {
   type        = string
-  description = "The version number of the cache engine. If not specified, the latest available version will be used."
-  default     = null
+  description = "The major version number of the cache engine. Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6."
+
+  validation {
+    condition     = length(var.engine_major_version) > 0
+    error_message = "The engine_major_version must not be empty."
+  }
+}
+
+variable "engine_minor_version" {
+  type        = string
+  description = "Minor or patch version appended to the major version."
+
+  validation {
+    condition     = length(var.engine_minor_version) > 0
+    error_message = "The engine_minor_version must not be empty."
+  }
 }
 
 ################################################################################
@@ -353,13 +367,13 @@ variable "maintenance_window" {
   }
 }
 
-variable "apply_immediately" {
+variable "immediate_apply_enabled" {
   type        = bool
   description = "Whether to apply changes immediately or during the next maintenance window."
   default     = false
 }
 
-variable "auto_minor_version_upgrade" {
+variable "minor_version_auto_upgrade_enabled" {
   type        = bool
   description = "Enable automatic minor version upgrades during the maintenance window."
   default     = true

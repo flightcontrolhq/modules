@@ -135,7 +135,7 @@ output "ecs_capacity_provider_config" {
   value = {
     auto_scaling_group_arn         = aws_autoscaling_group.this.arn
     managed_scaling_status         = "ENABLED"
-    managed_termination_protection = var.protect_from_scale_in ? "ENABLED" : "DISABLED"
+    managed_termination_protection = var.scale_in_protection_enabled ? "ENABLED" : "DISABLED"
   }
 }
 

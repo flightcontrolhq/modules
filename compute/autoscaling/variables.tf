@@ -106,7 +106,7 @@ variable "wait_for_capacity_timeout" {
 # Auto Scaling Group - Instance Protection and Lifecycle
 ################################################################################
 
-variable "protect_from_scale_in" {
+variable "scale_in_protection_enabled" {
   type        = bool
   description = "Whether newly launched instances are protected from scale in by default."
   default     = false
@@ -123,7 +123,7 @@ variable "max_instance_lifetime" {
   }
 }
 
-variable "force_delete" {
+variable "force_delete_enabled" {
   type        = bool
   description = "Whether to force delete the Auto Scaling Group without waiting for instances to terminate."
   default     = false
@@ -159,7 +159,7 @@ variable "health_check_grace_period" {
 # Auto Scaling Group - Capacity and Scaling Behavior
 ################################################################################
 
-variable "capacity_rebalance" {
+variable "capacity_rebalance_enabled" {
   type        = bool
   description = "Whether to enable capacity rebalancing for Spot instances when they receive a rebalance recommendation."
   default     = false
@@ -265,7 +265,7 @@ variable "target_group_arns" {
 # Auto Scaling Group - ECS Integration
 ################################################################################
 
-variable "ecs_managed" {
+variable "ecs_managed_tag_enabled" {
   type        = bool
   description = "Whether to add the 'AmazonECSManaged' tag for ECS capacity provider integration."
   default     = false
@@ -275,7 +275,7 @@ variable "ecs_managed" {
 # Auto Scaling Group - Tag Propagation
 ################################################################################
 
-variable "propagate_tags_at_launch" {
+variable "tag_propagation_at_launch_enabled" {
   type        = bool
   description = "Whether to propagate tags from the Auto Scaling Group to launched instances."
   default     = true
@@ -453,9 +453,9 @@ variable "launch_template" {
 
     # Private DNS Name Options
     private_dns_name_options = optional(object({
-      enable_resource_name_dns_aaaa_record = optional(bool)
-      enable_resource_name_dns_a_record    = optional(bool)
-      hostname_type                        = optional(string, "ip-name")
+      resource_name_dns_aaaa_record_enabled = optional(bool)
+      resource_name_dns_a_record_enabled    = optional(bool)
+      hostname_type                         = optional(string, "ip-name")
     }))
 
     # Instance Requirements (Attribute-based instance type selection) - Used with mixed instances policy

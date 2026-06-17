@@ -46,7 +46,7 @@ variable "comment" {
   default     = "Managed by Terraform"
 }
 
-variable "force_destroy" {
+variable "record_force_destroy_enabled" {
   type        = bool
   description = "If true, destroy all records in the hosted zone when the zone is destroyed. Only applies to created zones."
   default     = false
@@ -62,7 +62,7 @@ variable "delegation_set_id" {
 # Private Zone
 ################################################################################
 
-variable "private_zone" {
+variable "private_zone_enabled" {
   type        = bool
   description = "If true, the created hosted zone is private and must be associated with one or more VPCs."
   default     = false
@@ -158,6 +158,45 @@ variable "query_logging_enabled" {
   type        = bool
   description = "Enable query logging for the hosted zone. Requires a CloudWatch log group ARN in us-east-1 for public zones."
   default     = false
+}
+
+variable "query_log_group_creation_enabled" {
+  type        = bool
+  description = "If true, create a CloudWatch Logs log group and Route53 resource policy in us-east-1 for query logs."
+  default     = true
+}
+
+variable "query_log_group_name" {
+  type        = string
+  description = "Name for the created CloudWatch Logs log group. Defaults to /aws/route53/<hosted-zone-name>."
+  default     = null
+
+  validation {
+    condition     = var.query_log_group_name == null || length(var.query_log_group_name) > 0
+    error_message = "The query_log_group_name must not be empty."
+  }
+}
+
+variable "query_log_group_retention_days" {
+  type        = number
+  description = "Number of days to retain query logs. Use 0 to retain logs indefinitely."
+  default     = 90
+
+  validation {
+    condition     = contains([0, 1, 3, 5, 7, 14, 30, 60, 90, 180, 365, 731, 1827, 3653], var.query_log_group_retention_days)
+    error_message = "The query_log_group_retention_days must be 0, 1, 3, 5, 7, 14, 30, 60, 90, 180, 365, 731, 1827, or 3653."
+  }
+}
+
+variable "query_log_resource_policy_name" {
+  type        = string
+  description = "Name for the CloudWatch Logs resource policy that allows Route53 to write query logs. Defaults to a hosted-zone-derived name."
+  default     = null
+
+  validation {
+    condition     = var.query_log_resource_policy_name == null || length(var.query_log_resource_policy_name) > 0
+    error_message = "The query_log_resource_policy_name must not be empty."
+  }
 }
 
 variable "query_log_group_arn" {

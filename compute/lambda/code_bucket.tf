@@ -7,11 +7,11 @@ module "code_bucket" {
 
   source = "../../storage/s3"
 
-  name               = local.code_bucket_name
-  region             = var.region
-  versioning_enabled = true
-  force_destroy      = var.code_bucket_force_destroy
-  tags               = local.tags
+  name                  = local.code_bucket_name
+  region                = var.region
+  versioning_enabled    = true
+  force_destroy_enabled = var.code_bucket_force_destroy_enabled
+  tags                  = local.tags
 }
 
 resource "aws_s3_object" "placeholder" {

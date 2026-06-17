@@ -29,10 +29,10 @@ module "cdn" {
 
   origins = [
     {
-      origin_id      = local.origin_id
-      domain_name    = module.hosting.bucket_regional_domain_name
-      s3_origin      = true
-      custom_headers = var.additional_origin_headers
+      origin_id         = local.origin_id
+      domain_name       = module.hosting.bucket_regional_domain_name
+      s3_origin_enabled = true
+      custom_headers    = var.additional_origin_headers
       origin_shield = var.origin_shield_region == null ? null : {
         enabled              = true
         origin_shield_region = var.origin_shield_region
@@ -45,7 +45,7 @@ module "cdn" {
     viewer_protocol_policy       = "redirect-to-https"
     allowed_methods              = ["GET", "HEAD", "OPTIONS"]
     cached_methods               = ["GET", "HEAD"]
-    compress                     = true
+    compression_enabled          = true
     cache_policy_id              = var.cache_policy_id
     origin_request_policy_id     = var.origin_request_policy_id
     response_headers_policy_id   = local.effective_response_headers_policy_id
@@ -55,11 +55,11 @@ module "cdn" {
 
   ordered_cache_behaviors = local.ordered_behaviors
 
-  default_root_object = var.default_root_object
-  price_class         = var.price_class
-  http_version        = "http2and3"
-  ipv6_enabled        = true
-  wait_for_deployment = var.deployment_wait_enabled
+  default_root_object     = var.default_root_object
+  price_class             = var.price_class
+  http_version            = "http2and3"
+  ipv6_enabled            = true
+  deployment_wait_enabled = var.deployment_wait_enabled
 
   minimum_protocol_version = var.minimum_protocol_version
 

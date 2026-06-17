@@ -273,7 +273,7 @@ module "worker_service" {
 |------|-------------|------|---------|----------|
 | vpc_id | VPC ID where the service will run | `string` | n/a | yes |
 | subnet_ids | Subnet IDs for ECS tasks | `list(string)` | n/a | yes |
-| assign_public_ip | Assign public IP to tasks (for Fargate in public subnets without NAT) | `bool` | `false` | no |
+| public_ip_assignment_enabled | Assign public IP to tasks (for Fargate in public subnets without NAT) | `bool` | `false` | no |
 | security_group_ids | Additional security group IDs to attach | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the service | `list(string)` | `[]` | no |
 
@@ -329,8 +329,8 @@ module "worker_service" {
 | deployment_minimum_healthy_percent | Minimum healthy percent during deployment | `number` | `100` | no |
 | deployment_maximum_percent | Maximum percent during deployment | `number` | `200` | no |
 | execute_command_enabled | Enable ECS Exec for debugging | `bool` | `false` | no |
-| force_new_deployment | Force a new deployment | `bool` | `false` | no |
-| wait_for_steady_state | Wait for service to reach steady state | `bool` | `true` | no |
+| new_deployment_forcing_enabled | Force a new deployment | `bool` | `false` | no |
+| steady_state_wait_enabled | Wait for service to reach steady state | `bool` | `true` | no |
 | health_check_grace_period_seconds | Grace period for LB health checks | `number` | `0` | no |
 | ecs_managed_tags_enabled | Enable ECS managed tags | `bool` | `true` | no |
 | propagate_tags | Propagate tags from SERVICE or TASK_DEFINITION | `string` | `"SERVICE"` | no |
@@ -523,7 +523,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • vpc_id (required)             │   │ • cluster_arn (required)                │  ║
 ║  │ • tags                      │   │ • subnet_ids (required)         │   └─────────────────────────────────────────┘  ║
-║  └──────────────┬──────────────┘   │ • assign_public_ip              │                                                 ║
+║  └──────────────┬──────────────┘   │ • public_ip_assignment_enabled  │                                                 ║
 ║                 │                  │ • security_group_ids            │                                                 ║
 ║                 │                  │ • allowed_cidr_blocks           │                                                 ║
 ║                 │                  └─────────────────────────────────┘                                                 ║
@@ -551,8 +551,8 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • task_cpu                  │   │ • desired_count                 │   │ • deployment_type (strategy seed)       │  ║
 ║  │ • task_memory               │   │ • execute_command_enabled        │   │ • deployment_minimum_healthy_percent    │  ║
-║  │ • container_port            │   │ • force_new_deployment          │   │ • deployment_maximum_percent            │  ║
-║  │ • launch_type               │   │ • wait_for_steady_state         │   │ • deployment_circuit_breaker            │  ║
+║  │ • container_port            │   │ • new_deployment_forcing_enabled│   │ • deployment_maximum_percent            │  ║
+║  │ • launch_type               │   │ • steady_state_wait_enabled     │   │ • deployment_circuit_breaker            │  ║
 ║  │ • network_mode              │   │ • platform_version              │   └─────────────────────────────────────────┘  ║
 ║  │ • requires_compatibilities  │   │ • capacity_provider_strategies  │                                                ║
 ║  │ • runtime_platform          │   │ • health_check_grace_period_    │                                                ║
@@ -762,7 +762,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║                                                                  │                                                     ║
 ║  var.vpc_id ───────────────────────────────────────────────────────────────────────────────────────────┐               ║
 ║  var.subnet_ids ───────────────────────────────────────────────────────────────────────────────────────┤               ║
-║  var.assign_public_ip ─────────────────────────────────────────────────────────────────────────────────┤               ║
+║  var.public_ip_assignment_enabled ─────────────────────────────────────────────────────────────────────┤               ║
 ║  var.allowed_cidr_blocks ──────────► module.security_group ────────────────────────────────────────────┤               ║
 ║  var.security_group_ids ───────────────────────────────────────────────────────────────────────────────┤               ║
 ║                                                                                                        │               ║
@@ -1020,7 +1020,7 @@ The infrastructure for the ECS deployment controller's built-in traffic shifting
 ## Notes
 
 - The module creates a security group that allows inbound traffic from the VPC CIDR on the container port
-- For Fargate tasks in public subnets without NAT, set `assign_public_ip = true`
+- For Fargate tasks in public subnets without NAT, set `public_ip_assignment_enabled = true`
 - The placeholder container uses hello-world from public ECR - no special permissions needed
 - For blue_green/linear/canary deployments, ECS itself executes the traffic shift; the Flightcontrol deploy manager drives it via UpdateService and pause lifecycle hooks
 - The task definition has `lifecycle { ignore_changes = all }` since the external deployment controller manages updates

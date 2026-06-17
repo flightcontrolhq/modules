@@ -8,7 +8,7 @@ resource "aws_rds_global_cluster" "this" {
   global_cluster_identifier = var.global_cluster_identifier
   engine                    = var.engine
   engine_version            = var.engine_version
-  storage_encrypted         = var.storage_encrypted
+  storage_encrypted         = var.storage_encryption_enabled
   database_name             = var.database_name
   deletion_protection       = var.deletion_protection_enabled
 }
@@ -26,7 +26,7 @@ resource "aws_rds_cluster" "this" {
 
   # Storage
   storage_type      = var.storage_type
-  storage_encrypted = var.storage_encrypted
+  storage_encrypted = var.storage_encryption_enabled
   kms_key_id        = var.kms_key_id
 
   # Network
@@ -38,9 +38,9 @@ resource "aws_rds_cluster" "this" {
 
   # Authentication
   master_username                     = var.master_username
-  master_password                     = var.manage_master_user_password ? null : var.master_password
-  manage_master_user_password         = var.manage_master_user_password
-  master_user_secret_kms_key_id       = var.manage_master_user_password ? var.master_user_secret_kms_key_id : null
+  master_password                     = var.master_user_password_management_enabled ? null : var.master_password
+  manage_master_user_password         = var.master_user_password_management_enabled
+  master_user_secret_kms_key_id       = var.master_user_password_management_enabled ? var.master_user_secret_kms_key_id : null
   iam_database_authentication_enabled = var.iam_database_authentication_enabled
 
   # Database
@@ -52,16 +52,16 @@ resource "aws_rds_cluster" "this" {
   # Backup
   backup_retention_period   = var.backup_retention_period
   preferred_backup_window   = var.preferred_backup_window
-  copy_tags_to_snapshot     = var.copy_tags_to_snapshot
-  skip_final_snapshot       = var.skip_final_snapshot
+  copy_tags_to_snapshot     = var.snapshot_tag_copying_enabled
+  skip_final_snapshot       = !var.final_snapshot_creation_enabled
   final_snapshot_identifier = local.final_snapshot_identifier
   snapshot_identifier       = var.snapshot_identifier
   backtrack_window          = local.is_mysql ? var.backtrack_window : 0
 
   # Maintenance
   preferred_maintenance_window = var.preferred_maintenance_window
-  allow_major_version_upgrade  = var.allow_major_version_upgrade
-  apply_immediately            = var.apply_immediately
+  allow_major_version_upgrade  = var.major_version_upgrade_enabled
+  apply_immediately            = var.immediate_apply_enabled
   deletion_protection          = var.deletion_protection_enabled
 
   # Monitoring
@@ -112,8 +112,8 @@ resource "aws_rds_cluster" "this" {
     }
 
     precondition {
-      condition     = var.manage_master_user_password || var.master_password != null
-      error_message = "master_password is required when manage_master_user_password is false."
+      condition     = var.master_user_password_management_enabled || var.master_password != null
+      error_message = "master_password is required when master_user_password_management_enabled is false."
     }
 
     precondition {

@@ -3,8 +3,8 @@ definition:
   name: AWS IAM Role
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
-  version: 0.1.2
-  description: Mark destructive IAM role inputs immutable
+  version: 0.2.0
+  description: Rename IAM policy detach input to match Terraform naming conventions
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -48,7 +48,7 @@ module:
     - collapsible: true
       default: true
       description: Detach managed policies before destroying the role.
-      id: force_detach_policies
+      id: policy_force_detach_enabled
       label: Force detach policies on destroy
       type: boolean
     - id: section_trust
@@ -293,7 +293,7 @@ module:
         assume_role_conditions: << module.input.assume_role_conditions || [] >>
         custom_assume_role_policy: << module.input.custom_assume_role_policy >>
         description: << module.input.description >>
-        force_detach_policies: << module.input.force_detach_policies >>
+        policy_force_detach_enabled: << module.input.policy_force_detach_enabled >>
         inline_policies: << module.input.inline_policies || {} >>
         inline_policy_statements: << module.input.inline_policy_statements || [] >>
         instance_profile_creation_enabled: << module.input.instance_profile_creation_enabled >>

@@ -30,8 +30,8 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
 
-  endpoint_public_access  = true
-  endpoint_private_access = true
+  public_endpoint_access_enabled  = true
+  private_endpoint_access_enabled = true
 
   ebs_csi_driver_enabled         = true
   pod_identity_agent_enabled     = true
@@ -69,14 +69,14 @@ module "eks" {
 | kubernetes_version | Kubernetes version (`MAJOR.MINOR`). | `string` | `null` | no |
 | vpc_id | VPC ID to launch the control plane ENIs into. | `string` | n/a | yes |
 | subnet_ids | Subnets for control plane ENIs (>=2, multi-AZ). | `list(string)` | n/a | yes |
-| endpoint_public_access | Expose the API server publicly. | `bool` | `false` | no |
-| endpoint_private_access | Expose the API server inside the VPC. | `bool` | `true` | no |
+| public_endpoint_access_enabled | Expose the API server publicly. | `bool` | `false` | no |
+| private_endpoint_access_enabled | Expose the API server inside the VPC. | `bool` | `true` | no |
 | public_access_cidrs | CIDRs allowed to hit the public endpoint. | `list(string)` | `["0.0.0.0/0"]` | no |
 | service_ipv4_cidr | Override the service CIDR (IPv4 only). | `string` | `null` | no |
 | ip_family | `ipv4` or `ipv6`. | `string` | `"ipv4"` | no |
 | additional_cluster_security_group_ingress | Extra cluster-SG ingress rules sourced by IPv4 CIDR. | `list(object)` | `[]` | no |
 | additional_cluster_security_group_ingress_sg | Extra cluster-SG ingress rules sourced by another SG. | `list(object)` | `[]` | no |
-| bootstrap_cluster_creator_admin_permissions | Auto-grant cluster-admin to the creating principal. | `bool` | `true` | no |
+| cluster_creator_admin_permissions_enabled | Auto-grant cluster-admin to the creating principal. | `bool` | `true` | no |
 | access_entries | EKS access entries to create (replaces aws-auth ConfigMap). | `map(object)` | `{}` | no |
 | enabled_cluster_log_types | Control plane log types to ship to CloudWatch. | `list(string)` | `["api","audit","authenticator"]` | no |
 | cluster_log_retention_in_days | Retention for the control plane log group. | `number` | `30` | no |

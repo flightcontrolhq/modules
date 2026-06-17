@@ -103,7 +103,7 @@ module "security_group" {
   vpc_id      = module.vpc.vpc_id
 
   # Allow all outbound traffic (no inbound for basic test)
-  allow_all_egress = true
+  all_egress_enabled = true
 
   tags = local.common_tags
 }

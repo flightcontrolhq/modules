@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.2.1
-  description: Make state backend workspace name immutable
+  version: 0.3.1
+  description: Disallow reserved RDS initial database names
 module:
   inputs:
     - id: network
@@ -62,7 +62,7 @@ module:
       immutable: true
       label: Name slug
       patterns:
-        - message: Use 1-40 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
+        - message: 1-40 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
           pattern: ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$
       required: true
       type: string
@@ -82,6 +82,11 @@ module:
     - id: db_name
       immutable: true
       label: Database name
+      patterns:
+        - message: 1-64 lowercase letters, numbers, and underscores. Start with a letter.
+          pattern: ^[a-z][a-z0-9_]{0,63}$
+        - message: Pick a different name, this is reserved by AWS.
+          pattern: ^(?:|[^adimnoprst].*|a(?:|[^d].*|d(?:|[^m].*|m(?:|[^i].*|i(?:|[^n].*|n.+))))|d(?:|[^a].*|a(?:|[^t].*|t(?:|[^a].*|a(?:|[^b].*|b(?:|[^a].*|a(?:|[^s].*|s(?:|[^e].*|e(?:[^s].*|s.+))))))))|i(?:|[^n].*|n(?:|[^f].*|f(?:|[^o].*|o(?:|[^r].*|r(?:|[^m].*|m(?:|[^a].*|a(?:|[^t].*|t(?:|[^i].*|i(?:|[^o].*|o(?:|[^n].*|n(?:|[^_].*|_(?:|[^s].*|s(?:|[^c].*|c(?:|[^h].*|h(?:|[^e].*|e(?:|[^m].*|m(?:|[^a].*|a.+)))))))))))))))))|m(?:|[^y].*|y(?:|[^s].*|s(?:|[^q].*|q(?:|[^l].*|l.+))))|n(?:|[^u].*|u(?:|[^l].*|l(?:|[^l].*|l.+)))|o(?:|[^r].*|r(?:|[^a].*|a(?:|[^c].*|c(?:|[^l].*|l(?:|[^e].*|e.+)))))|p(?:|[^eo].*|e(?:|[^r].*|r(?:|[^f].*|f(?:|[^o].*|o(?:|[^r].*|r(?:|[^m].*|m(?:|[^a].*|a(?:|[^n].*|n(?:|[^c].*|c(?:|[^e].*|e(?:|[^_].*|_(?:|[^s].*|s(?:|[^c].*|c(?:|[^h].*|h(?:|[^e].*|e(?:|[^m].*|m(?:|[^a].*|a.+))))))))))))))))|o(?:|[^s].*|s(?:|[^t].*|t(?:|[^g].*|g(?:|[^r].*|r(?:|[^e].*|e(?:|[^s].*|s.+)))))))|r(?:|[^do].*|d(?:|[^s].*|s(?:|[^a].*|a(?:|[^d].*|d(?:|[^m].*|m(?:|[^i].*|i(?:|[^n].*|n.+))))))|o(?:|[^o].*|o(?:|[^t].*|t.+)))|s(?:|[^y].*|y(?:|[^s].*|s.+))|t(?:|[^e].*|e(?:|[^m].*|m(?:|[^p].*|p(?:|[^l].*|l(?:|[^a].*|a(?:|[^t].*|t(?:|[^e].*|e(?:|[^01].*|0.+|1.+)))))))))$
       placeholder: myapp_prod
       required: true
       show_when:
@@ -100,7 +105,7 @@ module:
       immutable: true
       label: Username
       patterns:
-        - message: Use a valid RDS master username. Start with a letter and use only letters, numbers, and underscores.
+        - message: Invalid RDS master username. Start with a letter. Letters, numbers, and underscores only.
           pattern: ^[A-Za-z][A-Za-z0-9_]{0,62}$
       required: true
       show_when:
@@ -206,7 +211,7 @@ module:
     - collapsible: true
       default: true
       description: Enable automatic minor engine version upgrades during the configured maintenance window.
-      id: auto_minor_version_upgrade
+      id: minor_version_auto_upgrade_enabled
       label: Auto minor version upgrades
       type: boolean
     - id: section_size
@@ -289,7 +294,7 @@ module:
       type: section
     - default: false
       description: Keep disabled for production databases unless public access is intentional.
-      id: publicly_accessible
+      id: public_access_enabled
       label: Publicly accessible
       type: boolean
     - collapsible: true
@@ -336,7 +341,7 @@ module:
       label: Availability & replicas
       type: section
     - default: false
-      id: multi_az
+      id: multi_az_enabled
       label: Multi-AZ
       type: boolean
     - collapsible: true
@@ -345,7 +350,7 @@ module:
       label: Availability zone
       required: false
       show_when:
-        multi_az: false
+        multi_az_enabled: false
       type: string
     - default: false
       id: read_replica_creation_enabled
@@ -556,29 +561,29 @@ module:
       type: string
     - collapsible: true
       default: true
-      id: copy_tags_to_snapshot
+      id: snapshot_tag_copying_enabled
       label: Copy tags to snapshots
       type: boolean
     - collapsible: true
       default: true
       description: Delete retained automated backups when the database is deleted. Disable this to preserve automated backups after deletion.
-      id: delete_automated_backups
+      id: automated_backups_deletion_enabled
       label: Delete automated backups
       show_when:
         backup_retention_period:
           not: 0
       type: boolean
     - collapsible: true
-      default: false
-      id: skip_final_snapshot
-      label: Skip final snapshot
+      default: true
+      id: final_snapshot_creation_enabled
+      label: Create final snapshot
       type: boolean
     - collapsible: true
       id: final_snapshot_identifier
       label: Final snapshot identifier
       required: false
       show_when:
-        skip_final_snapshot: false
+        final_snapshot_creation_enabled: true
       type: string
     - default: true
       id: deletion_protection_enabled
@@ -595,12 +600,12 @@ module:
       type: string
     - collapsible: true
       default: false
-      id: allow_major_version_upgrade
+      id: major_version_upgrade_enabled
       label: Allow major version upgrades
       type: boolean
     - collapsible: true
       default: false
-      id: apply_immediately
+      id: immediate_apply_enabled
       label: Apply changes immediately
       type: boolean
     - id: section_monitoring
@@ -911,11 +916,11 @@ module:
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
         allocated_storage: << module.input.allocated_storage >>
-        allow_major_version_upgrade: << module.input.allow_major_version_upgrade >>
+        major_version_upgrade_enabled: << module.input.major_version_upgrade_enabled >>
         allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
         allowed_security_group_ids: << module.input.allowed_security_group_ids >>
-        apply_immediately: << module.input.apply_immediately >>
-        auto_minor_version_upgrade: << module.input.auto_minor_version_upgrade >>
+        immediate_apply_enabled: << module.input.immediate_apply_enabled >>
+        minor_version_auto_upgrade_enabled: << module.input.minor_version_auto_upgrade_enabled >>
         availability_zone: << module.input.availability_zone >>
         backup_retention_period: << module.input.backup_retention_period >>
         backup_window: << module.input.backup_window >>
@@ -929,7 +934,7 @@ module:
         cloudwatch_alarm_period: << module.input.cloudwatch_alarm_period >>
         cloudwatch_alarm_storage_threshold: << int(module.input.cloudwatch_alarm_storage_threshold_gib * 1073741824) >>
         cloudwatch_ok_actions: << module.input.cloudwatch_ok_actions >>
-        copy_tags_to_snapshot: << module.input.copy_tags_to_snapshot >>
+        snapshot_tag_copying_enabled: << module.input.snapshot_tag_copying_enabled >>
         cloudwatch_alarms_creation_enabled: << module.input.cloudwatch_alarms_creation_enabled >>
         monitoring_role_creation_enabled: << module.input.monitoring_role_creation_enabled >>
         option_group_creation_enabled: << module.input.option_group_creation_enabled >>
@@ -937,7 +942,7 @@ module:
         read_replica_creation_enabled: << module.input.read_replica_creation_enabled >>
         security_group_creation_enabled: << module.input.security_group_creation_enabled >>
         db_name: '<< module.input.restore_mode == "none" ? module.input.db_name : null >>'
-        delete_automated_backups: << module.input.delete_automated_backups >>
+        automated_backups_deletion_enabled: << module.input.automated_backups_deletion_enabled >>
         deletion_protection_enabled: << module.input.deletion_protection_enabled >>
         domain: << module.input.domain >>
         domain_iam_role_name: << module.input.domain_iam_role_name >>
@@ -952,12 +957,12 @@ module:
         kms_key_id: << module.input.kms_key_id >>
         license_model: '<< module.input.engine == "oracle-ee" || module.input.engine == "oracle-se2" || module.input.engine == "oracle-se2-cdb" ? module.input.license_model_oracle : module.input.license_model_sqlserver >>'
         maintenance_window: << module.input.maintenance_window >>
-        manage_master_user_password: true
+        master_user_password_management_enabled: true
         master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
         max_allocated_storage: << module.input.max_allocated_storage >>
         monitoring_interval: << module.input.monitoring_interval >>
         monitoring_role_arn: << module.input.monitoring_role_arn >>
-        multi_az: << module.input.multi_az >>
+        multi_az_enabled: << module.input.multi_az_enabled >>
         name: << module.input.name >>
         option_group_engine_version: << module.input.option_group_engine_version >>
         option_group_name: << module.input.option_group_name >>
@@ -970,14 +975,14 @@ module:
         performance_insights_kms_key_id: << module.input.performance_insights_kms_key_id >>
         performance_insights_retention_period: << module.input.performance_insights_retention_period >>
         port: << module.input.port >>
-        publicly_accessible: << module.input.publicly_accessible >>
+        public_access_enabled: << module.input.public_access_enabled >>
         read_replica_availability_zones: << module.input.read_replica_availability_zones >>
         read_replica_count: << module.input.read_replica_count >>
         read_replica_instance_class: << module.input.read_replica_instance_class >>
         region: << module.input.aws_region >>
         restore_to_point_in_time: '<< module.input.restore_mode == "point_in_time" ? { restore_time: module.input.point_in_time_use_latest_restorable_time ? null : module.input.point_in_time_restore_time, source_db_instance_identifier: module.input.point_in_time_source_db_instance_identifier, source_db_instance_automated_backups_arn: module.input.point_in_time_source_db_instance_automated_backups_arn, source_dbi_resource_id: module.input.point_in_time_source_dbi_resource_id, use_latest_restorable_time: module.input.point_in_time_use_latest_restorable_time } : null >>'
         security_group_id: << module.input.security_group_id >>
-        skip_final_snapshot: << module.input.skip_final_snapshot >>
+        final_snapshot_creation_enabled: << module.input.final_snapshot_creation_enabled >>
         snapshot_identifier: '<< module.input.restore_mode == "snapshot" ? module.input.snapshot_identifier : null >>'
         storage_throughput: << module.input.storage_throughput >>
         storage_type: << module.input.storage_type >>
@@ -1071,7 +1076,7 @@ module:
 
     Select a VPC network first. Ravion maps the network's AWS account, region, VPC ID, and private subnet IDs into this module. The database subnet group uses the selected private subnets by default.
 
-    Publicly accessible is disabled by default. Keep it disabled for normal application databases and allow access through security group IDs from application services or controlled CIDR blocks.
+    Public access is disabled by default. Keep it disabled for normal application databases and allow access through security group IDs from application services or controlled CIDR blocks.
 
     ## Database engine and sizing
 
@@ -1113,7 +1118,7 @@ module:
     | Allocated storage | Yes | 20 | Storage in GiB. |
     | Master username | Yes | dbadmin | Master database user. Do not use reserved engine words such as admin. |
     | Storage KMS key ARN | No | Blank | Uses a customer-managed KMS key for storage encryption. |
-    | Initial database name | No | Blank | Creates an initial database when supported by the engine. |
+    | Initial database name | No | Blank | Creates an initial database when supported by the engine. Reserved RDS engine words such as database are blocked. |
     | Publicly accessible | No | false | Leave disabled unless public database access is intentional. |
     | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
     | Multi-AZ | No | false | Enables high availability standby. |

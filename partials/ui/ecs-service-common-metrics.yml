@@ -1,0 +1,65 @@
+- id: cpu_utilization
+  name: CPU utilization
+  type: line
+  source:
+    type: cloudwatch
+    aws_account_id: << module.input.aws_account_id >>
+    dimensions:
+      ClusterName: << stack.output.cluster_name >>
+      ServiceName: << stack.output.service_name >>
+    name: CPUUtilization
+    namespace: AWS/ECS
+    region: << stack.output.region >>
+    statistic: Average
+- id: memory_utilization
+  name: Memory utilization
+  type: line
+  source:
+    type: cloudwatch
+    aws_account_id: << module.input.aws_account_id >>
+    dimensions:
+      ClusterName: << stack.output.cluster_name >>
+      ServiceName: << stack.output.service_name >>
+    name: MemoryUtilization
+    namespace: AWS/ECS
+    region: << stack.output.region >>
+    statistic: Average
+- id: running_tasks
+  name: Running tasks
+  type: line
+  source:
+    type: cloudwatch
+    aws_account_id: << module.input.aws_account_id >>
+    dimensions:
+      ClusterName: << stack.output.cluster_name >>
+      ServiceName: << stack.output.service_name >>
+    name: RunningTaskCount
+    namespace: ECS/ContainerInsights
+    region: << stack.output.region >>
+    statistic: Average
+- id: network_in
+  name: Network in
+  type: line
+  source:
+    type: cloudwatch
+    aws_account_id: << module.input.aws_account_id >>
+    dimensions:
+      ClusterName: << stack.output.cluster_name >>
+      ServiceName: << stack.output.service_name >>
+    name: NetworkRxBytes
+    namespace: ECS/ContainerInsights
+    region: << stack.output.region >>
+    statistic: Sum
+- id: network_out
+  name: Network out
+  type: line
+  source:
+    type: cloudwatch
+    aws_account_id: << module.input.aws_account_id >>
+    dimensions:
+      ClusterName: << stack.output.cluster_name >>
+      ServiceName: << stack.output.service_name >>
+    name: NetworkTxBytes
+    namespace: ECS/ContainerInsights
+    region: << stack.output.region >>
+    statistic: Sum
