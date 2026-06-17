@@ -37,6 +37,8 @@
   max: 100
   min: 1
   required: false
+  show_when:
+    auto_scaling_enabled: true
   default: 80
 - id: scale_in_cooldown
   label: Scale-in cooldown (secs)
@@ -44,6 +46,8 @@
   description: Time after a scale-in activity before another scale-in can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
   collapsible: true
   min: 0
+  show_when:
+    auto_scaling_enabled: true
   default: 300
 - id: scale_out_cooldown
   label: Scale-out cooldown (secs)
@@ -51,12 +55,16 @@
   description: Time after a scale-out activity before another scale-out can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
   collapsible: true
   min: 0
+  show_when:
+    auto_scaling_enabled: true
   default: 300
 - id: scale_in_enabled
   label: Scale in
   type: boolean
   description: Allow autoscaling to reduce task count automatically.
   collapsible: true
+  show_when:
+    auto_scaling_enabled: true
   default: true
 - id: scheduled_scaling
   label: Scheduled scaling actions

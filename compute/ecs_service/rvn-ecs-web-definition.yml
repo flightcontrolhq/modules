@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.5.1
-  description: Share ECS service definition config with worker modules
+  description: Share ECS service config and hide inactive autoscaling fields
 module:
   inputs:
     - id: section_cluster
@@ -261,7 +261,8 @@ module:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml
       container_definitions: >-
-        << (module.input.firelens_enabled ? [{"cpu": (module.input.capacity_provider == "ec2" ?
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.prebuilt_image_start_command)
+        > 0 ? module.input.prebuilt_image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
         "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment": ([{name:
         "PORT", value: string(module.input.container_port)}] | concat(module.input.environment_variables !=
@@ -294,7 +295,8 @@ module:
         stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
         stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
         "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
-        "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"cpu":
+        "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
+        (len(module.input.prebuilt_image_start_command) > 0 ? module.input.prebuilt_image_start_command : nil), "cpu":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
         int(float(module.input.fargate_size.vcpu) * 1024)), "environment": ([{name: "PORT", value:
         string(module.input.container_port)}] | concat(module.input.environment_variables != nil ?
@@ -431,7 +433,7 @@ module:
 
     For Nixpacks and Dockerfile builds, provide Git repository, Git branch, and optionally Source base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
 
-    For Prebuilt image from registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials.
+    For Prebuilt image from registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials. Use Start command to override the image default CMD when the prebuilt image needs a different service command.
 
     ## Routing and health checks
 
@@ -539,6 +541,7 @@ module:
     | Git branch                      | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
     | Source base path                | No       | .                          | Path from repository root to source code           |
     | Image repository                | Yes*     | nginx                      | Required for prebuilt image deployments            |
+    | Start command                   | No       | []                         | Command arguments that override a prebuilt image default CMD |
     | Container port                  | Yes      | 80                         | Port exposed by the app container                  |
     | Health check path               | Yes      | /                          | HTTP path used by the target group health check    |
     | Domain host rules               | No       | -                          | Hostnames such as app.example.com or *.example.com |

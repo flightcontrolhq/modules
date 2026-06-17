@@ -34,6 +34,16 @@
   required: false
   show_when:
     build_type: prebuilt_image
+- id: prebuilt_image_start_command
+  label: Start command
+  type: string_array
+  description: Optional command arguments that override the image default command. For shell behavior, use `/bin/sh`, `-lc`, and your command string as separate arguments.
+  add_button_label: Add cmd segment
+  placeholder: npm
+  required: false
+  default: []
+  show_when:
+    build_type: prebuilt_image
 - $include: ./dockerfile-build.yml
 - $include: ./nixpacks-basic.yml
 - id: nixpacks_start_cmd
