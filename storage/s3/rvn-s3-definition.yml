@@ -263,7 +263,7 @@ module:
         kms_key_id: << module.input.kms_key_id >>
         lifecycle_rules: >-
           << (module.input.lifecycle_rule_forms != nil ? map(module.input.lifecycle_rule_forms,
-          true ? {"id": #.id, "enabled": #.enabled, "prefix": #.prefix, "tags": nil, "expiration":
+          #.id ? {"id": #.id, "enabled": #.enabled, "prefix": #.prefix, "tags": nil, "expiration":
           (#.expiration_days || #.expiration_date || #.expiration_expired_object_delete_marker_enabled ?
           {"days": #.expiration_days, "date": #.expiration_date, "expired_object_delete_marker":
           #.expiration_expired_object_delete_marker_enabled} : nil), "noncurrent_version_expiration":
@@ -275,7 +275,7 @@ module:
           #.noncurrent_transition_days, "newer_noncurrent_versions":
           #.noncurrent_transition_newer_noncurrent_versions, "storage_class":
           #.noncurrent_transition_storage_class}] : []), "abort_incomplete_multipart_upload_days":
-          #.abort_incomplete_multipart_upload_days} : {}) : []) | concat(module.input.lifecycle_rules_raw != nil ?
+          #.abort_incomplete_multipart_upload_days} : nil) : []) | concat(module.input.lifecycle_rules_raw != nil ?
           module.input.lifecycle_rules_raw : []) >>
         name: << module.input.name >>
         policy_templates: << module.input.policy_templates || [] >>
