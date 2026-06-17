@@ -90,6 +90,8 @@ Use semantic versioning for released module definitions. For local development p
 
 Use `section` entries to group related fields. IDs should be stable snake_case and should match Terraform variable names when practical. Form labels and section labels must use sentence case, except for service names and acronyms.
 
+Keep input validation `patterns[].message` text concise and direct. Avoid filler instructions such as "Use ..." when the constraint can stand alone, for example `1-40 lowercase letters, numbers, and hyphens. Start and end with a letter or number.` For invalid-value messages that name the field type, start with `Invalid`, for example `Invalid RDS master username. Start with a letter. Letters, numbers, and underscores only.` For reserved-name validation, use `Pick a different name, this is reserved by AWS.` Avoid lookahead/lookbehind in module-definition regex patterns because backend validation may reject them.
+
 For OpenTofu/Terraform-backed modules, put Terraform runner and escape-hatch inputs in a dedicated section included from `partials/inputs/terraform-settings.yml` when possible. This section should include inputs such as `execution_environment_id`, `opentofu_version` or other tool-version overrides, `advanced_terraform_variables`, and `ravion_state_backend_workspace`. Do not place `execution_environment_id` under the AWS account/region section, and do not leave `advanced_terraform_variables` in a generic advanced section.
 
 Default to exposing Terraform variables as module inputs. The module-definition UI should make normal Terraform module capabilities available without requiring users to edit escape-hatch maps.
