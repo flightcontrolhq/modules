@@ -1,0 +1,360 @@
+definition:
+  type: rvn-s3
+  name: S3 Bucket
+  description: S3 bucket with public access blocking, encryption, versioning, lifecycle rules, and configurable bucket policies.
+release:
+  version: 0.1.0
+  description: Initial S3 bucket module definition
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $include: ../../partials/inputs/aws-region.yml
+    - id: section_bucket
+      label: Bucket
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      description: Globally unique S3 bucket name.
+      id: name
+      immutable: true
+      label: Bucket name
+      patterns:
+        - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
+          pattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
+        - message: Bucket names must not contain consecutive periods.
+          pattern: ^(?!.*\.\.).*$
+        - message: Bucket names must not be formatted as an IPv4 address.
+          pattern: ^(?!\d+\.\d+\.\d+\.\d+$).*$
+      required: true
+      type: string
+    - collapsible: true
+      default: false
+      description: Delete the bucket even when it contains objects. Use with caution.
+      id: force_destroy_enabled
+      label: Force destroy
+      type: boolean
+    - id: section_public_access
+      label: Public access block
+      type: section
+    - default: true
+      description: Block public ACLs for this bucket.
+      id: block_public_acls
+      label: Block public ACLs
+      type: boolean
+    - default: true
+      description: Block public bucket policies for this bucket.
+      id: block_public_policy
+      label: Block public policies
+      type: boolean
+    - default: true
+      description: Ignore public ACLs on this bucket and its objects.
+      id: ignore_public_acls
+      label: Ignore public ACLs
+      type: boolean
+    - default: true
+      description: Restrict public bucket policies to AWS service principals and authorized users in this account.
+      id: restrict_public_buckets
+      label: Restrict public buckets
+      type: boolean
+    - id: section_encryption
+      label: Encryption
+      type: section
+    - collapsible: true
+      description: Optional AWS KMS key ID or ARN for SSE-KMS. Leave empty to use SSE-S3 AES256 encryption.
+      id: kms_key_id
+      label: KMS key ID
+      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
+      type: string
+    - collapsible: true
+      default: true
+      description: Enable S3 Bucket Keys for SSE-KMS to reduce KMS request costs. Applies only when KMS key ID is set.
+      id: bucket_key_enabled
+      label: Bucket key
+      type: boolean
+    - id: section_versioning
+      label: Versioning
+      type: section
+    - default: false
+      description: Keep multiple versions of objects in the bucket.
+      id: versioning_enabled
+      label: Versioning
+      type: boolean
+    - id: section_lifecycle
+      label: Lifecycle rules
+      type: section
+    - collapsible: true
+      default: []
+      description: Configure common lifecycle rules with form fields. Use advanced lifecycle rules below for multiple transitions, tag filters, or less common combinations.
+      id: lifecycle_rule_forms
+      item_inputs:
+        - description: Unique identifier for this lifecycle rule.
+          id: id
+          label: Rule ID
+          required: true
+          type: string
+        - default: true
+          description: Whether this lifecycle rule is enabled.
+          id: enabled
+          label: Enabled
+          type: boolean
+        - description: Object key prefix matched by this rule. Leave empty to apply to the whole bucket.
+          id: prefix
+          label: Prefix
+          required: false
+          type: string
+        - description: Days after object creation when current versions expire.
+          id: expiration_days
+          label: Expiration days
+          min: 1
+          required: false
+          type: number
+        - description: Date when current versions expire, in YYYY-MM-DD format. Use either expiration days or expiration date, not both.
+          id: expiration_date
+          label: Expiration date
+          required: false
+          type: string
+        - default: false
+          description: Expire delete markers when they are the only remaining version.
+          id: expiration_expired_object_delete_marker_enabled
+          label: Expire delete markers
+          type: boolean
+        - description: Days after an object becomes noncurrent when noncurrent versions expire.
+          id: noncurrent_version_expiration_days
+          label: Noncurrent expiration days
+          min: 1
+          required: false
+          type: number
+        - description: Number of newer noncurrent versions to retain before noncurrent expiration applies.
+          id: noncurrent_version_newer_noncurrent_versions
+          label: Newer noncurrent versions to retain
+          min: 1
+          required: false
+          type: number
+        - description: Storage class for a current version transition.
+          id: transition_storage_class
+          label: Transition storage class
+          required: false
+          type: string
+          values:
+            - label: Glacier Flexible Retrieval
+              value: GLACIER
+            - label: Standard-IA
+              value: STANDARD_IA
+            - label: One Zone-IA
+              value: ONEZONE_IA
+            - label: Intelligent-Tiering
+              value: INTELLIGENT_TIERING
+            - label: Deep Archive
+              value: DEEP_ARCHIVE
+            - label: Glacier Instant Retrieval
+              value: GLACIER_IR
+        - description: Days after object creation when the current version transitions.
+          id: transition_days
+          label: Transition days
+          required: false
+          type: number
+        - description: Date when current versions transition, in YYYY-MM-DD format. Use either transition days or transition date, not both.
+          id: transition_date
+          label: Transition date
+          required: false
+          type: string
+        - description: Storage class for a noncurrent version transition.
+          id: noncurrent_transition_storage_class
+          label: Noncurrent transition storage class
+          required: false
+          type: string
+          values:
+            - label: Glacier Flexible Retrieval
+              value: GLACIER
+            - label: Standard-IA
+              value: STANDARD_IA
+            - label: One Zone-IA
+              value: ONEZONE_IA
+            - label: Intelligent-Tiering
+              value: INTELLIGENT_TIERING
+            - label: Deep Archive
+              value: DEEP_ARCHIVE
+            - label: Glacier Instant Retrieval
+              value: GLACIER_IR
+        - description: Days after an object becomes noncurrent when it transitions.
+          id: noncurrent_transition_days
+          label: Noncurrent transition days
+          required: false
+          type: number
+        - description: Number of newer noncurrent versions to retain before noncurrent transition applies.
+          id: noncurrent_transition_newer_noncurrent_versions
+          label: Newer noncurrent versions before transition
+          required: false
+          type: number
+        - description: Days after initiation when incomplete multipart uploads are aborted.
+          id: abort_incomplete_multipart_upload_days
+          label: Abort incomplete multipart uploads days
+          min: 1
+          required: false
+          type: number
+      item_label: Lifecycle rule
+      label: Lifecycle rules
+      required: false
+      type: object_array
+    - collapsible: true
+      default: []
+      description: Advanced lifecycle rules in the Terraform lifecycle rule shape. Use this for tag filters, multiple transitions, or other combinations not covered by the form above.
+      id: lifecycle_rules_raw
+      label: Advanced lifecycle rules
+      placeholder: |-
+        - id: expire-logs
+          enabled: true
+          prefix: logs/
+          expiration:
+            days: 90
+          transitions:
+            - days: 30
+              storage_class: STANDARD_IA
+          abort_incomplete_multipart_upload_days: 7
+      required: false
+      type: array
+    - id: section_bucket_policy
+      label: Bucket policy
+      type: section
+    - add_button_label: Add policy template
+      default: []
+      description: Prebuilt bucket policy statements to add.
+      id: policy_templates
+      label: Policy templates
+      type: string_array
+      values:
+        - description: Deny requests that do not use HTTPS.
+          label: Deny insecure transport
+          value: deny_insecure_transport
+        - description: Allow Application Load Balancer access log delivery.
+          label: ALB access logs
+          value: alb_access_logs
+        - description: Allow Network Load Balancer access log delivery.
+          label: NLB access logs
+          value: nlb_access_logs
+        - description: Allow VPC Flow Logs delivery.
+          label: VPC Flow Logs
+          value: vpc_flow_logs
+    - collapsible: true
+      description: Custom bucket policy JSON document. If policy templates are also selected, statements are merged.
+      id: custom_policy
+      label: Custom policy JSON
+      placeholder: |-
+        {
+          "Version": "2012-10-17",
+          "Statement": []
+        }
+      required: false
+      type: text
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $include: ../../partials/inputs/execution-environment.yml
+    - $include: ../../partials/inputs/tags.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: storage/s3
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        block_public_acls: << module.input.block_public_acls >>
+        block_public_policy: << module.input.block_public_policy >>
+        bucket_key_enabled: << module.input.bucket_key_enabled >>
+        custom_policy: << module.input.custom_policy >>
+        force_destroy_enabled: << module.input.force_destroy_enabled >>
+        ignore_public_acls: << module.input.ignore_public_acls >>
+        kms_key_id: << module.input.kms_key_id >>
+        lifecycle_rules: >-
+          << (module.input.lifecycle_rule_forms != nil ? map(module.input.lifecycle_rule_forms,
+          true ? {"id": #.id, "enabled": #.enabled, "prefix": #.prefix, "tags": nil, "expiration":
+          (#.expiration_days || #.expiration_date || #.expiration_expired_object_delete_marker_enabled ?
+          {"days": #.expiration_days, "date": #.expiration_date, "expired_object_delete_marker":
+          #.expiration_expired_object_delete_marker_enabled} : nil), "noncurrent_version_expiration":
+          (#.noncurrent_version_expiration_days || #.noncurrent_version_newer_noncurrent_versions ?
+          {"noncurrent_days": #.noncurrent_version_expiration_days, "newer_noncurrent_versions":
+          #.noncurrent_version_newer_noncurrent_versions} : nil), "transitions": (#.transition_storage_class ?
+          [{"days": #.transition_days, "date": #.transition_date, "storage_class": #.transition_storage_class}] : []),
+          "noncurrent_version_transitions": (#.noncurrent_transition_storage_class ? [{"noncurrent_days":
+          #.noncurrent_transition_days, "newer_noncurrent_versions":
+          #.noncurrent_transition_newer_noncurrent_versions, "storage_class":
+          #.noncurrent_transition_storage_class}] : []), "abort_incomplete_multipart_upload_days":
+          #.abort_incomplete_multipart_upload_days} : {}) : []) | concat(module.input.lifecycle_rules_raw != nil ?
+          module.input.lifecycle_rules_raw : []) >>
+        name: << module.input.name >>
+        policy_templates: << module.input.policy_templates || [] >>
+        region: << module.input.aws_region >>
+        restrict_public_buckets: << module.input.restrict_public_buckets >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        versioning_enabled: << module.input.versioning_enabled >>
+  readme: |
+    S3 bucket with public access blocking, encryption, versioning, lifecycle rules, and configurable bucket policies.
+
+    ## Overview
+
+    Use this module to create an Amazon S3 bucket with secure defaults and common operational controls exposed in Ravion. The module blocks public access by default, enables server-side encryption, and can manage versioning, lifecycle rules, and bucket policy statements.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Application object storage | Create a private bucket with encryption and tags. |
+    | Access log storage | Use ALB, NLB, or VPC Flow Logs policy templates with lifecycle expiration. |
+    | Compliance retention | Enable versioning and lifecycle rules for noncurrent versions. |
+    | Custom integrations | Attach custom bucket policy statements while preserving public access block settings. |
+
+    ## Security defaults
+
+    Public access block settings are enabled by default: Block public ACLs, Block public policies, Ignore public ACLs, and Restrict public buckets. Leave these enabled for private application buckets and log buckets unless you have a specific public bucket design.
+
+    The bucket uses SSE-S3 AES256 encryption by default. Set KMS key ID to use SSE-KMS. Bucket key remains enabled by default for SSE-KMS to reduce KMS request volume.
+
+    ## Lifecycle rules
+
+    Lifecycle rules can expire current objects, expire noncurrent versions, transition current or noncurrent versions to colder storage classes, and abort incomplete multipart uploads. The lifecycle rule form covers the common one-transition-per-rule cases. Advanced lifecycle rules accept the Terraform lifecycle rule shape, including id, enabled, prefix, tags, expiration, noncurrent_version_expiration, transitions, noncurrent_version_transitions, and abort_incomplete_multipart_upload_days.
+
+    ## Bucket policies
+
+    Policy templates add statements for common AWS service integrations:
+
+    | Template | Purpose |
+    | --- | --- |
+    | Deny insecure transport | Denies S3 requests over HTTP. |
+    | ALB access logs | Allows Application Load Balancer log delivery. |
+    | NLB access logs | Allows Network Load Balancer log delivery. |
+    | VPC Flow Logs | Allows VPC Flow Logs delivery. |
+
+    Custom policy JSON can be provided for additional statements. When templates and custom policy are both set, the module merges their statements into one bucket policy.
+
+    ## Configuration
+
+    | Setting | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | AWS account | Yes | None | AWS account where the bucket is created. |
+    | Region | Yes | None | AWS Region for the bucket. |
+    | Bucket name | Yes | Project, environment, and module given IDs | Must be globally unique and follow S3 naming rules. |
+    | Force destroy | No | false | Deletes objects during bucket destroy. Use with caution. |
+    | Public access block settings | No | true | Four independent controls for ACLs and public bucket policies. |
+    | KMS key ID | No | None | Uses SSE-KMS when set; otherwise uses SSE-S3 AES256. |
+    | Bucket key | No | true | Applies to SSE-KMS only. |
+    | Versioning | No | false | Keeps multiple versions of objects. |
+    | Lifecycle rules | No | Empty list | Form-based expiration, transition, noncurrent version, and multipart cleanup rules. |
+    | Advanced lifecycle rules | No | Empty list | Raw Terraform lifecycle rule shape for tag filters, multiple transitions, and uncommon combinations. |
+    | Policy templates | No | Empty list | Adds common bucket policy statements. |
+    | Custom policy JSON | No | None | Additional policy statements merged with templates. |
+    | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
+    | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
+    | Ravion Terraform workspace name | No | Generated from project, environment, module, and stack IDs | Override only when you need a specific backend workspace name. |
+
+    ## Design decisions
+
+    The module defaults to private, encrypted buckets. Public access settings are exposed because some AWS integrations need carefully scoped policies, but the secure defaults should remain enabled for most buckets.
+
+    Bucket policy creation is inferred from selected policy templates or Custom policy JSON. Internal Terraform callers can override that inference for policies whose value is known only during apply, but that escape hatch is not part of the normal Ravion form.
+
+    Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
+
+    ## Learn more
+
+    - [Amazon S3 bucket naming rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html)
+    - [Blocking public access to your Amazon S3 storage](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html)
+    - [Protecting data with server-side encryption](https://docs.aws.amazon.com/AmazonS3/latest/userguide/serv-side-encryption.html)
+    - [Managing your storage lifecycle](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/storage/s3)

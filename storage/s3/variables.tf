@@ -234,9 +234,9 @@ variable "custom_policy" {
   }
 }
 
-variable "bucket_policy_creation_enabled" {
+variable "bucket_policy_creation_override_enabled" {
   type        = bool
-  description = "Override the default decision to create a bucket policy. When null (default), the module creates a policy if policy_templates or custom_policy is set. Set to true when passing a custom_policy whose value is known-after-apply."
+  description = "Overrides automatic bucket policy creation detection. Use only when custom_policy is known after plan, such as policies that depend on resources created in the same apply."
   default     = null
 }
 
