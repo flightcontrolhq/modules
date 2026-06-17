@@ -253,7 +253,7 @@ Each record supports:
 | type | Record type: `A`, `AAAA`, `CNAME`, `CAA`, `MX`, `NAPTR`, `NS`, `PTR`, `SOA`, `SPF`, `SRV`, `TXT`, `DS` | `string` | yes |
 | ttl | TTL in seconds (required unless using `alias`) | `number` | conditional |
 | records | Record values (required unless using `alias`) | `list(string)` | conditional |
-| alias | Alias target `{ name, zone_id, evaluate_target_health }` (use instead of `ttl`/`records`) | `object` | conditional |
+| alias | Alias target `{ name, zone_id, evaluate_target_health }` (use instead of `ttl`/`records`). `name` is the AWS target DNS name. `zone_id` is the AWS target resource hosted zone ID, not this domain's hosted zone ID. For ALB/NLB use the load balancer canonical hosted zone ID; for CloudFront use `Z2FDTNDATAQYW2`; API Gateway and S3 website endpoints use service and region-specific IDs. | `object` | conditional |
 | set_identifier | Unique ID for routing-policy records | `string` | no |
 | health_check_id | Route53 health check ID | `string` | no |
 | allow_overwrite | Allow creation to overwrite an existing record | `bool` | no |
