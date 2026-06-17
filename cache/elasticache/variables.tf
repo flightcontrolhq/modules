@@ -41,8 +41,12 @@ variable "engine_major_version" {
 
 variable "engine_minor_version" {
   type        = string
-  description = "Optional minor or patch version appended to the major version. Examples: major 9 and minor 0 becomes 9.0; major 1.6 and minor 22 becomes 1.6.22."
-  default     = null
+  description = "Minor or patch version appended to the major version."
+
+  validation {
+    condition     = length(var.engine_minor_version) > 0
+    error_message = "The engine_minor_version must not be empty."
+  }
 }
 
 ################################################################################

@@ -93,11 +93,11 @@ module:
       placeholder: "9"
       required: true
       type: string
-    - collapsible: true
-      description: "Optional minor or patch version appended to the major version. Examples: Valkey 9 plus 0 becomes 9.0, Redis OSS 7 plus 1 becomes 7.1, and Memcached 1.6 plus 22 becomes 1.6.22."
+    - description: Minor or patch version appended to the major version.
       id: engine_minor_version
       label: Engine minor version
       placeholder: "0"
+      required: true
       type: string
     - default: true
       description: Enable automatic minor engine version upgrades during the maintenance window.
@@ -762,7 +762,7 @@ module:
     | Engine | Yes | valkey | Valkey is the recommended default for Redis-compatible workloads because AWS prices it 20% lower than Redis OSS for node-based caches and 33% lower for Serverless. |
     | Serverless | No | false | Creates an ElastiCache Serverless cache for Redis or Valkey. |
     | Engine major version | Yes | None | Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6. |
-    | Engine minor version | No | Blank | Appended to the major version when an exact version is required. Use 0 for Valkey 9.0, 1 for Redis OSS 7.1, or 22 for Memcached 1.6.22. |
+    | Engine minor version | Yes | None | Appended to the major version. Use 0 for Valkey 9.0, 1 for Redis OSS 7.1, or 22 for Memcached 1.6.22. |
     | Node type | Yes for provisioned caches | cache.t4g.micro | ElastiCache node size for provisioned clusters. |
     | Cache nodes | No | 1 | Memcached node count. |
     | Cluster mode | No | false | Enables Redis or Valkey sharding when one primary shard is not enough for data size or throughput. |

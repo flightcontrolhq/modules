@@ -23,6 +23,7 @@ module "redis" {
   name                 = "my-redis"
   engine               = "redis"
   engine_major_version = "7"
+  engine_minor_version = "1"
   node_type            = "cache.t4g.micro"
 
   vpc_id     = module.vpc.vpc_id
@@ -71,6 +72,7 @@ module "redis_cluster" {
   name                    = "my-redis-cluster"
   engine                  = "redis"
   engine_major_version    = "7"
+  engine_minor_version    = "1"
   node_type               = "cache.r7g.large"
   cluster_mode_enabled    = true
   num_node_groups         = 3
@@ -100,6 +102,7 @@ module "memcached" {
   name                 = "my-memcached"
   engine               = "memcached"
   engine_major_version = "1.6"
+  engine_minor_version = "22"
   node_type            = "cache.t4g.micro"
   num_cache_nodes      = 3
 
@@ -119,6 +122,7 @@ module "redis_serverless" {
   name                 = "my-serverless-redis"
   engine               = "redis"
   engine_major_version = "7"
+  engine_minor_version = "1"
   serverless_enabled   = true
 
   serverless_cache_usage_limits = {
@@ -142,6 +146,7 @@ module "redis" {
   name                 = "my-redis"
   engine               = "redis"
   engine_major_version = "7"
+  engine_minor_version = "1"
   node_type            = "cache.t4g.small"
 
   vpc_id     = module.vpc.vpc_id
@@ -168,6 +173,7 @@ module "redis" {
   name                 = "my-redis"
   engine               = "redis"
   engine_major_version = "7"
+  engine_minor_version = "1"
   node_type            = "cache.t4g.micro"
 
   vpc_id     = module.vpc.vpc_id
@@ -188,6 +194,7 @@ module "redis" {
   name                 = "my-redis"
   engine               = "redis"
   engine_major_version = "7"
+  engine_minor_version = "1"
   node_type            = "cache.r7g.large"
 
   vpc_id     = module.vpc.vpc_id
@@ -227,7 +234,7 @@ module "redis" {
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
 | engine | The cache engine to use: redis, valkey, or memcached. | `string` | `"valkey"` | no |
 | engine_major_version | The major version number of the cache engine. Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6. | `string` | n/a | yes |
-| engine_minor_version | Optional minor or patch version appended to the major version. | `string` | `null` | no |
+| engine_minor_version | Minor or patch version appended to the major version. | `string` | n/a | yes |
 | node_type | The compute and memory capacity of the nodes. | `string` | `"cache.t4g.micro"` | no |
 | num_cache_nodes | The number of cache nodes (Memcached only). | `number` | `1` | no |
 | num_node_groups | The number of node groups (shards) for Redis cluster mode. | `number` | `1` | no |
