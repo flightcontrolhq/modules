@@ -18,12 +18,18 @@ module:
       immutable: true
       label: Bucket name
       patterns:
+        - message: Bucket names must be 3-63 characters long.
+          pattern: ^.{3,63}$
         - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
           pattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
         - message: Bucket names must not contain consecutive periods.
           pattern: ^(?!.*\.\.).*$
+        - message: Bucket names must not contain periods next to hyphens.
+          pattern: ^(?!.*(\.-|-\.)).*$
         - message: Bucket names must not be formatted as an IPv4 address.
           pattern: ^(?!\d+\.\d+\.\d+\.\d+$).*$
+        - message: Bucket names must not start with xn-- or end with -s3alias.
+          pattern: ^(?!xn--)(?!.*-s3alias$).*$
       required: true
       type: string
     - collapsible: true
@@ -86,9 +92,12 @@ module:
       description: Configure common lifecycle rules with form fields. Use advanced lifecycle rules below for multiple transitions, tag filters, or less common combinations.
       id: lifecycle_rule_forms
       item_inputs:
-        - description: Unique identifier for this lifecycle rule.
+        - description: Unique identifier for this lifecycle rule. Use letters, numbers, periods, underscores, or hyphens.
           id: id
           label: Rule ID
+          patterns:
+            - message: Use 1-255 letters, numbers, periods, underscores, or hyphens.
+              pattern: ^[A-Za-z0-9._-]{1,255}$
           required: true
           type: string
         - default: true
@@ -110,6 +119,9 @@ module:
         - description: Date when current versions expire, in YYYY-MM-DD format. Use either expiration days or expiration date, not both.
           id: expiration_date
           label: Expiration date
+          patterns:
+            - message: Use YYYY-MM-DD format.
+              pattern: ^\d{4}-\d{2}-\d{2}$
           required: false
           type: string
         - default: false
@@ -155,6 +167,9 @@ module:
         - description: Date when current versions transition, in YYYY-MM-DD format. Use either transition days or transition date, not both.
           id: transition_date
           label: Transition date
+          patterns:
+            - message: Use YYYY-MM-DD format.
+              pattern: ^\d{4}-\d{2}-\d{2}$
           required: false
           type: string
         - description: Storage class for a noncurrent version transition.
