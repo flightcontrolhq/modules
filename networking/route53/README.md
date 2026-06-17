@@ -165,9 +165,9 @@ module "dns" {
 
 ### Query logging
 
-Query logging requires a pre-existing CloudWatch log group. For public zones
-the log group **must** be in `us-east-1` and have a resource policy permitting
-Route53 to write to it.
+Query logging is supported for public hosted zones. By default, the module
+creates the CloudWatch log group and resource policy in `us-east-1`, where
+Route53 requires query logging destinations and permissions.
 
 ```hcl
 module "dns" {
@@ -175,14 +175,28 @@ module "dns" {
 
   name                 = "example.com"
   query_logging_enabled = true
-  query_log_group_arn  = aws_cloudwatch_log_group.dns_queries.arn
+}
+```
+
+To reuse an existing `us-east-1` log group, disable log group creation and pass
+its ARN. The module still creates the resource policy that allows Route53 to
+write logs.
+
+```hcl
+module "dns" {
+  source = "..."
+
+  name                             = "example.com"
+  query_logging_enabled            = true
+  query_log_group_creation_enabled = false
+  query_log_group_arn              = aws_cloudwatch_log_group.dns_queries.arn
 }
 ```
 
 ### DNSSEC
 
 DNSSEC signing requires a customer-managed KMS key in `us-east-1` with the
-appropriate key policy for Route53. After the module is applied, version_publishing_enabled the
+appropriate key policy for Route53. After the module is applied, publish the
 `dnssec_ds_record` output to the parent zone (registrar).
 
 ```hcl
@@ -204,7 +218,7 @@ output "ds_record" {
 | Name               | Version   |
 | ------------------ | --------- |
 | opentofu/terraform | >= 1.10.0 |
-| aws                | >= 5.0    |
+| aws                | >= 6.0    |
 
 ## Inputs
 
@@ -268,7 +282,11 @@ Each record supports:
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | query_logging_enabled | Enable Route53 query logging | `bool` | `false` | no |
-| query_log_group_arn | ARN of the destination CloudWatch log group | `string` | `null` | conditional |
+| query_log_group_creation_enabled | Create the CloudWatch Logs log group and resource policy in `us-east-1` | `bool` | `true` | no |
+| query_log_group_name | Name for the created CloudWatch Logs log group | `string` | `null` | no |
+| query_log_group_retention_days | Number of days to retain query logs; use `0` to retain indefinitely | `number` | `90` | no |
+| query_log_resource_policy_name | Name for the CloudWatch Logs resource policy | `string` | `null` | no |
+| query_log_group_arn | ARN of an existing destination CloudWatch log group when creation is disabled | `string` | `null` | conditional |
 
 ### DNSSEC
 
@@ -291,8 +309,10 @@ Each record supports:
 | record_names | Map of record keys to FQDNs |
 | record_ids | Map of record keys to Route53 record IDs |
 | dnssec_key_signing_key_id | The ID of the KSK (null when DNSSEC disabled) |
-| dnssec_ds_record | The DS record to version_publishing_enabled to the parent zone |
+| dnssec_ds_record | The DS record to publish to the parent zone |
 | query_log_id | The ID of the query log configuration |
+| query_log_group_arn | The ARN of the CloudWatch Logs log group used for query logs |
+| query_log_group_name | The name of the CloudWatch Logs log group used for query logs |
 
 ## Notes
 
