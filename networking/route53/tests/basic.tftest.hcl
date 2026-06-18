@@ -150,6 +150,27 @@ run "existing_zone_with_records" {
   }
 }
 
+run "record_value_for_standard_record" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name         = "www.example.com"
+        type         = "A"
+        standard_ttl = 300
+        record_value = "192.0.2.1"
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_route53_record.this["A-www.example.com"].records == toset(["192.0.2.1"])
+    error_message = "record_value should be used for standard non-alias records"
+  }
+}
+
 ################################################################################
 # Alias record to ALB
 ################################################################################

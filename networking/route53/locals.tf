@@ -43,7 +43,7 @@ locals {
       name    = v.name
       type    = v.type
       ttl     = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)
-      records = v.alias != null || v.target_type == "alias" ? null : v.records != null ? v.records : contains(["CNAME", "SOA"], v.type) ? [v.record_value] : v.record_values
+      records = v.alias != null || v.target_type == "alias" ? null : v.records != null ? v.records : v.record_values != null ? v.record_values : v.record_value != null ? [v.record_value] : null
       set_identifier = (
         v.routing_policy != "simple" ||
         v.weighted_routing_policy != null ||
