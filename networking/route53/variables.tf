@@ -145,6 +145,14 @@ variable "records" {
   validation {
     condition = alltrue([
       for v in var.records :
+      !contains(["CNAME", "SOA"], v.type) || v.records == null || length(v.records) == 1
+    ])
+    error_message = "CNAME and SOA records must have exactly one record value."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
       v.failover_routing_policy == null || contains(["PRIMARY", "SECONDARY"], coalesce(try(v.failover_routing_policy.type, null), "PRIMARY"))
     ])
     error_message = "failover_routing_policy.type must be PRIMARY or SECONDARY."
