@@ -55,10 +55,10 @@ locals {
   )
 
   # When the green rule is enabled the module owns both priorities so the
-  # test rule (production conditions + the X-Ravion-Test header) is always
+  # test rule (production conditions + the configured test selector) is always
   # evaluated before the production rule — otherwise ALB, which routes by
   # priority order and not specificity, would match production first and a
-  # header-bearing request would never reach green. The production rule's
+  # test request would never reach green. The production rule's
   # priority becomes the base (its configured priority, else the default
   # below) and the test rule sits one slot ahead at base - 1. Both numbers
   # must be unique across all rules on a shared listener; set an explicit
@@ -182,4 +182,3 @@ locals {
   # Service discovery settings
   enable_service_discovery = var.service_discovery != null
 }
-

@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.6.0
-  description: Share ECS service config and desired task count behavior, and add native ECS deployment strategies (rolling/blue_green/linear/canary) with a green test listener rule, production/alternate target group pair, and load-balancer advanced-config outputs
+  description: Share ECS service config and desired task count behavior, and add native ECS deployment strategies (rolling/blue_green/linear/canary) with a default query-string green test listener rule, production/alternate target group pair, and load-balancer advanced-config outputs
 module:
   inputs:
     - id: section_cluster
@@ -167,20 +167,6 @@ module:
         - stage: POST_TEST_TRAFFIC_SHIFT
           timeout_in_minutes: 1440
           timeout_action: ROLLBACK
-    - id: test_header_name
-      label: Test traffic header name
-      type: string
-      description: HTTP header that routes a request to the green (test) target group during a deployment. Send this header with the value below to reach the new revision before production traffic shifts. Requests without it keep hitting production.
-      collapsible: true
-      required: true
-      default: X-Ravion-Test
-    - id: test_header_value
-      label: Test traffic header value
-      type: string
-      description: Value the test traffic header must carry to be routed to the green (test) target group.
-      collapsible: true
-      required: true
-      default: "1"
     - id: section_health
       label: Health check
       type: section
@@ -344,8 +330,6 @@ module:
               - ../../partials/stack/ecs-service-common-terraform-variables.yml
               - container_port: << module.input.container_port >>
                 health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
-                test_header_name: << module.input.test_header_name >>
-                test_header_value: << module.input.test_header_value >>
                 load_balancer_attachment:
                   container_port: << module.input.container_port >>
                   enabled: true

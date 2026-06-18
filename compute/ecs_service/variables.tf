@@ -332,13 +332,13 @@ variable "test_listener_rule_arn" {
 
 variable "green_alb_listener_rule_enabled" {
   type        = bool
-  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test header (test_header_name/test_header_value) and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. Created by default; no effect for NLB services."
+  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test selector (query string by default, or header when test_traffic_condition_type is \"header\") and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. Created by default; no effect for NLB services."
   default     = true
 }
 
 variable "test_header_name" {
   type        = string
-  description = "HTTP header name that distinguishes test traffic for the green listener rule. Requests carrying this header (with test_header_value) match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true."
+  description = "HTTP header name that distinguishes test traffic for the green listener rule. Requests carrying this header (with test_header_value) match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"header\"."
   default     = "X-Ravion-Test"
 }
 
