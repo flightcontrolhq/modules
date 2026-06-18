@@ -313,7 +313,8 @@ module:
         from_fields:
           - type
           - name
-        separator: "|"
+          - set_identifier
+        separator: "-"
       label: Records
       required: false
       type: object_map
