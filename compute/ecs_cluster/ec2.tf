@@ -63,13 +63,15 @@ module "ecs_instance_security_group" {
 
   all_egress_enabled = true
 
+  # For ip_protocol="-1" (all protocols), AWS requires from_port/to_port to
+  # be omitted; use -1 here for caller clarity.
   ingress_rules = concat(
     # Allow inbound from public ALB if enabled
     var.public_alb_enabled ? [
       {
         description                  = "Allow inbound from public ALB"
-        from_port                    = 0
-        to_port                      = 0
+        from_port                    = -1
+        to_port                      = -1
         ip_protocol                  = "-1"
         referenced_security_group_id = module.public_alb[0].security_group_id
       }
@@ -78,8 +80,8 @@ module "ecs_instance_security_group" {
     var.private_alb_enabled ? [
       {
         description                  = "Allow inbound from private ALB"
-        from_port                    = 0
-        to_port                      = 0
+        from_port                    = -1
+        to_port                      = -1
         ip_protocol                  = "-1"
         referenced_security_group_id = module.private_alb[0].security_group_id
       }
