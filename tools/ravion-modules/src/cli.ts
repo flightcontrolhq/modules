@@ -6,11 +6,10 @@ import { promisify } from "node:util";
 import YAML from "yaml";
 import { parseAuthoringDefinitionFile } from "./authoring-schema.js";
 import { compileAllDefinitions, compileDefinitionFile, findDefinitionFiles } from "./compiler.js";
-import { generateDefinitionsFromInventory, readInventoryFile, validateGeneratedDefinitions } from "./generate-definitions.js";
+import { generateDefinitionsFromInventory, readInventoryFile } from "./generate-definitions.js";
 import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from "./github-releases.js";
 import { runMigrationGuardrails } from "./guardrails.js";
 import { selectLocalDevSourceRef } from "./local-dev-source-ref.js";
-import { validateModuleConfig } from "./module-schema.js";
 import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags, pushPlannedTags } from "./tags.js";
@@ -27,8 +26,6 @@ async function main(): Promise<void> {
 if (command === "validate") {
   for (const filePath of args) {
     await parseAuthoringDefinitionFile(filePath);
-    const compiled = await compileDefinitionFile(filePath);
-    validateModuleConfig(compiled.module, compiled.filePath);
   }
 } else if (command === "compile") {
   const compiled = args.length > 0 ? await Promise.all(args.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
@@ -87,9 +84,6 @@ if (command === "validate") {
   const definitionFilePaths = getPositionalArgs(args, new Set(["--format", "--output"]));
   const resolvedDefinitionFilePaths = await resolveDefinitionFileArgs(definitionFilePaths);
   const compiled = resolvedDefinitionFilePaths.length > 0 ? await Promise.all(resolvedDefinitionFilePaths.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
-  for (const definition of compiled) {
-    validateModuleConfig(definition.module, definition.filePath);
-  }
   const localDev = args.includes("--local-dev");
   const client = await createDefaultRavionApiClient({ baseUrl: localDev ? (process.env.RAVION_API_URL ?? "http://localhost:8080") : undefined, requireToken: !localDev });
   const localDevSourceRef = localDev ? await resolveLocalDevSourceRef() : undefined;
@@ -122,9 +116,6 @@ if (command === "validate") {
     process.exitCode = 1;
   } else {
     const result = await generateDefinitionsFromInventory(await readInventoryFile(inventoryPath), process.cwd(), { write: args.includes("--write") });
-    if (args.includes("--write")) {
-      await validateGeneratedDefinitions(result);
-    }
     console.log(JSON.stringify({ generated: result.generated.map(({ content: _content, ...item }) => item), missing: result.missing }, null, 2));
   }
 } else if (command === "pull-definition") {

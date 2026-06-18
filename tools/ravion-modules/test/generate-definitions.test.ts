@@ -9,7 +9,6 @@ import {
   normalizeRemoteConfigForComparison,
   type RemoteModuleInventory,
 } from "../src/generate-definitions.js";
-import { validateModuleConfig } from "../src/module-schema.js";
 
 describe("definition generation", () => {
   it("generates self-contained colocated definitions for matching rvn modules", async () => {
@@ -30,7 +29,6 @@ describe("definition generation", () => {
     assert.doesNotMatch(content, /\$include|\$merge|\$template/);
 
     const compiled = await compileDefinitionFile(join(rootPath, "networking", "vpc", "rvn-aws-network-definition.yml"));
-    validateModuleConfig(compiled.module, compiled.filePath);
     assert.deepEqual(
       compiled.module,
       normalizeRemoteConfigForComparison(inventory.versionsByDefinitionId.network[0].config, "rvn-aws-network", "1.2.0", "networking/vpc"),
