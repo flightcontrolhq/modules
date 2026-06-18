@@ -95,6 +95,22 @@ variable "records" {
     set_identifier  = optional(string)
     health_check_id = optional(string)
     allow_overwrite = optional(bool, false)
+
+    target_type                            = optional(string, "standard")
+    record_value                           = optional(string)
+    record_values                          = optional(list(string))
+    standard_ttl                           = optional(number)
+    alias_name                             = optional(string)
+    alias_zone_id                          = optional(string)
+    alias_evaluate_target_health           = optional(bool, false)
+    routing_policy                         = optional(string, "simple")
+    weighted_routing_policy_weight         = optional(number)
+    failover_routing_policy_type           = optional(string)
+    latency_routing_policy_region          = optional(string)
+    geolocation_routing_policy_continent   = optional(string)
+    geolocation_routing_policy_country     = optional(string)
+    geolocation_routing_policy_subdivision = optional(string)
+
     alias = optional(object({
       name                   = string
       zone_id                = string
@@ -136,8 +152,11 @@ variable "records" {
     condition = alltrue([
       for k, v in var.records :
       (
-        v.alias != null
-      ) != (v.records != null && v.ttl != null)
+        v.alias != null || (v.target_type == "alias" && v.alias_name != null && v.alias_zone_id != null)
+        ) != (
+        (v.records != null || v.record_value != null || v.record_values != null) &&
+        (v.ttl != null || v.standard_ttl != null)
+      )
     ])
     error_message = "Each record must have either `alias` set, or both `records` and `ttl` set (but not both)."
   }

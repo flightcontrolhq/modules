@@ -4,7 +4,7 @@ definition:
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
   version: 0.1.2
-  description: Map Route 53 record form fields to native Terraform record inputs and enforce single-value records.
+  description: Preserve Route 53 record maps while normalizing form fields for Terraform.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -488,7 +488,7 @@ module:
         query_log_group_retention_days: << module.input.query_log_group_retention_days >>
         query_log_resource_policy_name: << module.input.query_log_resource_policy_name >>
         record_force_destroy_enabled: << module.input.record_force_destroy_enabled >>
-        records: '<< (module.input.records || {}) | map(({name: #?.name, type: #?.type, ttl: (#?.target_type || "standard") == "alias" ? nil : #?.ttl, records: (#?.target_type || "standard") == "alias" ? nil : (#?.type == "CNAME" || #?.type == "SOA" ? [#?.record_value] : #?.records), set_identifier: (#?.routing_policy || "simple") == "simple" ? nil : #?.set_identifier, health_check_id: #?.health_check_id, allow_overwrite: #?.allow_overwrite || false, alias: (#?.target_type || "standard") == "alias" ? {name: #?.alias_name, zone_id: #?.alias_zone_id, evaluate_target_health: #?.alias_evaluate_target_health || false} : nil, weighted_routing_policy: (#?.routing_policy || "simple") == "weighted" ? {weight: #?.weighted_routing_policy_weight} : nil, failover_routing_policy: (#?.routing_policy || "simple") == "failover" ? {type: #?.failover_routing_policy_type} : nil, latency_routing_policy: (#?.routing_policy || "simple") == "latency" ? {region: #?.latency_routing_policy_region} : nil, geolocation_routing_policy: (#?.routing_policy || "simple") == "geolocation" ? {continent: #?.geolocation_routing_policy_continent, country: #?.geolocation_routing_policy_country, subdivision: #?.geolocation_routing_policy_subdivision} : nil, multivalue_answer_routing_policy: (#?.routing_policy || "simple") == "multivalue" ? true : nil})) >>'
+        records: << module.input.records || {} >>
         region: << module.input.aws_region >>
         tags:
           $include: ../../partials/stack/ravion-tags.yml
