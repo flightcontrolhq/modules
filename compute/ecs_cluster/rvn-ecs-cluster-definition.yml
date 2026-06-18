@@ -4,7 +4,7 @@ definition:
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
   version: 0.2.0
-  description: add default capacity provider selection; the cluster default strategy now commits to a single provider family
+  description: Automatically derive the default capacity provider so the cluster default strategy commits to a single provider family
 module:
   inputs:
     - id: network
@@ -512,10 +512,6 @@ module:
 
     Select an **EC2 instance type** to enable EC2 capacity. Leave it blank for a Fargate-only cluster.
 
-    ### Default capacity provider
-
-    Services that do not set their own capacity provider strategy use the cluster default. AWS does not allow mixing Fargate and EC2 capacity providers in that default, so it commits to a single one. Leave **Default capacity provider** blank to pick automatically (EC2 when enabled, then Fargate, then Fargate Spot), or choose one of the enabled providers explicitly.
-
     ## Load balancers
 
     ### Public application load balancer
@@ -567,7 +563,6 @@ module:
     | Fargate               | No       | `true`               | Allow services to use Fargate capacity                        |
     | Fargate Spot          | No       | `true`               | Allow services to use lower-cost interruptible Fargate Spot   |
     | EC2 instance type     | No       | —                    | Enables EC2 capacity when selected                            |
-    | Default capacity provider | No   | Automatic            | Provider used by services without their own strategy          |
     | Public load balancer  | No       | `false`              | Create an internet-facing ALB                                 |
     | Private load balancer | No       | `false`              | Create an internal ALB                                        |
     | Public NLB            | No       | `false`              | Create an internet-facing Network Load Balancer               |
@@ -619,7 +614,6 @@ module:
       base_path: compute/ecs_cluster
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
-        capacity_provider_default: << module.input.capacity_provider_default >>
         load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
         ec2_ami_id: << module.input.ec2_ami_id >>
         ec2_spot_enabled: << module.input.ec2_spot_enabled >>
