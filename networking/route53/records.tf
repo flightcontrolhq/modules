@@ -3,9 +3,7 @@
 ################################################################################
 
 resource "aws_route53_record" "this" {
-  for_each = {
-    for record in var.records : join("|", compact([record.type, record.name, coalesce(record.set_identifier, "")])) => record
-  }
+  for_each = var.records
 
   zone_id = local.zone_id
   name    = each.value.name

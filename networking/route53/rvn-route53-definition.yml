@@ -165,7 +165,7 @@ module:
           description: Values for a standard DNS record. Leave empty for alias records.
           id: records
           label: Record values
-          required: false
+          required: true
           show_when:
             target_type:
               not: alias
@@ -328,6 +328,7 @@ module:
         from_fields:
           - type
           - name
+          - set_identifier
         separator: "-"
       label: Records
       required: false
