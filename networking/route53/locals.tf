@@ -32,12 +32,26 @@ locals {
   route53_query_log_hosted_zone_arn   = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${local.zone_id}"
 
   normalized_records = {
-    for v in var.records : join("-", compact([v.type, v.name, v.routing_policy == "simple" ? null : v.set_identifier])) => {
-      name            = v.name
-      type            = v.type
-      ttl             = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)
-      records         = v.alias != null || v.target_type == "alias" ? null : v.records != null ? v.records : contains(["CNAME", "SOA"], v.type) ? [v.record_value] : v.record_values
-      set_identifier  = v.routing_policy == "simple" ? null : v.set_identifier
+    for v in var.records : join("|", compact([v.type, v.name, (
+      v.routing_policy != "simple" ||
+      v.weighted_routing_policy != null ||
+      v.failover_routing_policy != null ||
+      v.latency_routing_policy != null ||
+      v.geolocation_routing_policy != null ||
+      coalesce(v.multivalue_answer_routing_policy, false) == true
+      ) ? v.set_identifier : null])) => {
+      name    = v.name
+      type    = v.type
+      ttl     = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)
+      records = v.alias != null || v.target_type == "alias" ? null : v.records != null ? v.records : contains(["CNAME", "SOA"], v.type) ? [v.record_value] : v.record_values
+      set_identifier = (
+        v.routing_policy != "simple" ||
+        v.weighted_routing_policy != null ||
+        v.failover_routing_policy != null ||
+        v.latency_routing_policy != null ||
+        v.geolocation_routing_policy != null ||
+        coalesce(v.multivalue_answer_routing_policy, false) == true
+      ) ? v.set_identifier : null
       health_check_id = v.health_check_id
       allow_overwrite = v.allow_overwrite
 

@@ -321,6 +321,9 @@ module:
             routing_policy: geolocation
           type: string
       item_label: Record
+      item_title:
+        fallback: Record
+        template: "{type} {name}"
       label: Records
       required: false
       type: object_array

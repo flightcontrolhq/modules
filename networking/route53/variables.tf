@@ -176,6 +176,21 @@ variable "records" {
     ])
     error_message = "failover_routing_policy.type must be PRIMARY or SECONDARY."
   }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
+      (
+        v.routing_policy == "simple" &&
+        v.weighted_routing_policy == null &&
+        v.failover_routing_policy == null &&
+        v.latency_routing_policy == null &&
+        v.geolocation_routing_policy == null &&
+        coalesce(v.multivalue_answer_routing_policy, false) != true
+      ) || try(length(v.set_identifier) > 0, false)
+    ])
+    error_message = "set_identifier is required when using weighted, failover, latency, geolocation, or multivalue routing policies."
+  }
 }
 
 ################################################################################
