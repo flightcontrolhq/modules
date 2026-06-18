@@ -32,7 +32,7 @@ locals {
   route53_query_log_hosted_zone_arn   = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${local.zone_id}"
 
   normalized_records = {
-    for k, v in var.records : k => {
+    for v in var.records : join("-", compact([v.type, v.name, v.routing_policy == "simple" ? null : v.set_identifier])) => {
       name            = v.name
       type            = v.type
       ttl             = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)

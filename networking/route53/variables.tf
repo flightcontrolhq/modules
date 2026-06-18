@@ -87,7 +87,7 @@ variable "vpc_associations" {
 ################################################################################
 
 variable "records" {
-  type = map(object({
+  type = list(object({
     name            = string
     type            = string
     ttl             = optional(number)
@@ -137,12 +137,12 @@ variable "records" {
 
     multivalue_answer_routing_policy = optional(bool)
   }))
-  description = "A map of DNS records to create in the hosted zone, keyed by a unique identifier. Each record must have either `records` + `ttl` or `alias` set."
-  default     = {}
+  description = "A list of DNS records to create in the hosted zone. Terraform derives stable resource keys from each record type, name, and optional set identifier."
+  default     = []
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
       contains(["A", "AAAA", "CNAME", "CAA", "MX", "NAPTR", "NS", "PTR", "SOA", "SPF", "SRV", "TXT", "DS"], v.type)
     ])
     error_message = "Each record type must be one of: A, AAAA, CNAME, CAA, MX, NAPTR, NS, PTR, SOA, SPF, SRV, TXT, DS."
@@ -150,7 +150,7 @@ variable "records" {
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
       (
         v.alias != null || (v.target_type == "alias" && v.alias_name != null && v.alias_zone_id != null)
         ) != (
@@ -163,7 +163,7 @@ variable "records" {
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
       !contains(["CNAME", "SOA"], v.type) || v.records == null || length(v.records) == 1
     ])
     error_message = "CNAME and SOA records must have exactly one record value."
@@ -171,7 +171,7 @@ variable "records" {
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
       v.failover_routing_policy == null || contains(["PRIMARY", "SECONDARY"], coalesce(try(v.failover_routing_policy.type, null), "PRIMARY"))
     ])
     error_message = "failover_routing_policy.type must be PRIMARY or SECONDARY."
