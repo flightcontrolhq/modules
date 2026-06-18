@@ -48,20 +48,26 @@ module:
     - id: deployment_strategy
       label: Deployment strategy
       type: string
+      description: Choose how traffic moves from the current deployment to the new deployment.
       required: true
       default: rolling
       values:
         - label: Rolling
+          description: Replace tasks in place while the service keeps serving from the production target group.
           value: rolling
         - label: Blue/green
+          description: Start the new deployment on the alternate target group, then shift production traffic after test validation.
           value: blue_green
         - label: Linear
+          description: Shift production traffic to the new deployment in equal percentage steps with a wait between steps.
           value: linear
         - label: Canary
+          description: Send a small percentage of production traffic to the new deployment first, then shift the rest after the canary bake time.
           value: canary
     - id: deployment_bake_time_in_minutes
       label: Bake time in minutes
       type: number
+      description: Minutes to keep the current and new deployments running after production traffic has fully shifted, before the old deployment is removed.
       max: 1440
       min: 0
       show_when:
@@ -73,6 +79,7 @@ module:
     - id: linear_step_percentage
       label: Linear step percentage
       type: number
+      description: Percentage of production traffic to move to the new deployment at each linear step.
       max: 100
       min: 1
       show_when:
@@ -81,6 +88,7 @@ module:
     - id: linear_step_bake_time_in_minutes
       label: Linear step bake time in minutes
       type: number
+      description: Minutes to wait between linear traffic steps before shifting the next percentage.
       max: 1440
       min: 0
       show_when:
@@ -89,6 +97,7 @@ module:
     - id: canary_percent
       label: Canary percent
       type: number
+      description: Percentage of production traffic to send to the new deployment during the canary phase.
       max: 100
       min: 1
       show_when:
@@ -97,6 +106,7 @@ module:
     - id: canary_bake_time_in_minutes
       label: Canary bake time in minutes
       type: number
+      description: Minutes to hold canary traffic before shifting the remaining production traffic to the new deployment.
       max: 1440
       min: 0
       show_when:
