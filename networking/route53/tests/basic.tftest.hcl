@@ -92,8 +92,8 @@ run "private_zone_with_vpcs" {
   command = plan
 
   variables {
-    name         = "internal.example.com"
-    private_zone = true
+    name                 = "internal.example.com"
+    private_zone_enabled = true
     vpc_associations = {
       primary = {
         vpc_id     = "vpc-12345678"
@@ -123,20 +123,20 @@ run "existing_zone_with_records" {
   variables {
     zone_creation_enabled = false
     zone_id               = "Z1EXISTING00000000"
-    records = {
-      www = {
+    records = [
+      {
         name    = "www.existing.example.com"
         type    = "A"
         ttl     = 300
         records = ["192.0.2.1"]
-      }
-      txt = {
+      },
+      {
         name    = "existing.example.com"
         type    = "TXT"
         ttl     = 300
         records = ["v=spf1 -all"]
       }
-    }
+    ]
   }
 
   assert {
@@ -150,6 +150,27 @@ run "existing_zone_with_records" {
   }
 }
 
+run "record_value_for_standard_record" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name         = "www.example.com"
+        type         = "A"
+        standard_ttl = 300
+        record_value = "192.0.2.1"
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_route53_record.this["A-www.example.com"].records == toset(["192.0.2.1"])
+    error_message = "record_value should be used for standard non-alias records"
+  }
+}
+
 ################################################################################
 # Alias record to ALB
 ################################################################################
@@ -159,8 +180,8 @@ run "alias_record" {
 
   variables {
     name = "example.com"
-    records = {
-      apex = {
+    records = [
+      {
         name = "example.com"
         type = "A"
         alias = {
@@ -169,13 +190,92 @@ run "alias_record" {
           evaluate_target_health = true
         }
       }
-    }
+    ]
   }
 
   assert {
     condition     = length(aws_route53_record.this) == 1
     error_message = "The alias record should be created"
   }
+}
+
+################################################################################
+# Non-simple routing policies
+################################################################################
+
+run "weighted_records_with_set_identifiers" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name                           = "www.example.com"
+        type                           = "A"
+        ttl                            = 300
+        records                        = ["192.0.2.1"]
+        routing_policy                 = "weighted"
+        set_identifier                 = "blue"
+        weighted_routing_policy_weight = 10
+      },
+      {
+        name           = "www.example.com"
+        type           = "A"
+        ttl            = 300
+        records        = ["192.0.2.2"]
+        set_identifier = "green"
+        weighted_routing_policy = {
+          weight = 90
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_route53_record.this) == 2
+    error_message = "Weighted records with different set identifiers should create separate records"
+  }
+}
+
+run "routing_policy_requires_set_identifier" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name                           = "www.example.com"
+        type                           = "A"
+        ttl                            = 300
+        records                        = ["192.0.2.1"]
+        routing_policy                 = "weighted"
+        weighted_routing_policy_weight = 10
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
+run "nested_routing_policy_requires_set_identifier" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "www.example.com"
+        type    = "A"
+        ttl     = 300
+        records = ["192.0.2.1"]
+        weighted_routing_policy = {
+          weight = 10
+        }
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
 }
 
 ################################################################################

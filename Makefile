@@ -19,6 +19,9 @@ endif
 ifeq ($(DRY_RUN),1)
 LOCAL_DEV_PUBLISH_FLAGS += --dry-run
 endif
+ifeq ($(FORCE),1)
+LOCAL_DEV_PUBLISH_FLAGS += --force
+endif
 LOCAL_DEV_SOURCE_REF_ENV :=
 ifneq ($(SOURCE_REF),)
 LOCAL_DEV_SOURCE_REF_ENV := RAVION_LOCAL_DEV_SOURCE_REF="$(SOURCE_REF)"
@@ -71,6 +74,7 @@ help:
 	@echo "  make test-single TEST=TestVpcBasic"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network DRY_RUN=1"
+	@echo "  make publish-local-dev MODULE=rvn-aws-network FORCE=1"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network SOURCE_REF=my-branch"
 	@echo "  make pull-local-definition"
 	@echo "  make pull-local-definition PULL_SOURCE_TYPE=rvn-aws-rds PULL_TARGET_TYPE=rvn-rds PULL_OUTPUT=database/rds/rvn-rds-definition.yml"

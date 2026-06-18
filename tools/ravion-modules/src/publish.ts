@@ -60,6 +60,7 @@ export interface RavionApiClientOptions {
 export interface PublishOptions {
   dryRun?: boolean;
   localDev?: boolean;
+  localDevForce?: boolean;
   localDevSourceRef?: string;
   logger?: (message: string) => void;
 }
@@ -100,7 +101,9 @@ export async function publishDefinitions(
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
   const definitionsToPublish = options.localDev
-    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main")
+    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main", {
+        force: options.localDevForce,
+      })
     : compiledDefinitions;
   const statuses = getReleaseStatuses(definitionsToPublish, { inventory });
   const errors = createPublishPlanErrors(statuses, definitionsToPublish, inventory);
@@ -241,6 +244,7 @@ export function applyLocalDevVersions(
   compiledDefinitions: CompiledDefinition[],
   inventory: RemoteModuleInventory,
   sourceRef = "main",
+  options: { force?: boolean } = {},
 ): CompiledDefinition[] {
   const definitionsByType = new Map(
     inventory.definitions.map((definition) => [definition.type, definition]),
@@ -251,7 +255,7 @@ export function applyLocalDevVersions(
       ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
       : [];
     const originalTag = `${definition.type}@${definition.version}`;
-    const selectedVersion = selectLocalDevVersion(definition, remoteVersions, sourceRef);
+    const selectedVersion = selectLocalDevVersion(definition, remoteVersions, sourceRef, options);
     const module = replaceLocalDevSourceRefs(definition.module, originalTag, sourceRef) as Record<
       string,
       unknown
@@ -457,6 +461,7 @@ function selectLocalDevVersion(
   definition: CompiledDefinition,
   remoteVersions: RemoteModuleVersion[],
   sourceRef: string,
+  options: { force?: boolean } = {},
 ): string {
   for (let suffix = 1; ; suffix += 1) {
     const candidate = `${definition.version}-${suffix}`;
@@ -466,10 +471,7 @@ function selectLocalDevVersion(
       `${definition.type}@${definition.version}`,
       sourceRef,
     );
-    if (
-      !remoteVersion ||
-      stableStringify(remoteVersion.config) === stableStringify(candidateModule)
-    ) {
+    if (!remoteVersion || (!options.force && stableStringify(remoteVersion.config) === stableStringify(candidateModule))) {
       return candidate;
     }
   }
