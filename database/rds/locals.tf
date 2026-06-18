@@ -68,6 +68,7 @@ locals {
     ? var.parameter_group_family
     : local.default_parameter_group_family
   )
+  parameter_group_name = "rds-${var.name}"
 
   # Option group major engine version derivation
   # For Oracle: 19, 21

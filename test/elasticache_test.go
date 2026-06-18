@@ -47,6 +47,7 @@ func TestElastiCacheRedis(t *testing.T) {
 	primaryEndpoint := terraform.Output(t, terraformOptions, "primary_endpoint")
 	port := terraform.Output(t, terraformOptions, "port")
 	securityGroupId := terraform.Output(t, terraformOptions, "security_group_id")
+	parameterGroupName := terraform.Output(t, terraformOptions, "parameter_group_name")
 
 	// Assert replication_group_id is not empty
 	require.NotEmpty(t, replicationGroupId, "replication_group_id should not be empty")
@@ -59,6 +60,8 @@ func TestElastiCacheRedis(t *testing.T) {
 
 	// Assert security_group_id is not empty
 	require.NotEmpty(t, securityGroupId, "security_group_id should not be empty")
+	require.NotEmpty(t, parameterGroupName, "parameter_group_name should not be empty")
+	assert.Equal(t, "elasticache-"+uniqueName, parameterGroupName, "ElastiCache parameter group name should be prefixed")
 
 	// Use AWS SDK to verify ElastiCache replication group exists
 	replicationGroupExists := helpers.ElastiCacheReplicationGroupExists(t, replicationGroupId, awsRegion)
@@ -115,6 +118,7 @@ func TestElastiCacheMemcached(t *testing.T) {
 	configurationEndpoint := terraform.Output(t, terraformOptions, "configuration_endpoint")
 	port := terraform.Output(t, terraformOptions, "port")
 	securityGroupId := terraform.Output(t, terraformOptions, "security_group_id")
+	parameterGroupName := terraform.Output(t, terraformOptions, "parameter_group_name")
 
 	// Assert cluster_id is not empty
 	require.NotEmpty(t, clusterId, "cluster_id should not be empty")
@@ -127,6 +131,8 @@ func TestElastiCacheMemcached(t *testing.T) {
 
 	// Assert security_group_id is not empty
 	require.NotEmpty(t, securityGroupId, "security_group_id should not be empty")
+	require.NotEmpty(t, parameterGroupName, "parameter_group_name should not be empty")
+	assert.Equal(t, "elasticache-"+uniqueName, parameterGroupName, "ElastiCache parameter group name should be prefixed")
 
 	// Use AWS SDK to verify ElastiCache cluster exists
 	clusterExists := helpers.ElastiCacheClusterExists(t, clusterId, awsRegion)
@@ -187,6 +193,7 @@ func TestElastiCacheReplication(t *testing.T) {
 	readerEndpoint := terraform.Output(t, terraformOptions, "reader_endpoint")
 	port := terraform.Output(t, terraformOptions, "port")
 	securityGroupId := terraform.Output(t, terraformOptions, "security_group_id")
+	parameterGroupName := terraform.Output(t, terraformOptions, "parameter_group_name")
 
 	// Assert replication_group_id is not empty
 	require.NotEmpty(t, replicationGroupId, "replication_group_id should not be empty")
@@ -202,6 +209,8 @@ func TestElastiCacheReplication(t *testing.T) {
 
 	// Assert security_group_id is not empty
 	require.NotEmpty(t, securityGroupId, "security_group_id should not be empty")
+	require.NotEmpty(t, parameterGroupName, "parameter_group_name should not be empty")
+	assert.Equal(t, "elasticache-"+uniqueName, parameterGroupName, "ElastiCache parameter group name should be prefixed")
 
 	// Use AWS SDK to verify ElastiCache replication group exists
 	replicationGroupExists := helpers.ElastiCacheReplicationGroupExists(t, replicationGroupId, awsRegion)

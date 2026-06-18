@@ -134,7 +134,7 @@ output "subnet_group_arn" {
 ################################################################################
 
 output "parameter_group_name" {
-  description = "The name of the ElastiCache parameter group."
+  description = "The name of the ElastiCache parameter group. Managed groups are named with the elasticache- prefix."
   value       = local.is_serverless ? null : aws_elasticache_parameter_group.this[0].name
 }
 

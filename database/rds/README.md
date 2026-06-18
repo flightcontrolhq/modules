@@ -230,6 +230,8 @@ module "postgres" {
 }
 ```
 
+Managed parameter groups created by this module are named `rds-${name}` so the same name slug can be reused by other module types.
+
 ### Oracle with Option Group
 
 ```hcl
@@ -370,8 +372,8 @@ module "mysql" {
 | cloudwatch_alarm_connections_threshold | Database connections threshold. | `number` | `100` | no |
 | cloudwatch_alarm_actions | ARNs to notify on ALARM. | `list(string)` | `[]` | no |
 | cloudwatch_ok_actions | ARNs to notify on OK. | `list(string)` | `[]` | no |
-| parameter_group_creation_enabled | Whether to create a parameter group. | `bool` | `true` | no |
-| parameter_group_name | Existing parameter group name. | `string` | `null` | no |
+| parameter_group_creation_enabled | Whether to create a parameter group. Managed groups are named `rds-${name}`. | `bool` | `true` | no |
+| parameter_group_name | Existing parameter group name to use when creation is disabled. | `string` | `null` | no |
 | parameter_group_family | Parameter group family. | `string` | `null` | no |
 | parameters | Parameter name/value pairs. | `list(object)` | `[]` | no |
 | option_group_creation_enabled | Whether to create an option group. | `bool` | `false` | no |
@@ -406,7 +408,7 @@ module "mysql" {
 | security_group_arn | The security group ARN. |
 | db_subnet_group_name | The DB subnet group name. |
 | db_subnet_group_arn | The DB subnet group ARN. |
-| db_parameter_group_name | The parameter group name. |
+| db_parameter_group_name | The DB parameter group name. Managed groups are named `rds-${name}`. |
 | db_parameter_group_arn | The parameter group ARN. |
 | db_option_group_name | The option group name. |
 | db_option_group_arn | The option group ARN. |

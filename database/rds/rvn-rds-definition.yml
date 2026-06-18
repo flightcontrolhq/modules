@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.3.1
-  description: Disallow reserved RDS initial database names
+  version: 0.3.3
+  description: Fix all-protocol security group egress updates
 module:
   inputs:
     - id: network

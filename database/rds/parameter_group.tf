@@ -5,7 +5,7 @@
 resource "aws_db_parameter_group" "this" {
   count = local.create_parameter_group ? 1 : 0
 
-  name        = var.name
+  name        = local.parameter_group_name
   family      = local.parameter_group_family
   description = "Parameter group for ${var.name} RDS instance"
 
@@ -24,5 +24,9 @@ resource "aws_db_parameter_group" "this" {
 
   lifecycle {
     create_before_destroy = true
+
+    ignore_changes = [
+      name,
+    ]
   }
 }
