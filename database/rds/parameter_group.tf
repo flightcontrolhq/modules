@@ -19,10 +19,14 @@ resource "aws_db_parameter_group" "this" {
   }
 
   tags = merge(local.tags, {
-    Name = local.parameter_group_name
+    Name = var.name
   })
 
   lifecycle {
     create_before_destroy = true
+
+    ignore_changes = [
+      name,
+    ]
   }
 }
