@@ -217,6 +217,8 @@ module "redis" {
 }
 ```
 
+Managed parameter groups created by this module are named `elasticache-${name}` so the same name slug can be reused by other module types.
+
 ## Requirements
 
 | Name               | Version   |
@@ -299,7 +301,7 @@ module "redis" {
 | security_group_id | The ID of the security group. |
 | security_group_arn | The ARN of the security group. |
 | subnet_group_name | The name of the ElastiCache subnet group. |
-| parameter_group_name | The name of the ElastiCache parameter group. |
+| parameter_group_name | The name of the ElastiCache parameter group. Managed groups are named `elasticache-${name}`. |
 | cloudwatch_alarm_arns | Map of CloudWatch alarm ARNs. |
 | connection_string_secret_arn | The ARN of the Secrets Manager secret holding the connection string. |
 | connection_string_secret_name | The name of the Secrets Manager secret holding the connection string. |

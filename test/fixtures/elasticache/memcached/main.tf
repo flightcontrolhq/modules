@@ -126,6 +126,11 @@ output "port" {
   value       = module.elasticache.port
 }
 
+output "parameter_group_name" {
+  description = "The name of the ElastiCache parameter group."
+  value       = module.elasticache.parameter_group_name
+}
+
 output "security_group_id" {
   description = "The ID of the ElastiCache security group."
   value       = module.elasticache.security_group_id

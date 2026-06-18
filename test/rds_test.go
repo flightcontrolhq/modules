@@ -39,15 +39,18 @@ func TestRdsBasic(t *testing.T) {
 	address := terraform.Output(t, terraformOptions, "address")
 	port := terraform.Output(t, terraformOptions, "port")
 	securityGroupID := terraform.Output(t, terraformOptions, "security_group_id")
+	parameterGroupName := terraform.Output(t, terraformOptions, "db_parameter_group_name")
 
 	require.NotEmpty(t, instanceIdentifier, "db_instance_identifier should not be empty")
 	require.NotEmpty(t, instanceArn, "db_instance_arn should not be empty")
 	require.NotEmpty(t, instanceStatus, "db_instance_status should not be empty")
 	require.NotEmpty(t, address, "address should not be empty")
 	require.NotEmpty(t, securityGroupID, "security_group_id should not be empty")
+	require.NotEmpty(t, parameterGroupName, "db_parameter_group_name should not be empty")
 
 	assert.Equal(t, "postgres", engine, "engine output should be postgres")
 	assert.Equal(t, "5432", port, "port should be 5432 for postgres")
+	assert.Equal(t, "rds-"+uniqueName, parameterGroupName, "RDS parameter group name should be prefixed")
 
 	exists := helpers.RDSInstanceExists(t, instanceIdentifier, awsRegion)
 	assert.True(t, exists, "RDS instance should exist in AWS")

@@ -49,6 +49,7 @@ locals {
     "memcached${var.engine_major_version}"
   )
   parameter_group_family = coalesce(var.parameter_group_family, local.default_parameter_group_family)
+  parameter_group_name   = "elasticache-${var.name}"
 
   # Cluster mode
   cluster_mode_enabled = var.cluster_mode_enabled && local.is_redis_compatible && !local.is_serverless
