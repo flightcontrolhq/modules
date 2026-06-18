@@ -5,7 +5,7 @@
 resource "aws_db_parameter_group" "this" {
   count = local.create_parameter_group ? 1 : 0
 
-  name        = var.name
+  name        = local.parameter_group_name
   family      = local.parameter_group_family
   description = "Parameter group for ${var.name} RDS instance"
 
@@ -19,7 +19,7 @@ resource "aws_db_parameter_group" "this" {
   }
 
   tags = merge(local.tags, {
-    Name = var.name
+    Name = local.parameter_group_name
   })
 
   lifecycle {

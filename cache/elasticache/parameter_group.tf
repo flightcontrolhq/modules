@@ -5,7 +5,7 @@
 resource "aws_elasticache_parameter_group" "this" {
   count = local.is_serverless ? 0 : 1
 
-  name        = var.name
+  name        = local.parameter_group_name
   family      = local.parameter_group_family
   description = "Parameter group for ${var.name} ElastiCache cluster"
 
@@ -18,7 +18,7 @@ resource "aws_elasticache_parameter_group" "this" {
   }
 
   tags = merge(local.tags, {
-    Name = var.name
+    Name = local.parameter_group_name
   })
 
   lifecycle {
