@@ -3,7 +3,7 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.6.0
+  version: 0.6.1
   description: Add native ECS blue/green, linear, and canary deployments with per-deploy strategy controls, manual approval gates, standby validation traffic, production/alternate target groups, ALB group stickiness guidance, ECS infrastructure role, and load-balancer advanced configuration outputs.
 module:
   inputs:
@@ -164,7 +164,8 @@ module:
               description: Proceed with the deployment as if it were approved.
               value: CONTINUE
       item_label: Pause stage
-      item_title_field: stage
+      item_title:
+        template: "{stage}"
       item_description: "Timeout: {timeout_in_minutes} minutes / {timeout_action}"
       show_when:
         deployment_strategy:
@@ -418,8 +419,7 @@ module:
       >>
     infrastructure:
       ecs_cluster_arn: <<stack.output.service_cluster>>
-      ecs_service_arns:
-        - <<stack.output.service_arn>>
+      ecs_service_arn: <<stack.output.service_arn>>
       ecs_target_group_arn: <<stack.output.target_group_arn>>
       # Load-balancer advanced configuration for native traffic-shift
       # strategies (blue_green / linear / canary). The deploy manager
