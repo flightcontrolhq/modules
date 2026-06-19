@@ -228,6 +228,26 @@ output "target_group_arn" {
   value       = module.ecs_service.target_group_arn
 }
 
+output "alternate_target_group_arn" {
+  description = "The ARN of the alternate target group ECS shifts traffic to during native traffic-shift deployments."
+  value       = module.ecs_service.alternate_target_group_arn
+}
+
+output "ecs_infrastructure_role_arn" {
+  description = "The ARN of the IAM role ECS assumes to manage load-balancer wiring during native traffic-shift deployments."
+  value       = module.ecs_service.ecs_infrastructure_role_arn
+}
+
+output "production_listener_rule_arn" {
+  description = "The ARN of the production listener rule wired into the service's advanced_configuration."
+  value       = module.ecs_service.production_listener_rule_arn
+}
+
+output "test_listener_rule_arn" {
+  description = "The ARN of the test listener rule wired into the service's advanced_configuration."
+  value       = module.ecs_service.test_listener_rule_arn
+}
+
 output "alb_security_group_id" {
   description = "The ID of the ALB security group."
   value       = module.ecs_cluster.public_alb_security_group_id

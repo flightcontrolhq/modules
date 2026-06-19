@@ -90,6 +90,36 @@ variable "container_insights_enabled" {
 }
 
 ################################################################################
+# Default Capacity Provider Strategy
+################################################################################
+
+variable "capacity_provider_default" {
+  type        = string
+  description = "Capacity provider family used for the cluster's default strategy. AWS rejects default strategies that mix Fargate and EC2 (Auto Scaling group) capacity providers, so the default strategy must commit to a single family; services can still target any attached capacity provider via their own strategy. Valid values: 'ec2', 'fargate' (also includes Fargate Spot when enabled), 'fargate_spot'. When null, defaults to 'ec2' if the EC2 capacity provider is enabled, then 'fargate' if enabled, and finally 'fargate_spot'."
+  default     = null
+
+  validation {
+    condition     = var.capacity_provider_default == null || contains(["ec2", "fargate", "fargate_spot"], coalesce(var.capacity_provider_default, "null"))
+    error_message = "The capacity_provider_default must be 'ec2', 'fargate', or 'fargate_spot'."
+  }
+
+  validation {
+    condition     = var.capacity_provider_default != "ec2" || var.ec2_instance_type != null
+    error_message = "The capacity_provider_default 'ec2' requires ec2_instance_type to be set."
+  }
+
+  validation {
+    condition     = var.capacity_provider_default != "fargate" || var.fargate_enabled
+    error_message = "The capacity_provider_default 'fargate' requires fargate_enabled to be true."
+  }
+
+  validation {
+    condition     = var.capacity_provider_default != "fargate_spot" || var.fargate_spot_enabled
+    error_message = "The capacity_provider_default 'fargate_spot' requires fargate_spot_enabled to be true."
+  }
+}
+
+################################################################################
 # Fargate Capacity Provider
 ################################################################################
 

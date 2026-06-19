@@ -879,9 +879,11 @@ run "ec2_custom_weights" {
     ec2_base          = 0
   }
 
+  # AWS rejects default strategies mixing Fargate and EC2 providers, so the
+  # default strategy commits to a single family (EC2 wins when enabled).
   assert {
-    condition     = length(aws_ecs_cluster_capacity_providers.this.default_capacity_provider_strategy) == 2
-    error_message = "Should have 2 capacity provider strategies (Fargate + EC2)"
+    condition     = length(aws_ecs_cluster_capacity_providers.this.default_capacity_provider_strategy) == 1
+    error_message = "Default strategy should contain only the EC2 capacity provider when EC2 is enabled"
   }
 }
 

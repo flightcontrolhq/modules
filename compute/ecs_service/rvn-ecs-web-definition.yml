@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.5.1
-  description: Share ECS service config and desired task count behavior
+  version: 0.6.0
+  description: Add native ECS blue/green, linear, and canary deployments with per-deploy strategy controls, manual approval gates, standby validation traffic, production/alternate target groups, ALB group stickiness guidance, ECS infrastructure role, and load-balancer advanced configuration outputs.
 module:
   inputs:
     - id: section_cluster
@@ -42,6 +42,139 @@ module:
       description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
       default: true
     - $include: ../../partials/inputs/ecs-service-build-inputs.yml
+    - id: section_deployment
+      label: Deployment
+      type: section
+    - id: deployment_strategy
+      label: Deployment strategy
+      type: string
+      description: Choose how traffic moves from the current deployment to the new deployment.
+      required: true
+      default: rolling
+      values:
+        - label: Rolling
+          description: Replace tasks in place while the service keeps serving from the production target group.
+          value: rolling
+        - label: Blue/green
+          description: Start the new deployment on the alternate target group, then shift production traffic after test validation.
+          value: blue_green
+        - label: Linear
+          description: Shift production traffic to the new deployment in equal percentage steps with a wait between steps.
+          value: linear
+        - label: Canary
+          description: Send a small percentage of production traffic to the new deployment first, then shift the rest after the canary bake time.
+          value: canary
+    - id: deployment_bake_time_in_minutes
+      label: Bake time in minutes
+      type: number
+      description: Minutes to keep the current and new deployments running after production traffic has fully shifted, before the old deployment is removed.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default: 10
+    - id: linear_step_percentage
+      label: Linear step percentage
+      type: number
+      description: Percentage of production traffic to move to the new deployment at each linear step.
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: linear
+      default: 20
+    - id: linear_step_bake_time_in_minutes
+      label: Linear step bake time in minutes
+      type: number
+      description: Minutes to wait between linear traffic steps before shifting the next percentage.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: linear
+      default: 5
+    - id: canary_percent
+      label: Canary percent
+      type: number
+      description: Percentage of production traffic to send to the new deployment during the canary phase.
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: canary
+      default: 5
+    - id: canary_bake_time_in_minutes
+      label: Canary bake time in minutes
+      type: number
+      description: Minutes to hold canary traffic before shifting the remaining production traffic to the new deployment.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: canary
+      default: 10
+    - id: deployment_pause_stages
+      label: Manual approval gates
+      type: object_array
+      description: Optional gates that pause the deployment at chosen lifecycle stages until you approve it. Applies only to the blue/green, linear, and canary strategies.
+      collapsible: true
+      item_inputs:
+        - id: stage
+          label: Stage
+          type: string
+          description: Deployment lifecycle stage at which to pause and wait for manual approval.
+          default: POST_TEST_TRAFFIC_SHIFT
+          values:
+            - label: Reconcile service
+              description: Pause during service reconciliation, before ECS finalizes the deployment.
+              value: RECONCILE_SERVICE
+            - label: Pre scale up
+              description: Pause before the new task set scales up.
+              value: PRE_SCALE_UP
+            - label: Post scale up
+              description: Pause after the new task set has scaled up and become healthy.
+              value: POST_SCALE_UP
+            - label: Post test traffic shift
+              description: Pause after test traffic is shifted to the new (green) tasks, so you can validate them before production traffic moves.
+              value: POST_TEST_TRAFFIC_SHIFT
+            - label: Pre production traffic shift
+              description: Pause before production traffic begins shifting to the new tasks.
+              value: PRE_PRODUCTION_TRAFFIC_SHIFT
+            - label: Post production traffic shift
+              description: Pause after production traffic has fully shifted to the new tasks, before the old tasks are removed.
+              value: POST_PRODUCTION_TRAFFIC_SHIFT
+        - id: timeout_in_minutes
+          label: Timeout (minutes)
+          type: number
+          description: Minutes to wait for manual approval before the timeout action runs. Matches the AWS default of 1,440 minutes (24 hours).
+          max: 20160
+          min: 1
+          required: true
+          default: 1440
+        - id: timeout_action
+          label: On timeout
+          type: string
+          description: Action to take if approval is not given before the timeout elapses. Defaults to rolling back.
+          required: true
+          default: ROLLBACK
+          values:
+            - label: Roll back
+              description: Roll the deployment back to the previous revision.
+              value: ROLLBACK
+            - label: Continue
+              description: Proceed with the deployment as if it were approved.
+              value: CONTINUE
+      item_label: Pause stage
+      item_title_field: stage
+      item_description: "Timeout: {timeout_in_minutes} minutes / {timeout_action}"
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default:
+        - stage: POST_TEST_TRAFFIC_SHIFT
+          timeout_in_minutes: 1440
+          timeout_action: ROLLBACK
     - id: section_health
       label: Health check
       type: section
@@ -118,7 +251,7 @@ module:
     - id: target_group_stickiness_enabled
       label: Sticky sessions
       type: boolean
-      description: Enable load balancer cookie stickiness so repeat requests are routed to the same task when possible.
+      description: Enable load balancer cookie stickiness so repeat requests are routed to the same task when possible. When enabled, traffic-shift deployments also keep clients on the first production or alternate target group they reach.
       collapsible: true
       default: true
     - id: target_group_stickiness_type
@@ -257,6 +390,46 @@ module:
   deploy:
     $merge:
       - ../../partials/deploy/ecs-service-deploy-common.yml
+    strategy: |
+      <<
+      module.input.deployment_strategy == "rolling" ? nil :
+      module.input.deployment_strategy == "blue_green" ? {
+        "type": "blue_green",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages
+      } :
+      module.input.deployment_strategy == "linear" ? {
+        "type": "linear",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "linear": {
+          "step_percentage": module.input.linear_step_percentage,
+          "step_bake_time_in_minutes": module.input.linear_step_bake_time_in_minutes
+        }
+      } : {
+        "type": "canary",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "canary": {
+          "canary_percent": module.input.canary_percent,
+          "canary_bake_time_in_minutes": module.input.canary_bake_time_in_minutes
+        }
+      }
+      >>
+    infrastructure:
+      ecs_cluster_arn: <<stack.output.service_cluster>>
+      ecs_service_arns:
+        - <<stack.output.service_arn>>
+      ecs_target_group_arn: <<stack.output.target_group_arn>>
+      # Load-balancer advanced configuration for native traffic-shift
+      # strategies (blue_green / linear / canary). The deploy manager
+      # attaches these to UpdateService loadBalancers[].advancedConfiguration
+      # so ECS can shift traffic between the production and alternate target
+      # groups. Null/absent for non-load-balanced services (rolling only).
+      ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
+      ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
+      ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
+      ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
     task_definition:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml
@@ -498,7 +671,7 @@ module:
 
     ## Deployment
 
-    Deployment type defaults to Rolling. Blue/green is available when you need separate target groups for CodeDeploy-style traffic shifting.
+    Deployment strategy defaults to Rolling. Blue/green, Linear, and Canary use the native ECS traffic-shift controller with production and alternate target groups. The deployment strategy can change between deploys without changing Terraform infrastructure.
 
     Deployments update the ECS service task definition with the selected image, generated container definition, awslogs configuration, runtime platform, environment variables, secrets, and capacity-provider-compatible task settings.
 
@@ -515,6 +688,53 @@ module:
     Use pre-deploy commands for work that must complete before the service updates, such as database migrations. Use post-deploy commands for work that should happen after a successful deployment, such as cache warming. Commands are ECS command argument arrays. For shell behavior, use `/bin/sh`, `-lc`, and your shell command as separate arguments.
 
     Hook-specific environment variables are appended to the app container override for the one-off task. Optional hook CPU, memory, ephemeral storage, and timeout settings let release tasks use different resources from the web service without changing the steady-state app task.
+
+    ## Standby validation traffic
+
+    For Blue/green, Linear, and Canary deployments, Ravion creates a test listener rule on the same Application Load Balancer listener as the production rule. During the test traffic stage, requests that match the service's normal Domain host rules and Path rules and include the standby selector route to the standby, or green, task set on the alternate target group.
+
+    By default, the standby selector is the query parameter `__x-rvn-test__=1`. For example, if production traffic uses `https://app.example.com/health`, validate the standby service with:
+
+    ```text
+    https://app.example.com/health?__x-rvn-test__=1
+    ```
+
+    The alternate target group only has registered targets while ECS is running a traffic-shift deployment. Outside that window, the standby route may have no healthy targets.
+
+    Use Advanced Terraform variables to override the standby selector. Values in Advanced Terraform variables override the generated Terraform variables for the service.
+
+    To use a different query parameter:
+
+    ```json
+    {
+      "test_query_string_key": "preview",
+      "test_query_string_value": "green"
+    }
+    ```
+
+    Then validate standby traffic with `?preview=green`.
+
+    To use an HTTP header instead of a query parameter:
+
+    ```json
+    {
+      "test_traffic_condition_type": "header",
+      "test_header_name": "X-Ravion-Test",
+      "test_header_value": "1"
+    }
+    ```
+
+    Then send requests with `X-Ravion-Test: 1`. A service can use either the query-string selector or the header selector, not both at once.
+
+    ## Sticky sessions and traffic shifts
+
+    The module definition sets Sticky sessions to true by default. When that setting is enabled, Ravion configures target-group stickiness for the service's production and alternate target groups, so the load balancer keeps repeat requests on the same task when possible. With the default Load balancer cookie stickiness type, the target-level cookie is `AWSALB`; AWS may also set `AWSALBCORS` for CORS support. With Application cookie stickiness, the target-level cookie is the configured Application cookie name, and AWS may also set `AWSALBAPP-*` cookies.
+
+    During Blue/green, Linear, and Canary deployments, Ravion also enables ALB group stickiness on the production and standby listener rule forward actions when Sticky sessions is enabled. A client that first reaches the production target group or the alternate target group keeps using that same group for the stickiness cookie duration, even while the deployment's weighted traffic shift changes for new clients.
+
+    The ALB group stickiness cookie is `AWSALBTG`. For CORS requests, AWS may also set `AWSALBTGCORS`. Application cookie name applies only to `app_cookie` stickiness inside the selected target group; the ALB group stickiness cookie name is managed by AWS and cannot be changed.
+
+    To clear stickiness for a browser, open the browser developer tools, go to Application or Storage > Cookies for the service domain, and delete the relevant cookies: `AWSALBTG` and `AWSALBTGCORS` for ALB group stickiness; `AWSALB` and `AWSALBCORS` for the default target-level stickiness; and the configured Application cookie name plus any `AWSALBAPP-*` cookies when Application cookie stickiness is selected. For API clients, remove those cookie names from the cookie jar or stop sending them in the `Cookie` header. The next request can then enter the current traffic split like a new client. If Sticky sessions is turned off, Ravion does not enable target-group stickiness or ALB group stickiness for this behavior.
 
     ## Builder settings
 
@@ -545,6 +765,7 @@ module:
     | Start command                   | No       | []                         | Command arguments that override a prebuilt image default CMD |
     | Container port                  | Yes      | 80                         | Port exposed by the app container                  |
     | Health check path               | Yes      | /                          | HTTP path used by the target group health check    |
+    | Sticky sessions                 | No       | true                       | Keep clients on the same task, and on the same traffic-shift target group when enabled |
     | Domain host rules               | No       | -                          | Hostnames such as app.example.com or *.example.com |
     | Path rules                      | No       | -                          | Path patterns such as /*, /api/*, or /app/*        |
     | Capacity provider               | Yes      | fargate                    | Primary service capacity provider                  |
@@ -569,7 +790,7 @@ module:
     | Post-deploy timeout (secs)      | No       | 1800                       | Maximum post-deploy task wait time                 |
     | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
     | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
-    | Deployment type                 | No       | rolling                    | Rolling or blue/green deployment infrastructure    |
+    | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
     | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
     | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |
     | OpenTofu version override       | No       | Ravion default             | Override the OpenTofu version for the stack        |

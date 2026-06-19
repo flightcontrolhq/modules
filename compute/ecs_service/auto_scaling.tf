@@ -96,8 +96,6 @@ resource "aws_appautoscaling_scheduled_action" "this" {
 ################################################################################
 
 locals {
-  primary_target_group_arn_suffix = local.enable_load_balancer ? (
-    var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn_suffix : aws_lb_target_group.tg_1[0].arn_suffix
-  ) : ""
+  primary_target_group_arn_suffix = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn_suffix : ""
 }
 
