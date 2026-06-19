@@ -4,7 +4,7 @@ This module creates an Amazon ECS service with a placeholder task definition, lo
 
 **Note:** This module provisions infrastructure with a placeholder container (hello-world). The Flightcontrol deploy manager deploys the actual application by registering task definitions and calling UpdateService with the authoritative `deploymentConfiguration` (strategy, bake times, pause lifecycle hooks) on every deploy.
 
-When a load balancer is attached, the module always provisions the production + alternate target-group pair, the ECS infrastructure role, and the service's `load_balancer.advanced_configuration` — so the deployment strategy is a **per-deployment decision**: any service can switch between rolling / blue_green / linear / canary on a single deploy with no Terraform changes. `deployment_type` only seeds the strategy at create time.
+When a load balancer is attached, the module always provisions the production + alternate target-group pair, the ECS infrastructure role, and the service's `load_balancer.advanced_configuration` — so the deployment strategy is a **per-deployment decision**: eligible services can switch between rolling / blue_green / linear / canary on a single deploy with no Terraform changes. ALB traffic-shift deployments require a single production listener rule. `deployment_type` only seeds the strategy at create time.
 
 ## Features
 
@@ -256,7 +256,7 @@ module "worker_service" {
 | Name | Version |
 |------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 5.0 |
+| aws | >= 6.21 |
 
 ## Inputs
 
@@ -317,9 +317,9 @@ module "worker_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | desired_count | Desired number of tasks (0 for infrastructure-first) | `number` | `0` | no |
-| deployment_type | Create-time seed for the deployment strategy (rolling, blue_green, linear, canary); the strategy itself is set per deployment via UpdateService | `string` | `"rolling"` | no |
-| deployment_strategy_config | Initial bake/canary/linear tuning for native traffic-shift strategies (seed only — the deploy manager owns it per-deploy) | `object` | `{}` | no |
-| test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation (takes precedence over green_alb_listener_rule_enabled) | `string` | `null` | no |
+| deployment_type | Initial deployment strategy for direct Terraform use; Ravion stacks use rolling and set blue_green/linear/canary per deploy via UpdateService | `string` | `"rolling"` | no |
+| deployment_strategy_config | Initial bake/canary/linear tuning for direct Terraform use; Ravion stacks set this per deploy through the deploy manager | `object` | `{}` | no |
+| test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation when the module-created green listener rule is not enabled | `string` | `null` | no |
 | green_alb_listener_rule_enabled | Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments, so the new revision can be validated before production traffic shifts. ALB-only; no effect for NLB services | `bool` | `true` | no |
 | test_traffic_condition_type | Which request attribute distinguishes test traffic for the green rule: `header` (test_header_name/value) or `query-string` (test_query_string_key/value). One type per service — ALB AND-combines conditions and ECS wires exactly one test rule, so genuine "header OR query-string" matching is not possible natively | `string` | `"query-string"` | no |
 | test_header_name | HTTP header name that routes test traffic to the green target group when test_traffic_condition_type is `header` | `string` | `"X-Ravion-Test"` | no |
@@ -836,7 +836,7 @@ The placeholder container prints a message and exits, so load balancer health ch
 All four strategies run on the native ECS deployment controller — no
 CodeDeploy and no external controller.
 
-The same infrastructure (2 target groups + infrastructure role) backs every load-balanced service, so any service can switch strategy on its next deployment.
+The same infrastructure (2 target groups + infrastructure role) backs every load-balanced service, so eligible services can switch strategy on their next deployment. ALB traffic-shift deployments require a single production listener rule.
 
 | Feature | Rolling | Blue/Green | Linear | Canary |
 |---------|---------|------------|--------|--------|
@@ -850,6 +850,53 @@ The same infrastructure (2 target groups + infrastructure role) backs every load
 **Use blue/green when:** you want full validation of the new revision (optionally via a test listener rule) before shifting all production traffic at once, with instant rollback during the bake window.
 
 **Use linear/canary when:** you want production traffic to shift gradually with monitoring between steps.
+
+### How do I access the standby service during a traffic-shift deployment?
+
+For ALB-backed blue_green, linear, and canary deployments, the module creates a test listener rule that routes matching requests to the standby, or green, task set on the alternate target group. The request must match the same host/path conditions as the production listener rule and include the test selector.
+
+By default, the selector is the query parameter `__x-rvn-test__=1`:
+
+```bash
+curl "https://api.example.com/health?__x-rvn-test__=1"
+```
+
+The alternate target group only has registered targets while ECS is running a traffic-shift deployment. Outside that window, the standby route may have no healthy targets.
+
+To override the query parameter in Terraform:
+
+```hcl
+test_query_string_key   = "preview"
+test_query_string_value = "green"
+```
+
+Then request `?preview=green`.
+
+To use an HTTP header instead of a query parameter:
+
+```hcl
+test_traffic_condition_type = "header"
+test_header_name            = "X-Ravion-Test"
+test_header_value           = "1"
+```
+
+Then send the header with the request:
+
+```bash
+curl -H "X-Ravion-Test: 1" "https://api.example.com/health"
+```
+
+When using the Ravion ECS Web Server module definition, set the same lower-level variables through Advanced Terraform variables. For example, to use a header selector:
+
+```json
+{
+  "test_traffic_condition_type": "header",
+  "test_header_name": "X-Ravion-Test",
+  "test_header_value": "1"
+}
+```
+
+The ALB rule can use one selector type per service: either `query-string` or `header`.
 
 ### How do I use this module with an NLB instead of an ALB?
 

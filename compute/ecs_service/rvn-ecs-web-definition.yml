@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.6.0
-  description: Share ECS service config and desired task count behavior, and add native ECS deployment strategies (rolling/blue_green/linear/canary) with a default query-string green test listener rule, production/alternate target group pair, and load-balancer advanced-config outputs
+  description: Add native ECS blue/green, linear, and canary deployments with per-deploy strategy controls, manual approval gates, standby validation traffic, production/alternate target groups, ECS infrastructure role, and load-balancer advanced configuration outputs.
 module:
   inputs:
     - id: section_cluster
@@ -673,7 +673,7 @@ module:
 
     ## Deployment
 
-    Deployment type defaults to Rolling. Blue/green is available when you need separate target groups for CodeDeploy-style traffic shifting.
+    Deployment strategy defaults to Rolling. Blue/green, Linear, and Canary use the native ECS traffic-shift controller with production and alternate target groups. The deployment strategy can change between deploys without changing Terraform infrastructure.
 
     Deployments update the ECS service task definition with the selected image, generated container definition, awslogs configuration, runtime platform, environment variables, secrets, and capacity-provider-compatible task settings.
 
@@ -690,6 +690,43 @@ module:
     Use pre-deploy commands for work that must complete before the service updates, such as database migrations. Use post-deploy commands for work that should happen after a successful deployment, such as cache warming. Commands are ECS command argument arrays. For shell behavior, use `/bin/sh`, `-lc`, and your shell command as separate arguments.
 
     Hook-specific environment variables are appended to the app container override for the one-off task. Optional hook CPU, memory, ephemeral storage, and timeout settings let release tasks use different resources from the web service without changing the steady-state app task.
+
+    ## Standby validation traffic
+
+    For Blue/green, Linear, and Canary deployments, Ravion creates a test listener rule on the same Application Load Balancer listener as the production rule. During the test traffic stage, requests that match the service's normal Domain host rules and Path rules and include the standby selector route to the standby, or green, task set on the alternate target group.
+
+    By default, the standby selector is the query parameter `__x-rvn-test__=1`. For example, if production traffic uses `https://app.example.com/health`, validate the standby service with:
+
+    ```text
+    https://app.example.com/health?__x-rvn-test__=1
+    ```
+
+    The alternate target group only has registered targets while ECS is running a traffic-shift deployment. Outside that window, the standby route may have no healthy targets.
+
+    Use Advanced Terraform variables to override the standby selector. Values in Advanced Terraform variables override the generated Terraform variables for the service.
+
+    To use a different query parameter:
+
+    ```json
+    {
+      "test_query_string_key": "preview",
+      "test_query_string_value": "green"
+    }
+    ```
+
+    Then validate standby traffic with `?preview=green`.
+
+    To use an HTTP header instead of a query parameter:
+
+    ```json
+    {
+      "test_traffic_condition_type": "header",
+      "test_header_name": "X-Ravion-Test",
+      "test_header_value": "1"
+    }
+    ```
+
+    Then send requests with `X-Ravion-Test: 1`. A service can use either the query-string selector or the header selector, not both at once.
 
     ## Builder settings
 
@@ -744,7 +781,7 @@ module:
     | Post-deploy timeout (secs)      | No       | 1800                       | Maximum post-deploy task wait time                 |
     | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
     | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
-    | Deployment type                 | No       | rolling                    | Rolling or blue/green deployment infrastructure    |
+    | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
     | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
     | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |
     | OpenTofu version override       | No       | Ravion default             | Override the OpenTofu version for the stack        |

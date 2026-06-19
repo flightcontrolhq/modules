@@ -167,7 +167,7 @@ output "production_listener_rule_arn" {
 }
 
 output "test_listener_rule_arn" {
-  description = "ARN of the test listener rule the ECS deployment controller rewrites during the TEST_TRAFFIC_SHIFT lifecycle stages, routing test traffic to the green revision before the production cutover. The deploy manager passes it as advanced_configuration.test_listener_rule on UpdateService. Null when no test listener rule is configured (the common case)."
+  description = "ARN of the test listener rule the ECS deployment controller rewrites during the TEST_TRAFFIC_SHIFT lifecycle stages, routing test traffic to the green revision before the production cutover. The deploy manager passes it as advanced_configuration.test_listener_rule on UpdateService. Null when no module-created or externally-managed test listener rule is configured."
   value       = local.test_listener_rule_arn
 }
 
@@ -266,4 +266,3 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
-

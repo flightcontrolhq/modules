@@ -286,7 +286,7 @@ variable "desired_count" {
 
 variable "deployment_type" {
   type        = string
-  description = "The deployment strategy ('rolling', 'blue_green', 'linear', 'canary') used to seed the service's deployment_configuration at create time. The strategy is a per-deployment setting on the native ECS controller — the Flightcontrol deploy manager passes the authoritative strategy on every UpdateService call, so it can change between deployments without Terraform changes."
+  description = "Initial deployment strategy for direct Terraform use ('rolling', 'blue_green', 'linear', 'canary'). Ravion ECS Web stack provisioning passes 'rolling' and the Flightcontrol deploy manager passes the authoritative blue_green/linear/canary strategy on each UpdateService call, so strategy changes in Ravion do not require Terraform changes."
   default     = "rolling"
 
   validation {
@@ -314,19 +314,20 @@ variable "deployment_strategy_config" {
     }), {})
   })
   description = <<-EOT
-    Initial tuning for the native traffic-shift strategies (blue_green /
-    linear / canary). This only seeds the service at create time — the
-    Flightcontrol deploy manager passes the authoritative
-    deploymentConfiguration (including pause lifecycle hooks) on every
-    UpdateService call, so post-create changes to these values are
-    ignored by Terraform (see ignore_changes on aws_ecs_service.this).
+    Initial tuning for direct Terraform use with native traffic-shift
+    strategies (blue_green / linear / canary). Ravion ECS Web stack
+    provisioning uses rolling and the Flightcontrol deploy manager passes
+    the authoritative deploymentConfiguration (including pause lifecycle
+    hooks) on every UpdateService call, so post-create changes to these
+    values are ignored by Terraform (see ignore_changes on
+    aws_ecs_service.this).
   EOT
   default     = {}
 }
 
 variable "test_listener_rule_arn" {
   type        = string
-  description = "Optional ARN of an externally-managed ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies. Takes precedence over green_alb_listener_rule_enabled."
+  description = "Optional ARN of an externally-managed ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies when the module-created green listener rule is not enabled."
   default     = null
 }
 
