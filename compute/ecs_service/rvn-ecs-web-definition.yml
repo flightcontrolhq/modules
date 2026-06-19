@@ -165,9 +165,7 @@ module:
               value: CONTINUE
       item_label: Pause stage
       item_title_field: stage
-      item_summary:
-        - timeout_in_minutes
-        - timeout_action
+      item_description: "Timeout: {timeout_in_minutes} minutes / {timeout_action}"
       show_when:
         deployment_strategy:
           - blue_green
