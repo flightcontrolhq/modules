@@ -1,0 +1,733 @@
+definition:
+  type: rvn-lambda
+  name: Lambda Function
+  description: AWS Lambda function with zip builds, alias-based deployments, IAM, logs, and optional function URLs.
+release:
+  version: 0.1.0
+  description: Initial AWS Lambda module definition with stack, build, and deploy wiring.
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $include: ../../partials/inputs/aws-region.yml
+    - id: section_function
+      label: Lambda function
+      type: section
+    - id: name
+      immutable: true
+      label: Function name
+      type: string
+      description: Name for the Lambda function and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: 1-64 letters, numbers, underscores, or hyphens.
+          pattern: ^[A-Za-z0-9_-]{1,64}$
+    - id: description
+      label: Function description
+      type: string
+      description: Description shown for the Lambda function in AWS.
+      collapsible: true
+      required: false
+    - id: handler
+      label: Handler
+      type: string
+      description: Function entrypoint for the zip package, such as index.handler.
+      required: true
+      default: index.handler
+    - id: runtime
+      label: Runtime
+      type: string
+      description: Lambda runtime for the zip package, such as nodejs20.x, python3.12, or provided.al2023.
+      required: true
+      default: nodejs20.x
+    - id: architecture
+      label: Architecture
+      type: string
+      description: CPU architecture used by the function.
+      required: true
+      default: x86_64
+      values:
+        - label: x86_64
+          value: x86_64
+        - label: arm64
+          value: arm64
+    - id: memory_size
+      label: Memory (MB)
+      type: number
+      description: Memory allocated to the function. Lambda CPU scales with memory.
+      min: 128
+      max: 10240
+      required: true
+      default: 128
+    - id: timeout
+      label: Timeout (secs)
+      type: number
+      description: Maximum runtime for a single invocation.
+      min: 1
+      max: 900
+      required: true
+      default: 3
+    - id: ephemeral_storage_size
+      label: Ephemeral storage (MB)
+      type: number
+      description: Size of the function's /tmp directory.
+      collapsible: true
+      min: 512
+      max: 10240
+      default: 512
+    - id: reserved_concurrent_executions
+      label: Reserved concurrency
+      type: number
+      description: Reserved concurrent executions for this function. Use -1 to remove limits.
+      collapsible: true
+      min: -1
+      required: false
+    - id: tracing_mode
+      label: X-Ray tracing
+      type: string
+      description: Choose whether Lambda actively traces invocations with AWS X-Ray.
+      collapsible: true
+      default: PassThrough
+      values:
+        - label: Pass through
+          value: PassThrough
+        - label: Active
+          value: Active
+    - id: environment_variables
+      label: Runtime environment variables
+      type: keyvalue
+      description: Environment variables passed to the Lambda function.
+      collapsible: true
+      default: {}
+      required: false
+    - id: layers
+      label: Lambda layers
+      type: string_array
+      description: Versioned Lambda layer ARNs to attach to the function.
+      collapsible: true
+      add_button_label: Add layer
+      default: []
+      placeholder: arn:aws:lambda:us-east-1:123456789012:layer:example:1
+    - id: kms_key_arn
+      label: Environment KMS key ARN
+      type: string
+      description: Optional customer-managed KMS key ARN used to encrypt environment variables.
+      collapsible: true
+      required: false
+      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
+    - id: code_signing_config_arn
+      label: Code signing config ARN
+      type: string
+      description: Optional Lambda code signing configuration ARN.
+      collapsible: true
+      required: false
+    - id: section_build
+      label: Build config
+      type: section
+    - id: build_type
+      label: Build type
+      type: string
+      description: Choose how Ravion builds the Lambda zip package.
+      required: true
+      default: nixpacks
+      values:
+        - label: Nixpacks
+          description: Automatically build the package based on your code and config.
+          value: nixpacks
+        - label: Dockerfile
+          description: Use a Dockerfile and export the Lambda package contents from the built image.
+          value: dockerfile
+        - label: Disabled
+          description: Skip the build step and deploy an existing S3 object key.
+          value: none
+    - $include: ../../partials/inputs/build-git-source.yml
+    - id: output_directory
+      label: Package output directory
+      type: string
+      description: Directory inside the built image that contains the Lambda package files.
+      required: true
+      default: /app
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+    - id: artifact_key_prefix
+      label: Artifact S3 key prefix
+      type: string
+      description: S3 prefix where Ravion uploads zip packages. The build appends the generated package filename.
+      collapsible: true
+      default: <<module.given_id>>
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+    - id: max_zip_size
+      label: Maximum zip size (bytes)
+      type: number
+      description: Optional maximum package size. Builds fail when the generated zip is larger.
+      collapsible: true
+      min: 1
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+    - $include: ../../partials/inputs/dockerfile-build.yml
+    - $include: ../../partials/inputs/nixpacks-basic.yml
+    - $include: ../../partials/inputs/nixpacks-advanced.yml
+    - $merge:
+        - ../../partials/inputs/build-environment-variables.yml
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+    - $include: ../../partials/inputs/dockerfile-env-injection.yml
+    - $template: ../../partials/templates/builder-infrastructure-inputs.yml
+      with:
+        no_options_message: Select an AWS account and region to load available EC2 instance types.
+    - id: section_networking
+      label: Networking
+      type: section
+    - id: vpc_config_enabled
+      label: Connect to a VPC
+      type: boolean
+      description: Attach the function to subnets and security groups.
+      default: false
+    - id: subnet_ids
+      label: Subnet IDs
+      type: string_array
+      description: Subnets where Lambda creates network interfaces.
+      add_button_label: Add subnet
+      required: true
+      show_when:
+        vpc_config_enabled: true
+    - id: security_group_ids
+      label: Security group IDs
+      type: string_array
+      description: Security groups attached to the Lambda network interfaces.
+      add_button_label: Add security group
+      required: true
+      show_when:
+        vpc_config_enabled: true
+    - id: ipv6_allowed_for_dual_stack
+      label: Allow outbound IPv6
+      type: boolean
+      description: Allow outbound IPv6 traffic when the selected subnets are dual stack.
+      collapsible: true
+      default: false
+      show_when:
+        vpc_config_enabled: true
+    - id: section_iam
+      label: IAM role
+      type: section
+    - id: role_creation_enabled
+      label: Create IAM role
+      type: boolean
+      description: Create and manage the Lambda execution role in this module.
+      default: true
+    - id: role_arn
+      label: Existing role ARN
+      type: string
+      description: IAM role ARN to use when this module should not create the role.
+      required: true
+      placeholder: arn:aws:iam::123456789012:role/my-lambda-role
+      show_when:
+        role_creation_enabled: false
+    - id: role_name
+      label: Role name
+      type: string
+      description: Custom name for the created IAM role. Defaults to function name plus -lambda-role.
+      collapsible: true
+      required: false
+      show_when:
+        role_creation_enabled: true
+    - id: role_permissions_boundary
+      label: Permissions boundary ARN
+      type: string
+      description: Optional IAM permissions boundary for the created role.
+      collapsible: true
+      required: false
+      show_when:
+        role_creation_enabled: true
+    - id: basic_execution_policy_enabled
+      label: Basic execution policy
+      type: boolean
+      description: Attach AWSLambdaBasicExecutionRole to the created role.
+      collapsible: true
+      default: true
+      show_when:
+        role_creation_enabled: true
+    - id: vpc_execution_policy_enabled
+      label: VPC execution policy
+      type: boolean
+      description: Attach AWSLambdaVPCAccessExecutionRole when the function is connected to a VPC.
+      collapsible: true
+      default: true
+      show_when:
+        role_creation_enabled: true
+    - id: role_managed_policy_arns
+      label: Managed policy ARNs
+      type: string_array
+      description: Additional managed policies to attach to the created role.
+      collapsible: true
+      add_button_label: Add policy ARN
+      default: []
+      show_when:
+        role_creation_enabled: true
+    - id: role_inline_policies
+      label: Inline role policies
+      type: object
+      description: Map of inline policy name to JSON policy document for the created role.
+      collapsible: true
+      default: {}
+      required: false
+      show_when:
+        role_creation_enabled: true
+    - id: section_logs
+      label: Logs
+      type: section
+    - id: log_group_creation_enabled
+      label: Create log group
+      type: boolean
+      description: Create and manage the CloudWatch log group for this function.
+      default: true
+    - id: log_group_name
+      label: Log group name
+      type: string
+      description: Custom CloudWatch log group name. Defaults to /aws/lambda/{function name}.
+      collapsible: true
+      required: false
+      show_when:
+        log_group_creation_enabled: true
+    - id: log_retention_days
+      label: Log retention days
+      type: number
+      description: Days to retain CloudWatch logs. Use 0 to retain indefinitely.
+      collapsible: true
+      default: 30
+      min: 0
+      show_when:
+        log_group_creation_enabled: true
+    - id: log_kms_key_id
+      label: Log KMS key ID
+      type: string
+      description: Optional KMS key ID or ARN for log group encryption.
+      collapsible: true
+      required: false
+      show_when:
+        log_group_creation_enabled: true
+    - id: section_function_url
+      label: Function URL
+      type: section
+    - id: function_url_enabled
+      label: Enable function URL
+      type: boolean
+      description: Create an HTTPS endpoint for the function.
+      default: false
+    - id: function_url_auth_type
+      label: Authorization type
+      type: string
+      description: Choose whether the function URL requires AWS IAM authorization.
+      required: true
+      default: AWS_IAM
+      show_when:
+        function_url_enabled: true
+      values:
+        - label: AWS IAM
+          value: AWS_IAM
+        - label: None
+          value: NONE
+    - id: function_url_invoke_mode
+      label: Invoke mode
+      type: string
+      description: Choose buffered responses or response streaming.
+      collapsible: true
+      default: BUFFERED
+      show_when:
+        function_url_enabled: true
+      values:
+        - label: Buffered
+          value: BUFFERED
+        - label: Response stream
+          value: RESPONSE_STREAM
+    - id: function_url_cors
+      label: CORS config
+      type: object
+      description: Optional Lambda function URL CORS configuration.
+      collapsible: true
+      required: false
+      show_when:
+        function_url_enabled: true
+    - id: section_integrations
+      label: Integrations
+      type: section
+    - id: dead_letter_target_arn
+      label: Dead-letter target ARN
+      type: string
+      description: Optional SQS queue or SNS topic ARN for asynchronous invocation failures.
+      collapsible: true
+      required: false
+    - id: permissions
+      label: Invoke permissions
+      type: object_array
+      description: Permission statements for services or accounts that invoke this function.
+      collapsible: true
+      item_label: Permission
+      item_title:
+        template: "{principal}"
+      item_inputs:
+        - id: principal
+          label: Principal
+          type: string
+          description: Service principal or AWS account allowed to invoke the function.
+          required: true
+          placeholder: apigateway.amazonaws.com
+        - id: source_arn
+          label: Source ARN
+          type: string
+          description: Optional source ARN that scopes the invoke permission.
+          required: false
+        - id: source_account
+          label: Source account
+          type: string
+          description: Optional source AWS account ID.
+          required: false
+        - id: qualifier
+          label: Qualifier
+          type: string
+          description: Optional function version or alias qualifier.
+          required: false
+      default: []
+    - id: event_source_mappings
+      label: Event source mappings
+      type: object_array
+      description: Event sources such as SQS, DynamoDB streams, or Kinesis streams that invoke this function.
+      collapsible: true
+      item_label: Event source
+      item_title:
+        template: "{event_source_arn}"
+      item_inputs:
+        - id: event_source_arn
+          label: Event source ARN
+          type: string
+          description: ARN of the stream or queue that invokes this function.
+          required: true
+        - id: enabled
+          label: Enabled
+          type: boolean
+          default: true
+        - id: batch_size
+          label: Batch size
+          type: number
+          required: false
+          min: 1
+        - id: maximum_batching_window_in_seconds
+          label: Maximum batching window (secs)
+          type: number
+          required: false
+          min: 0
+        - id: starting_position
+          label: Starting position
+          type: string
+          required: false
+          values:
+            - label: Latest
+              value: LATEST
+            - label: Trim horizon
+              value: TRIM_HORIZON
+            - label: At timestamp
+              value: AT_TIMESTAMP
+      default: []
+    - id: file_system_configs
+      label: File systems
+      type: object_array
+      description: EFS access points mounted into the function.
+      collapsible: true
+      item_label: File system
+      item_title:
+        template: "{local_mount_path}"
+      item_inputs:
+        - id: arn
+          label: EFS access point ARN
+          type: string
+          required: true
+        - id: local_mount_path
+          label: Local mount path
+          type: string
+          description: Mount path inside the function. AWS requires paths under /mnt/.
+          required: true
+          placeholder: /mnt/shared
+      default: []
+    - id: section_advanced_lambda
+      label: Advanced Lambda settings
+      type: section
+    - id: snap_start_apply_on
+      label: SnapStart
+      type: string
+      description: Enable Lambda SnapStart for published versions. AWS currently supports this for Java runtimes.
+      collapsible: true
+      required: false
+      values:
+        - label: Published versions
+          value: PublishedVersions
+    - id: lambda_at_edge_enabled
+      label: Lambda@Edge constraints
+      type: boolean
+      description: Validate settings against Lambda@Edge constraints.
+      collapsible: true
+      default: false
+    - id: code_bucket_name
+      immutable: true
+      label: Code bucket name
+      type: string
+      description: S3 bucket used for Lambda zip artifacts. Must be globally unique.
+      collapsible: true
+      required: false
+      patterns:
+        - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
+          pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
+    - id: code_bucket_force_destroy_enabled
+      label: Force destroy code bucket
+      type: boolean
+      description: Delete the code bucket even when it contains package objects during stack destroy.
+      collapsible: true
+      default: false
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $include: ../../partials/inputs/execution-environment.yml
+    - $merge:
+        - ../../partials/inputs/tags.yml
+      collapsible: true
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/lambda
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        aliases:
+          live:
+            description: Active Ravion deployment alias.
+        architectures:
+          - << module.input.architecture >>
+        basic_execution_policy_enabled: << module.input.basic_execution_policy_enabled >>
+        code_bucket_force_destroy_enabled: << module.input.code_bucket_force_destroy_enabled >>
+        code_bucket_name: << module.input.code_bucket_name || nil >>
+        code_signing_config_arn: << module.input.code_signing_config_arn || nil >>
+        dead_letter_target_arn: << module.input.dead_letter_target_arn || nil >>
+        description: << module.input.description || nil >>
+        environment_variables: << module.input.environment_variables >>
+        ephemeral_storage_size: << module.input.ephemeral_storage_size >>
+        event_source_mappings: << module.input.event_source_mappings >>
+        file_system_configs: << module.input.file_system_configs >>
+        function_url_auth_type: << module.input.function_url_auth_type >>
+        function_url_cors: << module.input.function_url_cors || nil >>
+        function_url_enabled: << module.input.function_url_enabled >>
+        function_url_invoke_mode: << module.input.function_url_invoke_mode >>
+        handler: << module.input.handler >>
+        kms_key_arn: << module.input.kms_key_arn || nil >>
+        lambda_at_edge_enabled: << module.input.lambda_at_edge_enabled >>
+        layers: << module.input.layers >>
+        log_group_creation_enabled: << module.input.log_group_creation_enabled >>
+        log_group_name: << module.input.log_group_name || nil >>
+        log_kms_key_id: << module.input.log_kms_key_id || nil >>
+        log_retention_days: << module.input.log_retention_days >>
+        memory_size: << module.input.memory_size >>
+        name: << module.input.name >>
+        package_type: Zip
+        permissions: << module.input.permissions >>
+        region: << module.input.aws_region >>
+        reserved_concurrent_executions: << module.input.reserved_concurrent_executions >>
+        role_arn: << module.input.role_arn || nil >>
+        role_creation_enabled: << module.input.role_creation_enabled >>
+        role_inline_policies: << module.input.role_inline_policies >>
+        role_managed_policy_arns: << module.input.role_managed_policy_arns >>
+        role_name: << module.input.role_name || nil >>
+        role_permissions_boundary: << module.input.role_permissions_boundary || nil >>
+        runtime: << module.input.runtime >>
+        snap_start_apply_on: << module.input.snap_start_apply_on || nil >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        timeout: << module.input.timeout >>
+        tracing_mode: << module.input.tracing_mode >>
+        version_publishing_enabled: true
+        vpc_config: >-
+          << module.input.vpc_config_enabled ? {subnet_ids: module.input.subnet_ids, security_group_ids:
+          module.input.security_group_ids, ipv6_allowed_for_dual_stack:
+          module.input.ipv6_allowed_for_dual_stack} : nil >>
+        vpc_execution_policy_enabled: << module.input.vpc_execution_policy_enabled >>
+  build:
+    type: '<< module.input.build_type == "none" ? "disabled" : "lambda" >>'
+    timeout: 1800
+    inputs:
+      - $include: ../../partials/inputs/build-inputs.yml
+    source:
+      $include: ../../partials/build/git-source.yml
+    builder: >-
+      << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
+      || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
+      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory,
+      max_zip_size: module.input.max_zip_size} : {type: "nixpacks", install_cmd:
+      module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, config_file_path:
+      module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path,
+      nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs,
+      apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs,
+      output_directory: module.input.output_directory, max_zip_size: module.input.max_zip_size} >>
+    environment_variables: << module.input.build_environment_variables >>
+    destinations:
+      - id: lambda-package
+        type: s3
+        bucket: << stack.output.code_bucket_id >>
+        key: << module.input.artifact_key_prefix || module.given_id >>
+        region: << stack.output.region >>
+    infrastructure:
+      $include: ../../partials/build/infrastructure.yml
+  deploy:
+    type: aws:lambda
+    timeout: 1800
+    inputs:
+      - id: s3_key
+        label: S3 object key
+        type: string
+        description: S3 key for the Lambda zip package to deploy.
+        required: true
+      - id: s3_object_version
+        label: S3 object version
+        type: string
+        description: Optional S3 object version for versioned artifact buckets.
+        required: false
+    infrastructure:
+      function_arn: << stack.output.function_arn >>
+      region: << stack.output.region >>
+      alias_name: live
+      s3_artifact_bucket: << stack.output.code_bucket_id >>
+    definition:
+      package_type: zip
+      s3_key: << deploy.input.s3_key >>
+      s3_object_version: << deploy.input.s3_object_version || nil >>
+  ui:
+    metrics:
+      - id: invocations
+        name: Invocations
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Invocations
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: errors
+        name: Errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Errors
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: duration
+        name: Duration
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Duration
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Average
+      - id: throttles
+        name: Throttles
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: Throttles
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: concurrent_executions
+        name: Concurrent executions
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FunctionName: << stack.output.function_name >>
+          name: ConcurrentExecutions
+          namespace: AWS/Lambda
+          region: << stack.output.region >>
+          statistic: Average
+  readme: |
+    AWS Lambda function with zip builds, alias-based deployments, IAM, logs, and optional function URLs.
+
+    ## Overview
+
+    The Lambda Function module creates an AWS Lambda function, execution role, CloudWatch log group, artifact bucket, and a live alias that Ravion updates during deployments. Terraform provisions the long-lived function infrastructure with a placeholder zip, while Ravion builds zip packages from a Git repository and deploys them by publishing a new function version and moving the live alias.
+
+    Terraform source: [flightcontrolhq/modules/compute/lambda](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/lambda)
+
+    ## Use cases
+
+    | Scenario | Lambda Function helps by... |
+    | -------- | --------------------------- |
+    | Event handlers | Running code from queues, streams, schedules, or custom invoke permissions |
+    | Lightweight APIs | Exposing a function URL when API Gateway is not required |
+    | Background tasks | Running short-lived compute without managing servers or containers |
+    | Zip deployments | Building a package from Git and promoting it through a stable alias |
+
+    ## Build and deployment
+
+    Builds use Nixpacks or a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
+
+    If Build type is Disabled, Ravion skips the build step and you provide an existing S3 object key at deploy time.
+
+    ## Function configuration
+
+    Runtime, handler, memory, timeout, architecture, environment variables, layers, tracing, and ephemeral storage are managed by the stack. Change these settings through a stack change so Terraform remains the source of truth for function configuration. The deploy step focuses on code promotion.
+
+    ## Networking and integrations
+
+    Connect to a VPC when the function needs private subnet access to databases, caches, or internal services. Invoke permissions let AWS services or accounts call the function. Event source mappings connect queues and streams directly to the function. File systems mount EFS access points under /mnt paths.
+
+    ## Configuration
+
+    | Section | Field | Required | Default | Notes |
+    | ------- | ----- | -------- | ------- | ----- |
+    | AWS account & region | AWS account | Yes | none | Account where Lambda resources are created |
+    | AWS account & region | Region | Yes | none | Region for the Lambda function and code bucket |
+    | Lambda function | Function name | Yes | Generated from project, environment, and module IDs | Immutable AWS function name |
+    | Lambda function | Handler | Yes | index.handler | Zip package entrypoint |
+    | Lambda function | Runtime | Yes | nodejs20.x | Lambda runtime string |
+    | Lambda function | Memory | Yes | 128 MB | Also affects CPU allocation |
+    | Lambda function | Timeout | Yes | 3 seconds | Maximum invocation runtime |
+    | Build config | Build type | Yes | Nixpacks | Nixpacks, Dockerfile, or Disabled |
+    | Build config | Git repository | Required for builds | none | Source repository for package builds |
+    | Build config | Package output directory | Required for builds | /app | Directory zipped and uploaded |
+    | Networking | Connect to a VPC | No | false | Shows subnet and security group fields |
+    | IAM role | Create IAM role | No | true | Use an existing role by turning this off |
+    | Logs | Create log group | No | true | Creates /aws/lambda/{function name} by default |
+    | Function URL | Enable function URL | No | false | Creates an HTTPS endpoint for direct invokes |
+    | Integrations | Invoke permissions | No | [] | Allows services or accounts to invoke the function |
+    | Integrations | Event source mappings | No | [] | Connects queues or streams to the function |
+    | Terraform settings | Advanced Terraform variables | No | {} | Escape hatch for uncommon Terraform inputs |
+
+    ## Design decisions
+
+    - The module is zip-first. It uses the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
+    - Terraform creates a placeholder package and the live alias so the function exists before the first real deployment.
+    - Runtime configuration stays in Terraform to avoid deploy-time configuration drift.
+    - The code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
+
+    ## Learn more
+
+    - [AWS Lambda developer guide](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html)
+    - [Configuring Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-function-common.html)
+    - [Lambda function URLs](https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html)
+    - [Lambda event source mappings](https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html)
