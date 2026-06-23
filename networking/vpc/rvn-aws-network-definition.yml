@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.1.1
-  description: Mark destructive network inputs immutable
+  version: 0.2.0
+  description: Add Logs tab for CloudWatch.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -283,3 +283,17 @@ module:
           $include: ../stack/ravion-tags.yml
         vpc_cidr: << module.input.vpc_cidr >>
         vpc_peering_connections: << module.input.vpc_peering_connections >>
+  ui:
+    logs: |-
+      <<
+      module.input.flow_logs_enabled && stack.output.flow_log_cloudwatch_log_group_name ? [{
+        "id":"vpc_flow_logs",
+        "name":"VPC flow logs",
+        "source":{
+          "type":"cloudwatch",
+          "aws_account_id":module.input.aws_account_id,
+          "region":stack.output.region,
+          "log_group":stack.output.flow_log_cloudwatch_log_group_name
+        }
+      }] : []
+      >>
