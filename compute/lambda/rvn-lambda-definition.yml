@@ -151,26 +151,6 @@ module:
         build_type:
           - nixpacks
           - dockerfile
-    - id: artifact_key_prefix
-      label: Artifact S3 key prefix
-      type: string
-      description: S3 prefix where Ravion uploads zip packages. The build appends the generated package filename.
-      collapsible: true
-      default: <<module.given_id>>
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
-    - id: max_zip_size
-      label: Maximum zip size (bytes)
-      type: number
-      description: Optional maximum package size. Builds fail when the generated zip is larger.
-      collapsible: true
-      min: 1
-      show_when:
-        build_type:
-          - nixpacks
-          - dockerfile
     - $include: ../../partials/inputs/dockerfile-build.yml
     - $include: ../../partials/inputs/nixpacks-basic.yml
     - $include: ../../partials/inputs/nixpacks-advanced.yml
@@ -181,25 +161,94 @@ module:
           - nixpacks
           - dockerfile
     - $include: ../../partials/inputs/dockerfile-env-injection.yml
-    - $template: ../../partials/templates/builder-infrastructure-inputs.yml
-      with:
-        no_options_message: Select an AWS account and region to load available EC2 instance types.
+    - id: section_builder_config
+      label: Builder config
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: section
+    - default: ec2
+      description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
+      id: build_infrastructure_type
+      label: Builder instance type
+      required: true
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+      values:
+        - label: EC2
+          value: ec2
+        - label: EC2 spot
+          value: ec2-spot
+    - default: c7a.4xlarge
+      description: EC2 instance type for builds. Start with the default value, then increase or decrease it based on the resource usage report at the end of builds.
+      id: build_instance_size
+      label: Builder instance size
+      no_options_message: Select an AWS account and region to load available EC2 instance types.
+      required: true
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
+    - collapsible: true
+      description: Optional execution environment ID or given ID for builds. Defaults to the module Terraform execution environment.
+      id: build_execution_environment_id
+      label: Builder execution environment
+      required: false
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
+    - collapsible: true
+      description: Optional AMI ID for build runners. Leave empty to use the default runner image.
+      id: build_ami
+      label: Builder AMI
+      required: false
+      show_when:
+        build_type:
+          - nixpacks
+          - dockerfile
+      type: string
     - id: section_networking
-      label: Networking
+      label: Private networking
       type: section
     - id: vpc_config_enabled
-      label: Connect to a VPC
+      label: Connect to private VPC
       type: boolean
-      description: Attach the function to subnets and security groups.
+      description: Attach the function to private subnets from a VPC network and selected security groups.
       default: false
-    - id: subnet_ids
-      label: Subnet IDs
-      type: string_array
-      description: Subnets where Lambda creates network interfaces.
-      add_button_label: Add subnet
+    - id: network
+      immutable: true
+      label: Private VPC network
+      description: VPC network whose private subnets are used by the Lambda function.
+      mapped_inputs:
+        - id: section_vpc
+          label: Private VPC
+          type: section
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          required: true
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Private subnets where Lambda creates network interfaces.
+          id: subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          required: true
+          type: string_array
       required: true
       show_when:
         vpc_config_enabled: true
+      type: $ref:rvn-aws-network
     - id: security_group_ids
       label: Security group IDs
       type: string_array
@@ -232,36 +281,12 @@ module:
       placeholder: arn:aws:iam::123456789012:role/my-lambda-role
       show_when:
         role_creation_enabled: false
-    - id: role_name
-      label: Role name
-      type: string
-      description: Custom name for the created IAM role. Defaults to function name plus -lambda-role.
-      collapsible: true
-      required: false
-      show_when:
-        role_creation_enabled: true
     - id: role_permissions_boundary
       label: Permissions boundary ARN
       type: string
       description: Optional IAM permissions boundary for the created role.
       collapsible: true
       required: false
-      show_when:
-        role_creation_enabled: true
-    - id: basic_execution_policy_enabled
-      label: Basic execution policy
-      type: boolean
-      description: Attach AWSLambdaBasicExecutionRole to the created role.
-      collapsible: true
-      default: true
-      show_when:
-        role_creation_enabled: true
-    - id: vpc_execution_policy_enabled
-      label: VPC execution policy
-      type: boolean
-      description: Attach AWSLambdaVPCAccessExecutionRole when the function is connected to a VPC.
-      collapsible: true
-      default: true
       show_when:
         role_creation_enabled: true
     - id: role_managed_policy_arns
@@ -497,62 +522,79 @@ module:
         - ../../partials/inputs/tags.yml
       collapsible: true
   stack:
-    $template: ../../partials/templates/opentofu-stack.yml
-    with:
-      base_path: compute/lambda
-      terraform_variables:
-        ...overrides: << module.input.advanced_terraform_variables >>
-        aliases:
-          live:
-            description: Active Ravion deployment alias.
-        architectures:
-          - << module.input.architecture >>
-        basic_execution_policy_enabled: << module.input.basic_execution_policy_enabled >>
-        code_bucket_force_destroy_enabled: << module.input.code_bucket_force_destroy_enabled >>
-        code_bucket_name: << module.input.code_bucket_name || nil >>
-        code_signing_config_arn: << module.input.code_signing_config_arn || nil >>
-        dead_letter_target_arn: << module.input.dead_letter_target_arn || nil >>
-        description: << module.input.description || nil >>
-        environment_variables: << module.input.environment_variables >>
-        ephemeral_storage_size: << module.input.ephemeral_storage_size >>
-        event_source_mappings: << module.input.event_source_mappings >>
-        file_system_configs: << module.input.file_system_configs >>
-        function_url_auth_type: << module.input.function_url_auth_type >>
-        function_url_cors: << module.input.function_url_cors || nil >>
-        function_url_enabled: << module.input.function_url_enabled >>
-        function_url_invoke_mode: << module.input.function_url_invoke_mode >>
-        handler: << module.input.handler >>
-        kms_key_arn: << module.input.kms_key_arn || nil >>
-        lambda_at_edge_enabled: << module.input.lambda_at_edge_enabled >>
-        layers: << module.input.layers >>
-        log_group_creation_enabled: << module.input.log_group_creation_enabled >>
-        log_group_name: << module.input.log_group_name || nil >>
-        log_kms_key_id: << module.input.log_kms_key_id || nil >>
-        log_retention_days: << module.input.log_retention_days >>
-        memory_size: << module.input.memory_size >>
-        name: << module.input.name >>
-        package_type: Zip
-        permissions: << module.input.permissions >>
-        region: << module.input.aws_region >>
-        reserved_concurrent_executions: << module.input.reserved_concurrent_executions >>
-        role_arn: << module.input.role_arn || nil >>
-        role_creation_enabled: << module.input.role_creation_enabled >>
-        role_inline_policies: << module.input.role_inline_policies >>
-        role_managed_policy_arns: << module.input.role_managed_policy_arns >>
-        role_name: << module.input.role_name || nil >>
-        role_permissions_boundary: << module.input.role_permissions_boundary || nil >>
-        runtime: << module.input.runtime >>
-        snap_start_apply_on: << module.input.snap_start_apply_on || nil >>
-        tags:
-          $include: ../stack/ravion-tags.yml
-        timeout: << module.input.timeout >>
-        tracing_mode: << module.input.tracing_mode >>
-        version_publishing_enabled: true
-        vpc_config: >-
-          << module.input.vpc_config_enabled ? {subnet_ids: module.input.subnet_ids, security_group_ids:
-          module.input.security_group_ids, ipv6_allowed_for_dual_stack:
-          module.input.ipv6_allowed_for_dual_stack} : nil >>
-        vpc_execution_policy_enabled: << module.input.vpc_execution_policy_enabled >>
+    type: opentofu
+    ravion_state_backend_workspace: >-
+      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
+      + module.given_id + "-" + stack.id>>
+    pipelines:
+      defaults:
+        input:
+          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
+          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
+          base_path: compute/lambda
+          branch: main
+          execution_environment_id: << module.input.execution_environment_id || defaults.execution_environment_id >>
+          ref: $local.module_tag
+          repo: https://github.com/flightcontrolhq/modules
+          stack_id: <<stack.id>>
+          terraform_variables:
+            ...overrides: << module.input.advanced_terraform_variables >>
+            aliases:
+              live:
+                description: Active Ravion deployment alias.
+            architectures:
+              - << module.input.architecture >>
+            code_bucket_force_destroy_enabled: << module.input.code_bucket_force_destroy_enabled >>
+            code_bucket_name: << module.input.code_bucket_name || nil >>
+            code_signing_config_arn: << module.input.code_signing_config_arn || nil >>
+            dead_letter_target_arn: << module.input.dead_letter_target_arn || nil >>
+            description: << module.input.description || nil >>
+            environment_variables: << module.input.environment_variables >>
+            ephemeral_storage_size: << module.input.ephemeral_storage_size >>
+            event_source_mappings: << module.input.event_source_mappings >>
+            file_system_configs: << module.input.file_system_configs >>
+            function_url_auth_type: << module.input.function_url_auth_type >>
+            function_url_cors: << module.input.function_url_cors || nil >>
+            function_url_enabled: << module.input.function_url_enabled >>
+            function_url_invoke_mode: << module.input.function_url_invoke_mode >>
+            handler: << module.input.handler >>
+            kms_key_arn: << module.input.kms_key_arn || nil >>
+            lambda_at_edge_enabled: << module.input.lambda_at_edge_enabled >>
+            layers: << module.input.layers >>
+            log_group_creation_enabled: << module.input.log_group_creation_enabled >>
+            log_group_name: << module.input.log_group_name || nil >>
+            log_kms_key_id: << module.input.log_kms_key_id || nil >>
+            log_retention_days: << module.input.log_retention_days >>
+            memory_size: << module.input.memory_size >>
+            name: << module.input.name >>
+            package_type: Zip
+            permissions: << module.input.permissions >>
+            region: << module.input.aws_region >>
+            reserved_concurrent_executions: << module.input.reserved_concurrent_executions >>
+            role_arn: << module.input.role_arn || nil >>
+            role_creation_enabled: << module.input.role_creation_enabled >>
+            role_inline_policies: << module.input.role_inline_policies >>
+            role_managed_policy_arns: << module.input.role_managed_policy_arns >>
+            role_permissions_boundary: << module.input.role_permissions_boundary || nil >>
+            runtime: << module.input.runtime >>
+            snap_start_apply_on: << module.input.snap_start_apply_on || nil >>
+            tags:
+              $include: ../../partials/stack/ravion-tags.yml
+            timeout: << module.input.timeout >>
+            tracing_mode: << module.input.tracing_mode >>
+            version_publishing_enabled: true
+            vpc_config: >-
+              << module.input.vpc_config_enabled ? {subnet_ids: module.input.subnet_ids, security_group_ids:
+              module.input.security_group_ids, ipv6_allowed_for_dual_stack:
+              module.input.ipv6_allowed_for_dual_stack} : nil >>
+            vpc_execution_policy_enabled: << module.input.vpc_config_enabled >>
+          tool: opentofu
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
+        variant: standard
+      change:
+        pipeline_id: << defaults.change_pipeline_id >>
+      destroy:
+        pipeline_id: << defaults.destroy_pipeline_id >>
   build:
     type: '<< module.input.build_type == "none" ? "disabled" : "lambda" >>'
     timeout: 1800
@@ -563,22 +605,26 @@ module:
     builder: >-
       << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
       || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
-      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory,
-      max_zip_size: module.input.max_zip_size} : {type: "nixpacks", install_cmd:
+      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} : {type: "nixpacks", install_cmd:
       module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, config_file_path:
       module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path,
       nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs,
       apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs,
-      output_directory: module.input.output_directory, max_zip_size: module.input.max_zip_size} >>
+      output_directory: module.input.output_directory} >>
     environment_variables: << module.input.build_environment_variables >>
     destinations:
       - id: lambda-package
         type: s3
         bucket: << stack.output.code_bucket_id >>
-        key: << module.input.artifact_key_prefix || module.given_id >>
+        key: << module.given_id >>
         region: << stack.output.region >>
     infrastructure:
-      $include: ../../partials/build/infrastructure.yml
+      ami: << module.input.build_ami || nil >>
+      aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
+      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id || defaults.execution_environment_id >>
+      instance_size: << module.input.build_instance_size >>
+      region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
+      type: << module.input.build_infrastructure_type >>
   deploy:
     type: aws:lambda
     timeout: 1800
