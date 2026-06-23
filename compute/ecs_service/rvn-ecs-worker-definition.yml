@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.1.0
-  description: Initial ECS worker module definition with configurable startup count
+  version: 0.2.0
+  description: Add Logs tab for CloudWatch.
 module:
   inputs:
     - id: section_cluster
@@ -129,6 +129,15 @@ module:
         module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
         "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars : []) >>
   ui:
+    logs:
+      - id: ecs_worker_logs
+        name: ECS worker logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: << stack.output.log_group_name >>
+          log_stream_prefix: << stack.output.log_stream_prefix >>
     metrics:
       - $include: ../../partials/ui/ecs-service-common-metrics.yml
   readme: |

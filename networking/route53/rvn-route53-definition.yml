@@ -3,8 +3,8 @@ definition:
   name: Route 53 DNS
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
-  version: 0.1.2
-  description: Use array-based Route 53 record inputs with stable Terraform resource keys.
+  version: 0.2.0
+  description: Add Logs tab for CloudWatch.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -489,6 +489,20 @@ module:
         vpc_associations: << module.input.vpc_associations || {} >>
         zone_creation_enabled: << module.input.zone_creation_enabled >>
         zone_id: << module.input.zone_id >>
+  ui:
+    logs: |-
+      <<
+      module.input.query_logging_enabled && stack.output.query_log_group_name ? [{
+        "id":"route53_query_logs",
+        "name":"Route 53 query logs",
+        "source":{
+          "type":"cloudwatch",
+          "aws_account_id":module.input.aws_account_id,
+          "region":"us-east-1",
+          "log_group":stack.output.query_log_group_name
+        }
+      }] : []
+      >>
   readme: |
     Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 
