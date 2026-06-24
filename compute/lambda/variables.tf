@@ -112,8 +112,8 @@ variable "code_bucket_force_destroy_enabled" {
 
 variable "placeholder_object_key" {
   type        = string
-  description = "S3 key for the placeholder deployment package uploaded to the auto-created code bucket."
-  default     = "placeholder.zip"
+  description = "S3 key for the bootstrap package uploaded to the auto-created code bucket."
+  default     = "bootstrap-package.zip"
 }
 
 variable "image_uri" {

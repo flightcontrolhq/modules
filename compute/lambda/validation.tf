@@ -27,7 +27,7 @@ check "zip_package_configuration" {
         )
       )
     )
-    error_message = "For package_type 'Zip', set handler/runtime and exactly one of: filename, (s3_bucket + s3_key), or neither (the module will create a code bucket and seed a placeholder). Do not set image_uri."
+    error_message = "For package_type 'Zip', set handler/runtime and exactly one of: filename, (s3_bucket + s3_key), or neither (the module will create a code bucket and seed a bootstrap package). Do not set image_uri."
   }
 }
 

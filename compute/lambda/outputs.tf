@@ -100,8 +100,8 @@ output "code_bucket_arn" {
 }
 
 output "code_object_key" {
-  description = "The S3 key of the initial placeholder deployment package, or null if not created."
-  value       = local.create_code_bucket ? aws_s3_object.placeholder[0].key : null
+  description = "The S3 key of the initial bootstrap package, or null if not created."
+  value       = local.create_code_bucket ? aws_s3_object.bootstrap_package[0].key : null
 }
 
 ################################################################################

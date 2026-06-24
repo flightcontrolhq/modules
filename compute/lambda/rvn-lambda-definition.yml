@@ -227,28 +227,19 @@ module:
       immutable: true
       label: Private VPC network
       description: VPC network whose private subnets are used by the Lambda function.
-      mapped_inputs:
-        - id: section_vpc
-          label: Private VPC
-          type: section
-        - default: <<ref.stack.output.vpc_id>>
-          id: vpc_id
-          immutable: true
-          label: VPC ID
-          required: true
-          type: string
-        - add_button_label: Add private subnet ID
-          default: <<ref.stack.output.private_subnet_ids>>
-          description: Private subnets where Lambda creates network interfaces.
-          id: subnet_ids
-          immutable: true
-          label: Private subnet IDs
-          required: true
-          type: string_array
       required: true
       show_when:
         vpc_config_enabled: true
       type: $ref:rvn-aws-network
+    - add_button_label: Add private subnet ID
+      description: Private subnets where Lambda creates network interfaces.
+      id: subnet_ids
+      immutable: true
+      label: Private subnet IDs
+      required: true
+      show_when:
+        vpc_config_enabled: true
+      type: string_array
     - id: security_group_ids
       label: Security group IDs
       type: string_array
@@ -715,7 +706,7 @@ module:
 
     ## Overview
 
-    The Lambda Function module creates an AWS Lambda function, execution role, CloudWatch log group, artifact bucket, and a live alias that Ravion updates during deployments. Terraform provisions the long-lived function infrastructure with a placeholder zip, while Ravion builds zip packages from a Git repository and deploys them by publishing a new function version and moving the live alias.
+    The Lambda Function module creates an AWS Lambda function, execution role, CloudWatch log group, artifact bucket, and a live alias that Ravion updates during deployments. Terraform provisions the long-lived function infrastructure with a bootstrap package, while Ravion builds zip packages from a Git repository and deploys them by publishing a new function version and moving the live alias.
 
     Terraform source: [flightcontrolhq/modules/compute/lambda](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/lambda)
 
@@ -767,7 +758,7 @@ module:
     ## Design decisions
 
     - The module is zip-first. It uses the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
-    - Terraform creates a placeholder package and the live alias so the function exists before the first real deployment.
+    - Terraform creates a bootstrap package and the live alias so the function exists before the first real deployment.
     - Runtime configuration stays in Terraform to avoid deploy-time configuration drift.
     - The code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
 
