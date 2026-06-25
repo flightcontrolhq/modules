@@ -205,6 +205,7 @@ module:
           - nixpacks
           - dockerfile
       type: string
+      values: $values:ravion/execution_environments
     - collapsible: true
       description: Optional AMI ID for build runners. Leave empty to use the default runner image.
       id: build_ami
@@ -524,7 +525,7 @@ module:
           aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
           base_path: compute/lambda
           branch: main
-          execution_environment_id: << module.input.execution_environment_id || defaults.execution_environment_id >>
+          execution_environment_id: << module.input.execution_environment_id >>
           ref: $local.module_tag
           repo: https://github.com/flightcontrolhq/modules
           stack_id: <<stack.id>>
@@ -612,7 +613,7 @@ module:
     infrastructure:
       ami: << module.input.build_ami || nil >>
       aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
-      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id || defaults.execution_environment_id >>
+      execution_environment_id: << module.input.build_execution_environment_id || module.input.execution_environment_id >>
       instance_size: << module.input.build_instance_size >>
       region: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_region >>"
       type: << module.input.build_infrastructure_type >>

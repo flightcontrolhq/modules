@@ -42,6 +42,7 @@
       - nixpacks
       - dockerfile
   type: string
+  values: $values:ravion/execution_environments
 - collapsible: true
   description: Optional AMI ID for build runners. Leave empty to use the default runner image.
   id: build_ami
