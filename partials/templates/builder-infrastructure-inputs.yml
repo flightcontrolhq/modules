@@ -4,6 +4,7 @@
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: section
 - default: ec2
   description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
@@ -14,6 +15,7 @@
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: string
   values:
     - label: EC2
@@ -30,6 +32,7 @@
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: string
   values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
 - collapsible: true
@@ -41,6 +44,7 @@
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: string
 - collapsible: true
   description: Optional AMI ID for build runners. Leave empty to use the default runner image.
@@ -51,4 +55,5 @@
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: string

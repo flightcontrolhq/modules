@@ -9,8 +9,8 @@ inputs:
   - id: image_ref
     label: Image tag or digest
     type: string
-    description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from registry mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
-    placeholder: sha256:... or latest or <run-id>-nixpacks
+    description: Pass the image tag or digest to deploy. For Dockerfile, Nixpacks, or Railpack builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from registry mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
+    placeholder: sha256:... or latest or <run-id>-railpack
     required: true
 pre_deploy: >-
   << module.input.pre_deploy_enabled && len(module.input.pre_deploy_command) > 0 ? {"container_overrides": [{"name": stack.output.container_name,

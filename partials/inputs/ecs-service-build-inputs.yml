@@ -13,10 +13,14 @@
     - description: Automatically build an image based on your code and config
       label: Nixpacks
       value: nixpacks
+    - description: Automatically build an image with Railpack
+      label: Railpack
+      value: railpack
     - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
       label: Prebuilt image from registry
       value: prebuilt_image
 - $include: ./build-git-source.yml
+- $include: ./railpack-version.yml
 - id: image_repository
   label: Image repository
   type: string
@@ -53,3 +57,10 @@
   show_when:
     build_type: nixpacks
 - $include: ./nixpacks-advanced.yml
+- $include: ./railpack-basic.yml
+- id: railpack_start_cmd
+  label: Start command
+  type: string
+  placeholder: Railpack default
+  show_when:
+    build_type: railpack

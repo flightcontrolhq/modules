@@ -8,7 +8,11 @@ builder: >-
   module.input.nixpacks_start_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path:
   module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs:
   module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs:
-  module.input.nixpacks_nix_libs, cache_from: {tag: "nixpacks"}} : {type: "disabled"} >>
+  module.input.nixpacks_nix_libs, cache_from: {tag: "nixpacks"}} :
+  module.input.build_type == "railpack" ? {type: "railpack", railpack_version:
+  module.input.railpack_version, railpack_install_cmd: module.input.railpack_install_cmd,
+  railpack_build_cmd: module.input.railpack_build_cmd, railpack_start_cmd:
+  module.input.railpack_start_cmd, cache_from: {tag: "railpack"}} : {type: "disabled"} >>
 destinations:
   - id: ecr
     type: ecr

@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.7.0
-  description: Add Logs tab for CloudWatch.
+  version: 0.8.0
+  description: Add Railpack image builds.
 module:
   inputs:
     - id: section_cluster
@@ -590,7 +590,7 @@ module:
     | -------------------------------- | --------------------------------------------------------------- |
     | Deploying a public web app       | Routing host or path traffic through the public cluster ALB      |
     | Hosting an internal HTTP service | Routing private traffic through the private cluster ALB          |
-    | Building from source             | Creating images with Nixpacks or a Dockerfile and pushing to ECR |
+    | Building from source             | Creating images with Railpack, Nixpacks, or a Dockerfile and pushing to ECR |
     | Bringing an existing image       | Deploying a public or private registry image by tag or digest    |
     | Tuning production capacity       | Combining Fargate, Fargate Spot, or EC2 with autoscaling         |
     | Running release tasks            | Running pre-deploy or post-deploy ECS tasks with the app image   |
@@ -608,12 +608,15 @@ module:
 
     | Build type      | When to use it                                                    |
     | --------------- | ----------------------------------------------------------------- |
+    | Railpack        | Let Ravion detect the app stack and build an image from source with Railpack |
     | Nixpacks        | Let Ravion detect the app stack and build an image from source    |
     | Dockerfile      | Build from a Dockerfile in the selected repository                |
     | Prebuilt image from registry | Deploy an existing image from Docker Hub, GHCR, ECR, or registry |
     | Disabled        | Build outside Ravion and provide a full image URI at deploy time  |
 
-    For Nixpacks and Dockerfile builds, provide Git repository, Git branch, and optionally Source base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
+    For Railpack, Nixpacks, and Dockerfile builds, provide Git repository, Git branch, and optionally Base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
+
+    Railpack settings let you optionally pin the Railpack version and override install, build, and start commands. Leave them blank to use Railpack defaults and autodetection.
 
     For Prebuilt image from registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials. Use Start command to override the image default CMD when the prebuilt image needs a different service command.
 
@@ -688,7 +691,7 @@ module:
 
     | Build mode             | Deploy image value                                  |
     | ---------------------- | --------------------------------------------------- |
-    | Nixpacks or Dockerfile | Image digest such as sha256:...                     |
+    | Railpack, Nixpacks, or Dockerfile | Image digest such as sha256:...            |
     | Prebuilt image from registry | Tag for the configured repository, such as latest   |
     | Disabled               | Full image URI, ideally pinned by digest            |
 
@@ -747,7 +750,7 @@ module:
 
     ## Builder settings
 
-    Builder settings apply to Nixpacks and Dockerfile builds.
+    Builder settings apply to Railpack, Nixpacks, and Dockerfile builds.
 
     | Field                         | Default       | Description                                          |
     | ----------------------------- | ------------- | ---------------------------------------------------- |
@@ -766,10 +769,11 @@ module:
     | Run in private subnets          | No       | true                       | Run tasks in private subnets without public IPs    |
     | Service name                    | Yes      | {project}-{env}-{module}   | Name for the ECS service and related resources     |
     | ECS cluster                     | Yes      | -                          | Existing rvn-ecs-cluster module instance           |
-    | Build type                      | Yes      | dockerfile                 | Dockerfile, Nixpacks, Prebuilt image from registry, or Disabled |
-    | Git repository                  | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
-    | Git branch                      | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
-    | Source base path                | No       | .                          | Path from repository root to source code           |
+    | Build type                      | Yes      | dockerfile                 | Dockerfile, Railpack, Nixpacks, Prebuilt image from registry, or Disabled |
+    | Git repository                  | Yes*     | -                          | Required for Railpack, Nixpacks, and Dockerfile builds |
+    | Git branch                      | Yes*     | -                          | Required for Railpack, Nixpacks, and Dockerfile builds |
+    | Base path                       | No       | .                          | Repository-relative source and build root          |
+    | Railpack version                | No       | Ravion default             | Optional version for Railpack builds               |
     | Image repository                | Yes*     | nginx                      | Required for prebuilt image deployments            |
     | Start command                   | No       | []                         | Command arguments that override a prebuilt image default CMD |
     | Container port                  | Yes      | 80                         | Port exposed by the app container                  |

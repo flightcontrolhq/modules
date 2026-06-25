@@ -5,13 +5,15 @@
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: gitrepo
 - default: .
-  description: Path from repo root to your source code.
+  description: Repository-relative source and build root.
   id: source_base_path
-  label: Source base path
+  label: Base path
   show_when:
     build_type:
       - nixpacks
       - dockerfile
+      - railpack
   type: string
