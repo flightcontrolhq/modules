@@ -1,10 +1,10 @@
 definition:
   type: rvn-lambda
   name: Lambda Function
-  description: AWS Lambda function with zip builds, alias-based deployments, IAM, logs, and optional function URLs.
+  description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
   version: 0.1.0
-  description: Initial AWS Lambda module definition with stack, build, and deploy wiring.
+  description: Add AWS Lambda module definition with zip and container image build support.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -28,18 +28,36 @@ module:
       description: Description shown for the Lambda function in AWS.
       collapsible: true
       required: false
+    - id: package_type
+      immutable: true
+      label: Package type
+      type: string
+      description: AWS Lambda deployment package type. AWS does not support changing this after the function is created.
+      required: true
+      default: Zip
+      values:
+        - label: Zip package
+          description: Build or deploy a .zip package from S3.
+          value: Zip
+        - label: Container image
+          description: Deploy an existing container image from Amazon ECR.
+          value: Image
     - id: handler
       label: Handler
       type: string
       description: Function entrypoint for the zip package, such as index.handler.
       required: true
       default: index.handler
+      show_when:
+        package_type: Zip
     - id: runtime
       label: Runtime
       type: string
       description: Lambda runtime for the zip package, such as nodejs20.x, python3.12, or provided.al2023.
       required: true
       default: nodejs20.x
+      show_when:
+        package_type: Zip
     - id: architecture
       label: Architecture
       type: string
@@ -108,6 +126,8 @@ module:
       add_button_label: Add layer
       default: []
       placeholder: arn:aws:lambda:us-east-1:123456789012:layer:example:1
+      show_when:
+        package_type: Zip
     - id: kms_key_arn
       label: Environment KMS key ARN
       type: string
@@ -121,26 +141,48 @@ module:
       description: Optional Lambda code signing configuration ARN.
       collapsible: true
       required: false
+      show_when:
+        package_type: Zip
     - id: section_build
       label: Build config
       type: section
     - id: build_type
       label: Build type
       type: string
-      description: Choose how Ravion builds the Lambda zip package.
+      description: Choose how Ravion builds or resolves the Lambda deployment artifact.
       required: true
       default: nixpacks
       values:
         - label: Nixpacks
-          description: Automatically build the package based on your code and config.
+          description: Automatically build a zip package or Lambda container image based on your code and config.
           value: nixpacks
         - label: Dockerfile
-          description: Use a Dockerfile and export the Lambda package contents from the built image.
+          description: Use a Dockerfile to build a zip package or Lambda container image.
           value: dockerfile
+        - label: Prebuilt image from ECR
+          description: Container images only. Deploy tags or digests from an existing Amazon ECR repository.
+          value: prebuilt_image
         - label: Disabled
-          description: Skip the build step and deploy an existing S3 object key.
+          description: Skip the build step. Zip deploys use an S3 object key; image deploys use a full ECR image URI.
           value: none
-    - $include: ../../partials/inputs/build-git-source.yml
+    - $template: ../../partials/inputs/build-git-source.yml
+      with:
+        show_when:
+          package_type:
+            - Zip
+            - Image
+          build_type:
+            - nixpacks
+            - dockerfile
+    - id: image_repository
+      label: ECR image repository
+      type: string
+      description: Amazon ECR repository URI without a tag or digest, such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function.
+      placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function
+      required: true
+      show_when:
+        package_type: Image
+        build_type: prebuilt_image
     - id: output_directory
       label: Package output directory
       type: string
@@ -148,22 +190,53 @@ module:
       required: true
       default: /app
       show_when:
+        package_type: Zip
         build_type:
           - nixpacks
           - dockerfile
-    - $include: ../../partials/inputs/dockerfile-build.yml
-    - $include: ../../partials/inputs/nixpacks-basic.yml
-    - $include: ../../partials/inputs/nixpacks-advanced.yml
+    - $template: ../../partials/inputs/dockerfile-build.yml
+      with:
+        show_when:
+          package_type:
+            - Zip
+            - Image
+          build_type: dockerfile
+    - $template: ../../partials/inputs/nixpacks-build.yml
+      with:
+        show_when:
+          package_type:
+            - Zip
+            - Image
+          build_type: nixpacks
+    - id: nixpacks_start_cmd
+      label: Start command
+      type: string
+      placeholder: Intelligent default based on your language & framework
+      show_when:
+        package_type: Image
+        build_type: nixpacks
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
+        package_type:
+          - Zip
+          - Image
         build_type:
           - nixpacks
           - dockerfile
-    - $include: ../../partials/inputs/dockerfile-env-injection.yml
+    - $merge:
+        - ../../partials/inputs/dockerfile-env-injection.yml
+      show_when:
+        package_type:
+          - Zip
+          - Image
+        build_type: dockerfile
     - id: section_builder_config
       label: Builder config
       show_when:
+        package_type:
+          - Zip
+          - Image
         build_type:
           - nixpacks
           - dockerfile
@@ -174,6 +247,9 @@ module:
       label: Builder instance type
       required: true
       show_when:
+        package_type:
+          - Zip
+          - Image
         build_type:
           - nixpacks
           - dockerfile
@@ -190,6 +266,9 @@ module:
       no_options_message: Select an AWS account and region to load available EC2 instance types.
       required: true
       show_when:
+        package_type:
+          - Zip
+          - Image
         build_type:
           - nixpacks
           - dockerfile
@@ -201,6 +280,9 @@ module:
       label: Builder execution environment
       required: false
       show_when:
+        package_type:
+          - Zip
+          - Image
         build_type:
           - nixpacks
           - dockerfile
@@ -212,10 +294,77 @@ module:
       label: Builder AMI
       required: false
       show_when:
+        package_type:
+          - Zip
+          - Image
         build_type:
           - nixpacks
           - dockerfile
       type: string
+    - id: section_advanced_build_options
+      label: Advanced build options
+      type: section
+      show_when:
+        package_type: Image
+    - id: ecr_scan_on_push_enabled
+      label: Scan images on push
+      type: boolean
+      description: Ask ECR to run its basic vulnerability scan whenever a new image is pushed.
+      collapsible: true
+      default: true
+      show_when:
+        package_type: Image
+        build_type:
+          - nixpacks
+          - dockerfile
+    - id: ecr_force_deletion_enabled
+      label: Force delete image repository
+      type: boolean
+      description: Allow the generated ECR repository to be deleted even when it contains images. Use with care.
+      collapsible: true
+      default: false
+      show_when:
+        package_type: Image
+        build_type:
+          - nixpacks
+          - dockerfile
+    - id: ecr_default_lifecycle_policy_enabled
+      label: Default lifecycle policy
+      type: boolean
+      description: Apply the built-in ECR lifecycle policy for untagged and older tagged images.
+      collapsible: true
+      default: false
+      show_when:
+        package_type: Image
+        build_type:
+          - nixpacks
+          - dockerfile
+    - id: image_command
+      label: Image command
+      type: string_array
+      description: Optional Lambda image command override.
+      collapsible: true
+      add_button_label: Add command segment
+      default: []
+      show_when:
+        package_type: Image
+    - id: image_entry_point
+      label: Image entry point
+      type: string_array
+      description: Optional Lambda image entry point override.
+      collapsible: true
+      add_button_label: Add entry point segment
+      default: []
+      show_when:
+        package_type: Image
+    - id: image_working_directory
+      label: Image working directory
+      type: string
+      description: Optional Lambda image working directory override.
+      collapsible: true
+      required: false
+      show_when:
+        package_type: Image
     - id: section_networking
       label: Private networking
       type: section
@@ -477,12 +626,16 @@ module:
     - id: section_advanced_lambda
       label: Advanced Lambda settings
       type: section
+      show_when:
+        package_type: Zip
     - id: snap_start_apply_on
       label: SnapStart
       type: string
       description: Enable Lambda SnapStart for published versions. AWS currently supports this for Java runtimes.
       collapsible: true
       required: false
+      show_when:
+        package_type: Zip
       values:
         - label: Published versions
           value: PublishedVersions
@@ -492,6 +645,8 @@ module:
       description: Validate settings against Lambda@Edge constraints.
       collapsible: true
       default: false
+      show_when:
+        package_type: Zip
     - id: code_bucket_name
       immutable: true
       label: Code bucket name
@@ -499,6 +654,8 @@ module:
       description: S3 bucket used for Lambda zip artifacts. Must be globally unique.
       collapsible: true
       required: false
+      show_when:
+        package_type: Zip
       patterns:
         - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
           pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
@@ -508,6 +665,8 @@ module:
       description: Delete the code bucket even when it contains package objects during stack destroy.
       collapsible: true
       default: false
+      show_when:
+        package_type: Zip
     - $include: ../../partials/inputs/terraform-settings.yml
     - $include: ../../partials/inputs/execution-environment.yml
     - $merge:
@@ -536,11 +695,26 @@ module:
                 description: Active Ravion deployment alias.
             architectures:
               - << module.input.architecture >>
-            code_bucket_force_destroy_enabled: << module.input.code_bucket_force_destroy_enabled >>
-            code_bucket_name: << module.input.code_bucket_name || nil >>
-            code_signing_config_arn: << module.input.code_signing_config_arn || nil >>
+            code_bucket_force_destroy_enabled: >-
+              << module.input.package_type == "Zip" ? module.input.code_bucket_force_destroy_enabled : false >>
+            code_bucket_name: >-
+              << module.input.package_type == "Zip" ? (module.input.code_bucket_name || nil) : nil >>
+            code_signing_config_arn: >-
+              << module.input.package_type == "Zip" ? (module.input.code_signing_config_arn || nil) : nil >>
             dead_letter_target_arn: << module.input.dead_letter_target_arn || nil >>
             description: << module.input.description || nil >>
+            ecr_default_lifecycle_policy_enabled: >-
+              << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
+              module.input.build_type == "dockerfile") ? module.input.ecr_default_lifecycle_policy_enabled : false >>
+            ecr_force_deletion_enabled: >-
+              << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
+              module.input.build_type == "dockerfile") ? module.input.ecr_force_deletion_enabled : false >>
+            ecr_repository_creation_enabled: >-
+              << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
+              module.input.build_type == "dockerfile") >>
+            ecr_scan_on_push_enabled: >-
+              << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
+              module.input.build_type == "dockerfile") ? module.input.ecr_scan_on_push_enabled : true >>
             environment_variables: << module.input.environment_variables >>
             ephemeral_storage_size: << module.input.ephemeral_storage_size >>
             event_source_mappings: << module.input.event_source_mappings >>
@@ -549,17 +723,28 @@ module:
             function_url_cors: << module.input.function_url_cors || nil >>
             function_url_enabled: << module.input.function_url_enabled >>
             function_url_invoke_mode: << module.input.function_url_invoke_mode >>
-            handler: << module.input.handler >>
+            handler: >-
+              << module.input.package_type == "Zip" ? module.input.handler : nil >>
+            image_config: >-
+              << module.input.package_type == "Image" && (len(module.input.image_command) > 0 ||
+              len(module.input.image_entry_point) > 0 || module.input.image_working_directory) ? {command:
+              (len(module.input.image_command) > 0 ? module.input.image_command : nil), entry_point:
+              (len(module.input.image_entry_point) > 0 ? module.input.image_entry_point : nil),
+              working_directory: (module.input.image_working_directory || nil)} : nil >>
+            image_uri: >-
+              << module.input.package_type == "Image" ? "public.ecr.aws/docker/library/hello-world:latest" : nil >>
             kms_key_arn: << module.input.kms_key_arn || nil >>
-            lambda_at_edge_enabled: << module.input.lambda_at_edge_enabled >>
-            layers: << module.input.layers >>
+            lambda_at_edge_enabled: >-
+              << module.input.package_type == "Zip" ? module.input.lambda_at_edge_enabled : false >>
+            layers: >-
+              << module.input.package_type == "Zip" ? module.input.layers : [] >>
             log_group_creation_enabled: << module.input.log_group_creation_enabled >>
             log_group_name: << module.input.log_group_name || nil >>
             log_kms_key_id: << module.input.log_kms_key_id || nil >>
             log_retention_days: << module.input.log_retention_days >>
             memory_size: << module.input.memory_size >>
             name: << module.input.name >>
-            package_type: Zip
+            package_type: << module.input.package_type >>
             permissions: << module.input.permissions >>
             region: << module.input.aws_region >>
             reserved_concurrent_executions: << module.input.reserved_concurrent_executions >>
@@ -568,8 +753,10 @@ module:
             role_inline_policies: << module.input.role_inline_policies >>
             role_managed_policy_arns: << module.input.role_managed_policy_arns >>
             role_permissions_boundary: << module.input.role_permissions_boundary || nil >>
-            runtime: << module.input.runtime >>
-            snap_start_apply_on: << module.input.snap_start_apply_on || nil >>
+            runtime: >-
+              << module.input.package_type == "Zip" ? module.input.runtime : nil >>
+            snap_start_apply_on: >-
+              << module.input.package_type == "Zip" ? (module.input.snap_start_apply_on || nil) : nil >>
             tags:
               $include: ../../partials/stack/ravion-tags.yml
             timeout: << module.input.timeout >>
@@ -588,28 +775,44 @@ module:
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>
   build:
-    type: '<< module.input.build_type == "none" ? "disabled" : "lambda" >>'
+    type: >-
+      << module.input.package_type == "Image" ? ((module.input.build_type == "nixpacks" ||
+      module.input.build_type == "dockerfile") ? "image" : "disabled") : (module.input.build_type
+      == "none" || module.input.build_type == "prebuilt_image" ? "disabled" : "lambda") >>
     timeout: 1800
     inputs:
       - $include: ../../partials/inputs/build-inputs.yml
     source:
       $include: ../../partials/build/git-source.yml
     builder: >-
-      << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
-      || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
-      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} : {type: "nixpacks", install_cmd:
-      module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, config_file_path:
+      << module.input.package_type == "Image" && module.input.build_type == "dockerfile" ? {type:
+      "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context:
+      module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
+      module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} :
+      module.input.package_type == "Image" && module.input.build_type == "nixpacks" ? {type:
+      "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd:
+      module.input.nixpacks_build_cmd, start_cmd: module.input.nixpacks_start_cmd, config_file_path:
       module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path,
       nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs,
       apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs,
-      output_directory: module.input.output_directory} >>
+      cache_from: {tag: "nixpacks"}} : module.input.build_type == "dockerfile" ? {type:
+      "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context:
+      module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
+      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
+      module.input.build_type == "nixpacks" ? {type: "nixpacks", install_cmd:
+      module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd,
+      config_file_path: module.input.nixpacks_config_file_path, build_path:
+      module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs:
+      module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs:
+      module.input.nixpacks_nix_libs, output_directory: module.input.output_directory} : {type:
+      "disabled"} >>
     environment_variables: << module.input.build_environment_variables >>
     destinations:
-      - id: lambda-package
-        type: s3
-        bucket: << stack.output.code_bucket_id >>
-        key: << module.given_id >>
-        region: << stack.output.region >>
+      - >-
+        ...<< module.input.package_type == "Image" ? [{id: "ecr", type: "ecr", repository_arn:
+        stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
+        module.input.build_type]}] : [{id: "lambda-package", type: "s3", bucket:
+        stack.output.code_bucket_id, key: module.given_id, region: stack.output.region}] >>
     infrastructure:
       ami: << module.input.build_ami || nil >>
       aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
@@ -626,20 +829,51 @@ module:
         type: string
         description: S3 key for the Lambda zip package to deploy.
         required: true
+        show_when:
+          package_type: Zip
       - id: s3_object_version
         label: S3 object version
         type: string
         description: Optional S3 object version for versioned artifact buckets.
         required: false
+        show_when:
+          package_type: Zip
+      - id: image_uri
+        label: Container image URI
+        type: string
+        description: Full Amazon ECR image URI to deploy when the build step is disabled.
+        required: true
+        placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function:latest
+        show_when:
+          package_type: Image
+          build_type: none
+      - id: image_ref
+        label: Image tag or digest
+        type: string
+        description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from ECR mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
+        placeholder: sha256:... or latest or <run-id>-nixpacks
+        required: true
+        show_when:
+          package_type: Image
+          build_type:
+            - nixpacks
+            - dockerfile
+            - prebuilt_image
     infrastructure:
       function_arn: << stack.output.function_arn >>
       region: << stack.output.region >>
       alias_name: live
-      s3_artifact_bucket: << stack.output.code_bucket_id >>
-    definition:
-      package_type: zip
-      s3_key: << deploy.input.s3_key >>
-      s3_object_version: << deploy.input.s3_object_version || nil >>
+      s3_artifact_bucket: >-
+        << module.input.package_type == "Zip" ? stack.output.code_bucket_id : nil >>
+    definition: >-
+      << module.input.package_type == "Image" ? {package_type: "image", image_uri:
+      (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ?
+      module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
+      ":" + deploy.input.image_ref) : module.input.build_type == "none" ? deploy.input.image_uri :
+      (deploy.input.image_ref contains "sha256:" ? stack.output.ecr_repository_url + "@" +
+      deploy.input.image_ref : stack.output.ecr_repository_url + ":" + deploy.input.image_ref))} :
+      {package_type: "zip", s3_key: deploy.input.s3_key, s3_object_version:
+      (deploy.input.s3_object_version || nil)} >>
   ui:
     metrics:
       - id: invocations
@@ -703,11 +937,11 @@ module:
           region: << stack.output.region >>
           statistic: Average
   readme: |
-    AWS Lambda function with zip builds, alias-based deployments, IAM, logs, and optional function URLs.
+    AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 
     ## Overview
 
-    The Lambda Function module creates an AWS Lambda function, execution role, CloudWatch log group, artifact bucket, and a live alias that Ravion updates during deployments. Terraform provisions the long-lived function infrastructure with a bootstrap package, while Ravion builds zip packages from a Git repository and deploys them by publishing a new function version and moving the live alias.
+    The Lambda Function module creates an AWS Lambda function, execution role, CloudWatch log group, optional artifact bucket, and a live alias that Ravion updates during deployments. Terraform provisions the long-lived function infrastructure with either a bootstrap zip package or a sample container image. Deployments publish a new function version and move the live alias.
 
     Terraform source: [flightcontrolhq/modules/compute/lambda](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/lambda)
 
@@ -719,16 +953,23 @@ module:
     | Lightweight APIs | Exposing a function URL when API Gateway is not required |
     | Background tasks | Running short-lived compute without managing servers or containers |
     | Zip deployments | Building a package from Git and promoting it through a stable alias |
+    | Container image deployments | Building or deploying Lambda-compatible images from Amazon ECR |
 
     ## Build and deployment
 
-    Builds use Nixpacks or a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
+    Package type is immutable after creation because AWS Lambda does not support changing an existing function between zip packages and container images.
 
-    If Build type is Disabled, Ravion skips the build step and you provide an existing S3 object key at deploy time.
+    For zip package functions, builds use Nixpacks or a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
+
+    If Build type is Disabled for zip packages, Ravion skips the build step and you provide an existing S3 object key at deploy time.
+
+    For container image functions, Nixpacks and Dockerfile builds produce a Lambda-compatible container image, push it to a module-managed ECR repository, and deployments promote a tag or digest from that repository. Prebuilt image mode uses an existing ECR repository and asks for the tag or digest at deploy time. Disabled mode skips the build step and asks for a full ECR image URI at deploy time.
+
+    Terraform creates image functions with a sample hello-world container image so the function exists before the first real deployment.
 
     ## Function configuration
 
-    Runtime, handler, memory, timeout, architecture, environment variables, layers, tracing, and ephemeral storage are managed by the stack. Change these settings through a stack change so Terraform remains the source of truth for function configuration. The deploy step focuses on code promotion.
+    Runtime, handler, memory, timeout, architecture, environment variables, layers, tracing, image config, and ephemeral storage are managed by the stack. Handler, runtime, layers, code signing, SnapStart, Lambda@Edge constraints, and the code bucket apply only to zip package functions. Change these settings through a stack change so Terraform remains the source of truth for function configuration. The deploy step focuses on code promotion.
 
     ## Networking and integrations
 
@@ -741,13 +982,15 @@ module:
     | AWS account & region | AWS account | Yes | none | Account where Lambda resources are created |
     | AWS account & region | Region | Yes | none | Region for the Lambda function and code bucket |
     | Lambda function | Function name | Yes | Generated from project, environment, and module IDs | Immutable AWS function name |
-    | Lambda function | Handler | Yes | index.handler | Zip package entrypoint |
-    | Lambda function | Runtime | Yes | nodejs20.x | Lambda runtime string |
+    | Lambda function | Package type | Yes | Zip package | Immutable AWS package type |
+    | Lambda function | Handler | Zip only | index.handler | Zip package entrypoint |
+    | Lambda function | Runtime | Zip only | nodejs20.x | Lambda runtime string |
     | Lambda function | Memory | Yes | 128 MB | Also affects CPU allocation |
     | Lambda function | Timeout | Yes | 3 seconds | Maximum invocation runtime |
-    | Build config | Build type | Yes | Nixpacks | Nixpacks, Dockerfile, or Disabled |
-    | Build config | Git repository | Required for builds | none | Source repository for package builds |
-    | Build config | Package output directory | Required for builds | /app | Directory zipped and uploaded |
+    | Build config | Build type | Yes | Nixpacks | Zip packages support Nixpacks, Dockerfile, or Disabled. Container images support Nixpacks, Dockerfile, Prebuilt image from ECR, or Disabled |
+    | Build config | Git repository | Required for builds | none | Source repository for Nixpacks and Dockerfile builds |
+    | Build config | ECR image repository | Prebuilt image only | none | Existing ECR repository URI without a tag or digest |
+    | Build config | Package output directory | Required for zip builds | /app | Directory zipped and uploaded |
     | Networking | Connect to a VPC | No | false | Shows subnet and security group fields |
     | IAM role | Create IAM role | No | true | Use an existing role by turning this off |
     | Logs | Create log group | No | true | Creates /aws/lambda/{function name} by default |
@@ -758,10 +1001,12 @@ module:
 
     ## Design decisions
 
-    - The module is zip-first. It uses the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
-    - Terraform creates a bootstrap package and the live alias so the function exists before the first real deployment.
+    - Package type is immutable. Create a new Lambda module/function to migrate between zip packages and container images.
+    - Zip package functions use the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
+    - Container image functions use the image build pipeline to push Dockerfile or Nixpacks builds to ECR. Prebuilt image mode promotes tags or digests from an existing ECR repository.
+    - Terraform creates a bootstrap zip package for zip functions, or uses the sample hello-world container image for image functions, so the function exists before the first real deployment.
     - Runtime configuration stays in Terraform to avoid deploy-time configuration drift.
-    - The code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
+    - The zip code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
 
     ## Learn more
 

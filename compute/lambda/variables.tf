@@ -133,6 +133,51 @@ variable "image_config" {
 }
 
 ################################################################################
+# ECR Repository
+################################################################################
+
+variable "ecr_repository_creation_enabled" {
+  type        = bool
+  description = "Create an ECR repository for built container image package deployments."
+  default     = false
+}
+
+variable "ecr_repository_name" {
+  type        = string
+  description = "Name of the ECR repository. If null, defaults to var.name."
+  default     = null
+}
+
+variable "ecr_image_tag_mutability" {
+  type        = string
+  description = "Tag mutability setting for the ECR repository."
+  default     = "MUTABLE"
+
+  validation {
+    condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
+    error_message = "The ecr_image_tag_mutability must be 'MUTABLE' or 'IMMUTABLE'."
+  }
+}
+
+variable "ecr_scan_on_push_enabled" {
+  type        = bool
+  description = "Scan images for vulnerabilities on push."
+  default     = true
+}
+
+variable "ecr_force_deletion_enabled" {
+  type        = bool
+  description = "Allow the ECR repository to be deleted even when it contains images."
+  default     = false
+}
+
+variable "ecr_default_lifecycle_policy_enabled" {
+  type        = bool
+  description = "Apply the submodule's built-in lifecycle policy for untagged and older tagged images."
+  default     = false
+}
+
+################################################################################
 # Lambda Function - Configuration
 ################################################################################
 

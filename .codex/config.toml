@@ -1,6 +1,0 @@
-[mcp_servers.executor]
-type = "http"
-url = "http://127.0.0.1:4789/mcp"
-
-  [mcp_servers.executor.http_headers]
-  Authorization = "Bearer nhcYwS94ApuJ56xziMvthIIF_w9a1vKdTZmGN8v0ww8"

@@ -105,6 +105,25 @@ output "code_object_key" {
 }
 
 ################################################################################
+# ECR
+################################################################################
+
+output "ecr_repository_arn" {
+  description = "The ARN of the ECR repository, or null if disabled."
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_arn : null
+}
+
+output "ecr_repository_name" {
+  description = "The name of the ECR repository, or null if disabled."
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_name : null
+}
+
+output "ecr_repository_url" {
+  description = "The URL of the ECR repository, or null if disabled."
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_url : null
+}
+
+################################################################################
 # Account & Region
 ################################################################################
 

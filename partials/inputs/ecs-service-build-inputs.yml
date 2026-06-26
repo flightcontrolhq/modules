@@ -16,7 +16,12 @@
     - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
       label: Prebuilt image from registry
       value: prebuilt_image
-- $include: ./build-git-source.yml
+- $template: ./build-git-source.yml
+  with:
+    show_when:
+      build_type:
+        - nixpacks
+        - dockerfile
 - id: image_repository
   label: Image repository
   type: string
@@ -44,12 +49,21 @@
   default: []
   show_when:
     build_type: prebuilt_image
-- $include: ./dockerfile-build.yml
-- $include: ./nixpacks-basic.yml
+- $template: ./dockerfile-build.yml
+  with:
+    show_when:
+      build_type: dockerfile
+- $template: ./nixpacks-basic.yml
+  with:
+    show_when:
+      build_type: nixpacks
 - id: nixpacks_start_cmd
   label: Start command
   type: string
   placeholder: Intelligent default based on your language & framework
   show_when:
     build_type: nixpacks
-- $include: ./nixpacks-advanced.yml
+- $template: ./nixpacks-advanced.yml
+  with:
+    show_when:
+      build_type: nixpacks
