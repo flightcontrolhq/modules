@@ -37,15 +37,13 @@ module "ecr" {
         Sid    = "RavionBootstrapImagePushPolicy"
         Effect = "Allow"
         Principal = {
-          AWS = local.current_iam_principal_arn
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action = [
           "ecr:BatchCheckLayerAvailability",
-          "ecr:BatchGetImage",
           "ecr:CompleteLayerUpload",
           "ecr:DescribeImages",
           "ecr:DescribeRepositories",
-          "ecr:GetDownloadUrlForLayer",
           "ecr:InitiateLayerUpload",
           "ecr:PutImage",
           "ecr:UploadLayerPart",

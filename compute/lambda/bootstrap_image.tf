@@ -10,6 +10,8 @@
 resource "terraform_data" "bootstrap_image" {
   count = local.create_bootstrap_image ? 1 : 0
 
+  depends_on = [module.ecr]
+
   input = {
     image_uri       = local.bootstrap_image_uri
     image_tag       = local.bootstrap_image_tag

@@ -22,17 +22,6 @@ locals {
 
   lambda_role_arn = var.role_creation_enabled ? aws_iam_role.this[0].arn : var.role_arn
 
-  current_assumed_role_matches = regexall(
-    "^arn:aws:sts::[0-9]+:assumed-role/([^/]+)/.*$",
-    data.aws_caller_identity.current.arn
-  )
-
-  current_iam_principal_arn = (
-    length(local.current_assumed_role_matches) > 0 ?
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.current_assumed_role_matches[0][0]}" :
-    data.aws_caller_identity.current.arn
-  )
-
   create_code_bucket = (
     var.package_type == "Zip" &&
     var.filename == null &&
