@@ -36,14 +36,14 @@ check "image_package_configuration" {
     condition = (
       var.package_type != "Image" ||
       (
-        var.image_uri != null &&
+        (var.image_uri != null || var.ecr_repository_creation_enabled) &&
         var.filename == null &&
         var.s3_bucket == null &&
         var.s3_key == null &&
         var.s3_object_version == null
       )
     )
-    error_message = "For package_type 'Image', set image_uri and do not set filename/s3_* values."
+    error_message = "For package_type 'Image', set image_uri or enable ecr_repository_creation_enabled so the module can seed a bootstrap image. Do not set filename/s3_* values."
   }
 }
 

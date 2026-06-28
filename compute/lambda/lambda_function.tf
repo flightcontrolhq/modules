@@ -24,7 +24,7 @@ resource "aws_lambda_function" "this" {
   s3_key            = var.package_type == "Zip" ? local.effective_s3_key : null
   s3_object_version = var.package_type == "Zip" ? var.s3_object_version : null
 
-  image_uri = var.package_type == "Image" ? var.image_uri : null
+  image_uri = var.package_type == "Image" ? local.effective_image_uri : null
   handler   = var.package_type == "Zip" ? var.handler : null
   runtime   = var.package_type == "Zip" ? var.runtime : null
 
@@ -109,6 +109,8 @@ resource "aws_lambda_function" "this" {
   depends_on = [
     aws_iam_role_policy_attachment.managed,
     aws_iam_role_policy.inline,
-    aws_cloudwatch_log_group.this
+    aws_cloudwatch_log_group.this,
+    module.ecr,
+    terraform_data.bootstrap_image
   ]
 }

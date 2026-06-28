@@ -6,6 +6,7 @@ This module creates an AWS Lambda function with broad runtime configuration supp
 
 - Supports both `Zip` and `Image` package types
 - Optional ECR repository for container image build pipelines
+- Single-apply bootstrap image seeding for module-managed ECR repositories
 - Supports standard Lambda and Lambda@Edge validation mode
 - Optional IAM role creation or use of an existing role
 - Optional CloudWatch log group creation with retention and KMS encryption
@@ -40,7 +41,7 @@ module "lambda_image" {
 
   name                            = "image-fn"
   package_type                    = "Image"
-  image_uri                       = "public.ecr.aws/docker/library/hello-world:latest"
+  architectures                   = ["x86_64"]
   ecr_repository_creation_enabled = true
   timeout                         = 30
   memory_size                     = 512
@@ -210,4 +211,5 @@ module "lambda_with_integrations" {
 - Lambda@Edge deployments must be created in `us-east-1`.
 - The module enforces key Lambda@Edge constraints when `lambda_at_edge_enabled = true`.
 - For `Zip` package type, provide either `filename` or (`s3_bucket` + `s3_key`).
-- For `Image` package type, provide `image_uri`. Enable `ecr_repository_creation_enabled` when a build pipeline should push images to a module-owned ECR repository.
+- For `Image` package type, provide `image_uri`, or enable `ecr_repository_creation_enabled` so the module can seed a Lambda-compatible bootstrap image in the module-owned ECR repository during apply.
+- Bootstrap image seeding requires the Terraform/OpenTofu runner to have AWS CLI v2 and Docker CLI access.

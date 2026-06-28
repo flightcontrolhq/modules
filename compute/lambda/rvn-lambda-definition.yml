@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.1.0
-  description: Add AWS Lambda module definition with zip and container image build support.
+  version: 0.1.2
+  description: Add single-apply bootstrap images for container image functions.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -710,8 +710,7 @@ module:
               << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
               module.input.build_type == "dockerfile") ? module.input.ecr_force_deletion_enabled : false >>
             ecr_repository_creation_enabled: >-
-              << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
-              module.input.build_type == "dockerfile") >>
+              << module.input.package_type == "Image" >>
             ecr_scan_on_push_enabled: >-
               << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
               module.input.build_type == "dockerfile") ? module.input.ecr_scan_on_push_enabled : true >>
@@ -731,8 +730,7 @@ module:
               (len(module.input.image_command) > 0 ? module.input.image_command : nil), entry_point:
               (len(module.input.image_entry_point) > 0 ? module.input.image_entry_point : nil),
               working_directory: (module.input.image_working_directory || nil)} : nil >>
-            image_uri: >-
-              << module.input.package_type == "Image" ? "public.ecr.aws/docker/library/hello-world:latest" : nil >>
+            image_uri: null
             kms_key_arn: << module.input.kms_key_arn || nil >>
             lambda_at_edge_enabled: >-
               << module.input.package_type == "Zip" ? module.input.lambda_at_edge_enabled : false >>
@@ -807,12 +805,11 @@ module:
       module.input.nixpacks_nix_libs, output_directory: module.input.output_directory} : {type:
       "disabled"} >>
     environment_variables: << module.input.build_environment_variables >>
-    destinations:
-      - >-
-        ...<< module.input.package_type == "Image" ? [{id: "ecr", type: "ecr", repository_arn:
-        stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
-        module.input.build_type]}] : [{id: "lambda-package", type: "s3", bucket:
-        stack.output.code_bucket_id, key: module.given_id, region: stack.output.region}] >>
+    destinations: >-
+      << module.input.package_type == "Image" ? [{id: "ecr", type: "ecr", repository_arn:
+      stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
+      module.input.build_type]}] : [{id: "lambda-package", type: "s3", bucket:
+      stack.output.code_bucket_id, key: module.given_id, region: stack.output.region}] >>
     infrastructure:
       ami: << module.input.build_ami || nil >>
       aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
@@ -965,7 +962,7 @@ module:
 
     For container image functions, Nixpacks and Dockerfile builds produce a Lambda-compatible container image, push it to a module-managed ECR repository, and deployments promote a tag or digest from that repository. Prebuilt image mode uses an existing ECR repository and asks for the tag or digest at deploy time. Disabled mode skips the build step and asks for a full ECR image URI at deploy time.
 
-    Terraform creates image functions with a sample hello-world container image so the function exists before the first real deployment.
+    Terraform creates image functions by pushing a small Lambda-compatible bootstrap image into the module-managed ECR repository during the same apply, so the function exists before the first real deployment.
 
     ## Function configuration
 
@@ -1004,7 +1001,7 @@ module:
     - Package type is immutable. Create a new Lambda module/function to migrate between zip packages and container images.
     - Zip package functions use the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
     - Container image functions use the image build pipeline to push Dockerfile or Nixpacks builds to ECR. Prebuilt image mode promotes tags or digests from an existing ECR repository.
-    - Terraform creates a bootstrap zip package for zip functions, or uses the sample hello-world container image for image functions, so the function exists before the first real deployment.
+    - Terraform creates a bootstrap zip package for zip functions, or pushes a small Lambda-compatible bootstrap image into ECR for image functions, so the function exists before the first real deployment.
     - Runtime configuration stays in Terraform to avoid deploy-time configuration drift.
     - The zip code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
 

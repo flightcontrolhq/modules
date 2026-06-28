@@ -18,4 +18,21 @@ module "ecr" {
   force_delete_enabled       = var.ecr_force_deletion_enabled
 
   default_lifecycle_policy_enabled = var.ecr_default_lifecycle_policy_enabled
+
+  repository_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "LambdaECRImageRetrievalPolicy"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+        ]
+      }
+    ]
+  })
 }
