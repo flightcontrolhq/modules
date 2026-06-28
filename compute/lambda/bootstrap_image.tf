@@ -27,6 +27,7 @@ resource "terraform_data" "bootstrap_image" {
   }
 
   provisioner "local-exec" {
+    quiet       = true
     interpreter = ["/bin/sh", "-c"]
 
     environment = {
@@ -43,6 +44,8 @@ resource "terraform_data" "bootstrap_image" {
         printf '%s\n' "Lambda bootstrap image: $*"
       }
 
+      trap 'status=$?; if [ "$status" -ne 0 ]; then printf "%s\n" "Lambda bootstrap image: failed with exit code $status" >&2; fi' EXIT
+
       run_as_root() {
         if [ "$(id -u)" -eq 0 ]; then
           "$@"
@@ -54,11 +57,36 @@ resource "terraform_data" "bootstrap_image" {
         fi
       }
 
+      can_run_as_root() {
+        [ "$(id -u)" -eq 0 ] || (command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1)
+      }
+
       require_command() {
         if ! command -v "$1" >/dev/null 2>&1; then
           echo "Missing required command for Lambda bootstrap image: $1" >&2
           exit 1
         fi
+      }
+
+      install_awscli_from_archive() {
+        require_command python3
+
+        AWSCLI_WORKDIR="$(mktemp -d)"
+        export AWSCLI_WORKDIR
+
+        log "installing awscli without root"
+        python3 - "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" "$AWSCLI_WORKDIR/awscliv2.zip" "$AWSCLI_WORKDIR" <<'PY'
+      import sys
+      import urllib.request
+      import zipfile
+
+      urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
+      with zipfile.ZipFile(sys.argv[2]) as archive:
+          archive.extractall(sys.argv[3])
+      PY
+        "$AWSCLI_WORKDIR/aws/install" -i "$AWSCLI_WORKDIR/aws-cli" -b "$AWSCLI_WORKDIR/bin" >/dev/null
+        PATH="$AWSCLI_WORKDIR/bin:$PATH"
+        export PATH
       }
 
       install_awscli() {
@@ -67,16 +95,15 @@ resource "terraform_data" "bootstrap_image" {
         fi
 
         log "installing awscli"
-        if command -v dnf >/dev/null 2>&1; then
+        if can_run_as_root && command -v dnf >/dev/null 2>&1; then
           run_as_root dnf install -y awscli
-        elif command -v yum >/dev/null 2>&1; then
+        elif can_run_as_root && command -v yum >/dev/null 2>&1; then
           run_as_root yum install -y awscli
-        elif command -v apt-get >/dev/null 2>&1; then
+        elif can_run_as_root && command -v apt-get >/dev/null 2>&1; then
           run_as_root apt-get update
           run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y awscli
         else
-          echo "Missing aws command and no supported package manager found." >&2
-          exit 1
+          install_awscli_from_archive
         fi
       }
 
@@ -141,6 +168,8 @@ resource "terraform_data" "bootstrap_image" {
           exit 1
           ;;
       esac
+
+      log "starting bootstrap image seeding for $BOOTSTRAP_REPOSITORY:$BOOTSTRAP_IMAGE_TAG on $BOOTSTRAP_PLATFORM"
 
       require_command awk
       require_command gzip
