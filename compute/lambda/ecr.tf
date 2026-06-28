@@ -32,6 +32,24 @@ module "ecr" {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer",
         ]
+      },
+      {
+        Sid    = "RavionBootstrapImagePushPolicy"
+        Effect = "Allow"
+        Principal = {
+          AWS = local.current_iam_principal_arn
+        }
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:DescribeRepositories",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart",
+        ]
       }
     ]
   })
