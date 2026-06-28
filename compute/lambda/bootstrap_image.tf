@@ -44,7 +44,23 @@ resource "terraform_data" "bootstrap_image" {
         printf '%s\n' "Lambda bootstrap image: $*"
       }
 
-      trap 'status=$?; if [ "$status" -ne 0 ]; then printf "%s\n" "Lambda bootstrap image: failed with exit code $status" >&2; fi' EXIT
+      AWSCLI_WORKDIR=""
+      BOOTSTRAP_WORKDIR=""
+
+      cleanup() {
+        status=$?
+        if [ -n "$BOOTSTRAP_WORKDIR" ]; then
+          rm -rf "$BOOTSTRAP_WORKDIR"
+        fi
+        if [ -n "$AWSCLI_WORKDIR" ]; then
+          rm -rf "$AWSCLI_WORKDIR"
+        fi
+        if [ "$status" -ne 0 ]; then
+          printf "%s\n" "Lambda bootstrap image: failed with exit code $status" >&2
+        fi
+      }
+
+      trap cleanup EXIT
 
       run_as_root() {
         if [ "$(id -u)" -eq 0 ]; then
@@ -160,6 +176,25 @@ resource "terraform_data" "bootstrap_image" {
           --layer-digests "$blob_digest" >/dev/null
       }
 
+      wait_for_repository() {
+        attempt=1
+        while [ "$attempt" -le 30 ]; do
+          if aws ecr describe-repositories \
+            --region "$AWS_REGION" \
+            --repository-names "$BOOTSTRAP_REPOSITORY" >/dev/null 2>&1; then
+            return
+          fi
+
+          sleep 2
+          attempt=$((attempt + 1))
+        done
+
+        echo "Timed out waiting for ECR repository: $BOOTSTRAP_REPOSITORY" >&2
+        aws ecr describe-repositories \
+          --region "$AWS_REGION" \
+          --repository-names "$BOOTSTRAP_REPOSITORY" >/dev/null
+      }
+
       case "$BOOTSTRAP_PLATFORM" in
         linux/amd64) BOOTSTRAP_ARCH=amd64 ;;
         linux/arm64) BOOTSTRAP_ARCH=arm64 ;;
@@ -180,9 +215,7 @@ resource "terraform_data" "bootstrap_image" {
       install_awscli
 
       log "waiting for ECR repository $BOOTSTRAP_REPOSITORY"
-      aws ecr wait repository-exists \
-        --region "$AWS_REGION" \
-        --repository-names "$BOOTSTRAP_REPOSITORY"
+      wait_for_repository
 
       if aws ecr describe-images \
         --region "$AWS_REGION" \
@@ -192,7 +225,6 @@ resource "terraform_data" "bootstrap_image" {
       fi
 
       BOOTSTRAP_WORKDIR="$(mktemp -d)"
-      trap 'rm -rf "$BOOTSTRAP_WORKDIR"' EXIT
 
       mkdir -p "$BOOTSTRAP_WORKDIR/layer/var/task"
       printf '%s\n' 'exports.handler = async () => ({ statusCode: 200, body: "ravion lambda bootstrap" });' > "$BOOTSTRAP_WORKDIR/layer/var/task/index.js"
