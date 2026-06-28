@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.1.2
-  description: Add single-apply bootstrap images for container image functions.
+  version: 0.2.0
+  description: Harden single-apply bootstrap images for container image functions.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

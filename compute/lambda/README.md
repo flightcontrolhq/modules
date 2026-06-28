@@ -212,4 +212,4 @@ module "lambda_with_integrations" {
 - The module enforces key Lambda@Edge constraints when `lambda_at_edge_enabled = true`.
 - For `Zip` package type, provide either `filename` or (`s3_bucket` + `s3_key`).
 - For `Image` package type, provide `image_uri`, or enable `ecr_repository_creation_enabled` so the module can seed a Lambda-compatible bootstrap image in the module-owned ECR repository during apply.
-- Bootstrap image seeding requires the Terraform/OpenTofu runner to have AWS CLI v2 and Docker CLI access.
+- Bootstrap image seeding uses AWS CLI and Docker on the Terraform/OpenTofu runner. When they are missing, the module attempts to install them with the runner's package manager and passwordless sudo/root access.
