@@ -141,7 +141,8 @@ variable "nat_gateway_eip_allocation_ids" {
 
     The list length must match the number of NAT Gateways the module will create:
       - 1 when nat_gateway_high_availability_enabled = false
-      - subnet_count when nat_gateway_high_availability_enabled = true
+      - the resolved subnet count when nat_gateway_high_availability_enabled = true
+        (run a plan first to discover the resolved count when subnet_count is null)
 
     Supplied EIPs must already exist with domain = "vpc". This is useful for
     keeping NAT public IPs stable across VPC replacements (e.g. for partner

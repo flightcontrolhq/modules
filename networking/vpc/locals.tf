@@ -18,7 +18,7 @@ locals {
   selected_availability_zones = length(var.availability_zones) > 0 ? var.availability_zones : data.aws_availability_zones.available.names
   automatic_subnet_count      = min(3, length(local.selected_availability_zones))
   subnet_count                = var.subnet_count != null ? var.subnet_count : local.automatic_subnet_count
-  azs                         = [for i in range(local.subnet_count) : try(local.selected_availability_zones[i], "")]
+  azs                         = slice(local.selected_availability_zones, 0, min(local.subnet_count, length(local.selected_availability_zones)))
 
   # Subnet CIDRs - auto-calculate if not provided
   # Public subnets: /24 blocks at offset 1, 2, 3, ... (e.g., 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24)
@@ -50,7 +50,7 @@ locals {
     : null
   )
   supplied_nat_eip_allocation_ids_match_count = local.supplied_nat_eip_allocation_ids == null || length(local.supplied_nat_eip_allocation_ids) == local.nat_gateway_count
-  create_nat_eips                             = var.nat_gateway_enabled && (local.supplied_nat_eip_allocation_ids == null || !local.supplied_nat_eip_allocation_ids_match_count)
+  create_nat_eips                             = var.nat_gateway_enabled && local.supplied_nat_eip_allocation_ids == null
   nat_gateway_eip_allocation_ids              = local.supplied_nat_eip_allocation_ids != null && local.supplied_nat_eip_allocation_ids_match_count ? local.supplied_nat_eip_allocation_ids : aws_eip.nat[*].allocation_id
 
   # Flow Logs
