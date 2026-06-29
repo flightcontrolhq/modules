@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.2.0
-  description: Add Logs tab for CloudWatch.
+  version: 0.2.1
+  description: Adapt default subnet count to regions with fewer availability zones.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -31,6 +31,14 @@ module:
       label: VPC CIDR
       required: false
       type: string
+    - collapsible: true
+      description: Leave empty to create up to 3 public/private subnet pairs, capped by the availability zones available in the selected region and AWS account.
+      id: subnet_count
+      label: Subnet pairs
+      max: 6
+      min: 1
+      required: false
+      type: number
     - id: section_nat
       label: NAT gateway
       type: section
@@ -53,7 +61,7 @@ module:
 
         The list length must match the number of NAT Gateways the module will create:
           - 1 when nat_gateway_high_availability_enabled = false
-          - 3 when nat_gateway_high_availability_enabled = true
+          - the resolved subnet pair count when nat_gateway_high_availability_enabled = true
 
         Supplied EIPs must already exist with domain = "vpc". This is useful for
         keeping NAT public IPs stable across VPC replacements (e.g. for partner
@@ -211,6 +219,7 @@ module:
     | Region                         | Yes      | —                    | AWS region (recommend avoiding us-east-1 for reliability)              |
     | Name                           | Yes      | `{project}-{env}`    | Name prefix for all resources (1-36 chars, lowercase, hyphens allowed) |
     | VPC CIDR                       | No       | `10.0.0.0/16`        | IPv4 address range for the VPC                                         |
+    | Subnet pairs                   | No       | Auto                 | Up to 3 public/private subnet pairs, capped by available AZs           |
     | NAT Gateway                    | No       | `true`               | Enable outbound internet from private subnets                          |
     | NAT Gateway High Availability  | No       | `false`              | Deploy one NAT per AZ instead of a single shared NAT                   |
     | NAT Gateway EIP Allocation IDs | No       | —                    | Pre-allocated EIPs for stable NAT public IPs                           |
@@ -248,8 +257,8 @@ module:
 
     This VPC follows [AWS VPC best practices](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-best-practices.html):
 
-    - **Availability zone spread:** Subnets are provisioned across 3 AZs by default for high availability
-    - **Automatic CIDR allocation:** Subnets are /24 blocks carved from your VPC CIDR. With the default `10.0.0.0/16`, public subnets get `10.0.1.0/24`, `10.0.2.0/24`, `10.0.3.0/24` and private subnets get `10.0.11.0/24`, `10.0.12.0/24`, `10.0.13.0/24`.
+    - **Availability zone spread:** Subnets are provisioned across up to 3 AZs by default, capped by the AZs available in the selected region and AWS account
+    - **Automatic CIDR allocation:** Subnets are /24 blocks carved from your VPC CIDR. With the default `10.0.0.0/16`, the first three public subnets get `10.0.1.0/24`, `10.0.2.0/24`, `10.0.3.0/24` and private subnets get `10.0.11.0/24`, `10.0.12.0/24`, `10.0.13.0/24`.
     - **DNS enabled:** DNS support and hostnames are enabled for service discovery
     - **Single route table for public:** All public subnets share one route table with an Internet Gateway route
     - **Per-AZ route tables when HA NAT:** Each private subnet gets its own route table pointing to the NAT in its AZ
@@ -279,6 +288,7 @@ module:
         nat_gateway_eip_allocation_ids: << module.input.nat_gateway_eip_allocation_ids >>
         nat_gateway_high_availability_enabled: << module.input.nat_gateway_high_availability_enabled >>
         region: << module.input.aws_region >>
+        subnet_count: << module.input.subnet_count >>
         tags:
           $include: ../stack/ravion-tags.yml
         vpc_cidr: << module.input.vpc_cidr >>

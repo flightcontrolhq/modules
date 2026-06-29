@@ -51,12 +51,12 @@ variable "dns_hostnames_enabled" {
 
 variable "subnet_count" {
   type        = number
-  description = "The number of public and private subnet pairs to create. Each pair is placed in a different availability zone."
-  default     = 3
+  description = "The number of public and private subnet pairs to create. Each pair is placed in a different availability zone. If null, the module creates up to 3 subnet pairs, capped by the number of selected or available availability zones."
+  default     = null
 
   validation {
-    condition     = var.subnet_count >= 1 && var.subnet_count <= 6
-    error_message = "The subnet_count must be between 1 and 6."
+    condition     = var.subnet_count == null || (var.subnet_count >= 1 && var.subnet_count <= 6)
+    error_message = "The subnet_count must be null or between 1 and 6."
   }
 }
 
@@ -82,8 +82,8 @@ variable "public_subnet_cidrs" {
   }
 
   validation {
-    condition     = var.public_subnet_cidrs == null || length(var.public_subnet_cidrs) == var.subnet_count
-    error_message = "The number of public_subnet_cidrs must equal subnet_count."
+    condition     = var.public_subnet_cidrs == null || var.subnet_count == null || length(var.public_subnet_cidrs) == var.subnet_count
+    error_message = "The number of public_subnet_cidrs must equal subnet_count when subnet_count is set."
   }
 }
 
@@ -98,8 +98,8 @@ variable "private_subnet_cidrs" {
   }
 
   validation {
-    condition     = var.private_subnet_cidrs == null || length(var.private_subnet_cidrs) == var.subnet_count
-    error_message = "The number of private_subnet_cidrs must equal subnet_count."
+    condition     = var.private_subnet_cidrs == null || var.subnet_count == null || length(var.private_subnet_cidrs) == var.subnet_count
+    error_message = "The number of private_subnet_cidrs must equal subnet_count when subnet_count is set."
   }
 }
 
@@ -165,13 +165,11 @@ variable "nat_gateway_eip_allocation_ids" {
       var.nat_gateway_eip_allocation_ids == null ||
       !var.nat_gateway_enabled ||
       length(var.nat_gateway_eip_allocation_ids) == 0 ||
-      length(var.nat_gateway_eip_allocation_ids) == (
-        (var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled)
-        ? var.subnet_count
-        : 1
-      )
+      (!(var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled) && length(var.nat_gateway_eip_allocation_ids) == 1) ||
+      ((var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled) && var.subnet_count != null && length(var.nat_gateway_eip_allocation_ids) == var.subnet_count) ||
+      ((var.single_nat_gateway != null ? !var.single_nat_gateway : var.nat_gateway_high_availability_enabled) && var.subnet_count == null)
     )
-    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 for single-NAT mode, or subnet_count for HA mode (nat_gateway_high_availability_enabled = true, or deprecated single_nat_gateway = false)."
+    error_message = "The number of nat_gateway_eip_allocation_ids must equal 1 for single-NAT mode, or subnet_count for HA mode when subnet_count is set. Automatic subnet counts are checked during planning."
   }
 }
 
