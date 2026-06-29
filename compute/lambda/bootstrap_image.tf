@@ -87,18 +87,57 @@ resource "terraform_data" "bootstrap_image" {
       install_awscli_from_archive() {
         require_command python3
 
+        runner_arch="$(uname -m)"
+        case "$runner_arch" in
+          x86_64|amd64)
+            awscli_archive_arch="x86_64"
+            ;;
+          aarch64|arm64)
+            awscli_archive_arch="aarch64"
+            ;;
+          *)
+            echo "Unsupported runner architecture for AWS CLI archive install: $runner_arch" >&2
+            exit 1
+            ;;
+        esac
+
         AWSCLI_WORKDIR="$(mktemp -d)"
         export AWSCLI_WORKDIR
 
-        log "installing awscli without root"
-        python3 - "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" "$AWSCLI_WORKDIR/awscliv2.zip" "$AWSCLI_WORKDIR" <<'PY'
+        awscli_archive_url="https://awscli.amazonaws.com/awscli-exe-linux-$awscli_archive_arch.zip"
+
+        log "installing awscli without root for $runner_arch"
+        python3 - "$awscli_archive_url" "$AWSCLI_WORKDIR/awscliv2.zip" "$awscli_archive_url.sha256" "$AWSCLI_WORKDIR/awscliv2.zip.sha256" "$AWSCLI_WORKDIR" <<'PY'
+      import hashlib
       import sys
       import urllib.request
       import zipfile
 
-      urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
-      with zipfile.ZipFile(sys.argv[2]) as archive:
-          archive.extractall(sys.argv[3])
+      archive_url, archive_path, checksum_url, checksum_path, extract_dir = sys.argv[1:]
+
+      urllib.request.urlretrieve(archive_url, archive_path)
+      urllib.request.urlretrieve(checksum_url, checksum_path)
+
+      with open(checksum_path, "r", encoding="utf-8") as checksum_file:
+          expected_sha256 = checksum_file.read().split()[0].lower()
+
+      if len(expected_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_sha256):
+          raise SystemExit("Invalid AWS CLI checksum file.")
+
+      archive_sha256 = hashlib.sha256()
+      with open(archive_path, "rb") as archive_file:
+          for chunk in iter(lambda: archive_file.read(1024 * 1024), b""):
+              archive_sha256.update(chunk)
+
+      actual_sha256 = archive_sha256.hexdigest()
+      if actual_sha256 != expected_sha256:
+          raise SystemExit(
+              "AWS CLI archive checksum mismatch: "
+              f"expected {expected_sha256}, got {actual_sha256}."
+          )
+
+      with zipfile.ZipFile(archive_path) as archive:
+          archive.extractall(extract_dir)
       PY
         "$AWSCLI_WORKDIR/aws/install" -i "$AWSCLI_WORKDIR/aws-cli" -b "$AWSCLI_WORKDIR/bin" >/dev/null
         PATH="$AWSCLI_WORKDIR/bin:$PATH"

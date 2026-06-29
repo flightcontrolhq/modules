@@ -4,7 +4,7 @@ definition:
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
   version: 0.1.0
-  description: Harden single-apply bootstrap images for container image functions.
+  description: Add Lambda functions with hardened bootstrap images and managed ECR for built images.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -183,6 +183,24 @@ module:
       show_when:
         package_type: Image
         build_type: prebuilt_image
+    - id: initial_image_ref
+      label: Initial image tag or digest
+      type: string
+      description: Tag or digest from the configured ECR image repository used to create the Lambda function before the first deployment.
+      placeholder: sha256:... or latest
+      required: true
+      show_when:
+        package_type: Image
+        build_type: prebuilt_image
+    - id: initial_image_uri
+      label: Initial image URI
+      type: string
+      description: Full Amazon ECR image URI used to create the Lambda function before the first deployment.
+      placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function:latest
+      required: true
+      show_when:
+        package_type: Image
+        build_type: none
     - id: output_directory
       label: Package output directory
       type: string
@@ -710,7 +728,8 @@ module:
               << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
               module.input.build_type == "dockerfile") ? module.input.ecr_force_deletion_enabled : false >>
             ecr_repository_creation_enabled: >-
-              << module.input.package_type == "Image" >>
+              << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
+              module.input.build_type == "dockerfile") >>
             ecr_scan_on_push_enabled: >-
               << module.input.package_type == "Image" && (module.input.build_type == "nixpacks" ||
               module.input.build_type == "dockerfile") ? module.input.ecr_scan_on_push_enabled : true >>
@@ -730,7 +749,12 @@ module:
               (len(module.input.image_command) > 0 ? module.input.image_command : nil), entry_point:
               (len(module.input.image_entry_point) > 0 ? module.input.image_entry_point : nil),
               working_directory: (module.input.image_working_directory || nil)} : nil >>
-            image_uri: null
+            image_uri: >-
+              << module.input.package_type == "Image" ? (module.input.build_type == "prebuilt_image" ?
+              (module.input.initial_image_ref contains "sha256:" ? module.input.image_repository + "@" +
+              module.input.initial_image_ref : module.input.image_repository + ":" +
+              module.input.initial_image_ref) : module.input.build_type == "none" ?
+              module.input.initial_image_uri : nil) : nil >>
             kms_key_arn: << module.input.kms_key_arn || nil >>
             lambda_at_edge_enabled: >-
               << module.input.package_type == "Zip" ? module.input.lambda_at_edge_enabled : false >>
@@ -960,9 +984,9 @@ module:
 
     If Build type is Disabled for zip packages, Ravion skips the build step and you provide an existing S3 object key at deploy time.
 
-    For container image functions, Nixpacks and Dockerfile builds produce a Lambda-compatible container image, push it to a module-managed ECR repository, and deployments promote a tag or digest from that repository. Prebuilt image mode uses an existing ECR repository and asks for the tag or digest at deploy time. Disabled mode skips the build step and asks for a full ECR image URI at deploy time.
+    For container image functions, Nixpacks and Dockerfile builds produce a Lambda-compatible container image, push it to a module-managed ECR repository, and deployments promote a tag or digest from that repository. Prebuilt image mode uses an existing ECR repository, asks for an initial tag or digest when the function is created, and asks for the tag or digest to promote at deploy time. Disabled mode skips the build step, asks for an initial full ECR image URI when the function is created, and asks for a full ECR image URI at deploy time.
 
-    Terraform creates image functions by pushing a small Lambda-compatible bootstrap image into the module-managed ECR repository during the same apply, so the function exists before the first real deployment.
+    Terraform creates built-image functions by pushing a small Lambda-compatible bootstrap image into the module-managed ECR repository during the same apply. External-image modes create the function from the initial image you provide, so no module-managed ECR repository is created.
 
     ## Function configuration
 
@@ -987,6 +1011,8 @@ module:
     | Build config | Build type | Yes | Nixpacks | Zip packages support Nixpacks, Dockerfile, or Disabled. Container images support Nixpacks, Dockerfile, Prebuilt image from ECR, or Disabled |
     | Build config | Git repository | Required for builds | none | Source repository for Nixpacks and Dockerfile builds |
     | Build config | ECR image repository | Prebuilt image only | none | Existing ECR repository URI without a tag or digest |
+    | Build config | Initial image tag or digest | Prebuilt image only | none | Existing image used when the Lambda function is created |
+    | Build config | Initial image URI | Disabled image builds only | none | Full image URI used when the Lambda function is created |
     | Build config | Package output directory | Required for zip builds | /app | Directory zipped and uploaded |
     | Networking | Connect to a VPC | No | false | Shows subnet and security group fields |
     | IAM role | Create IAM role | No | true | Use an existing role by turning this off |
@@ -1001,7 +1027,7 @@ module:
     - Package type is immutable. Create a new Lambda module/function to migrate between zip packages and container images.
     - Zip package functions use the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
     - Container image functions use the image build pipeline to push Dockerfile or Nixpacks builds to ECR. Prebuilt image mode promotes tags or digests from an existing ECR repository.
-    - Terraform creates a bootstrap zip package for zip functions, or pushes a small Lambda-compatible bootstrap image into ECR for image functions, so the function exists before the first real deployment.
+    - Terraform creates a bootstrap zip package for zip functions and creates built-image functions with a bootstrap image in the module-managed ECR repository. External-image modes use the initial image you provide and do not create a module-managed ECR repository.
     - Runtime configuration stays in Terraform to avoid deploy-time configuration drift.
     - The zip code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
 

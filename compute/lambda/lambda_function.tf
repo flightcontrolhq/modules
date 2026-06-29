@@ -86,6 +86,15 @@ resource "aws_lambda_function" "this" {
   tags = local.tags
 
   lifecycle {
+    # Ravion deploy owns post-create code promotions; Terraform still manages
+    # runtime and function configuration.
+    ignore_changes = [
+      image_uri,
+      s3_bucket,
+      s3_key,
+      s3_object_version,
+    ]
+
     precondition {
       condition = (
         !var.lambda_at_edge_enabled ||
