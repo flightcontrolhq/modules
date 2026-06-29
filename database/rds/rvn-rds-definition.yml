@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.3.1
-  description: Disallow reserved RDS initial database names
+  version: 0.4.0
+  description: Add Logs tab for CloudWatch.
 module:
   inputs:
     - id: network
@@ -993,6 +993,19 @@ module:
         username: << module.input.username >>
         vpc_id: << module.input.vpc_id >>
   ui:
+    logs: |-
+      <<
+      module.input.enabled_cloudwatch_logs_exports != nil && module.input.enabled_cloudwatch_logs_exports != [] ? map(module.input.enabled_cloudwatch_logs_exports, {
+        "id":"rds_" + # + "_logs",
+        "name":"RDS " + # + " logs",
+        "source":{
+          "type":"cloudwatch",
+          "aws_account_id":module.input.aws_account_id,
+          "region":stack.output.region,
+          "log_group":"/aws/rds/instance/" + stack.output.db_instance_identifier + "/" + #
+        }
+      }) : []
+      >>
     metrics:
       - id: cpu_utilization
         name: CPU utilization

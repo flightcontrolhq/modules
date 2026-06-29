@@ -1,8 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import YAML from "yaml";
-import { compileDefinitionFile } from "./compiler.js";
-import { validateModuleConfig } from "./module-schema.js";
 
 export interface RemoteModuleDefinition {
   id: string;
@@ -101,13 +99,6 @@ export async function generateDefinitionsFromInventory(
   }
 
   return { generated, missing };
-}
-
-export async function validateGeneratedDefinitions(result: GenerateDefinitionsResult): Promise<void> {
-  for (const generated of result.generated) {
-    const compiled = await compileDefinitionFile(generated.filePath);
-    validateModuleConfig(compiled.module, generated.filePath);
-  }
 }
 
 export async function readInventoryFile(filePath: string): Promise<RemoteModuleInventory> {

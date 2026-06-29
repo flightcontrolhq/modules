@@ -39,8 +39,8 @@ module "dns" {
 
   name = "example.com"
 
-  records = {
-    apex = {
+  records = [
+    {
       name = "example.com"
       type = "A"
       alias = {
@@ -48,23 +48,23 @@ module "dns" {
         zone_id                = module.alb.alb_zone_id
         evaluate_target_health = true
       }
-    }
+    },
 
-    www = {
+    {
       name    = "www.example.com"
       type    = "CNAME"
       ttl     = 300
       records = ["example.com"]
-    }
+    },
 
-    spf = {
+    {
       name    = "example.com"
       type    = "TXT"
       ttl     = 300
       records = ["v=spf1 -all"]
-    }
+    },
 
-    mx = {
+    {
       name = "example.com"
       type = "MX"
       ttl  = 300
@@ -72,7 +72,7 @@ module "dns" {
         "10 inbound-smtp.us-east-1.amazonaws.com",
       ]
     }
-  }
+  ]
 }
 ```
 
@@ -85,14 +85,14 @@ module "app_dns" {
   zone_creation_enabled = false
   zone_id     = "Z1234567890ABC"
 
-  records = {
-    api = {
+  records = [
+    {
       name    = "api.example.com"
       type    = "A"
       ttl     = 60
       records = ["192.0.2.10"]
     }
-  }
+  ]
 }
 ```
 
@@ -112,14 +112,14 @@ module "internal_dns" {
     }
   }
 
-  records = {
-    db = {
+  records = [
+    {
       name    = "db.internal_load_balancer_enabled.example.com"
       type    = "CNAME"
       ttl     = 60
       records = [module.rds.endpoint]
     }
-  }
+  ]
 }
 ```
 
@@ -131,8 +131,8 @@ module "dns" {
 
   name = "example.com"
 
-  records = {
-    api_blue = {
+  records = [
+    {
       name           = "api.example.com"
       type           = "A"
       set_identifier = "blue"
@@ -144,9 +144,9 @@ module "dns" {
         zone_id                = module.alb_blue.alb_zone_id
         evaluate_target_health = true
       }
-    }
+    },
 
-    api_green = {
+    {
       name           = "api.example.com"
       type           = "A"
       set_identifier = "green"
@@ -159,7 +159,7 @@ module "dns" {
         evaluate_target_health = true
       }
     }
-  }
+  ]
 }
 ```
 
@@ -257,7 +257,7 @@ Each entry in `vpc_associations` supports:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| records | Map of DNS records to manage, keyed by a stable identifier | `map(object)` | `{}` | no |
+| records | List of DNS records to manage | `list(object)` | `[]` | no |
 
 Each record supports:
 
@@ -266,7 +266,7 @@ Each record supports:
 | name | The record name (FQDN or relative to the zone) | `string` | yes |
 | type | Record type: `A`, `AAAA`, `CNAME`, `CAA`, `MX`, `NAPTR`, `NS`, `PTR`, `SOA`, `SPF`, `SRV`, `TXT`, `DS` | `string` | yes |
 | ttl | TTL in seconds (required unless using `alias`) | `number` | conditional |
-| records | Record values (required unless using `alias`) | `list(string)` | conditional |
+| records | Record values (required unless using `alias`). CNAME and SOA records must have exactly one value. | `list(string)` | conditional |
 | alias | Alias target `{ name, zone_id, evaluate_target_health }` (use instead of `ttl`/`records`). `name` is the AWS target DNS name. `zone_id` is the AWS target resource hosted zone ID, not this domain's hosted zone ID. For ALB/NLB use the load balancer canonical hosted zone ID; for CloudFront use `Z2FDTNDATAQYW2`; API Gateway and S3 website endpoints use service and region-specific IDs. | `object` | conditional |
 | set_identifier | Unique ID for routing-policy records | `string` | no |
 | health_check_id | Route53 health check ID | `string` | no |

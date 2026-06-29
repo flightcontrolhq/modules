@@ -61,8 +61,8 @@ variable "vpc_id" {
 variable "ingress_rules" {
   type = list(object({
     description = optional(string, "Managed by Terraform")
-    from_port   = number
-    to_port     = number
+    from_port   = optional(number, null)
+    to_port     = optional(number, null)
     ip_protocol = optional(string, "tcp")
 
     # Source - exactly one of these should be specified
@@ -81,14 +81,14 @@ variable "ingress_rules" {
     - self: Set to true to allow traffic from the same security group
 
     For ip_protocol, use "tcp", "udp", "icmp", "icmpv6", or "-1" for all protocols.
-    When ip_protocol is "-1", from_port and to_port must be -1.
+    When ip_protocol is "-1" or "all", from_port and to_port are ignored (AWS rejects explicit ports with all-protocol rules).
   EOF
   default     = []
 
   validation {
     condition = alltrue([
       for rule in var.ingress_rules :
-      rule.from_port >= -1 && rule.from_port <= 65535
+      rule.from_port == null || (rule.from_port >= -1 && rule.from_port <= 65535)
     ])
     error_message = "All from_port values must be between -1 and 65535."
   }
@@ -96,9 +96,17 @@ variable "ingress_rules" {
   validation {
     condition = alltrue([
       for rule in var.ingress_rules :
-      rule.to_port >= -1 && rule.to_port <= 65535
+      rule.to_port == null || (rule.to_port >= -1 && rule.to_port <= 65535)
     ])
     error_message = "All to_port values must be between -1 and 65535."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      contains(["-1", "all"], lower(coalesce(rule.ip_protocol, "tcp"))) || (rule.from_port != null && rule.to_port != null)
+    ])
+    error_message = "from_port and to_port are required unless ip_protocol is -1 or all."
   }
 
   validation {
@@ -164,8 +172,8 @@ variable "ingress_rules" {
 variable "egress_rules" {
   type = list(object({
     description = optional(string, "Managed by Terraform")
-    from_port   = number
-    to_port     = number
+    from_port   = optional(number, null)
+    to_port     = optional(number, null)
     ip_protocol = optional(string, "tcp")
 
     # Destination - exactly one of these should be specified
@@ -184,14 +192,14 @@ variable "egress_rules" {
     - self: Set to true to allow traffic to the same security group
 
     For ip_protocol, use "tcp", "udp", "icmp", "icmpv6", or "-1" for all protocols.
-    When ip_protocol is "-1", from_port and to_port must be -1.
+    When ip_protocol is "-1" or "all", from_port and to_port are ignored (AWS rejects explicit ports with all-protocol rules).
   EOF
   default     = []
 
   validation {
     condition = alltrue([
       for rule in var.egress_rules :
-      rule.from_port >= -1 && rule.from_port <= 65535
+      rule.from_port == null || (rule.from_port >= -1 && rule.from_port <= 65535)
     ])
     error_message = "All from_port values must be between -1 and 65535."
   }
@@ -199,9 +207,17 @@ variable "egress_rules" {
   validation {
     condition = alltrue([
       for rule in var.egress_rules :
-      rule.to_port >= -1 && rule.to_port <= 65535
+      rule.to_port == null || (rule.to_port >= -1 && rule.to_port <= 65535)
     ])
     error_message = "All to_port values must be between -1 and 65535."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.egress_rules :
+      contains(["-1", "all"], lower(coalesce(rule.ip_protocol, "tcp"))) || (rule.from_port != null && rule.to_port != null)
+    ])
+    error_message = "from_port and to_port are required unless ip_protocol is -1 or all."
   }
 
   validation {

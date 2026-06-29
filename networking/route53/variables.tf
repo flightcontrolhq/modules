@@ -87,7 +87,7 @@ variable "vpc_associations" {
 ################################################################################
 
 variable "records" {
-  type = map(object({
+  type = list(object({
     name            = string
     type            = string
     ttl             = optional(number)
@@ -95,6 +95,21 @@ variable "records" {
     set_identifier  = optional(string)
     health_check_id = optional(string)
     allow_overwrite = optional(bool, false)
+
+    target_type                            = optional(string, "standard")
+    record_value                           = optional(string)
+    record_values                          = optional(list(string))
+    standard_ttl                           = optional(number)
+    alias_name                             = optional(string)
+    alias_zone_id                          = optional(string)
+    alias_evaluate_target_health           = optional(bool, false)
+    routing_policy                         = optional(string, "simple")
+    weighted_routing_policy_weight         = optional(number)
+    failover_routing_policy_type           = optional(string)
+    latency_routing_policy_region          = optional(string)
+    geolocation_routing_policy_continent   = optional(string)
+    geolocation_routing_policy_country     = optional(string)
+    geolocation_routing_policy_subdivision = optional(string)
 
     alias = optional(object({
       name                   = string
@@ -122,12 +137,12 @@ variable "records" {
 
     multivalue_answer_routing_policy = optional(bool)
   }))
-  description = "A map of DNS records to create in the hosted zone, keyed by a unique identifier. Each record must have either `records` + `ttl` or `alias` set."
-  default     = {}
+  description = "A list of DNS records to create in the hosted zone. Terraform derives stable resource keys from each record type, name, and optional set identifier."
+  default     = []
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
       contains(["A", "AAAA", "CNAME", "CAA", "MX", "NAPTR", "NS", "PTR", "SOA", "SPF", "SRV", "TXT", "DS"], v.type)
     ])
     error_message = "Each record type must be one of: A, AAAA, CNAME, CAA, MX, NAPTR, NS, PTR, SOA, SPF, SRV, TXT, DS."
@@ -135,18 +150,46 @@ variable "records" {
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
-      (v.alias != null) != (v.records != null && v.ttl != null)
+      for v in var.records :
+      (
+        v.alias != null || (v.target_type == "alias" && v.alias_name != null && v.alias_zone_id != null)
+        ) != (
+        (v.records != null || v.record_value != null || v.record_values != null) &&
+        (v.ttl != null || v.standard_ttl != null)
+      )
     ])
     error_message = "Each record must have either `alias` set, or both `records` and `ttl` set (but not both)."
   }
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
+      !contains(["CNAME", "SOA"], v.type) || v.records == null || length(v.records) == 1
+    ])
+    error_message = "CNAME and SOA records must have exactly one record value."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
       v.failover_routing_policy == null || contains(["PRIMARY", "SECONDARY"], coalesce(try(v.failover_routing_policy.type, null), "PRIMARY"))
     ])
     error_message = "failover_routing_policy.type must be PRIMARY or SECONDARY."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
+      (
+        v.routing_policy == "simple" &&
+        v.weighted_routing_policy == null &&
+        v.failover_routing_policy == null &&
+        v.latency_routing_policy == null &&
+        v.geolocation_routing_policy == null &&
+        coalesce(v.multivalue_answer_routing_policy, false) != true
+      ) || try(length(v.set_identifier) > 0, false)
+    ])
+    error_message = "set_identifier is required when using weighted, failover, latency, geolocation, or multivalue routing policies."
   }
 }
 

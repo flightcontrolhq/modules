@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -30,4 +30,56 @@ locals {
   query_log_group_retention_in_days   = var.query_log_group_retention_days == 0 ? null : var.query_log_group_retention_days
   route53_query_log_service_principal = "route53.${data.aws_partition.current.dns_suffix}"
   route53_query_log_hosted_zone_arn   = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${local.zone_id}"
+
+  normalized_records = {
+    for v in var.records : join("-", compact([v.type, v.name, (
+      v.routing_policy != "simple" ||
+      v.weighted_routing_policy != null ||
+      v.failover_routing_policy != null ||
+      v.latency_routing_policy != null ||
+      v.geolocation_routing_policy != null ||
+      coalesce(v.multivalue_answer_routing_policy, false) == true
+      ) ? v.set_identifier : null])) => {
+      name    = v.name
+      type    = v.type
+      ttl     = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)
+      records = v.alias != null || v.target_type == "alias" ? null : v.records != null ? v.records : v.record_values != null ? v.record_values : v.record_value != null ? [v.record_value] : null
+      set_identifier = (
+        v.routing_policy != "simple" ||
+        v.weighted_routing_policy != null ||
+        v.failover_routing_policy != null ||
+        v.latency_routing_policy != null ||
+        v.geolocation_routing_policy != null ||
+        coalesce(v.multivalue_answer_routing_policy, false) == true
+      ) ? v.set_identifier : null
+      health_check_id = v.health_check_id
+      allow_overwrite = v.allow_overwrite
+
+      alias = v.alias != null ? v.alias : v.target_type == "alias" ? {
+        name                   = v.alias_name
+        zone_id                = v.alias_zone_id
+        evaluate_target_health = v.alias_evaluate_target_health
+      } : null
+
+      weighted_routing_policy = v.weighted_routing_policy != null ? v.weighted_routing_policy : v.routing_policy == "weighted" ? {
+        weight = v.weighted_routing_policy_weight
+      } : null
+
+      failover_routing_policy = v.failover_routing_policy != null ? v.failover_routing_policy : v.routing_policy == "failover" ? {
+        type = v.failover_routing_policy_type
+      } : null
+
+      latency_routing_policy = v.latency_routing_policy != null ? v.latency_routing_policy : v.routing_policy == "latency" ? {
+        region = v.latency_routing_policy_region
+      } : null
+
+      geolocation_routing_policy = v.geolocation_routing_policy != null ? v.geolocation_routing_policy : v.routing_policy == "geolocation" ? {
+        continent   = v.geolocation_routing_policy_continent
+        country     = v.geolocation_routing_policy_country
+        subdivision = v.geolocation_routing_policy_subdivision
+      } : null
+
+      multivalue_answer_routing_policy = v.multivalue_answer_routing_policy != null ? v.multivalue_answer_routing_policy : v.routing_policy == "multivalue" ? true : null
+    }
+  }
 }

@@ -1,0 +1,871 @@
+definition:
+  type: rvn-elasticache
+  name: ElastiCache
+  description: Creates and manages Amazon ElastiCache for Redis, Valkey, Memcached, or serverless Redis-compatible caches.
+release:
+  version: 0.1.2
+  description: Fix all-protocol security group egress updates
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - id: section_aws
+          label: AWS account & region
+          type: section
+        - default: << ref.input.aws_account_id >>
+          id: aws_account_id
+          immutable: true
+          label: AWS account
+          type: string
+          values: $values:ravion/aws_accounts
+        - default: << ref.input.aws_region >>
+          description: AWS region for this cache.
+          id: aws_region
+          immutable: true
+          label: Region
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          default: << ref.input.execution_environment_id >>
+          description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
+          id: execution_environment_id
+          label: Terraform execution environment
+          type: string
+          values: $values:ravion/execution_environments
+        - id: section_vpc
+          label: VPC
+          type: section
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          required: true
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Subnets for the ElastiCache subnet group or serverless cache. Use private subnets for normal cache deployments.
+          id: subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          required: true
+          type: string_array
+      required: true
+      type: $ref:rvn-aws-network
+    - id: section_cache
+      label: Cache
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>
+      description: Name prefix for all ElastiCache resources.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: 1-40 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$
+      required: true
+      type: string
+    - id: section_version
+      label: Version
+      type: section
+    - default: valkey
+      description: Choose Valkey for Redis-compatible workloads with lower AWS pricing, Redis for Redis OSS compatibility requirements, or Memcached for simple non-persistent object caching without Redis data structures. AWS prices Valkey 20% lower than Redis OSS for node-based ElastiCache and 33% lower for Serverless, with a 90% lower Serverless minimum data storage size.
+      id: engine
+      immutable: true
+      label: Engine
+      required: true
+      type: string
+      values:
+        - label: Valkey
+          description: Recommended default for Redis-compatible workloads. AWS prices Valkey 20% lower than Redis OSS for node-based caches and 33% lower for Serverless, with a 90% lower Serverless minimum data storage size.
+          value: valkey
+        - label: Redis
+          description: Use when you specifically need Redis OSS engine compatibility or have an existing Redis OSS requirement.
+          value: redis
+        - label: Memcached
+          description: Best for simple volatile object caching where you do not need Redis commands, persistence, replicas, or cluster-mode sharding.
+          value: memcached
+    - description: "Major engine version. Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6."
+      id: engine_major_version
+      immutable: true
+      label: Engine major version
+      placeholder: "9"
+      required: true
+      type: string
+    - description: Minor or patch version appended to the major version.
+      id: engine_minor_version
+      label: Engine minor version
+      placeholder: "0"
+      required: true
+      type: string
+    - default: true
+      description: Enable automatic minor engine version upgrades during the maintenance window.
+      id: minor_version_auto_upgrade_enabled
+      label: Auto minor version upgrades
+      show_when:
+        serverless_enabled: false
+      type: boolean
+    - id: section_size
+      label: Size & topology
+      type: section
+    - default: false
+      description: Create an ElastiCache Serverless cache instead of provisioned nodes. Supported for Redis and Valkey.
+      id: serverless_enabled
+      immutable: true
+      label: Serverless
+      show_when:
+        engine:
+          - redis
+          - valkey
+      type: boolean
+    - default: cache.t4g.micro
+      description: ElastiCache node size for provisioned clusters.
+      id: node_type
+      label: Node type
+      patterns:
+        - message: Node type must start with cache.
+          pattern: ^cache\..+
+      required: true
+      show_when:
+        serverless_enabled: false
+      type: string
+    - default: 1
+      description: Number of Memcached cache nodes.
+      id: num_cache_nodes
+      label: Cache nodes
+      max: 40
+      min: 1
+      show_when:
+        engine: memcached
+        serverless_enabled: false
+      type: number
+    - default: false
+      description: Enable cluster mode when one primary shard is not enough for your data size or throughput. Leave disabled for simpler Redis or Valkey deployments with one primary and optional replicas.
+      id: cluster_mode_enabled
+      label: Cluster mode
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: boolean
+    - default: 1
+      description: Number of Redis or Valkey shards. Use 1 when cluster mode is disabled.
+      id: num_node_groups
+      label: Node groups
+      max: 500
+      min: 1
+      show_when:
+        cluster_mode_enabled: true
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: number
+    - default: 0
+      description: Number of replica nodes in each Redis or Valkey node group.
+      id: replicas_per_node_group
+      label: Replicas per node group
+      max: 5
+      min: 0
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: number
+    - collapsible: true
+      description: Port where the cache accepts connections. Leave blank for engine defaults.
+      id: port
+      label: Port
+      max: 65535
+      min: 1
+      type: number
+    - collapsible: true
+      default: ipv4
+      description: Network type for the replication group.
+      id: network_type
+      label: Network type
+      show_when:
+        serverless_enabled: false
+      type: string
+      values:
+        - label: IPv4
+          value: ipv4
+        - label: IPv6
+          value: ipv6
+        - label: Dual stack
+          value: dual_stack
+    - collapsible: true
+      default: ipv4
+      description: IP address discovery method.
+      id: ip_discovery
+      label: IP discovery
+      show_when:
+        serverless_enabled: false
+      type: string
+      values:
+        - label: IPv4
+          value: ipv4
+        - label: IPv6
+          value: ipv6
+    - id: section_security
+      label: Security
+      type: section
+    - default: true
+      description: Create a security group with ingress rules for this cache.
+      id: security_group_creation_enabled
+      label: Security group creation
+      type: boolean
+    - description: Existing security group ID to use when security group creation is disabled.
+      id: security_group_id
+      label: Security group ID
+      patterns:
+        - message: Security group ID must start with sg-.
+          pattern: ^sg-.+
+      required: true
+      show_when:
+        security_group_creation_enabled: false
+      type: string
+    - add_button_label: Add security group ID
+      description: Security groups allowed to connect to this cache.
+      id: allowed_security_group_ids
+      label: Allowed security groups
+      patterns:
+        - message: Security group ID must start with sg-.
+          pattern: ^sg-.+
+      placeholder: sg-...
+      type: string_array
+    - add_button_label: Add CIDR block
+      collapsible: true
+      description: IPv4 CIDR blocks allowed to connect to this cache.
+      id: allowed_cidr_blocks
+      label: Allowed IPv4 CIDR blocks
+      placeholder: 10.0.0.0/16
+      type: string_array
+    - add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      description: IPv6 CIDR blocks allowed to connect to this cache.
+      id: allowed_ipv6_cidr_blocks
+      label: Allowed IPv6 CIDR blocks
+      placeholder: 2001:db8::/64
+      type: string_array
+    - collapsible: true
+      default: true
+      description: Enable TLS encryption for Redis and Valkey traffic.
+      id: transit_encryption_enabled
+      label: Transit encryption
+      show_when:
+        engine:
+          - redis
+          - valkey
+      type: boolean
+    - collapsible: true
+      default: true
+      description: Enable encryption at rest for Redis and Valkey.
+      id: at_rest_encryption_enabled
+      label: At-rest encryption
+      show_when:
+        engine:
+          - redis
+          - valkey
+      type: boolean
+    - collapsible: true
+      description: KMS key ARN for at-rest encryption. Leave blank to use the AWS managed key.
+      id: kms_key_arn
+      label: KMS key ARN
+      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
+      show_when:
+        at_rest_encryption_enabled: true
+        engine:
+          - redis
+          - valkey
+      type: string
+    - collapsible: true
+      default: true
+      description: Generate an AUTH token for Redis or Valkey when no token is provided. Requires transit encryption.
+      id: auth_token_enabled
+      label: AUTH token generation
+      show_when:
+        engine:
+          - redis
+          - valkey
+        transit_encryption_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Optional explicit AUTH token. Leave blank to generate one when AUTH token generation is enabled.
+      id: auth_token
+      label: AUTH token
+      show_when:
+        engine:
+          - redis
+          - valkey
+        transit_encryption_enabled: true
+      type: string
+    - collapsible: true
+      default: 32
+      description: Length of the generated AUTH token.
+      id: auth_token_length
+      label: AUTH token length
+      max: 128
+      min: 16
+      show_when:
+        auth_token_enabled: true
+        engine:
+          - redis
+          - valkey
+        transit_encryption_enabled: true
+      type: number
+    - id: section_availability
+      label: Availability
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: section
+    - default: false
+      description: Enable automatic failover. Requires at least one replica.
+      id: automatic_failover_enabled
+      label: Automatic failover
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: boolean
+    - default: false
+      description: Enable Multi-AZ support for the replication group.
+      id: multi_az_enabled
+      label: Multi-AZ
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Enable data tiering for r6gd or r7gd node types.
+      id: data_tiering_enabled
+      label: Data tiering
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: boolean
+    - id: section_backups
+      label: Backups
+      show_when:
+        engine:
+          - redis
+          - valkey
+      type: section
+    - default: 0
+      description: Number of days to retain automatic snapshots. Set to 0 to disable backups.
+      id: snapshot_retention_limit
+      label: Snapshot retention days
+      max: 35
+      min: 0
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: number
+    - collapsible: true
+      description: Daily UTC window for automatic snapshots.
+      id: snapshot_window
+      label: Snapshot window
+      placeholder: 05:00-09:00
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: string
+    - collapsible: true
+      description: Final snapshot name to create when deleting the replication group. Leave blank to skip final snapshot creation.
+      id: final_snapshot_identifier
+      label: Final snapshot identifier
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: false
+      type: string
+    - collapsible: true
+      description: Snapshot ARNs to restore into the serverless cache.
+      id: serverless_snapshot_arns_to_restore
+      label: Serverless snapshot ARNs to restore
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: true
+      type: string_array
+    - collapsible: true
+      description: Daily UTC time for serverless automated snapshots.
+      id: serverless_daily_snapshot_time
+      label: Serverless daily snapshot time
+      placeholder: "05:00"
+      show_when:
+        engine:
+          - redis
+          - valkey
+        serverless_enabled: true
+      type: string
+    - id: section_serverless_limits
+      label: Serverless usage limits
+      show_when:
+        serverless_enabled: true
+      type: section
+    - default: 10
+      description: Maximum serverless data storage in GB.
+      id: serverless_data_storage_maximum
+      label: Data storage maximum (GB)
+      max: 5000
+      min: 1
+      show_when:
+        serverless_enabled: true
+      type: number
+    - default: 5000
+      description: Maximum serverless ECPU per second.
+      id: serverless_ecpu_per_second_maximum
+      label: ECPU per second maximum
+      max: 15000000
+      min: 1000
+      show_when:
+        serverless_enabled: true
+      type: number
+    - add_button_label: Add security group ID
+      collapsible: true
+      description: Security groups to associate with the serverless cache. Leave blank to use this module's security group.
+      id: serverless_security_group_ids
+      label: Serverless security groups
+      patterns:
+        - message: Security group ID must start with sg-.
+          pattern: ^sg-.+
+      show_when:
+        serverless_enabled: true
+      type: string_array
+    - id: section_maintenance
+      label: Maintenance
+      type: section
+    - collapsible: true
+      description: Weekly UTC maintenance window.
+      id: maintenance_window
+      label: Maintenance window
+      placeholder: sun:05:00-sun:09:00
+      show_when:
+        serverless_enabled: false
+      type: string
+    - default: false
+      description: Apply changes immediately instead of during the next maintenance window.
+      id: immediate_apply_enabled
+      label: Apply immediately
+      show_when:
+        serverless_enabled: false
+      type: boolean
+    - id: section_parameters
+      label: Parameter group
+      show_when:
+        serverless_enabled: false
+      type: section
+    - collapsible: true
+      description: Parameter group family. Leave blank to derive it from engine and version.
+      id: parameter_group_family
+      label: Parameter group family
+      placeholder: redis7
+      show_when:
+        serverless_enabled: false
+      type: string
+    - collapsible: true
+      default: []
+      description: Parameter name/value pairs for the ElastiCache parameter group.
+      id: parameters
+      item_inputs:
+        - id: name
+          label: Name
+          required: true
+          type: string
+        - id: value
+          label: Value
+          required: true
+          type: string
+      item_label: Parameter
+      label: Parameters
+      show_when:
+        serverless_enabled: false
+      type: object_array
+    - id: section_notifications
+      label: Notifications
+      type: section
+    - collapsible: true
+      description: SNS topic ARN for ElastiCache notifications.
+      id: notification_topic_arn
+      label: Notification topic ARN
+      placeholder: arn:aws:sns:us-east-1:123456789012:alerts
+      show_when:
+        serverless_enabled: false
+      type: string
+    - id: section_secrets
+      label: Secrets Manager
+      type: section
+    - default: true
+      description: Create a Secrets Manager secret containing the cache connection string.
+      id: secret_creation_enabled
+      label: Connection string secret
+      type: boolean
+    - collapsible: true
+      description: Secret name. Leave blank to use the generated connection string secret name.
+      id: secret_name
+      label: Secret name
+      show_when:
+        secret_creation_enabled: true
+      type: string
+    - collapsible: true
+      description: KMS key ARN used to encrypt the connection string secret.
+      id: secret_kms_key_arn
+      label: Secret KMS key ARN
+      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
+      show_when:
+        secret_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: 7
+      description: Days AWS Secrets Manager waits before deleting the secret. Set to 0 for immediate deletion.
+      id: secret_recovery_window_in_days
+      label: Secret recovery window (days)
+      max: 30
+      min: 0
+      show_when:
+        secret_creation_enabled: true
+      type: number
+    - id: section_observability
+      label: Observability
+      type: section
+    - default: false
+      description: Create CloudWatch alarms for CPU, memory, connections, and evictions.
+      id: cloudwatch_alarms_creation_enabled
+      label: CloudWatch alarms
+      type: boolean
+    - collapsible: true
+      default: 80
+      description: CPU utilization threshold in percent.
+      id: cloudwatch_alarm_cpu_threshold
+      label: CPU alarm threshold (%)
+      max: 100
+      min: 0
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 80
+      description: Memory utilization threshold in percent.
+      id: cloudwatch_alarm_memory_threshold
+      label: Memory alarm threshold (%)
+      max: 100
+      min: 0
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 1000
+      description: Current connections alarm threshold.
+      id: cloudwatch_alarm_connections_threshold
+      label: Connections alarm threshold
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 100
+      description: Evictions alarm threshold.
+      id: cloudwatch_alarm_evictions_threshold
+      label: Evictions alarm threshold
+      min: 0
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 2
+      description: Number of periods over which CloudWatch compares alarm data to the threshold.
+      id: cloudwatch_alarm_evaluation_periods
+      label: Alarm evaluation periods
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 300
+      description: Alarm period in seconds.
+      id: cloudwatch_alarm_period
+      label: Alarm period
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+      values:
+        - label: 10 seconds
+          value: 10
+        - label: 30 seconds
+          value: 30
+        - label: 60 seconds
+          value: 60
+        - label: 5 minutes
+          value: 300
+        - label: 15 minutes
+          value: 900
+        - label: 1 hour
+          value: 3600
+    - add_button_label: Add alarm action ARN
+      collapsible: true
+      description: ARNs to notify when an alarm transitions to ALARM.
+      id: cloudwatch_alarm_actions
+      label: Alarm actions
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: string_array
+    - add_button_label: Add OK action ARN
+      collapsible: true
+      description: ARNs to notify when an alarm transitions to OK.
+      id: cloudwatch_ok_actions
+      label: OK actions
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: string_array
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: cache/elasticache
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
+        allowed_ipv6_cidr_blocks: << module.input.allowed_ipv6_cidr_blocks >>
+        allowed_security_group_ids: << module.input.allowed_security_group_ids >>
+        at_rest_encryption_enabled: << module.input.at_rest_encryption_enabled >>
+        auth_token: << module.input.auth_token >>
+        auth_token_enabled: << module.input.auth_token_enabled >>
+        auth_token_length: << module.input.auth_token_length >>
+        automatic_failover_enabled: << module.input.automatic_failover_enabled >>
+        cloudwatch_alarm_actions: << module.input.cloudwatch_alarm_actions >>
+        cloudwatch_alarm_connections_threshold: << module.input.cloudwatch_alarm_connections_threshold >>
+        cloudwatch_alarm_cpu_threshold: << module.input.cloudwatch_alarm_cpu_threshold >>
+        cloudwatch_alarm_evaluation_periods: << module.input.cloudwatch_alarm_evaluation_periods >>
+        cloudwatch_alarm_evictions_threshold: << module.input.cloudwatch_alarm_evictions_threshold >>
+        cloudwatch_alarm_memory_threshold: << module.input.cloudwatch_alarm_memory_threshold >>
+        cloudwatch_alarm_period: << module.input.cloudwatch_alarm_period >>
+        cloudwatch_alarms_creation_enabled: << module.input.cloudwatch_alarms_creation_enabled >>
+        cloudwatch_ok_actions: << module.input.cloudwatch_ok_actions >>
+        cluster_mode_enabled: << module.input.cluster_mode_enabled >>
+        data_tiering_enabled: << module.input.data_tiering_enabled >>
+        engine: << module.input.engine >>
+        engine_major_version: << module.input.engine_major_version >>
+        engine_minor_version: << module.input.engine_minor_version >>
+        final_snapshot_identifier: << module.input.final_snapshot_identifier >>
+        global_replication_group_id: null
+        immediate_apply_enabled: << module.input.immediate_apply_enabled >>
+        ip_discovery: << module.input.ip_discovery >>
+        kms_key_arn: << module.input.kms_key_arn >>
+        log_delivery_configuration: []
+        maintenance_window: << module.input.maintenance_window >>
+        minor_version_auto_upgrade_enabled: << module.input.minor_version_auto_upgrade_enabled >>
+        multi_az_enabled: << module.input.multi_az_enabled >>
+        name: << module.input.name >>
+        network_type: << module.input.network_type >>
+        node_type: << module.input.node_type >>
+        notification_topic_arn: << module.input.notification_topic_arn >>
+        num_cache_nodes: << module.input.num_cache_nodes >>
+        num_node_groups: "<< module.input.cluster_mode_enabled ? module.input.num_node_groups : 1 >>"
+        parameter_group_family: << module.input.parameter_group_family >>
+        parameters: << module.input.parameters >>
+        port: << module.input.port >>
+        region: << module.input.aws_region >>
+        replicas_per_node_group: << module.input.replicas_per_node_group >>
+        secret_creation_enabled: << module.input.secret_creation_enabled >>
+        secret_kms_key_arn: << module.input.secret_kms_key_arn >>
+        secret_name: << module.input.secret_name >>
+        secret_recovery_window_in_days: << module.input.secret_recovery_window_in_days >>
+        security_group_creation_enabled: << module.input.security_group_creation_enabled >>
+        security_group_id: << module.input.security_group_id >>
+        serverless_cache_usage_limits:
+          data_storage_maximum: << module.input.serverless_data_storage_maximum >>
+          ecpu_per_second_maximum: << module.input.serverless_ecpu_per_second_maximum >>
+        serverless_daily_snapshot_time: << module.input.serverless_daily_snapshot_time >>
+        serverless_enabled: << module.input.serverless_enabled >>
+        serverless_security_group_ids: << module.input.serverless_security_group_ids >>
+        serverless_snapshot_arns_to_restore: << module.input.serverless_snapshot_arns_to_restore >>
+        snapshot_retention_limit: << module.input.snapshot_retention_limit >>
+        snapshot_window: << module.input.snapshot_window >>
+        subnet_ids: << module.input.subnet_ids >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        transit_encryption_enabled: << module.input.transit_encryption_enabled >>
+        vpc_id: << module.input.vpc_id >>
+  ui:
+    metrics: |-
+      <<
+      module.input.serverless_enabled ? [
+        {id:"serverless_cache_hit_rate", name:"Cache hit rate", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"CacheHitRate", statistic:"Average"}},
+        {id:"serverless_cache_hits", name:"Cache hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"CacheHits", statistic:"Sum"}},
+        {id:"serverless_cache_misses", name:"Cache misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"CacheMisses", statistic:"Sum"}},
+        {id:"serverless_current_connections", name:"Current connections", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"CurrConnections", statistic:"Average"}},
+        {id:"serverless_current_items", name:"Current items", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"CurrItems", statistic:"Average"}},
+        {id:"serverless_bytes_used_for_cache", name:"Bytes used for cache", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"BytesUsedForCache", statistic:"Average"}},
+        {id:"serverless_elasticache_processing_units", name:"ElastiCache processing units", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"ElastiCacheProcessingUnits", statistic:"Sum"}},
+        {id:"serverless_network_bytes_in", name:"Network bytes in", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"NetworkBytesIn", statistic:"Sum"}},
+        {id:"serverless_network_bytes_out", name:"Network bytes out", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"NetworkBytesOut", statistic:"Sum"}},
+        {id:"serverless_total_commands", name:"Total commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"TotalCmdsCount", statistic:"Sum"}},
+        {id:"serverless_get_type_commands", name:"Get-type commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"GetTypeCmds", statistic:"Sum"}},
+        {id:"serverless_set_type_commands", name:"Set-type commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"SetTypeCmds", statistic:"Sum"}},
+        {id:"serverless_key_based_commands", name:"Key-based commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheName:module.input.name}, name:"KeyBasedCmds", statistic:"Sum"}}
+      ] : module.input.engine == "memcached" ? [
+        {id:"memcached_cpu_utilization", name:"CPU utilization", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CPUUtilization", statistic:"Average"}},
+        {id:"memcached_freeable_memory", name:"Freeable memory", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"FreeableMemory", statistic:"Average"}},
+        {id:"memcached_swap_usage", name:"Swap usage", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"SwapUsage", statistic:"Average"}},
+        {id:"memcached_current_connections", name:"Current connections", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CurrConnections", statistic:"Average"}},
+        {id:"memcached_new_connections", name:"New connections", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"NewConnections", statistic:"Sum"}},
+        {id:"memcached_current_items", name:"Current items", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CurrItems", statistic:"Average"}},
+        {id:"memcached_bytes_used_for_cache", name:"Bytes used for cache", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"BytesUsedForCache", statistic:"Average"}},
+        {id:"memcached_bytes_read", name:"Bytes read into Memcached", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"BytesReadIntoMemcached", statistic:"Sum"}},
+        {id:"memcached_bytes_written", name:"Bytes written out from Memcached", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"BytesWrittenOutFromMemcached", statistic:"Sum"}},
+        {id:"memcached_network_bytes_in", name:"Network bytes in", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"NetworkBytesIn", statistic:"Sum"}},
+        {id:"memcached_network_bytes_out", name:"Network bytes out", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"NetworkBytesOut", statistic:"Sum"}},
+        {id:"memcached_cmd_get", name:"Get commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CmdGet", statistic:"Sum"}},
+        {id:"memcached_cmd_set", name:"Set commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CmdSet", statistic:"Sum"}},
+        {id:"memcached_get_hits", name:"Get hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"GetHits", statistic:"Sum"}},
+        {id:"memcached_get_misses", name:"Get misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"GetMisses", statistic:"Sum"}},
+        {id:"memcached_evictions", name:"Evictions", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"Evictions", statistic:"Sum"}},
+        {id:"memcached_reclaimed", name:"Reclaimed", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"Reclaimed", statistic:"Sum"}},
+        {id:"memcached_delete_hits", name:"Delete hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"DeleteHits", statistic:"Sum"}},
+        {id:"memcached_delete_misses", name:"Delete misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"DeleteMisses", statistic:"Sum"}},
+        {id:"memcached_increment_hits", name:"Increment hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"IncrHits", statistic:"Sum"}},
+        {id:"memcached_increment_misses", name:"Increment misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"IncrMisses", statistic:"Sum"}},
+        {id:"memcached_decrement_hits", name:"Decrement hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"DecrHits", statistic:"Sum"}},
+        {id:"memcached_decrement_misses", name:"Decrement misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"DecrMisses", statistic:"Sum"}},
+        {id:"memcached_cas_hits", name:"CAS hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CasHits", statistic:"Sum"}},
+        {id:"memcached_cas_misses", name:"CAS misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CasMisses", statistic:"Sum"}},
+        {id:"memcached_cas_badval", name:"CAS bad values", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CasBadval", statistic:"Sum"}},
+        {id:"memcached_flush_commands", name:"Flush commands", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.cluster_id}, name:"CmdFlush", statistic:"Sum"}}
+      ] : [
+        {id:"redis_engine_cpu_utilization", name:"Engine CPU utilization", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"EngineCPUUtilization", statistic:"Average"}},
+        {id:"redis_cpu_utilization", name:"CPU utilization", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"CPUUtilization", statistic:"Average"}},
+        {id:"redis_database_memory_usage_percentage", name:"Database memory usage", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"DatabaseMemoryUsagePercentage", statistic:"Average"}},
+        {id:"redis_database_memory_counted_for_evict", name:"Memory counted for eviction", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{ReplicationGroupId:stack.output.replication_group_id}, name:"DatabaseMemoryUsageCountedForEvictPercentage", statistic:"Average"}},
+        {id:"redis_database_capacity_usage_percentage", name:"Database capacity usage", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"DatabaseCapacityUsagePercentage", statistic:"Average"}},
+        {id:"redis_database_capacity_counted_for_evict", name:"Capacity counted for eviction", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{ReplicationGroupId:stack.output.replication_group_id}, name:"DatabaseCapacityUsageCountedForEvictPercentage", statistic:"Average"}},
+        {id:"redis_current_connections", name:"Current connections", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"CurrConnections", statistic:"Average"}},
+        {id:"redis_new_connections", name:"New connections", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"NewConnections", statistic:"Sum"}},
+        {id:"redis_current_items", name:"Current items", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"CurrItems", statistic:"Average"}},
+        {id:"redis_cache_hits", name:"Cache hits", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"CacheHits", statistic:"Sum"}},
+        {id:"redis_cache_misses", name:"Cache misses", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"CacheMisses", statistic:"Sum"}},
+        {id:"redis_cache_hit_rate", name:"Cache hit rate", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"CacheHitRate", statistic:"Average"}},
+        {id:"redis_evictions", name:"Evictions", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"Evictions", statistic:"Sum"}},
+        {id:"redis_bytes_used_for_cache", name:"Bytes used for cache", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"BytesUsedForCache", statistic:"Average"}},
+        {id:"redis_memory_fragmentation_ratio", name:"Memory fragmentation ratio", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"MemoryFragmentationRatio", statistic:"Average"}},
+        {id:"redis_swap_usage", name:"Swap usage", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"SwapUsage", statistic:"Average"}},
+        {id:"redis_freeable_memory", name:"Freeable memory", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"FreeableMemory", statistic:"Average"}},
+        {id:"redis_network_bytes_in", name:"Network bytes in", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"NetworkBytesIn", statistic:"Sum"}},
+        {id:"redis_network_bytes_out", name:"Network bytes out", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"NetworkBytesOut", statistic:"Sum"}},
+        {id:"redis_replication_lag", name:"Replication lag", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"ReplicationLag", statistic:"Average"}},
+        {id:"redis_save_in_progress", name:"Save in progress", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, namespace:"AWS/ElastiCache", region:stack.output.region, dimensions:{CacheClusterId:stack.output.replication_group_member_cluster_id}, name:"SaveInProgress", statistic:"Average"}}
+      ]
+      >>
+  readme: |-
+    Creates and manages Amazon ElastiCache for Redis, Valkey, Memcached, or serverless Redis-compatible caches.
+
+    ## Overview
+
+    Use this module when an application needs a managed in-memory cache in AWS. It provisions ElastiCache in a selected Ravion VPC network with subnet placement, security group access, optional Redis or Valkey authentication, encryption controls, backups, CloudWatch alarms, and a Secrets Manager connection string.
+
+    The module supports provisioned Redis, Valkey, and Memcached caches. It also supports ElastiCache Serverless for Redis-compatible engines when you want AWS-managed scaling instead of fixed node capacity.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Application cache | Create a private Redis, Valkey, or Memcached cache attached to an existing Ravion VPC network. |
+    | Production Redis-compatible cache | Enable replicas, automatic failover, Multi-AZ, encryption, backups, and CloudWatch alarms. |
+    | Serverless cache | Use ElastiCache Serverless for Redis or Valkey workloads with data storage and ECPU usage limits. |
+    | Shared connection details | Store the cache connection string in AWS Secrets Manager for application services to consume. |
+
+    ## Networking and access
+
+    Select a VPC network first. Ravion maps the network's AWS account, region, VPC ID, and private subnet IDs into this module. The cache subnet group or serverless cache uses those private subnets by default.
+
+    Security group creation is enabled by default. Add allowed security group IDs for application services that should connect to the cache. IPv4 and IPv6 CIDR access is available for controlled network ranges, but security group references are usually safer for application-to-cache traffic.
+
+    ## Engine and capacity
+
+    Choose Valkey for Redis-compatible workloads unless you specifically need Redis OSS. AWS prices Valkey 20% lower than Redis OSS for node-based ElastiCache and 33% lower for ElastiCache Serverless, with a 90% lower Serverless minimum data storage size. Choose Redis when you have a Redis OSS compatibility requirement, or Memcached for simple volatile object caching without Redis data structures. Provisioned Redis and Valkey support replicas, optional cluster mode sharding, automatic failover, Multi-AZ, backups, AUTH tokens, and encryption. Memcached uses cache node count instead of Redis-style replication groups.
+
+    For provisioned caches, choose a node type such as `cache.t4g.micro` or `cache.r7g.large`. For serverless caches, set the data storage maximum and ECPU per second maximum to control cost and capacity limits.
+
+    ## Security
+
+    Transit encryption and at-rest encryption default on for Redis and Valkey. AUTH token generation is enabled by default when transit encryption is enabled. You can provide a specific token when required, but generated tokens avoid hardcoding credentials in Ravion configuration.
+
+    The module can create a Secrets Manager secret with the cache connection string. Keep this enabled when application modules need a stable secret reference for connecting to the cache.
+
+    ## Backups and maintenance
+
+    Redis and Valkey provisioned caches can retain automatic snapshots for up to 35 days and can create a final snapshot during deletion when a final snapshot identifier is provided. Serverless caches can restore from snapshot ARNs and can set a daily snapshot time.
+
+    Maintenance windows, immediate apply, and automatic minor version upgrades control when AWS applies compatible engine and infrastructure changes for provisioned caches.
+
+    ## Observability
+
+    CloudWatch dashboard metrics are shown for provisioned Redis or Valkey, Memcached, and serverless caches. CloudWatch alarms are optional. When enabled, the module can alarm on CPU utilization, memory usage, current connections, and evictions.
+
+    ## Configuration
+
+    | Field | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | VPC network | Yes | None | Supplies AWS account, region, VPC ID, and private subnet IDs. |
+    | Name slug | Yes | Project and environment given IDs | Prefix for ElastiCache resources. |
+    | Engine | Yes | valkey | Valkey is the recommended default for Redis-compatible workloads because AWS prices it 20% lower than Redis OSS for node-based caches and 33% lower for Serverless. |
+    | Serverless | No | false | Creates an ElastiCache Serverless cache for Redis or Valkey. |
+    | Engine major version | Yes | None | Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6. |
+    | Engine minor version | Yes | None | Appended to the major version. Use 0 for Valkey 9.0, 1 for Redis OSS 7.1, or 22 for Memcached 1.6.22. |
+    | Node type | Yes for provisioned caches | cache.t4g.micro | ElastiCache node size for provisioned clusters. |
+    | Cache nodes | No | 1 | Memcached node count. |
+    | Cluster mode | No | false | Enables Redis or Valkey sharding when one primary shard is not enough for data size or throughput. |
+    | Node groups | No | 1 | Redis or Valkey shard count. Only shown when cluster mode is enabled. |
+    | Replicas per node group | No | 0 | Replica count per Redis or Valkey shard. |
+    | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
+    | Transit encryption | No | true | Applies to Redis and Valkey. Required for AUTH tokens. |
+    | At-rest encryption | No | true | Applies to Redis and Valkey. |
+    | AUTH token generation | No | true | Generates a Redis or Valkey AUTH token when no explicit token is provided. |
+    | Automatic failover | No | false | Requires at least one Redis or Valkey replica. |
+    | Multi-AZ | No | false | Spreads Redis or Valkey replicas across availability zones. |
+    | Snapshot retention days | No | 0 | Set 1-35 for automatic Redis or Valkey backups. |
+    | Serverless usage limits | No | 10 GB and 5000 ECPU/s | Applies only to serverless caches. |
+    | Connection string secret | No | true | Stores cache connection details in Secrets Manager. |
+    | CloudWatch alarms | No | false | Adds CPU, memory, connection, and eviction alarms. |
+    | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
+    | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
+
+    ## Advanced configuration
+
+    Use parameter group settings for engine parameters such as Redis eviction policy or Memcached options. Use notification topic ARN to send ElastiCache events to an SNS topic. Use advanced Terraform variables for one-off overrides not represented directly in the UI. Values in advanced Terraform variables override generated variables.
+
+    Terraform settings let you override the OpenTofu version, Terraform execution environment inherited from the VPC network, and Ravion state backend workspace name.
+
+    ## Design decisions
+
+    The module places caches in private subnets by default through the VPC network reference. Redis and Valkey encryption, AUTH token generation, security group creation, and connection string secret creation default on because they are safer defaults for application caches.
+
+    The normal form exposes common sizing, security, availability, backup, observability, and secret settings. Rare settings such as global replication group attachment and log delivery configuration are intentionally left to advanced Terraform variables.
+
+    ## Learn more
+
+    - [Amazon ElastiCache documentation](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/WhatIs.html)
+    - [ElastiCache for Redis OSS security](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/auth.html)
+    - [ElastiCache for Valkey](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/engine-versions.html)
+    - [ElastiCache Serverless](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/elasticache-serverless.html)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/cache/elasticache)

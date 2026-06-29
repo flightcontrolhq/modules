@@ -131,6 +131,11 @@ output "port" {
   value       = module.rds.port
 }
 
+output "db_parameter_group_name" {
+  description = "RDS DB parameter group name."
+  value       = module.rds.db_parameter_group_name
+}
+
 output "security_group_id" {
   description = "RDS security group ID."
   value       = module.rds.security_group_id

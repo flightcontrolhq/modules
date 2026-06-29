@@ -141,7 +141,7 @@ output "db_subnet_group_arn" {
 ################################################################################
 
 output "db_parameter_group_name" {
-  description = "The name of the DB parameter group."
+  description = "The name of the DB parameter group. Managed groups are named with the rds- prefix."
   value       = local.create_parameter_group ? aws_db_parameter_group.this[0].name : var.parameter_group_name
 }
 

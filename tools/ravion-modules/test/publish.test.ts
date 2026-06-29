@@ -201,6 +201,22 @@ describe("publish", () => {
     assert.equal(client.createdVersions.length, 0);
   });
 
+  it("local-dev force publishing chooses the next suffix when an identical suffixed version exists", async () => {
+    const compiled = createCompiledDefinition({ module: { stack: { source: { ref: "ravion-aws-vpc@1.2.3" } } } });
+    const suffixedConfig = { stack: { source: { ref: "main" } } };
+    const client = new MockRavionClient({
+      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
+      versionsByDefinitionId: {
+        vpc: [createRemoteVersion({ version: "1.2.3-1", config: suffixedConfig })],
+      },
+    });
+
+    const result = await publishDefinitions([compiled], client, { dryRun: false, localDev: true, localDevForce: true });
+
+    assert.deepEqual(result.items.map(({ action, version }) => ({ action, version })), [{ action: "create-version", version: "1.2.3-2" }]);
+    assert.equal(client.createdVersions[0].version, "1.2.3-2");
+  });
+
   it("formats a markdown dry-run plan with diffs", async () => {
     const client = new MockRavionClient();
 

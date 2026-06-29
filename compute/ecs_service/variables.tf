@@ -286,13 +286,90 @@ variable "desired_count" {
 
 variable "deployment_type" {
   type        = string
-  description = "The deployment type: 'rolling' (ECS) or 'blue_green' (CODE_DEPLOY)."
+  description = "Initial deployment strategy for direct Terraform use ('rolling', 'blue_green', 'linear', 'canary'). Ravion ECS Web stack provisioning passes 'rolling' and the Flightcontrol deploy manager passes the authoritative blue_green/linear/canary strategy on each UpdateService call, so strategy changes in Ravion do not require Terraform changes."
   default     = "rolling"
 
   validation {
-    condition     = contains(["rolling", "blue_green"], var.deployment_type)
-    error_message = "The deployment_type must be either 'rolling' or 'blue_green'."
+    condition     = contains(["rolling", "blue_green", "linear", "canary"], var.deployment_type)
+    error_message = "The deployment_type must be one of: 'rolling', 'blue_green', 'linear', 'canary'."
   }
+}
+
+variable "deployment_strategy_config" {
+  type = object({
+    # Minutes both revisions keep running after production traffic has
+    # fully shifted, before the old revision is terminated.
+    bake_time_in_minutes = optional(number, 10)
+
+    # Canary tuning — only used when deployment_type is 'canary'.
+    canary = optional(object({
+      canary_percent              = optional(number, 5.0)
+      canary_bake_time_in_minutes = optional(number, 10)
+    }), {})
+
+    # Linear tuning — only used when deployment_type is 'linear'.
+    linear = optional(object({
+      step_percent              = optional(number, 25.0)
+      step_bake_time_in_minutes = optional(number, 5)
+    }), {})
+  })
+  description = <<-EOT
+    Initial tuning for direct Terraform use with native traffic-shift
+    strategies (blue_green / linear / canary). Ravion ECS Web stack
+    provisioning uses rolling and the Flightcontrol deploy manager passes
+    the authoritative deploymentConfiguration (including pause lifecycle
+    hooks) on every UpdateService call, so post-create changes to these
+    values are ignored by Terraform (see ignore_changes on
+    aws_ecs_service.this).
+  EOT
+  default     = {}
+}
+
+variable "test_listener_rule_arn" {
+  type        = string
+  description = "Optional ARN of an externally-managed ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies when the module-created green listener rule is not enabled."
+  default     = null
+}
+
+variable "green_alb_listener_rule_enabled" {
+  type        = bool
+  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test selector (query string by default, or header when test_traffic_condition_type is \"header\") and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. Created by default; no effect for NLB services."
+  default     = true
+}
+
+variable "test_header_name" {
+  type        = string
+  description = "HTTP header name that distinguishes test traffic for the green listener rule. Requests carrying this header (with test_header_value) match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"header\"."
+  default     = "X-Ravion-Test"
+}
+
+variable "test_header_value" {
+  type        = string
+  description = "Value paired with test_header_name for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"header\"."
+  default     = "1"
+}
+
+variable "test_traffic_condition_type" {
+  type        = string
+  description = "Which request attribute distinguishes test traffic for the green listener rule: \"header\" (matches test_header_name/test_header_value) or \"query-string\" (matches test_query_string_key/test_query_string_value). ALB AND-combines conditions within a single rule and ECS native blue/green wires exactly one test rule, so the selector is one type per service, not both at once. Only used when green_alb_listener_rule_enabled is true."
+  default     = "query-string"
+
+  validation {
+    condition     = contains(["header", "query-string"], var.test_traffic_condition_type)
+    error_message = "test_traffic_condition_type must be either \"header\" or \"query-string\"."
+  }
+}
+
+variable "test_query_string_key" {
+  type        = string
+  description = "Query-string key that distinguishes test traffic for the green listener rule (e.g. \"__x-rvn-test__\" matches ?__x-rvn-test__=...). Requests carrying this key/value match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"query-string\"."
+  default     = "__x-rvn-test__"
+}
+
+variable "test_query_string_value" {
+  type        = string
+  description = "Value paired with test_query_string_key for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"query-string\"."
+  default     = "1"
 }
 
 variable "deployment_minimum_healthy_percent" {
@@ -452,6 +529,16 @@ variable "load_balancer_attachment" {
     })
 
     # ALB: Listener rules (attach to existing ALB listener)
+    #
+    # IMPORTANT: only the first rule is wired into the service's
+    # advanced_configuration as the production listener rule. Native
+    # traffic-shift deployments (blue_green/linear/canary) rewrite only
+    # that rule — traffic on any additional rules never shifts to the
+    # new revision. Terraform rejects >1 rule when deployment_type is a
+    # traffic-shift strategy, but because the strategy is a
+    # per-deployment decision on the native ECS controller, services
+    # that may ever deploy with a traffic-shift strategy must also keep
+    # to a single rule.
     listener_rules = optional(list(object({
       listener_arn = string
       priority     = optional(number, null) # null = AWS auto-assigns next available priority

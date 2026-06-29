@@ -3,8 +3,8 @@ definition:
   name: Route 53 DNS
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
-  version: 0.1.0
-  description: Initial Route 53 module definition with refined DNS record UI and managed query logging support.
+  version: 0.2.0
+  description: Add Logs tab for CloudWatch.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -162,38 +162,29 @@ module:
               description: Route an A or AAAA record to a supported AWS resource without setting a TTL.
               value: alias
         - add_button_label: Add record value
-          description: Values for a standard DNS record. CNAME and SOA records use a single value field instead.
-          id: record_values
+          description: Values for a standard DNS record. Leave empty for alias records.
+          id: records
           label: Record values
           required: true
           show_when:
+            target_type:
+              not: alias
             type:
               not:
-                - A
-                - AAAA
                 - CNAME
                 - SOA
           type: string_array
-        - description: Value for a single-value standard DNS record.
+        - description: Value for a standard DNS record type that accepts exactly one value.
           id: record_value
           label: Record value
           required: true
           show_when:
+            target_type:
+              not: alias
             type:
               - CNAME
               - SOA
           type: string
-        - add_button_label: Add record value
-          description: Values for a standard DNS record.
-          id: record_values_a_aaaa
-          label: Record values
-          required: true
-          show_when:
-            target_type: standard
-            type:
-              - A
-              - AAAA
-          type: string_array
         - description: DNS name of the AWS target resource. For an ALB or NLB, use the load balancer DNS name. For CloudFront, use the distribution domain name such as d111111abcdef8.cloudfront.net.
           id: alias_name
           label: Alias target DNS name
@@ -244,22 +235,8 @@ module:
           label: TTL seconds
           min: 0
           show_when:
-            target_type: standard
-            type:
-              - A
-              - AAAA
-          type: number
-        - collapsible: true
-          default: 300
-          description: TTL in seconds for standard records. Lower values update faster but can increase DNS query volume; 300 seconds is a common default.
-          id: standard_ttl
-          label: TTL seconds
-          min: 0
-          show_when:
-            type:
-              not:
-                - A
-                - AAAA
+            target_type:
+              not: alias
           type: number
         - collapsible: true
           default: simple
@@ -345,16 +322,11 @@ module:
           type: string
       item_label: Record
       item_title:
-        fallback: Record {key}
-        template: "{name} {type}"
-      key:
-        from_fields:
-          - type
-          - name
-        separator: "|"
+        fallback: Record
+        template: "{type} {name}"
       label: Records
       required: false
-      type: object_map
+      type: object_array
     - id: section_query_logging
       label: Query logging
       show_when:
@@ -510,13 +482,27 @@ module:
         query_log_group_retention_days: << module.input.query_log_group_retention_days >>
         query_log_resource_policy_name: << module.input.query_log_resource_policy_name >>
         record_force_destroy_enabled: << module.input.record_force_destroy_enabled >>
-        records: << module.input.records || {} >>
+        records: << module.input.records || [] >>
         region: << module.input.aws_region >>
         tags:
           $include: ../../partials/stack/ravion-tags.yml
         vpc_associations: << module.input.vpc_associations || {} >>
         zone_creation_enabled: << module.input.zone_creation_enabled >>
         zone_id: << module.input.zone_id >>
+  ui:
+    logs: |-
+      <<
+      module.input.query_logging_enabled && stack.output.query_log_group_name ? [{
+        "id":"route53_query_logs",
+        "name":"Route 53 query logs",
+        "source":{
+          "type":"cloudwatch",
+          "aws_account_id":module.input.aws_account_id,
+          "region":"us-east-1",
+          "log_group":stack.output.query_log_group_name
+        }
+      }] : []
+      >>
   readme: |
     Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 
@@ -546,9 +532,9 @@ module:
 
     ## DNS records
 
-    DNS records are configured as structured entries backed by a map. Ravion derives each record key from the record name, type, and optional set identifier. Each record includes a record name, record type, and either standard record values with a TTL or an alias target.
+    DNS records are configured as structured entries. Terraform derives each resource key from the record name, type, and optional set identifier. Each record includes a record name, record type, and either standard record values with a TTL or an alias target.
 
-    Standard records use TTL seconds and Record values. CNAME and SOA records use a single Record value field because those record sets should contain one value. Alias targets are exposed for A and AAAA records, which is the normal pattern for routing to AWS resources such as load balancers, CloudFront distributions, API Gateway domains, and S3 website endpoints. Alias records use Alias target DNS name and Alias target hosted zone ID. The alias target hosted zone ID belongs to the AWS target resource, not this domain's hosted zone. For an ALB or NLB, use the load balancer canonical hosted zone ID. For CloudFront, use Z2FDTNDATAQYW2. Regional services such as API Gateway and S3 website endpoints have service and region-specific hosted zone IDs.
+    Standard records use TTL seconds and Record values. CNAME and SOA records use a single Record value because those record types accept exactly one value. Alias targets are exposed for A and AAAA records, which is the normal pattern for routing to AWS resources such as load balancers, CloudFront distributions, API Gateway domains, and S3 website endpoints. Alias records use Alias target DNS name and Alias target hosted zone ID. The alias target hosted zone ID belongs to the AWS target resource, not this domain's hosted zone. For an ALB or NLB, use the load balancer canonical hosted zone ID. For CloudFront, use Z2FDTNDATAQYW2. Regional services such as API Gateway and S3 website endpoints have service and region-specific hosted zone IDs.
 
     Routing policy is optional. Use Set identifier for records that share the same name and type with weighted, failover, latency, or geolocation routing.
 
@@ -576,7 +562,7 @@ module:
     | Delegation set ID | No | None | Reusable delegation set for created public zones. |
     | Private hosted zone | No | false | Creates a private hosted zone instead of a public zone. |
     | VPC associations | For private zones | Empty map | VPCs associated with the private hosted zone. |
-    | DNS records | No | Empty map | Structured Route 53 records to create in the hosted zone. |
+    | DNS records | No | Empty list | Structured Route 53 records to create in the hosted zone. |
     | Query logging | No | false | Enables Route 53 query logging for public hosted zones. |
     | Create query log group | No | true | Creates the CloudWatch Logs log group and resource policy in us-east-1. |
     | Query log group name | No | Generated from hosted zone name | Name for the created CloudWatch Logs log group. |
