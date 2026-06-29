@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.2.0
-  description: Add Logs tab for CloudWatch.
+  version: 0.2.1
+  description: Refactor shared build input definitions.
 module:
   inputs:
     - id: section_cluster
