@@ -4,7 +4,7 @@ definition:
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
   version: 0.2.0
-  description: Use directory-based Lambda zip deploy inputs with pipeline-run build artifacts.
+  description: Use S3 key Lambda zip deploy inputs and immutable Lambda type selection.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -13,6 +13,7 @@ module:
       label: Lambda function
       type: section
     - id: lambda_type
+      immutable: true
       label: Lambda type
       type: string
       required: true
@@ -45,6 +46,8 @@ module:
       description: AWS Lambda deployment package type. AWS does not support changing this after the function is created.
       required: true
       default: Zip
+      show_when:
+        lambda_type: regional
       values:
         - label: Zip package
           description: Build or deploy a .zip package from S3.
@@ -52,8 +55,6 @@ module:
         - label: Container image
           description: Deploy an existing container image from Amazon ECR.
           value: Image
-          show_when:
-            lambda_type: regional
     - id: handler
       label: Handler
       type: string
@@ -247,10 +248,8 @@ module:
           description: Use a Dockerfile to build a zip package or Lambda container image.
           value: dockerfile
         - label: Disabled
-          description: Skip the build step. Zip deploys use an S3 object key.
+          description: Skip the build step and provide an existing artifact at deploy time.
           value: none
-          show_when:
-            package_type: Zip
     - $template: ../../partials/inputs/build-git-source.yml
       with:
         show_when:
@@ -1094,10 +1093,10 @@ module:
     type: aws:lambda
     timeout: 1800
     inputs:
-      - id: directory
-        label: S3 directory
+      - id: s3_key
+        label: S3 key
         type: string
-        description: S3 directory containing lambda.zip for the Lambda zip package to deploy.
+        description: S3 key for the Lambda zip package to deploy.
         required: true
         show_when:
           package_type: Zip
@@ -1132,7 +1131,7 @@ module:
       (module.input.build_type == "none" ? deploy.input.image_uri :
       (deploy.input.image_ref contains "sha256:" ? stack.output.ecr_repository_url + "@" +
       deploy.input.image_ref : stack.output.ecr_repository_url + ":" + deploy.input.image_ref))} :
-      {package_type: "zip", s3_key: deploy.input.directory + "/lambda.zip"} >>
+      {package_type: "zip", s3_key: deploy.input.s3_key} >>
   ui:
     metrics:
       - id: invocations
@@ -1216,7 +1215,7 @@ module:
 
     ## Build and deployment
 
-    Package type is immutable after creation because AWS Lambda does not support changing an existing function between zip packages and container images.
+    Lambda type and package type are immutable after creation. Lambda@Edge functions must be created in us-east-1, and AWS Lambda does not support changing an existing function between zip packages and container images.
 
     For zip package functions, builds use Nixpacks or a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
 
@@ -1241,6 +1240,7 @@ module:
     | AWS account & region | AWS account | Yes | none | Account where Lambda resources are created |
     | AWS account & region | Region | Yes | none | Region for the Lambda function and code bucket |
     | Lambda function | Function name | Yes | Generated from project, environment, and module IDs | Immutable AWS function name |
+    | Lambda function | Lambda type | Yes | Regional Lambda | Immutable because Lambda@Edge must be created in us-east-1 |
     | Lambda function | Package type | Yes | Zip package | Immutable AWS package type |
     | Lambda function | Handler | Zip only | index.handler | Zip package entrypoint |
     | Lambda function | Runtime | Zip only | nodejs20.x | Lambda runtime string |
@@ -1262,6 +1262,7 @@ module:
 
     ## Design decisions
 
+    - Lambda type is immutable. Create a new Lambda module/function to migrate between Regional Lambda and CloudFront Lambda@Edge, especially when the existing function is outside us-east-1.
     - Package type is immutable. Create a new Lambda module/function to migrate between zip packages and container images.
     - Zip package functions use the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
     - Container image functions use the image build pipeline to push Dockerfile or Nixpacks builds to ECR. Prebuilt image mode promotes tags or digests from an existing ECR repository.
