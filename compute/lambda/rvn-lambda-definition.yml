@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.1.0
-  description: Add Lambda functions with build-backed deployments and legacy-compatible configuration inputs.
+  version: 0.2.0
+  description: Use directory-based Lambda zip deploy inputs with pipeline-run build artifacts.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -219,13 +219,6 @@ module:
       label: Package S3 key
       type: string
       description: S3 key of the deployment package. Required when Package S3 bucket is set.
-      collapsible: true
-      show_when:
-        package_type: Zip
-    - id: s3_object_version
-      label: Package S3 object version
-      type: string
-      description: S3 object version containing the deployment package.
       collapsible: true
       show_when:
         package_type: Zip
@@ -1028,7 +1021,6 @@ module:
               << module.input.package_type == "Zip" ? module.input.runtime : nil >>
             s3_bucket: << module.input.s3_bucket || nil >>
             s3_key: << module.input.s3_key || nil >>
-            s3_object_version: << module.input.s3_object_version || nil >>
             snap_start_apply_on: >-
               << module.input.lambda_type == "edge" ? nil : (module.input.package_type == "Zip" ? (module.input.snap_start_apply_on || nil) : nil) >>
             tags:
@@ -1090,7 +1082,7 @@ module:
       << module.input.lambda_type != "edge" && module.input.package_type == "Image" ? [{id: "ecr", type: "ecr", repository_arn:
       stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
       module.input.build_type]}] : [{id: "lambda-package", type: "s3", bucket:
-      stack.output.code_bucket_id, key: module.given_id, region: stack.output.region}] >>
+      stack.output.code_bucket_id, directory: pipeline.run.id, region: stack.output.region}] >>
     infrastructure:
       ami: << module.input.build_ami || nil >>
       aws_account_id: "<< module.input.build_execution_environment_id || module.input.execution_environment_id ? nil : module.input.aws_account_id >>"
@@ -1102,18 +1094,11 @@ module:
     type: aws:lambda
     timeout: 1800
     inputs:
-      - id: s3_key
-        label: S3 object key
+      - id: directory
+        label: S3 directory
         type: string
-        description: S3 key for the Lambda zip package to deploy.
+        description: S3 directory containing lambda.zip for the Lambda zip package to deploy.
         required: true
-        show_when:
-          package_type: Zip
-      - id: s3_object_version
-        label: S3 object version
-        type: string
-        description: Optional S3 object version for versioned artifact buckets.
-        required: false
         show_when:
           package_type: Zip
       - id: image_uri
@@ -1147,8 +1132,7 @@ module:
       (module.input.build_type == "none" ? deploy.input.image_uri :
       (deploy.input.image_ref contains "sha256:" ? stack.output.ecr_repository_url + "@" +
       deploy.input.image_ref : stack.output.ecr_repository_url + ":" + deploy.input.image_ref))} :
-      {package_type: "zip", s3_key: deploy.input.s3_key, s3_object_version:
-      (deploy.input.s3_object_version || nil)} >>
+      {package_type: "zip", s3_key: deploy.input.directory + "/lambda.zip"} >>
   ui:
     metrics:
       - id: invocations

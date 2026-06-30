@@ -136,7 +136,6 @@ module "lambda_with_integrations" {
 | source_code_hash | Base64 SHA256 of package | `string` | `null` | no |
 | s3_bucket | S3 bucket for package | `string` | `null` | no |
 | s3_key | S3 key for package | `string` | `null` | no |
-| s3_object_version | S3 object version for package | `string` | `null` | no |
 | image_uri | Image URI (Image only) | `string` | `null` | no |
 | image_config | Image config override object | `object` | `null` | no |
 | ecr_repository_creation_enabled | Create an ECR repository for built container image deployments | `bool` | `false` | no |

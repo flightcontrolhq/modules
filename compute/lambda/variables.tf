@@ -92,12 +92,6 @@ variable "s3_key" {
   default     = null
 }
 
-variable "s3_object_version" {
-  type        = string
-  description = "S3 object version containing the deployment package."
-  default     = null
-}
-
 variable "code_bucket_name" {
   type        = string
   description = "Name for the auto-created S3 bucket used to store the deployment package. Only used when package_type is 'Zip' and neither filename nor s3_bucket is provided. Defaults to '<name>-code-<account_id>'."
