@@ -14,9 +14,11 @@ terraform {
     }
     # Ravion provider: provisions the SNS topic a CloudWatch metric alarm
     # publishes to and records the notification routing (template + channel).
+    # NOTE: pointing at the siddharthsuresh.dev dev registry for now; switch to
+    # providers.ravion.com when merging to main.
     ravion = {
-      source  = "providers.ravion.com/ravion/ravion"
-      version = ">= 0.1.0"
+      source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"
+      version = ">= 0.2.0"
     }
   }
 }
