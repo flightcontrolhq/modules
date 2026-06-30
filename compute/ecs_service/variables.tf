@@ -710,3 +710,49 @@ variable "region" {
   description = "AWS region. When null, the provider's configured region is used."
   default     = null
 }
+
+################################################################################
+# Alarm notifications (Ravion)
+################################################################################
+
+variable "notifications_enabled" {
+  type        = bool
+  description = "Provision CloudWatch CPU/memory alarms for this service and deliver Ravion notifications when they fire."
+  default     = false
+}
+
+variable "notification_template_id" {
+  type        = string
+  description = "The Ravion notification template (givenId) that renders the alarm message."
+  default     = ""
+}
+
+variable "notification_channel_ref" {
+  type        = string
+  description = "The channel a firing alarm notifies (e.g. a Slack connection id)."
+  default     = ""
+}
+
+variable "cpu_alarm_threshold" {
+  type        = number
+  description = "CPU utilization (%) above which the alarm fires."
+  default     = 80
+}
+
+variable "memory_alarm_threshold" {
+  type        = number
+  description = "Memory utilization (%) above which the alarm fires."
+  default     = 80
+}
+
+variable "alarm_evaluation_periods" {
+  type        = number
+  description = "Number of consecutive periods the metric must breach before the alarm fires."
+  default     = 2
+}
+
+variable "alarm_period" {
+  type        = number
+  description = "Alarm evaluation period in seconds."
+  default     = 300
+}

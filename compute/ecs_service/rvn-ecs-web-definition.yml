@@ -3,8 +3,8 @@ definition:
   name: ECS Web Server
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.7.0
-  description: Add Logs tab for CloudWatch.
+  version: 0.8.0
+  description: Add CloudWatch CPU/memory alarms wired to Ravion notifications via the ravion provider.
 module:
   inputs:
     - id: section_cluster
@@ -318,6 +318,56 @@ module:
     - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
     - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
     - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
+    - id: section_notifications
+      label: Alarm notifications
+      type: section
+    - id: notifications_enabled
+      label: Enable alarm notifications
+      type: boolean
+      description: Provision CloudWatch CPU and memory alarms for this service and deliver a Ravion notification when one fires.
+      default: false
+    - id: notification_template_id
+      label: Notification template
+      type: string
+      description: The notification template that renders the alarm message.
+      default: ""
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
+    - id: notification_channel_ref
+      label: Notification channel
+      type: string
+      description: The channel a firing alarm notifies (e.g. a Slack connection id).
+      default: ""
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
+    - id: cpu_alarm_threshold
+      label: CPU alarm threshold (%)
+      type: number
+      description: CPU utilization above which the alarm fires.
+      default: 80
+      max: 100
+      min: 1
+      collapsible: true
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
+    - id: memory_alarm_threshold
+      label: Memory alarm threshold (%)
+      type: number
+      description: Memory utilization above which the alarm fires.
+      default: 80
+      max: 100
+      min: 1
+      collapsible: true
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
   stack:
     type: opentofu
     ravion_state_backend_workspace: >-

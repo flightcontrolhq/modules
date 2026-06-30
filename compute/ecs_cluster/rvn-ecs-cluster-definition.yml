@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.2.0
-  description: Automatically derive the default capacity provider so the cluster default strategy commits to a single provider family
+  version: 0.3.0
+  description: Add cluster-level CloudWatch CPU/memory alarms wired to Ravion notifications via the ravion provider.
 module:
   inputs:
     - id: network
@@ -468,6 +468,56 @@ module:
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
+    - id: section_notifications
+      label: Alarm notifications
+      type: section
+    - id: notifications_enabled
+      label: Enable alarm notifications
+      type: boolean
+      description: Provision cluster-level CloudWatch CPU and memory alarms and deliver a Ravion notification when one fires.
+      default: false
+    - id: notification_template_id
+      label: Notification template
+      type: string
+      description: The notification template that renders the alarm message.
+      default: ""
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
+    - id: notification_channel_ref
+      label: Notification channel
+      type: string
+      description: The channel a firing alarm notifies (e.g. a Slack connection id).
+      default: ""
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
+    - id: cpu_alarm_threshold
+      label: CPU alarm threshold (%)
+      type: number
+      description: Cluster CPU utilization above which the alarm fires.
+      default: 80
+      max: 100
+      min: 1
+      collapsible: true
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
+    - id: memory_alarm_threshold
+      label: Memory alarm threshold (%)
+      type: number
+      description: Cluster memory utilization above which the alarm fires.
+      default: 80
+      max: 100
+      min: 1
+      collapsible: true
+      show_when:
+        notifications_enabled:
+          - true
+          - "true"
   readme: |-
     Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 
