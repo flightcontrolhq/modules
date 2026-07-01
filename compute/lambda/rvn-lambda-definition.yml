@@ -45,8 +45,6 @@ module:
       type: string
       required: true
       default: Zip
-      show_when:
-        lambda_type: regional
       values:
         - label: Zip package
           description: Build or deploy a .zip package from S3.
@@ -54,13 +52,33 @@ module:
         - label: Container image
           description: Deploy an existing container image from Amazon ECR.
           value: Image
-    - id: handler
-      label: Handler
+          show_when:
+            lambda_type: regional
+    - id: architecture
+      label: Architecture
       type: string
-      description: Function entrypoint for the zip package, such as index.handler.
+      description: CPU architecture used by the function.
       required: true
+      default: x86_64
+      show_when:
+        lambda_type: regional
+      values:
+        - label: x86_64
+          value: x86_64
+        - label: arm64
+          value: arm64
+    - id: version_publishing_enabled
+      label: Version publishing
+      type: boolean
+      description: Publish a new immutable Lambda version on function updates. Required for Lambda@Edge and aliases that target published versions.
+      default: false
+      show_when:
+        lambda_type: regional
+    - id: section_zip_package
+      label: Zip package
       show_when:
         package_type: Zip
+      type: section
     - id: runtime
       label: Runtime
       type: string
@@ -93,121 +111,14 @@ module:
           value: dotnet8
         - label: Go provided AL2023
           value: provided.al2023
-    - id: architecture
-      label: Architecture
+    - id: handler
+      label: Handler
       type: string
-      description: CPU architecture used by the function.
+      description: Function entrypoint for the zip package, such as index.handler.
+      placeholder: index.handler
       required: true
-      default: x86_64
-      show_when:
-        lambda_type: regional
-      values:
-        - label: x86_64
-          value: x86_64
-        - label: arm64
-          value: arm64
-    - id: version_publishing_enabled
-      label: Version publishing
-      type: boolean
-      description: Publish a new immutable Lambda version on function updates. Required for Lambda@Edge and aliases that target published versions.
-      default: false
-      show_when:
-        lambda_type: regional
-    - id: memory_size
-      label: Memory (MB)
-      type: number
-      description: Memory allocated to the function. Lambda CPU scales with memory.
-      min: 128
-      max: 10240
-      required: true
-      default: 128
-      show_when:
-        lambda_type: regional
-    - id: timeout
-      label: Timeout (secs)
-      type: number
-      description: Maximum runtime for a single invocation.
-      min: 1
-      max: 900
-      required: true
-      default: 5
-      show_when:
-        lambda_type: regional
-    - id: ephemeral_storage_size
-      label: Ephemeral storage (MB)
-      type: number
-      description: Size of the function's /tmp directory.
-      collapsible: true
-      min: 512
-      max: 10240
-      default: 512
-      show_when:
-        lambda_type: regional
-    - id: reserved_concurrent_executions
-      label: Reserved concurrency
-      type: number
-      description: Reserved concurrent executions for this function. Use -1 to remove limits.
-      collapsible: true
-      min: -1
-      required: false
-      show_when:
-        lambda_type: regional
-    - id: tracing_mode
-      label: X-Ray tracing
-      type: string
-      description: Choose whether Lambda actively traces invocations with AWS X-Ray.
-      collapsible: true
-      default: PassThrough
-      values:
-        - label: Pass through
-          value: PassThrough
-        - label: Active
-          value: Active
-      show_when:
-        lambda_type: regional
-    - id: environment_variables
-      label: Environment variables
-      type: object
-      description: Environment variables passed to the Lambda function.
-      collapsible: true
-      default: {}
-      required: false
-      show_when:
-        lambda_type: regional
-    - id: layers
-      label: Lambda layers
-      type: string_array
-      description: Versioned Lambda layer ARNs to attach to the function.
-      collapsible: true
-      add_button_label: Add layer
-      default: []
-      placeholder: arn:aws:lambda:us-east-1:123456789012:layer:example:1
-      show_when:
-        lambda_type: regional
-        package_type: Zip
-    - id: kms_key_arn
-      label: Environment KMS key ARN
-      type: string
-      description: Optional customer-managed KMS key ARN used to encrypt environment variables.
-      collapsible: true
-      required: false
-      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
-      show_when:
-        lambda_type: regional
-    - id: code_signing_config_arn
-      label: Code signing config ARN
-      type: string
-      description: Optional Lambda code signing configuration ARN.
-      collapsible: true
-      required: false
-      show_when:
-        lambda_type: regional
-        package_type: Zip
-    - id: section_zip_package
-      label: Zip package
       show_when:
         package_type: Zip
-      type: section
     - id: s3_bucket
       label: Package S3 bucket
       type: string
@@ -230,6 +141,62 @@ module:
       default: placeholder.zip
       show_when:
         package_type: Zip
+    - id: code_bucket_name
+      immutable: true
+      label: Code bucket name
+      type: string
+      description: S3 bucket used for Lambda zip artifacts. Must be globally unique.
+      collapsible: true
+      required: false
+      show_when:
+        package_type: Zip
+      patterns:
+        - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
+          pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
+    - id: code_bucket_force_destroy_enabled
+      label: Force destroy code bucket
+      type: boolean
+      description: Delete the code bucket even when it contains package objects during stack destroy.
+      collapsible: true
+      default: true
+      show_when:
+        package_type: Zip
+    - id: section_image_package
+      label: Image package
+      show_when:
+        lambda_type: regional
+        package_type: Image
+      type: section
+    - id: image_config_command
+      label: Image command
+      type: string_array
+      description: Command arguments that override the container image CMD.
+      collapsible: true
+      add_button_label: Add command item
+      default: []
+      show_when:
+        lambda_type: regional
+        package_type: Image
+    - id: image_config_entry_point
+      label: Image entry point
+      type: string_array
+      description: Entry point arguments that override the container image ENTRYPOINT.
+      collapsible: true
+      add_button_label: Add entry point item
+      default: []
+      show_when:
+        lambda_type: regional
+        package_type: Image
+    - id: image_config_working_directory
+      label: Image working directory
+      type: string
+      description: Working directory inside the container image.
+      collapsible: true
+      required: false
+      placeholder: /var/task
+      show_when:
+        lambda_type: regional
+        package_type: Image
     - id: section_build
       label: Build config
       type: section
@@ -376,42 +343,106 @@ module:
           - nixpacks
           - dockerfile
       type: string
-    - id: section_image_package
-      label: Image package
+    - id: section_runtime
+      label: Runtime configuration
       show_when:
         lambda_type: regional
-        package_type: Image
       type: section
-    - id: image_config_command
-      label: Image command
-      type: string_array
-      description: Command arguments that override the container image CMD.
-      collapsible: true
-      add_button_label: Add command item
-      default: []
+    - id: memory_size
+      label: Memory (MB)
+      type: number
+      description: Memory allocated to the function. Lambda CPU scales with memory.
+      min: 128
+      max: 10240
+      required: true
+      default: 128
       show_when:
         lambda_type: regional
-        package_type: Image
-    - id: image_config_entry_point
-      label: Image entry point
-      type: string_array
-      description: Entry point arguments that override the container image ENTRYPOINT.
-      collapsible: true
-      add_button_label: Add entry point item
-      default: []
+    - id: timeout
+      label: Timeout (secs)
+      type: number
+      description: Maximum runtime for a single invocation.
+      min: 1
+      max: 900
+      required: true
+      default: 5
       show_when:
         lambda_type: regional
-        package_type: Image
-    - id: image_config_working_directory
-      label: Image working directory
+    - id: ephemeral_storage_size
+      label: Ephemeral storage (MB)
+      type: number
+      description: Size of the function's /tmp directory.
+      collapsible: true
+      min: 512
+      max: 10240
+      default: 512
+      show_when:
+        lambda_type: regional
+    - id: layers
+      label: Lambda layers
+      type: string_array
+      description: Versioned Lambda layer ARNs to attach to the function.
+      collapsible: true
+      add_button_label: Add layer
+      default: []
+      placeholder: arn:aws:lambda:us-east-1:123456789012:layer:example:1
+      show_when:
+        lambda_type: regional
+        package_type: Zip
+    - id: reserved_concurrent_executions
+      label: Reserved concurrency
+      type: number
+      description: Reserved concurrent executions for this function. Use -1 to remove limits.
+      collapsible: true
+      min: -1
+      required: false
+      show_when:
+        lambda_type: regional
+    - id: kms_key_arn
+      label: Environment KMS key ARN
       type: string
-      description: Working directory inside the container image.
+      description: Optional customer-managed KMS key ARN used to encrypt environment variables.
       collapsible: true
       required: false
-      placeholder: /var/task
+      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
       show_when:
         lambda_type: regional
-        package_type: Image
+    - id: tracing_mode
+      label: X-Ray tracing
+      type: string
+      description: Choose whether Lambda actively traces invocations with AWS X-Ray.
+      collapsible: true
+      default: PassThrough
+      values:
+        - label: Pass through
+          value: PassThrough
+        - label: Active
+          value: Active
+      show_when:
+        lambda_type: regional
+    - id: code_signing_config_arn
+      label: Code signing config ARN
+      type: string
+      description: Optional Lambda code signing configuration ARN.
+      collapsible: true
+      required: false
+      show_when:
+        lambda_type: regional
+        package_type: Zip
+    - id: section_environment
+      label: Environment variables
+      show_when:
+        lambda_type: regional
+      type: section
+    - id: environment_variables
+      label: Environment variables
+      type: object
+      description: Environment variables passed to the Lambda function.
+      collapsible: true
+      default: {}
+      required: false
+      show_when:
+        lambda_type: regional
     - id: section_vpc
       label: VPC config
       type: section
@@ -897,26 +928,6 @@ module:
       values:
         - label: Published versions
           value: PublishedVersions
-    - id: code_bucket_name
-      immutable: true
-      label: Code bucket name
-      type: string
-      description: S3 bucket used for Lambda zip artifacts. Must be globally unique.
-      collapsible: true
-      required: false
-      show_when:
-        package_type: Zip
-      patterns:
-        - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
-          pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
-    - id: code_bucket_force_destroy_enabled
-      label: Force destroy code bucket
-      type: boolean
-      description: Delete the code bucket even when it contains package objects during stack destroy.
-      collapsible: true
-      default: true
-      show_when:
-        package_type: Zip
     - $include: ../../partials/inputs/terraform-settings.yml
     - $include: ../../partials/inputs/execution-environment.yml
     - $merge:
