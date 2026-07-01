@@ -20,7 +20,6 @@
       label: Prebuilt image from registry
       value: prebuilt_image
 - $include: ./build-git-source.yml
-- $include: ./railpack-version.yml
 - id: image_repository
   label: Image repository
   type: string
@@ -57,7 +56,7 @@
   show_when:
     build_type: nixpacks
 - $include: ./nixpacks-advanced.yml
-- $include: ./railpack-basic.yml
+- $include: ./railpack.yml
 - id: railpack_start_cmd
   label: Start command
   type: string

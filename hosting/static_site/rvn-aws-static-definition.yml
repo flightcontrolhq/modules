@@ -132,8 +132,7 @@ module:
     - $include: ../../partials/inputs/dockerfile-build.yml
     - $include: ../../partials/inputs/nixpacks-basic.yml
     - $include: ../../partials/inputs/nixpacks-advanced.yml
-    - $include: ../../partials/inputs/railpack-version.yml
-    - $include: ../../partials/inputs/railpack-basic.yml
+    - $include: ../../partials/inputs/railpack.yml
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
