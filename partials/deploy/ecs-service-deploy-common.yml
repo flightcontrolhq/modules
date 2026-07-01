@@ -3,8 +3,7 @@ concurrency:
   queue_overflow: oldest
   queue_size: 1
 infrastructure:
-  ecs_cluster_arn: <<stack.output.service_cluster>>
-  ecs_service_arn: <<stack.output.service_arn>>
+  $include: ecs-service-deploy-infrastructure-common.yml
 inputs:
   - id: image_ref
     label: Image tag or digest
