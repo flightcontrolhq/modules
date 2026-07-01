@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -24,6 +24,4 @@ locals {
   create_http_listener  = var.http_listener_enabled
   create_https_listener = var.https_listener_enabled
 }
-
-
 
