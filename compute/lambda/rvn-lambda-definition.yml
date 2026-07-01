@@ -43,7 +43,6 @@ module:
       immutable: true
       label: Package type
       type: string
-      description: AWS Lambda deployment package type. AWS does not support changing this after the function is created.
       required: true
       default: Zip
       show_when:
@@ -946,8 +945,8 @@ module:
                 << module.input.lambda_type == "edge" ? {} : {"live": {"description": "Active Ravion deployment alias."}} >>
               ...overrides: >-
                 << module.input.lambda_type == "edge" ? {} : (module.input.aliases || {}) >>
-            architectures: >-
-              << module.input.lambda_type == "edge" ? ["x86_64"] : [module.input.architecture] >>
+            architecture: >-
+              << module.input.lambda_type == "edge" ? "x86_64" : module.input.architecture >>
             code_bucket_force_destroy_enabled: >-
               << module.input.package_type == "Zip" ? module.input.code_bucket_force_destroy_enabled : false >>
             code_bucket_name: >-

@@ -39,14 +39,14 @@ variable "package_type" {
   }
 }
 
-variable "architectures" {
-  type        = list(string)
+variable "architecture" {
+  type        = string
   description = "Instruction set architecture for the Lambda function."
-  default     = ["x86_64"]
+  default     = "x86_64"
 
   validation {
-    condition     = length(var.architectures) > 0 && alltrue([for a in var.architectures : contains(["x86_64", "arm64"], a)])
-    error_message = "The architectures must contain one or more values from: 'x86_64', 'arm64'."
+    condition     = contains(["x86_64", "arm64"], var.architecture)
+    error_message = "The architecture must be either 'x86_64' or 'arm64'."
   }
 }
 

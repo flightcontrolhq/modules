@@ -60,7 +60,7 @@ locals {
     null
   )
 
-  bootstrap_image_platform = contains(var.architectures, "arm64") ? "linux/arm64" : "linux/amd64"
+  bootstrap_image_platform = var.architecture == "arm64" ? "linux/arm64" : "linux/amd64"
 
   effective_image_uri = (
     var.image_uri != null ? var.image_uri :

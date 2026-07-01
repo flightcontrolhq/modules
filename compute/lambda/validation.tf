@@ -58,7 +58,7 @@ check "lambda_at_edge_constraints" {
         length(var.file_system_configs) == 0 &&
         length(var.layers) == 0 &&
         var.dead_letter_target_arn == null &&
-        alltrue([for a in var.architectures : a == "x86_64"]) &&
+        var.architecture == "x86_64" &&
         var.timeout <= 30 &&
         var.memory_size <= 3008
       )

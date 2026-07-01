@@ -41,7 +41,7 @@ module "lambda_image" {
 
   name                            = "image-fn"
   package_type                    = "Image"
-  architectures                   = ["x86_64"]
+  architecture                    = "x86_64"
   ecr_repository_creation_enabled = true
   timeout                         = 30
   memory_size                     = 512
@@ -128,7 +128,7 @@ module "lambda_with_integrations" {
 | description | Description of the Lambda function | `string` | `null` | no |
 | tags | Tags to assign to all resources | `map(string)` | `{}` | no |
 | package_type | Package type (`Zip` or `Image`) | `string` | `"Zip"` | no |
-| architectures | Lambda architectures | `list(string)` | `["x86_64"]` | no |
+| architecture | Lambda architecture | `string` | `"x86_64"` | no |
 | version_publishing_enabled | Publish a version on update | `bool` | `false` | no |
 | handler | Function handler (Zip only) | `string` | `null` | no |
 | runtime | Function runtime (Zip only) | `string` | `null` | no |
