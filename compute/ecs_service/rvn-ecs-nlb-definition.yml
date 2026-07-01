@@ -1,0 +1,594 @@
+definition:
+  type: rvn-ecs-nlb
+  name: ECS Network Service
+  description: Network Load Balanced ECS service for TCP, UDP, and TLS workloads behind an ECS cluster NLB.
+release:
+  version: 0.1.0
+  description: Initial ECS Network Service module definition.
+module:
+  inputs:
+    - id: section_cluster
+      label: ECS cluster
+      type: section
+    - id: cluster
+      immutable: true
+      label: ECS cluster
+      type: $ref:rvn-ecs-cluster
+      mapped_inputs:
+        - $include: ../../partials/inputs/ecs-service-cluster-common-mapped-inputs.yml
+        - $include: ../../partials/inputs/ecs-service-cluster-nlb-mapped-inputs.yml
+      required: true
+    - id: section_service
+      label: Network service
+      type: section
+    - id: name
+      immutable: true
+      label: Service name
+      type: string
+      description: Name for the ECS service and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
+    - id: public_nlb_service_enabled
+      label: Public network service
+      type: boolean
+      description: Expose this service through the public NLB. Turn off to use the private NLB.
+      default: true
+    - id: private_subnet_placement_enabled
+      label: Run in private subnets
+      type: boolean
+      description: Recommended. Requires a NAT gateway or equivalent for internet access and keeps tasks off public subnets.
+      default: true
+    - $include: ../../partials/inputs/ecs-service-build-inputs.yml
+    - id: section_deployment
+      label: Deployment
+      type: section
+    - id: deployment_strategy
+      label: Deployment strategy
+      type: string
+      description: Choose how traffic moves from the current deployment to the new deployment.
+      required: true
+      default: rolling
+      values:
+        - label: Rolling
+          description: Replace tasks in place while the service keeps serving from the production target group.
+          value: rolling
+        - label: Blue/green
+          description: Start the new deployment on the alternate target group, then shift production traffic after test validation.
+          value: blue_green
+        - label: Linear
+          description: Shift production traffic to the new deployment in equal percentage steps with a wait between steps.
+          value: linear
+        - label: Canary
+          description: Send a small percentage of production traffic to the new deployment first, then shift the rest after the canary bake time.
+          value: canary
+    - id: deployment_bake_time_in_minutes
+      label: Bake time in minutes
+      type: number
+      description: Minutes to keep the current and new deployments running after production traffic has fully shifted, before the old deployment is removed.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default: 10
+    - id: linear_step_percentage
+      label: Linear step percentage
+      type: number
+      description: Percentage of production traffic to move to the new deployment at each linear step.
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: linear
+      default: 20
+    - id: linear_step_bake_time_in_minutes
+      label: Linear step bake time in minutes
+      type: number
+      description: Minutes to wait between linear traffic steps before shifting the next percentage.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: linear
+      default: 5
+    - id: canary_percent
+      label: Canary percent
+      type: number
+      description: Percentage of production traffic to send to the new deployment during the canary phase.
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: canary
+      default: 5
+    - id: canary_bake_time_in_minutes
+      label: Canary bake time in minutes
+      type: number
+      description: Minutes to hold canary traffic before shifting the remaining production traffic to the new deployment.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: canary
+      default: 10
+    - id: deployment_pause_stages
+      label: Manual approval gates
+      type: object_array
+      description: Optional gates that pause the deployment at chosen lifecycle stages until you approve it. Applies only to the blue/green, linear, and canary strategies.
+      collapsible: true
+      item_inputs:
+        - id: stage
+          label: Stage
+          type: string
+          description: Deployment lifecycle stage at which to pause and wait for manual approval.
+          default: POST_TEST_TRAFFIC_SHIFT
+          values:
+            - label: Reconcile service
+              value: RECONCILE_SERVICE
+            - label: Pre scale up
+              value: PRE_SCALE_UP
+            - label: Post scale up
+              value: POST_SCALE_UP
+            - label: Post test traffic shift
+              value: POST_TEST_TRAFFIC_SHIFT
+            - label: Pre production traffic shift
+              value: PRE_PRODUCTION_TRAFFIC_SHIFT
+            - label: Post production traffic shift
+              value: POST_PRODUCTION_TRAFFIC_SHIFT
+        - id: timeout_in_minutes
+          label: Timeout (minutes)
+          type: number
+          description: Minutes to wait for manual approval before the timeout action runs.
+          max: 20160
+          min: 1
+          required: true
+          default: 1440
+        - id: timeout_action
+          label: On timeout
+          type: string
+          description: Action to take if approval is not given before the timeout elapses.
+          required: true
+          default: ROLLBACK
+          values:
+            - label: Roll back
+              value: ROLLBACK
+            - label: Continue
+              value: CONTINUE
+      item_label: Pause stage
+      item_title:
+        template: "{stage}"
+      item_description: "Timeout: {timeout_in_minutes} minutes / {timeout_action}"
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default:
+        - stage: POST_TEST_TRAFFIC_SHIFT
+          timeout_in_minutes: 1440
+          timeout_action: ROLLBACK
+    - id: section_listener
+      label: Network listener
+      type: section
+    - id: container_port
+      immutable: true
+      label: Container port
+      type: number
+      description: Port the container listens on.
+      max: 65535
+      min: 1
+      required: true
+      default: 3000
+    - id: listener_port
+      immutable: true
+      label: Listener port
+      type: number
+      description: Port the NLB listens on.
+      max: 65535
+      min: 1
+      required: true
+      default: 80
+    - id: listener_protocol
+      immutable: true
+      label: Listener protocol
+      type: string
+      description: Protocol for the NLB listener and target group.
+      required: true
+      default: TCP
+      values:
+        - label: TCP
+          value: TCP
+        - label: TLS
+          value: TLS
+        - label: UDP
+          value: UDP
+    - id: tls_certificate_arn
+      label: TLS certificate ARN
+      type: string
+      description: ACM certificate ARN for TLS listeners.
+      placeholder: arn:aws:acm:...
+      required: true
+      show_when:
+        listener_protocol: TLS
+    - id: tls_ssl_policy
+      label: TLS SSL policy
+      type: string
+      description: SSL policy for TLS listeners.
+      collapsible: true
+      default: ELBSecurityPolicy-TLS13-1-2-2021-06
+      show_when:
+        listener_protocol: TLS
+    - id: tls_alpn_policy
+      label: TLS ALPN policy
+      type: string
+      description: Optional ALPN policy for TLS listeners.
+      collapsible: true
+      required: false
+      show_when:
+        listener_protocol: TLS
+      values:
+        - label: HTTP1 only
+          value: HTTP1Only
+        - label: HTTP2 only
+          value: HTTP2Only
+        - label: HTTP2 optional
+          value: HTTP2Optional
+        - label: HTTP2 preferred
+          value: HTTP2Preferred
+        - label: None
+          value: None
+    - id: tls_target_protocol
+      immutable: true
+      label: TLS target protocol
+      type: string
+      description: Protocol used between the NLB and the ECS task for TLS listeners. Use TCP for TLS termination at the NLB or TLS for encrypted traffic to the task.
+      required: true
+      default: TCP
+      show_when:
+        listener_protocol: TLS
+      values:
+        - label: TCP
+          value: TCP
+        - label: TLS
+          value: TLS
+    - id: load_balancer_ingress_cidr_blocks
+      label: NLB ingress CIDRs
+      type: string_array
+      description: IPv4 CIDR blocks allowed to reach the NLB listener.
+      add_button_label: Add CIDR block
+      default:
+        - 0.0.0.0/0
+      show_when:
+        public_nlb_service_enabled: true
+    - id: private_load_balancer_ingress_cidr_blocks
+      label: Private NLB ingress CIDRs
+      type: string_array
+      description: IPv4 CIDR blocks allowed to reach the private NLB listener.
+      add_button_label: Add CIDR block
+      default:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+      show_when:
+        public_nlb_service_enabled: false
+    - id: section_health
+      label: Health check
+      type: section
+    - id: health_check_protocol
+      label: Health check protocol
+      type: string
+      description: Protocol the target group uses for health checks.
+      required: true
+      default: TCP
+      values:
+        - label: TCP
+          value: TCP
+        - label: HTTP
+          value: HTTP
+        - label: HTTPS
+          value: HTTPS
+    - id: health_check_path
+      label: Health check path
+      type: string
+      description: HTTP path the load balancer calls to verify the service is healthy.
+      required: true
+      default: /
+      show_when:
+        health_check_protocol:
+          - HTTP
+          - HTTPS
+    - id: health_check_matcher
+      label: Success codes
+      type: string
+      description: HTTP status code matcher for successful health checks.
+      collapsible: true
+      required: true
+      default: 200-399
+      show_when:
+        health_check_protocol:
+          - HTTP
+          - HTTPS
+    - id: health_check_interval
+      label: Interval (secs)
+      type: number
+      description: Seconds between load balancer health checks.
+      collapsible: true
+      max: 300
+      min: 5
+      default: 30
+    - id: health_check_timeout
+      label: Timeout (secs)
+      type: number
+      description: Seconds to wait for the health-check response before marking that check as failed.
+      collapsible: true
+      max: 120
+      min: 2
+      default: 10
+    - id: healthy_threshold
+      label: Healthy threshold
+      type: number
+      description: Number of consecutive successful checks required before an unhealthy target is considered healthy.
+      collapsible: true
+      max: 10
+      min: 2
+      default: 3
+    - id: unhealthy_threshold
+      label: Unhealthy threshold
+      type: number
+      description: Number of consecutive failed checks required before a target is considered unhealthy.
+      collapsible: true
+      max: 10
+      min: 2
+      default: 3
+    - id: health_check_grace_period_seconds
+      label: Health check grace period (secs)
+      type: number
+      description: Seconds ECS ignores failing load balancer health checks after a task starts.
+      collapsible: true
+      min: 0
+      default: 0
+    - id: deregistration_delay
+      label: Deregistration delay (secs)
+      type: number
+      description: Seconds the target group waits for in-flight requests to drain before deregistering a target.
+      collapsible: true
+      max: 3600
+      min: 0
+      default: 300
+    - id: source_ip_stickiness_enabled
+      label: Source IP stickiness
+      type: boolean
+      description: Keep repeat traffic from the same source IP on the same task when possible.
+      collapsible: true
+      default: false
+    - $include: ../../partials/inputs/ecs-service-capacity-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-autoscaling-inputs.yml
+    - $template: ../../partials/templates/ecs-service-runtime-env-inputs.yml
+      with:
+        environment_variables_description: Runtime environment variables passed to the app container. PORT is added automatically from the container port setting.
+    - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
+  stack:
+    type: opentofu
+    ravion_state_backend_workspace: >-
+      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
+      + module.given_id + "-" + stack.id>>
+    pipelines:
+      defaults:
+        input:
+          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
+          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
+          base_path: compute/ecs_service
+          branch: main
+          execution_environment_id: << module.input.execution_environment_id >>
+          ref: $local.module_tag
+          repo: https://github.com/flightcontrolhq/modules
+          stack_id: <<stack.id>>
+          terraform_variables:
+            $merge:
+              - ../../partials/stack/ecs-service-common-terraform-variables.yml
+              - container_port: << module.input.container_port >>
+                health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
+                load_balancer_ingress_cidr_blocks: >-
+                  << module.input.public_nlb_service_enabled ? module.input.load_balancer_ingress_cidr_blocks :
+                  module.input.private_load_balancer_ingress_cidr_blocks >>
+                load_balancer_security_group_id: >-
+                  << module.input.public_nlb_service_enabled ? module.input.public_nlb_security_group_id :
+                  module.input.private_nlb_security_group_id >>
+                load_balancer_attachment:
+                  container_port: << module.input.container_port >>
+                  enabled: true
+                  nlb_listener:
+                    alpn_policy: '<< module.input.listener_protocol == "TLS" && module.input.tls_alpn_policy != "None" ? module.input.tls_alpn_policy : nil >>'
+                    certificate_arn: '<< module.input.listener_protocol == "TLS" ? module.input.tls_certificate_arn : nil >>'
+                    nlb_arn: >-
+                      << module.input.public_nlb_service_enabled ? module.input.public_nlb_arn :
+                      module.input.private_nlb_arn >>
+                    port: << module.input.listener_port >>
+                    protocol: << module.input.listener_protocol >>
+                    ssl_policy: '<< module.input.listener_protocol == "TLS" ? module.input.tls_ssl_policy : nil >>'
+                  target_group:
+                    deregistration_delay: << module.input.deregistration_delay >>
+                    health_check:
+                      enabled: true
+                      healthy_threshold: << module.input.healthy_threshold >>
+                      interval: << module.input.health_check_interval >>
+                      matcher: '<< module.input.health_check_protocol == "HTTP" || module.input.health_check_protocol == "HTTPS" ? module.input.health_check_matcher : nil >>'
+                      path: '<< module.input.health_check_protocol == "HTTP" || module.input.health_check_protocol == "HTTPS" ? module.input.health_check_path : nil >>'
+                      port: traffic-port
+                      protocol: << module.input.health_check_protocol >>
+                      timeout: << module.input.health_check_timeout >>
+                      unhealthy_threshold: << module.input.unhealthy_threshold >>
+                    port: << module.input.container_port >>
+                    protocol: '<< module.input.listener_protocol == "TLS" ? module.input.tls_target_protocol : module.input.listener_protocol >>'
+                    stickiness:
+                      enabled: << module.input.source_ip_stickiness_enabled >>
+                      type: source_ip
+                    target_type: ip
+          tool: opentofu
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
+        variant: standard
+      change:
+        pipeline_id: << defaults.change_pipeline_id >>
+      destroy:
+        pipeline_id: << defaults.destroy_pipeline_id >>
+  build:
+    $include: ../../partials/build/ecs-service-image-build.yml
+  deploy:
+    $merge:
+      - ../../partials/deploy/ecs-service-deploy-common.yml
+    strategy: |
+      <<
+      module.input.deployment_strategy == "rolling" ? nil :
+      module.input.deployment_strategy == "blue_green" ? {
+        "type": "blue_green",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages
+      } :
+      module.input.deployment_strategy == "linear" ? {
+        "type": "linear",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "linear": {
+          "step_percentage": module.input.linear_step_percentage,
+          "step_bake_time_in_minutes": module.input.linear_step_bake_time_in_minutes
+        }
+      } : {
+        "type": "canary",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "canary": {
+          "canary_percent": module.input.canary_percent,
+          "canary_bake_time_in_minutes": module.input.canary_bake_time_in_minutes
+        }
+      }
+      >>
+    infrastructure:
+      $merge:
+        - ../../partials/deploy/ecs-service-deploy-infrastructure-common.yml
+        - ecs_target_group_arn: <<stack.output.target_group_arn>>
+          ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
+          ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
+          ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
+          ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
+    task_definition:
+      $merge:
+        - ../../partials/deploy/ecs-service-task-definition-common.yml
+      container_definitions: >-
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.prebuilt_image_start_command)
+        > 0 ? module.input.prebuilt_image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
+        int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
+        "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment": ([{name:
+        "PORT", value: string(module.input.container_port)}] | concat(module.input.environment_variables !=
+        nil ? module.input.environment_variables : [])), "essential": true, "image":
+        (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains
+        "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref :
+        module.input.image_repository + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains
+        "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
+        stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
+        {"init_process_enabled": true}, "log_configuration": {"log_driver": "awsfirelens"}, "memory":
+        (module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
+        int(float(module.input.fargate_size.memory_gb) * 1024)), "name": (stack.output.container_name),
+        "port_mappings": [{"container_port": (module.input.container_port), "protocol":
+        (module.input.listener_protocol == "UDP" ? "udp" : "tcp")}], "readonly_root_filesystem": false,
+        "repository_credentials": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
+        module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
+        "stop_timeout": 30}, {"name": "log_router", "image": module.input.firelens_image, "cpu": 0,
+        "memory_reservation": 51, "essential": true, "environment": ([{name: "FIRELENS_CONFIG_CONTENT",
+        value: "[SERVICE]\n    Flush 1\n    Grace 30\n\n" + (module.input.firelens_config ?
+        module.input.firelens_config + "\n" : "") + (module.input.firelens_cloudwatch_output_enabled ?
+        "\n[OUTPUT]\n    Name cloudwatch\n    Match *\n    region " + stack.output.region +
+        "\n    log_group_name " + stack.output.log_group_name +
+        "\n    auto_create_group true\n    log_stream_prefix " + stack.output.log_stream_prefix +
+        "/\n    retry_limit 2\n    log_key log\n    log_format json/emf\n" : "")}] |
+        concat(module.input.firelens_environment_variables != nil ?
+        module.input.firelens_environment_variables : [])), "secrets": module.input.firelens_secrets != nil
+        ? module.input.firelens_secrets : [], "command": ["/bin/sh", "-c",
+        "printf '%s' \"$FIRELENS_CONFIG_CONTENT\" > /flightcontrol-firelens.conf && exec /entrypoint.sh"],
+        "user": "0", "log_configuration": {"log_driver": "awslogs", "options": {"awslogs-group":
+        stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
+        stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
+        "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
+        "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
+        (len(module.input.prebuilt_image_start_command) > 0 ? module.input.prebuilt_image_start_command : nil), "cpu":
+        (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
+        int(float(module.input.fargate_size.vcpu) * 1024)), "environment": ([{name: "PORT", value:
+        string(module.input.container_port)}] | concat(module.input.environment_variables != nil ?
+        module.input.environment_variables : [])), "essential": true, "image": (module.input.build_type ==
+        "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ?
+        module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
+        ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
+        stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url +
+        ":" + deploy.input.image_ref)), "linux_parameters": {"init_process_enabled": true},
+        "log_configuration": {"log_driver": "awslogs", "options": {"awslogs-group":
+        stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
+        stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider == "ec2" ?
+        int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
+        1024)), "name": (stack.output.container_name), "port_mappings": [{"container_port":
+        (module.input.container_port), "protocol": (module.input.listener_protocol == "UDP" ? "udp" : "tcp")}],
+        "readonly_root_filesystem": false, "repository_credentials": (module.input.image_registry_credentials_secret_arn ?
+        {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), "secrets":
+        (module.input.secrets), "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars
+        : []) >>
+  ui:
+    logs:
+      - id: ecs_network_service_logs
+        name: ECS network service logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: << stack.output.log_group_name >>
+          log_stream_prefix: << stack.output.log_stream_prefix >>
+    metrics:
+      - $include: ../../partials/ui/ecs-service-common-metrics.yml
+      - id: healthy_hosts
+        name: Healthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_nlb_service_enabled ? module.input.public_nlb_arn_suffix :
+              module.input.private_nlb_arn_suffix >>
+          name: HealthyHostCount
+          namespace: AWS/NetworkELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: unhealthy_hosts
+        name: Unhealthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_nlb_service_enabled ? module.input.public_nlb_arn_suffix :
+              module.input.private_nlb_arn_suffix >>
+          name: UnHealthyHostCount
+          namespace: AWS/NetworkELB
+          region: << stack.output.region >>
+          statistic: Average
+  readme: |
+    Network Load Balanced ECS service for TCP, UDP, and TLS workloads behind an ECS cluster NLB.
+
+    ## Overview
+
+    The ECS Network Service module creates an ECS service in an existing Ravion ECS cluster and attaches it to a public or private Network Load Balancer. Use it for TCP, UDP, or TLS workloads that need Layer 4 routing, static IP support, very high connection throughput, or non-HTTP protocols.
+
+    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+
+    ## Configuration
+
+    Select an ECS cluster with a public or private NLB enabled, choose whether this service uses the public or private NLB, configure the listener port and protocol, and choose the container port that receives traffic. TLS listeners require an ACM certificate ARN.
+
+    Health checks default to TCP. Use HTTP or HTTPS health checks only when the container exposes an HTTP-compatible health endpoint.
+
+    ## Build and deployment
+
+    This module supports the same Dockerfile, Nixpacks, prebuilt image, and disabled build modes as ECS Web Server. Deployments update the ECS service task definition and can use rolling, blue/green, linear, or canary strategies through the native ECS deployment controller.

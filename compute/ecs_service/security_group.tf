@@ -42,3 +42,31 @@ module "security_group" {
     ]
   )
 }
+
+locals {
+  nlb_listener_ingress_protocol = (
+    local.enable_nlb_listener && lower(var.load_balancer_attachment.nlb_listener.protocol) == "udp" ? "udp" : "tcp"
+  )
+}
+
+resource "aws_vpc_security_group_ingress_rule" "nlb_listener_ipv4" {
+  for_each = local.enable_nlb_listener && var.load_balancer_security_group_id != null ? toset(var.load_balancer_ingress_cidr_blocks) : toset([])
+
+  security_group_id = var.load_balancer_security_group_id
+  description       = "Allow ${upper(var.load_balancer_attachment.nlb_listener.protocol)} traffic on port ${var.load_balancer_attachment.nlb_listener.port} from ${each.value}"
+  from_port         = var.load_balancer_attachment.nlb_listener.port
+  to_port           = var.load_balancer_attachment.nlb_listener.port
+  ip_protocol       = local.nlb_listener_ingress_protocol
+  cidr_ipv4         = each.value
+}
+
+resource "aws_vpc_security_group_ingress_rule" "nlb_listener_ipv6" {
+  for_each = local.enable_nlb_listener && var.load_balancer_security_group_id != null ? toset(var.load_balancer_ingress_ipv6_cidr_blocks) : toset([])
+
+  security_group_id = var.load_balancer_security_group_id
+  description       = "Allow ${upper(var.load_balancer_attachment.nlb_listener.protocol)} traffic on port ${var.load_balancer_attachment.nlb_listener.port} from ${each.value}"
+  from_port         = var.load_balancer_attachment.nlb_listener.port
+  to_port           = var.load_balancer_attachment.nlb_listener.port
+  ip_protocol       = local.nlb_listener_ingress_protocol
+  cidr_ipv6         = each.value
+}

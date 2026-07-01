@@ -197,6 +197,11 @@ output "public_nlb_arn_suffix" {
   value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn_suffix : null
 }
 
+output "public_nlb_security_group_id" {
+  description = "The ID of the public NLB security group (null if disabled)."
+  value       = var.public_nlb_enabled ? module.public_nlb[0].security_group_id : null
+}
+
 ################################################################################
 # Private NLB
 ################################################################################
@@ -224,6 +229,11 @@ output "private_nlb_zone_id" {
 output "private_nlb_arn_suffix" {
   description = "The ARN suffix of the private NLB for CloudWatch Metrics (null if disabled)."
   value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn_suffix : null
+}
+
+output "private_nlb_security_group_id" {
+  description = "The ID of the private NLB security group (null if disabled)."
+  value       = var.private_nlb_enabled ? module.private_nlb[0].security_group_id : null
 }
 
 
