@@ -497,6 +497,11 @@ variable "load_balancer_ingress_ipv6_cidr_blocks" {
   type        = list(string)
   description = "IPv6 CIDR blocks allowed to access a service-created NLB listener. Only used when load_balancer_attachment.nlb_listener is set and load_balancer_security_group_id is provided."
   default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.load_balancer_ingress_ipv6_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All load_balancer_ingress_ipv6_cidr_blocks must be valid IPv6 CIDR blocks."
+  }
 }
 
 variable "allowed_cidr_blocks" {
