@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.7.0
-  description: Add Logs tab for CloudWatch.
+  version: 0.7.1
+  description: Use non-deprecated AWS region lookup.
 module:
   inputs:
     - id: section_cluster
