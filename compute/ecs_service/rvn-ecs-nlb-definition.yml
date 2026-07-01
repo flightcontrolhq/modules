@@ -4,7 +4,7 @@ definition:
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
   version: 0.1.1
-  description: Expand README and use non-deprecated AWS region lookup.
+  description: Initial version
 module:
   inputs:
     - id: section_cluster
