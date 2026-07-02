@@ -25,7 +25,7 @@ resource "aws_route" "public_internet_ipv6" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = var.subnet_count
+  count = local.subnet_count
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
@@ -38,7 +38,7 @@ resource "aws_route_table_association" "public" {
 # When using a single NAT gateway, we only need one private route table
 # When using multiple NAT gateways (one per AZ), we need one route table per AZ
 resource "aws_route_table" "private" {
-  count = local.nat_gateway_high_availability_enabled ? var.subnet_count : 1
+  count = local.nat_gateway_high_availability_enabled ? local.subnet_count : 1
 
   vpc_id = aws_vpc.this.id
 
@@ -48,7 +48,7 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  count = var.subnet_count
+  count = local.subnet_count
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = local.nat_gateway_high_availability_enabled ? aws_route_table.private[count.index].id : aws_route_table.private[0].id
