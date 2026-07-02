@@ -109,7 +109,7 @@ run "lambda_at_edge_valid_configuration" {
   variables {
     lambda_at_edge_enabled     = true
     version_publishing_enabled = true
-    architectures              = ["x86_64"]
+    architecture               = "x86_64"
     timeout                    = 30
     memory_size                = 128
     environment_variables      = {}

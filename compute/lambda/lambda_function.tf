@@ -10,7 +10,7 @@ resource "aws_lambda_function" "this" {
   package_type = var.package_type
   publish      = var.version_publishing_enabled
 
-  architectures                  = var.architectures
+  architectures                  = [var.architecture]
   memory_size                    = var.memory_size
   timeout                        = var.timeout
   kms_key_arn                    = var.kms_key_arn
@@ -104,7 +104,7 @@ resource "aws_lambda_function" "this" {
           length(var.layers) == 0 &&
           length(var.file_system_configs) == 0 &&
           var.dead_letter_target_arn == null &&
-          alltrue([for a in var.architectures : a == "x86_64"]) &&
+          var.architecture == "x86_64" &&
           var.timeout <= 30 &&
           var.memory_size <= 3008
         )
