@@ -106,7 +106,7 @@ describe("compiler", () => {
     assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "source_repo")), ["nixpacks", "dockerfile", "railpack"]);
 
     const basePath = findInput(inputs, "source_base_path");
-    assert.equal(basePath.label, "Base path");
+    assert.equal(basePath.label, "Source base path");
     assert.deepEqual(getBuildTypeShowWhen(basePath), ["nixpacks", "dockerfile", "railpack"]);
 
     const railpackVersion = findInput(inputs, "railpack_version");

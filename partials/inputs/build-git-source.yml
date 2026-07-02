@@ -1,19 +1,11 @@
 - id: source_repo
   label: Git repository
   required: true
-  show_when:
-    build_type:
-      - nixpacks
-      - dockerfile
-      - railpack
+  show_when: $with.show_when
   type: gitrepo
 - default: .
   description: Repository-relative source and build root.
   id: source_base_path
-  label: Base path
-  show_when:
-    build_type:
-      - nixpacks
-      - dockerfile
-      - railpack
+  label: Source base path
+  show_when: $with.show_when
   type: string

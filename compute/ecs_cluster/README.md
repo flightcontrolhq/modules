@@ -198,7 +198,7 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| name | Name prefix for all resources | `string` | n/a | yes |
+| name | Name prefix for all resources. Maximum length depends on enabled load balancers: 28 for public ALB, 27 for private ALB, 24 for public NLB, and 23 for private NLB. | `string` | n/a | yes |
 | tags | Map of tags to assign to resources | `map(string)` | `{}` | no |
 | load_balancer_deletion_protection_enabled | If true, load balancers created by this module cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
 | vpc_id | VPC ID for ECS resources | `string` | n/a | yes |

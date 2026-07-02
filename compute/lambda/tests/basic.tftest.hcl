@@ -107,16 +107,16 @@ run "lambda_at_edge_valid_configuration" {
   command = plan
 
   variables {
-    lambda_at_edge_enabled = true
-    publish                = true
-    architectures          = ["x86_64"]
-    timeout                = 30
-    memory_size            = 128
-    environment_variables  = {}
-    vpc_config             = null
-    layers                 = []
-    file_system_configs    = []
-    dead_letter_target_arn = null
+    lambda_at_edge_enabled     = true
+    version_publishing_enabled = true
+    architecture               = "x86_64"
+    timeout                    = 30
+    memory_size                = 128
+    environment_variables      = {}
+    vpc_config                 = null
+    layers                     = []
+    file_system_configs        = []
+    dead_letter_target_arn     = null
   }
 
   assert {
@@ -159,7 +159,7 @@ run "aliases_created" {
   command = plan
 
   variables {
-    publish = true
+    version_publishing_enabled = true
     aliases = {
       live = {
         function_version = "1"

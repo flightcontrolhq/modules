@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -66,5 +66,3 @@ locals {
     var.ec2_spot_instance_types
   ) : []
 }
-
-

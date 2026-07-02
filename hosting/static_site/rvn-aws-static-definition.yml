@@ -117,7 +117,13 @@ module:
         - description: Skip the build step and promote an existing S3 directory at deploy time.
           label: Disabled
           value: none
-    - $include: ../../partials/inputs/build-git-source.yml
+    - $template: ../../partials/inputs/build-git-source.yml
+      with:
+        show_when:
+          build_type:
+            - nixpacks
+            - dockerfile
+            - railpack
     - default: dist
       description: Directory produced by the build and uploaded to S3.
       id: output_directory
@@ -129,10 +135,18 @@ module:
           - dockerfile
           - railpack
       type: string
-    - $include: ../../partials/inputs/dockerfile-build.yml
-    - $include: ../../partials/inputs/nixpacks-basic.yml
-    - $include: ../../partials/inputs/nixpacks-advanced.yml
-    - $include: ../../partials/inputs/railpack.yml
+    - $template: ../../partials/inputs/dockerfile-build.yml
+      with:
+        show_when:
+          build_type: dockerfile
+    - $template: ../../partials/inputs/nixpacks-build.yml
+      with:
+        show_when:
+          build_type: nixpacks
+    - $template: ../../partials/inputs/railpack.yml
+      with:
+        show_when:
+          build_type: railpack
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:

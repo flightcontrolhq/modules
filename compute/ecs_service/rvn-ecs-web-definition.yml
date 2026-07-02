@@ -1,6 +1,6 @@
 definition:
   type: rvn-ecs-web
-  name: ECS Web Server
+  name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.8.0
