@@ -104,8 +104,8 @@ variable "task_ephemeral_storage_size_gib" {
   }
 
   validation {
-    condition     = var.task_ephemeral_storage_size_gib == null || var.launch_type == "FARGATE"
-    error_message = "The task_ephemeral_storage_size_gib is only supported when launch_type is FARGATE."
+    condition     = var.task_ephemeral_storage_size_gib == null || (var.launch_type == "FARGATE" && contains(var.requires_compatibilities, "FARGATE"))
+    error_message = "The task_ephemeral_storage_size_gib is only supported when launch_type is FARGATE and requires_compatibilities includes FARGATE."
   }
 }
 

@@ -536,6 +536,17 @@ run "custom_task_configuration" {
   }
 }
 
+run "ephemeral_storage_requires_fargate_task_compatibility" {
+  command = plan
+
+  variables {
+    task_ephemeral_storage_size_gib = 21
+    requires_compatibilities        = ["EC2"]
+  }
+
+  expect_failures = [var.task_ephemeral_storage_size_gib]
+}
+
 ################################################################################
 # Test: IAM Role Creation
 ################################################################################
