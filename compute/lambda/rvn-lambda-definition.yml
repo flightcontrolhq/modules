@@ -34,9 +34,9 @@ module:
         - message: 1-64 letters, numbers, underscores, or hyphens.
           pattern: ^[A-Za-z0-9_-]{1,64}$
     - id: description
-      label: Description
+      label: Function description
       type: string
-      description: Description stored on the Lambda function.
+      description: Description shown for the Lambda function in AWS.
       collapsible: true
       required: false
     - id: package_type
@@ -137,7 +137,7 @@ module:
       immutable: true
       label: Code bucket name
       type: string
-      description: Name for the managed code bucket used for Lambda zip artifacts. Must be globally unique. Defaults to <function-name>-code-<account-id>.
+      description: Name for the s3 bucket used for Lambda zip artifacts. Must be globally unique. Defaults to <function-name>-code-<account-id>.
       collapsible: true
       required: false
       show_when:
@@ -352,6 +352,38 @@ module:
       show_when:
         lambda_type: regional
         package_type: Zip
+    - id: dead_letter_target_arn
+      label: Dead-letter target ARN
+      type: string
+      description: Optional SQS queue or SNS topic ARN for asynchronous invocation failures.
+      collapsible: true
+      required: false
+      show_when:
+        lambda_type: regional
+    - id: file_system_configs
+      label: File systems
+      type: object_array
+      description: EFS access points mounted into the function.
+      collapsible: true
+      item_label: File system
+      item_title:
+        template: "{local_mount_path}"
+      item_inputs:
+        - id: arn
+          label: EFS access point ARN
+          type: string
+          description: EFS access point ARN.
+          placeholder: arn:aws:elasticfilesystem:...
+          required: true
+        - id: local_mount_path
+          label: Local mount path
+          type: string
+          description: Mount path inside the function. AWS requires paths under /mnt/.
+          required: true
+          placeholder: /mnt/shared
+      default: []
+      show_when:
+        lambda_type: regional
     - id: section_environment
       label: Environment variables
       type: section
@@ -516,6 +548,50 @@ module:
       required: false
       show_when:
         role_creation_enabled: true
+    - id: permissions
+      label: Invoke permissions
+      type: object_array
+      description: Permission statements for services or accounts that invoke this function.
+      collapsible: true
+      item_label: Permission
+      item_title:
+        template: "{principal}"
+      item_inputs:
+        - id: statement_id
+          label: Statement ID
+          type: string
+          description: Optional unique statement ID.
+          required: false
+        - id: action
+          label: Action
+          type: string
+          description: Lambda action allowed by this permission.
+          required: true
+          default: lambda:InvokeFunction
+        - id: principal
+          label: Principal
+          type: string
+          description: Service principal or AWS account allowed to invoke the function.
+          required: true
+          placeholder: apigateway.amazonaws.com
+        - id: source_arn
+          label: Source ARN
+          type: string
+          description: Optional source ARN that scopes the invoke permission.
+          required: false
+        - id: source_account
+          label: Source account
+          type: string
+          description: Optional source AWS account ID.
+          required: false
+        - id: qualifier
+          label: Qualifier
+          type: string
+          description: Optional function version or alias qualifier.
+          required: false
+      default: []
+      show_when:
+        lambda_type: regional
     - id: section_logs
       label: Logs
       type: section
@@ -702,100 +778,52 @@ module:
         lambda_type: regional
         function_url_enabled: true
         function_url_cors_enabled: true
-    - id: section_integrations
-      label: Integrations
+    - id: section_event_sources_aliases
+      label: Event sources and aliases
       type: section
-      show_when:
-        lambda_type: regional
-    - id: dead_letter_target_arn
-      label: Dead-letter target ARN
-      type: string
-      description: Optional SQS queue or SNS topic ARN for asynchronous invocation failures.
-      collapsible: true
-      required: false
-      show_when:
-        lambda_type: regional
-    - id: permissions
-      label: Invoke permissions
-      type: object_array
-      description: Permission statements for services or accounts that invoke this function.
-      collapsible: true
-      item_label: Permission
-      item_title:
-        template: "{principal}"
-      item_inputs:
-        - id: statement_id
-          label: Statement ID
-          type: string
-          description: Optional unique statement ID.
-          required: false
-        - id: action
-          label: Action
-          type: string
-          description: Lambda action allowed by this permission.
-          required: true
-          default: lambda:InvokeFunction
-        - id: principal
-          label: Principal
-          type: string
-          description: Service principal or AWS account allowed to invoke the function.
-          required: true
-          placeholder: apigateway.amazonaws.com
-        - id: source_arn
-          label: Source ARN
-          type: string
-          description: Optional source ARN that scopes the invoke permission.
-          required: false
-        - id: source_account
-          label: Source account
-          type: string
-          description: Optional source AWS account ID.
-          required: false
-        - id: qualifier
-          label: Qualifier
-          type: string
-          description: Optional function version or alias qualifier.
-          required: false
-      default: []
       show_when:
         lambda_type: regional
     - id: event_source_mappings
       label: Event source mappings
       type: object_array
-      description: Event sources such as SQS, DynamoDB streams, or Kinesis streams that invoke this function.
-      collapsible: true
-      item_label: Event source
+      description: Event source mappings for streams, queues, and self-managed sources. Use advanced Terraform variables for uncommon nested mapping options.
+      item_label: Event source mapping
       item_title:
         template: "{event_source_arn}"
       item_inputs:
         - id: event_source_arn
           label: Event source ARN
           type: string
-          description: ARN of the stream or queue that invokes this function.
+          description: Event source ARN, such as SQS, Kinesis, DynamoDB Streams, or MQ.
+          placeholder: arn:aws:sqs:...
           required: true
         - id: enabled
           label: Enabled
           type: boolean
+          description: Enable this event source mapping.
           default: true
         - id: batch_size
           label: Batch size
           type: number
+          description: Number of records Lambda reads from the source per batch.
           required: false
           min: 1
         - id: maximum_batching_window_in_seconds
           label: Maximum batching window (secs)
           type: number
+          description: Maximum time in seconds to gather records before invoking the function.
           required: false
           min: 0
         - id: starting_position
           label: Starting position
           type: string
+          description: Starting position for stream sources.
           required: false
           values:
-            - label: Latest
-              value: LATEST
             - label: Trim horizon
               value: TRIM_HORIZON
+            - label: Latest
+              value: LATEST
             - label: At timestamp
               value: AT_TIMESTAMP
         - id: destination_config_on_failure_arn
@@ -804,28 +832,6 @@ module:
           description: Destination ARN used when Lambda cannot process records.
           collapsible: true
           required: false
-      default: []
-      show_when:
-        lambda_type: regional
-    - id: file_system_configs
-      label: File systems
-      type: object_array
-      description: EFS access points mounted into the function.
-      collapsible: true
-      item_label: File system
-      item_title:
-        template: "{local_mount_path}"
-      item_inputs:
-        - id: arn
-          label: EFS access point ARN
-          type: string
-          required: true
-        - id: local_mount_path
-          label: Local mount path
-          type: string
-          description: Mount path inside the function. AWS requires paths under /mnt/.
-          required: true
-          placeholder: /mnt/shared
       default: []
       show_when:
         lambda_type: regional
@@ -932,9 +938,11 @@ module:
         dead_letter_target_arn: >-
           << module.input.lambda_type == "edge" ? nil : (module.input.dead_letter_target_arn || nil) >>
         description: << module.input.description || nil >>
+        ecr_default_lifecycle_policy_enabled: true
         ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
         ecr_repository_creation_enabled: >-
           << module.input.lambda_type != "edge" && module.input.package_type == "Image" >>
+        ecr_repository_name: << module.input.name >>
         ecr_scan_on_push_enabled: << module.input.ecr_scan_on_push_enabled >>
         environment_variables: >-
           << module.input.lambda_type == "edge" ? {} : (module.input.environment_variables || {}) >>
@@ -1215,8 +1223,8 @@ module:
     | IAM role | Create IAM role | No | true | Use an existing role by turning this off |
     | Logs | Create log group | No | true | Creates /aws/lambda/{function name} by default |
     | Function URL | Enable function URL | No | false | Creates an HTTPS endpoint for direct invokes |
-    | Integrations | Invoke permissions | No | [] | Allows services or accounts to invoke the function |
-    | Integrations | Event source mappings | No | [] | Connects queues or streams to the function |
+    | IAM permissions | Invoke permissions | No | [] | Allows services or accounts to invoke the function |
+    | Event sources and aliases | Event source mappings | No | [] | Connects queues or streams to the function |
     | Image registry lifecycle | Scan images on push | No | true | ECR basic vulnerability scanning for the module-managed repository |
     | Terraform settings | Advanced Terraform variables | No | {} | Escape hatch for uncommon Terraform inputs |
 
