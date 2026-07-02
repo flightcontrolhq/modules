@@ -7,8 +7,28 @@ variable "name" {
   description = "Name prefix for all resources created by this module."
 
   validation {
-    condition     = length(var.name) > 0 && length(var.name) <= 28
-    error_message = "The name must be between 1 and 28 characters. This limit ensures ALB names (name + '-pub'/'-priv' suffix) do not exceed the 32 character AWS limit."
+    condition     = length(var.name) > 0
+    error_message = "The name must not be empty."
+  }
+
+  validation {
+    condition     = !var.public_alb_enabled || length(var.name) <= 28
+    error_message = "The name must be 28 characters or less when public_alb_enabled is true so the public ALB name does not exceed the 32 character AWS limit."
+  }
+
+  validation {
+    condition     = !var.private_alb_enabled || length(var.name) <= 27
+    error_message = "The name must be 27 characters or less when private_alb_enabled is true so the private ALB name does not exceed the 32 character AWS limit."
+  }
+
+  validation {
+    condition     = !var.public_nlb_enabled || length(var.name) <= 24
+    error_message = "The name must be 24 characters or less when public_nlb_enabled is true so the public NLB name does not exceed the 32 character AWS limit."
+  }
+
+  validation {
+    condition     = !var.private_nlb_enabled || length(var.name) <= 23
+    error_message = "The name must be 23 characters or less when private_nlb_enabled is true so the private NLB name does not exceed the 32 character AWS limit."
   }
 }
 

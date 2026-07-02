@@ -5,7 +5,7 @@ This module creates a production-ready AWS VPC with public and private subnets, 
 ## Features
 
 - Configurable VPC CIDR block with DNS support and hostnames enabled by default
-- Public and private subnets across multiple availability zones
+- Public and private subnets across up to 3 availability zones by default, capped by the AZs available to the selected account and region
 - Automatic or custom subnet CIDR allocation using cidrsubnet function
 - Optional NAT Gateway (single or per-AZ for high availability)
 - Optional IPv6 support with Amazon-provided CIDR and Egress-Only Internet Gateway
@@ -27,6 +27,8 @@ module "vpc" {
   vpc_cidr = "10.0.0.0/16"
 }
 ```
+
+By default, the module creates up to 3 public/private subnet pairs. If the selected account and region expose only 2 availability zones, the default automatically falls back to 2 subnet pairs.
 
 ### With NAT Gateway (Single - Cost Effective)
 
@@ -65,7 +67,7 @@ module "nat_eips" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/eips?ref=v1.0.0"
 
   name      = "prod-nat"
-  eip_count = 3 # one per AZ
+  eip_count = 3 # one per resolved subnet AZ
 }
 
 module "vpc" {
@@ -81,7 +83,7 @@ module "vpc" {
 }
 ```
 
-The list length must equal `1` when `nat_gateway_high_availability_enabled = false`, or `subnet_count` when `nat_gateway_high_availability_enabled = true`. EIP allocations are consumed in order, so `allocation_ids[i]` is attached to the NAT Gateway in `availability_zones[i]`.
+The list length must equal `1` when `nat_gateway_high_availability_enabled = false`, or the resolved subnet count when `nat_gateway_high_availability_enabled = true`. EIP allocations are consumed in order, so `allocation_ids[i]` is attached to the NAT Gateway in `availability_zones[i]`.
 
 ### With IPv6 Support
 
@@ -298,7 +300,7 @@ module "vpc" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| subnet_count | The number of public and private subnet pairs to create (1-6) | `number` | `3` | no |
+| subnet_count | The number of public and private subnet pairs to create (1-6). If null, creates up to 3 pairs, capped by selected or available AZs | `number` | `null` | no |
 | availability_zones | A list of availability zones to use for subnets. If empty, AZs will be automatically selected | `list(string)` | `[]` | no |
 | public_subnet_cidrs | A list of CIDR blocks for public subnets. If null, CIDRs will be automatically calculated | `list(string)` | `null` | no |
 | private_subnet_cidrs | A list of CIDR blocks for private subnets. If null, CIDRs will be automatically calculated | `list(string)` | `null` | no |
@@ -310,7 +312,7 @@ module "vpc" {
 | nat_gateway_enabled | Enable NAT Gateway(s) to allow private subnets to access the internet | `bool` | `false` | no |
 | nat_gateway_high_availability_enabled | Deploy one NAT Gateway per AZ for high availability. Set to false (default) to use a single NAT Gateway for all private subnets (cost-effective) | `bool` | `false` | no |
 | single_nat_gateway | **DEPRECATED** — use `nat_gateway_high_availability_enabled` (inverted). When set non-null, takes precedence | `bool` | `null` | no |
-| nat_gateway_eip_allocation_ids | Pre-allocated EIP allocation IDs to attach to the NAT Gateway(s). When null, the module allocates new EIPs internally. Length must equal 1 when `nat_gateway_high_availability_enabled = false`, or `subnet_count` when `true` | `list(string)` | `null` | no |
+| nat_gateway_eip_allocation_ids | Pre-allocated EIP allocation IDs to attach to the NAT Gateway(s). When null, the module allocates new EIPs internally. Length must equal 1 when `nat_gateway_high_availability_enabled = false`, or the resolved subnet count when `true` | `list(string)` | `null` | no |
 
 ### IPv6
 
@@ -481,7 +483,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │       VPC CONFIGURATION         │   │            SUBNETS                      │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required, 1-36 ch)  │   │ • vpc_cidr (10.0.0.0/16)        │   │ • subnet_count (1-6, default: 3)        │  ║
+║  │ • name (required, 1-36 ch)  │   │ • vpc_cidr (10.0.0.0/16)        │   │ • subnet_count (auto, max 3 by default)│  ║
 ║  │ • tags                      │   │ • dns_support_enabled (true)   │   │ • availability_zones                    │  ║
 ║  └──────────────┬──────────────┘   │ • dns_hostnames_enabled (true) │   │ • public_subnet_cidrs                   │  ║
 ║                 │                  └─────────────────────────────────┘   │ • private_subnet_cidrs                  │  ║
@@ -492,7 +494,8 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
 ║  │  │ • default_tags = { ManagedBy = "terraform", Module = "networking/vpc" }                                   │   │  ║
 ║  │  │ • tags = merge(default_tags, var.tags)                                                                    │   │  ║
-║  │  │ • azs = var.availability_zones or slice(data.aws_availability_zones.available.names, 0, subnet_count)     │   │  ║
+║  │  │ • subnet_count = var.subnet_count or min(3, selected availability zone count)                             │   │  ║
+║  │  │ • azs = selected availability zones sliced to subnet_count                                                 │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ SUBNET CIDR CALCULATION:                                                                                   │   │  ║
 ║  │  │ • public_subnet_cidrs  = cidrsubnet(vpc_cidr, 8, i + 1)   # 10.0.1.0/24, 10.0.2.0/24, ...                 │   │  ║
@@ -678,7 +681,7 @@ Each entry in `vpc_peering_connections` accepts the following attributes:
 ║                              ▼                        ▼                             ▼                                 ║
 ║              aws_internet_gateway.this     aws_subnet.public[]          aws_subnet.private[]                          ║
 ║                              │                        │                             │                                 ║
-║  var.subnet_count ───────────┼────────────────────────┴─────────────────────────────┤                                 ║
+║  local.subnet_count ─────────┼────────────────────────┴─────────────────────────────┤                                 ║
 ║  var.availability_zones ─────┼────► local.azs ──────────────────────────────────────┤                                 ║
 ║  var.public_subnet_cidrs ────┼────► local.public_subnet_cidrs ──────────────────────┘                                 ║
 ║  var.private_subnet_cidrs ───┼────► local.private_subnet_cidrs ─────────────────────                                  ║
@@ -945,7 +948,7 @@ Before applying:
 1. **Decide the migration window.** Per-subnet egress gap of ~1s on each association swap. New TCP/UDP connections fail during the gap.
 2. **Verify the destination route table has the right routes.** When swapping a subnet onto a different RT, that RT must already have a working `0.0.0.0/0 → NAT` (and `::/0 → EIGW` if IPv6) route, or the subnet has zero egress until the route is added.
 3. **Check NAT capacity** (single-NAT direction). One NAT GW handles up to ~45 Gbps and 55k connections per dest IP/port pair, scaling automatically. Confirm your aggregate traffic fits.
-4. **Match `nat_gateway_eip_allocation_ids` to the target topology.** Length 1 for single-NAT, `subnet_count` for HA. The module's validation rejects mismatches.
+4. **Match `nat_gateway_eip_allocation_ids` to the target topology.** Length 1 for single-NAT, the resolved `subnet_count` for HA. The module's validation rejects mismatches.
 5. **Run `tofu plan` first** and verify there's no `-/+` on `aws_nat_gateway.this[0]` and no changes to `aws_route_table.private[0]`'s NAT route. If either appears, investigate before applying — those signal an unintended replacement.
 
 ### HA → Single
@@ -1035,7 +1038,7 @@ The variable was renamed (and inverted) in a recent version. The old `single_nat
 - When using S3 for flow logs with an existing bucket, ensure the bucket policy allows the VPC Flow Logs service principal
 - Private route tables: 1 table when `nat_gateway_high_availability_enabled = false`, or 1 per AZ when `true`
 - All resources are tagged with `ManagedBy = "terraform"` and `Module = "networking/vpc"` by default
-- Subnet preconditions validate that `subnet_count` doesn't exceed available AZs in the region
+- Subnet preconditions validate that the resolved `subnet_count` doesn't exceed selected or available AZs
 
 ## License
 

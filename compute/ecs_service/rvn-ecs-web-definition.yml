@@ -1,6 +1,6 @@
 definition:
   type: rvn-ecs-web
-  name: ECS Web Server
+  name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.7.1
@@ -418,18 +418,18 @@ module:
       }
       >>
     infrastructure:
-      ecs_cluster_arn: <<stack.output.service_cluster>>
-      ecs_service_arn: <<stack.output.service_arn>>
-      ecs_target_group_arn: <<stack.output.target_group_arn>>
-      # Load-balancer advanced configuration for native traffic-shift
-      # strategies (blue_green / linear / canary). The deploy manager
-      # attaches these to UpdateService loadBalancers[].advancedConfiguration
-      # so ECS can shift traffic between the production and alternate target
-      # groups. Null/absent for non-load-balanced services (rolling only).
-      ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
-      ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
-      ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
-      ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
+      $merge:
+        - ../../partials/deploy/ecs-service-deploy-infrastructure-common.yml
+        - ecs_target_group_arn: <<stack.output.target_group_arn>>
+          # Load-balancer advanced configuration for native traffic-shift
+          # strategies (blue_green / linear / canary). The deploy manager
+          # attaches these to UpdateService loadBalancers[].advancedConfiguration
+          # so ECS can shift traffic between the production and alternate target
+          # groups. Null/absent for non-load-balanced services (rolling only).
+          ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
+          ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
+          ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
+          ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
     task_definition:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml

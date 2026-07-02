@@ -1,0 +1,2 @@
+ecs_cluster_arn: <<stack.output.service_cluster>>
+ecs_service_arn: <<stack.output.service_arn>>

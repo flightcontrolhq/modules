@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.3.0
-  description: Rename ACM validation wait input to match Terraform naming conventions
+  version: 0.3.1
+  description: Use non-deprecated AWS region lookup.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

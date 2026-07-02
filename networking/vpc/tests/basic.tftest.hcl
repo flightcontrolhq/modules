@@ -82,6 +82,61 @@ run "basic_vpc" {
   }
 }
 
+# Test 1a: Default subnet count adapts to two-AZ regions/accounts
+run "default_subnet_count_two_available_azs" {
+  command = plan
+
+  override_data {
+    target = data.aws_availability_zones.available
+    values = {
+      names = ["us-west-1b", "us-west-1c"]
+    }
+  }
+
+  override_data {
+    target = data.aws_region.current
+    values = {
+      id   = "us-west-1"
+      name = "us-west-1"
+    }
+  }
+
+  assert {
+    condition     = length(aws_subnet.public) == 2
+    error_message = "Should create 2 public subnets by default when only 2 AZs are available"
+  }
+
+  assert {
+    condition     = length(aws_subnet.private) == 2
+    error_message = "Should create 2 private subnets by default when only 2 AZs are available"
+  }
+
+  assert {
+    condition     = aws_subnet.public[0].availability_zone == "us-west-1b" && aws_subnet.public[1].availability_zone == "us-west-1c"
+    error_message = "Should place default subnets in the available AZs"
+  }
+}
+
+# Test 1b: Explicit subnet count still fails when it exceeds available AZs
+run "explicit_subnet_count_exceeds_available_azs" {
+  command = plan
+
+  variables {
+    subnet_count = 3
+  }
+
+  override_data {
+    target = data.aws_availability_zones.available
+    values = {
+      names = ["us-west-1b", "us-west-1c"]
+    }
+  }
+
+  expect_failures = [
+    aws_vpc.this,
+  ]
+}
+
 # Test 2: Custom VPC CIDR
 run "custom_cidr" {
   command = plan
