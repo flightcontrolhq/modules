@@ -57,6 +57,18 @@
     memory_gb: 4
     vcpu: 2
   values: $values:aws/fargate/sizes?region=<<module.input.aws_region>>&cpuArchitecture=<<module.input.cpu_architecture>>&operatingSystem=linux&capacityProvider=<<module.input.capacity_provider>>
+- id: task_ephemeral_storage_size_gib
+  label: App ephemeral storage (GiB)
+  type: number
+  description: Optional ephemeral storage size for each Fargate app task. Leave blank to use the AWS default of 20 GiB.
+  collapsible: true
+  show_when:
+    capacity_provider:
+      - fargate
+      - fargate_spot
+  min: 21
+  max: 200
+  required: false
 - id: task_cpu
   label: App vCPU
   type: string
