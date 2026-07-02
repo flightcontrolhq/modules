@@ -3,7 +3,7 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.2.1
+  version: 0.2.2
   description: Refactor shared build input definitions.
 module:
   inputs:
