@@ -84,7 +84,7 @@ module "public_nlb" {
 
   source = "../../networking/nlb"
 
-  name   = "${var.name}-pub"
+  name   = "${var.name}-pub-nlb"
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -116,7 +116,7 @@ module "private_nlb" {
 
   source = "../../networking/nlb"
 
-  name   = "${var.name}-priv"
+  name   = "${var.name}-priv-nlb"
   tags   = var.tags
   vpc_id = var.vpc_id
 

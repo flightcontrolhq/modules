@@ -19,7 +19,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `cdn/`        | `cloudfront`      | AWS CloudFront distributions                                           | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
 | `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
-| `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs | v1.0.0  |
+| `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
 | `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) | v1.0.0  |

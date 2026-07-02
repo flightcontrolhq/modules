@@ -1,0 +1,33 @@
+- id: section_cluster_nlb
+  label: Cluster network load balancers
+  type: section
+- id: public_nlb_arn
+  immutable: true
+  label: Public NLB ARN
+  type: string
+  default: <<ref.stack.output.public_nlb_arn>>
+- id: public_nlb_arn_suffix
+  immutable: true
+  label: Public NLB ARN suffix
+  type: string
+  default: <<ref.stack.output.public_nlb_arn_suffix>>
+- id: public_nlb_security_group_id
+  immutable: true
+  label: Public NLB security group ID
+  type: string
+  default: <<ref.stack.output.public_nlb_security_group_id>>
+- id: private_nlb_arn
+  immutable: true
+  label: Private NLB ARN
+  type: string
+  default: <<ref.stack.output.private_nlb_arn>>
+- id: private_nlb_arn_suffix
+  immutable: true
+  label: Private NLB ARN suffix
+  type: string
+  default: <<ref.stack.output.private_nlb_arn_suffix>>
+- id: private_nlb_security_group_id
+  immutable: true
+  label: Private NLB security group ID
+  type: string
+  default: <<ref.stack.output.private_nlb_security_group_id>>

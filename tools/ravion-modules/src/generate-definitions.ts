@@ -46,6 +46,7 @@ const DEFAULT_MODULE_PATHS: Record<string, string> = {
   "rvn-aws-network": "networking/vpc",
   "rvn-aws-rds": "database/rds",
   "rvn-ecs-cluster": "compute/ecs_cluster",
+  "rvn-ecs-nlb": "compute/ecs_service",
   "rvn-ecs-web": "compute/ecs_service",
   "rvn-static": "hosting/static_site",
 };
