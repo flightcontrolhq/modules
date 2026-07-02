@@ -60,7 +60,7 @@
 - id: task_ephemeral_storage_size_gib
   label: App ephemeral storage (GiB)
   type: number
-  description: Optional ephemeral storage size for each Fargate app task. Leave blank to use the AWS default of 20 GiB.
+  description: Optional ephemeral storage size for each Fargate app task, from 21 to 200 GiB. Leave blank to use the AWS default of 20 GiB.
   collapsible: true
   show_when:
     capacity_provider:
