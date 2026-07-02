@@ -5,6 +5,8 @@ This module creates an AWS Lambda function with broad runtime configuration supp
 ## Features
 
 - Supports both `Zip` and `Image` package types
+- Optional ECR repository for container image build pipelines
+- Single-apply bootstrap image seeding for module-managed ECR repositories
 - Supports standard Lambda and Lambda@Edge validation mode
 - Optional IAM role creation or use of an existing role
 - Optional CloudWatch log group creation with retention and KMS encryption
@@ -37,11 +39,12 @@ module "lambda" {
 module "lambda_image" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
-  name         = "image-fn"
-  package_type = "Image"
-  image_uri    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/image-fn:latest"
-  timeout      = 30
-  memory_size  = 512
+  name                            = "image-fn"
+  package_type                    = "Image"
+  architecture                    = "x86_64"
+  ecr_repository_creation_enabled = true
+  timeout                         = 30
+  memory_size                     = 512
 }
 ```
 
@@ -125,7 +128,7 @@ module "lambda_with_integrations" {
 | description | Description of the Lambda function | `string` | `null` | no |
 | tags | Tags to assign to all resources | `map(string)` | `{}` | no |
 | package_type | Package type (`Zip` or `Image`) | `string` | `"Zip"` | no |
-| architectures | Lambda architectures | `list(string)` | `["x86_64"]` | no |
+| architecture | Lambda architecture | `string` | `"x86_64"` | no |
 | version_publishing_enabled | Publish a version on update | `bool` | `false` | no |
 | handler | Function handler (Zip only) | `string` | `null` | no |
 | runtime | Function runtime (Zip only) | `string` | `null` | no |
@@ -133,9 +136,14 @@ module "lambda_with_integrations" {
 | source_code_hash | Base64 SHA256 of package | `string` | `null` | no |
 | s3_bucket | S3 bucket for package | `string` | `null` | no |
 | s3_key | S3 key for package | `string` | `null` | no |
-| s3_object_version | S3 object version for package | `string` | `null` | no |
 | image_uri | Image URI (Image only) | `string` | `null` | no |
 | image_config | Image config override object | `object` | `null` | no |
+| ecr_repository_creation_enabled | Create an ECR repository for built container image deployments | `bool` | `false` | no |
+| ecr_repository_name | ECR repository name override | `string` | `null` | no |
+| ecr_image_tag_mutability | ECR image tag mutability (`MUTABLE` or `IMMUTABLE`) | `string` | `"MUTABLE"` | no |
+| ecr_scan_on_push_enabled | Scan images for vulnerabilities on push | `bool` | `true` | no |
+| ecr_force_deletion_enabled | Allow deleting the ECR repository even when it contains images | `bool` | `false` | no |
+| ecr_default_lifecycle_policy_enabled | Apply the built-in ECR lifecycle policy | `bool` | `false` | no |
 | memory_size | Memory in MB | `number` | `128` | no |
 | timeout | Timeout in seconds | `number` | `3` | no |
 | kms_key_arn | KMS key ARN for environment encryption | `string` | `null` | no |
@@ -188,10 +196,19 @@ module "lambda_with_integrations" {
 | event_source_mapping_ids | Event source mapping UUIDs by item index |
 | alias_arns | Alias ARNs by alias name |
 | function_url | Function URL when enabled |
+| code_bucket_id | Auto-created code bucket name when enabled |
+| code_bucket_arn | Auto-created code bucket ARN when enabled |
+| code_object_key | Initial bootstrap object key when created |
+| ecr_repository_arn | ECR repository ARN when enabled |
+| ecr_repository_name | ECR repository name when enabled |
+| ecr_repository_url | ECR repository URL when enabled |
+| aws_account_id | AWS account ID where resources are deployed |
+| region | AWS region where resources are deployed |
 
 ## Notes
 
 - Lambda@Edge deployments must be created in `us-east-1`.
 - The module enforces key Lambda@Edge constraints when `lambda_at_edge_enabled = true`.
 - For `Zip` package type, provide either `filename` or (`s3_bucket` + `s3_key`).
-- For `Image` package type, provide `image_uri`.
+- For `Image` package type, provide `image_uri`, or enable `ecr_repository_creation_enabled` so the module can seed a Lambda-compatible bootstrap image in the module-owned ECR repository during apply.
+- Bootstrap image seeding uses AWS CLI and standard POSIX tools on the Terraform/OpenTofu runner. When AWS CLI is missing, the module attempts a package-manager install with sudo/root access, then falls back to installing AWS CLI v2 in a temporary directory with Python 3.

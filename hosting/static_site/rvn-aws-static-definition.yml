@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.1.3
-  description: Use non-deprecated AWS region lookup.
+  version: 0.1.4
+  description: Refactor shared build input definitions.
 module:
   build:
     builder: >-
@@ -111,7 +111,12 @@ module:
         - description: Skip the build step and promote an existing S3 directory at deploy time.
           label: Disabled
           value: none
-    - $include: ../../partials/inputs/build-git-source.yml
+    - $template: ../../partials/inputs/build-git-source.yml
+      with:
+        show_when:
+          build_type:
+            - nixpacks
+            - dockerfile
     - default: dist
       description: Directory produced by the build and uploaded to S3.
       id: output_directory
@@ -122,9 +127,14 @@ module:
           - nixpacks
           - dockerfile
       type: string
-    - $include: ../../partials/inputs/dockerfile-build.yml
-    - $include: ../../partials/inputs/nixpacks-basic.yml
-    - $include: ../../partials/inputs/nixpacks-advanced.yml
+    - $template: ../../partials/inputs/dockerfile-build.yml
+      with:
+        show_when:
+          build_type: dockerfile
+    - $template: ../../partials/inputs/nixpacks-build.yml
+      with:
+        show_when:
+          build_type: nixpacks
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
