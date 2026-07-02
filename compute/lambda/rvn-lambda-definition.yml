@@ -4,7 +4,7 @@ definition:
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
   version: 0.2.0
-  description: Align Lambda build config with the shared ECS-style build inputs, including prebuilt image start command overrides.
+  description: Initial release
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
