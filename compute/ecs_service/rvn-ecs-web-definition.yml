@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 0.8.0
-  description: Add app container mount points so task volumes, including EFS, can be mounted into the app container.
+  description: Add app container mount points for task volumes and an EFS file system reference that provisions easy persistent storage for the app container.
 module:
   inputs:
     - id: section_cluster
@@ -317,6 +317,7 @@ module:
         environment_variables_description: Runtime environment variables passed to the app container. PORT is added automatically from the container port setting.
     - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
     - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-efs-inputs.yml
     - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
   stack:
     type: opentofu
@@ -448,7 +449,9 @@ module:
         {"init_process_enabled": true}, "log_configuration": {"log_driver": "awsfirelens"}, "memory":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
         int(float(module.input.fargate_size.memory_gb) * 1024)), "mount_points":
-        (module.input.app_mount_points != nil ? module.input.app_mount_points : []), "name":
+        ((module.input.app_mount_points != nil ? module.input.app_mount_points : []) |
+        concat(module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : [])), "name":
         (stack.output.container_name),
         "port_mappings": [{"app_protocol": "http", "container_port": (module.input.container_port),
         "protocol": "tcp"}], "readonly_root_filesystem": false, "repository_credentials":
@@ -485,8 +488,10 @@ module:
         stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
         stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
-        1024)), "mount_points": (module.input.app_mount_points != nil ? module.input.app_mount_points :
-        []), "name": (stack.output.container_name), "port_mappings": [{"app_protocol": "http",
+        1024)), "mount_points": ((module.input.app_mount_points != nil ? module.input.app_mount_points :
+        []) | concat(module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : [])), "name":
+        (stack.output.container_name), "port_mappings": [{"app_protocol": "http",
         "container_port": (module.input.container_port), "protocol": "tcp"}], "readonly_root_filesystem":
         false, "repository_credentials": (module.input.image_registry_credentials_secret_arn ?
         {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), "secrets":
@@ -683,7 +688,9 @@ module:
 
     ## Persistent storage
 
-    Use Task volumes to attach EFS or Docker volumes to the ECS task, and App mount points to mount those volumes into the app container by volume name. Sidecars mount the same volumes through their own Mount points setting.
+    The simplest path to persistent storage is the EFS file system setting. Enable it, select a Ravion EFS module, and set the EFS mount path. Ravion adds the task volume, mounts it into the app container, attaches the file system's client security group to the service so NFS traffic is allowed, and mounts through the file system's access point when one is enabled. The generated volume is named `efs`, so avoid that name for manually defined Task volumes while the EFS file system setting is on.
+
+    For other layouts, use Task volumes to attach EFS or Docker volumes to the ECS task, and App mount points to mount those volumes into the app container by volume name. Sidecars mount the same volumes through their own Mount points setting.
 
     EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. The module mounts an existing EFS file system; make sure the file system's mount targets allow inbound NFS traffic on port 2049 from the service security group. Transit encryption is enabled by default.
 
@@ -815,6 +822,8 @@ module:
     | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
     | Task volumes                    | No       | []                         | EFS or Docker volumes available to task containers |
     | App mount points                | No       | []                         | Task volume mounts for the app container           |
+    | EFS file system                 | No       | false                      | Mount a Ravion EFS module into the app container   |
+    | EFS mount path                  | Yes*     | /mnt/efs                   | App container path for the referenced file system  |
     | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
     | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |
     | OpenTofu version override       | No       | Ravion default             | Override the OpenTofu version for the stack        |

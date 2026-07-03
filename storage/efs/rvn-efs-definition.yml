@@ -1,0 +1,462 @@
+definition:
+  type: rvn-efs
+  name: EFS File System
+  description: Creates and manages an Amazon EFS file system with mount targets, security groups, automatic backups, and an optional access point.
+release:
+  version: 0.1.0
+  description: Initial version
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - id: section_aws
+          label: AWS account & region
+          type: section
+        - default: << ref.input.aws_account_id >>
+          id: aws_account_id
+          immutable: true
+          label: AWS account
+          type: string
+          values: $values:ravion/aws_accounts
+        - default: << ref.input.aws_region >>
+          description: AWS region for this file system.
+          id: aws_region
+          immutable: true
+          label: Region
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          default: << ref.input.execution_environment_id >>
+          description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
+          id: execution_environment_id
+          label: Terraform execution environment
+          type: string
+          values: $values:ravion/execution_environments
+        - id: section_vpc
+          label: VPC
+          type: section
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          required: true
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Subnets where EFS mount targets are created, one per subnet. Use private subnets in distinct availability zones.
+          id: subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          required: true
+          type: string_array
+      required: true
+      type: $ref:rvn-aws-network
+    - id: section_file_system
+      label: File system
+      type: section
+    - id: name
+      immutable: true
+      label: Name slug
+      type: string
+      description: Name prefix for all EFS resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: Use 1-64 letters, numbers, hyphens, and underscores, starting and ending with a letter or number.
+          pattern: ^[a-zA-Z0-9]([a-zA-Z0-9_-]{0,62}[a-zA-Z0-9])?$
+    - id: encrypted
+      label: Encryption at rest
+      type: boolean
+      description: Encrypt file system data at rest. Cannot be changed after creation.
+      immutable: true
+      default: true
+    - id: kms_key_id
+      label: KMS key ARN
+      type: string
+      description: KMS key for encryption at rest. Leave blank to use the AWS managed key for EFS.
+      collapsible: true
+      placeholder: arn:aws:kms:us-east-1:123456789012:key/abc-123
+      show_when:
+        encrypted: true
+    - id: performance_mode
+      label: Performance mode
+      type: string
+      description: General purpose fits most workloads. Max I/O trades higher latency for higher aggregate throughput and cannot be changed after creation.
+      immutable: true
+      default: generalPurpose
+      values:
+        - label: General purpose
+          description: Recommended for most workloads, with the lowest per-operation latency.
+          value: generalPurpose
+        - label: Max I/O
+          description: Higher aggregate throughput and operations per second at the cost of latency. Not supported with elastic throughput.
+          value: maxIO
+    - id: throughput_mode
+      label: Throughput mode
+      type: string
+      description: How the file system scales throughput.
+      default: bursting
+      values:
+        - label: Bursting
+          description: Throughput scales with the amount of data stored, with burst credits for spikes.
+          value: bursting
+        - label: Elastic
+          description: Throughput scales automatically with workload demand. Good for spiky or unpredictable workloads.
+          value: elastic
+        - label: Provisioned
+          description: Fixed throughput independent of the amount of data stored.
+          value: provisioned
+    - id: provisioned_throughput_in_mibps
+      label: Provisioned throughput (MiB/s)
+      type: number
+      description: Throughput to provision for the file system.
+      min: 1
+      required: true
+      show_when:
+        throughput_mode: provisioned
+      default: 128
+    - id: section_lifecycle
+      label: Lifecycle & backups
+      type: section
+    - id: transition_to_ia
+      label: Transition to Infrequent Access
+      type: string
+      description: Move files not accessed for this period to the lower-cost Infrequent Access storage class. Leave blank to keep files in Standard storage.
+      collapsible: true
+      required: false
+      values:
+        - label: After 1 day
+          value: AFTER_1_DAY
+        - label: After 7 days
+          value: AFTER_7_DAYS
+        - label: After 14 days
+          value: AFTER_14_DAYS
+        - label: After 30 days
+          value: AFTER_30_DAYS
+        - label: After 60 days
+          value: AFTER_60_DAYS
+        - label: After 90 days
+          value: AFTER_90_DAYS
+        - label: After 180 days
+          value: AFTER_180_DAYS
+        - label: After 270 days
+          value: AFTER_270_DAYS
+        - label: After 365 days
+          value: AFTER_365_DAYS
+    - id: transition_to_archive
+      label: Transition to Archive
+      type: string
+      description: Move files not accessed for this period to the Archive storage class. Requires a Transition to Infrequent Access period.
+      collapsible: true
+      required: false
+      values:
+        - label: After 1 day
+          value: AFTER_1_DAY
+        - label: After 7 days
+          value: AFTER_7_DAYS
+        - label: After 14 days
+          value: AFTER_14_DAYS
+        - label: After 30 days
+          value: AFTER_30_DAYS
+        - label: After 60 days
+          value: AFTER_60_DAYS
+        - label: After 90 days
+          value: AFTER_90_DAYS
+        - label: After 180 days
+          value: AFTER_180_DAYS
+        - label: After 270 days
+          value: AFTER_270_DAYS
+        - label: After 365 days
+          value: AFTER_365_DAYS
+    - id: transition_to_primary_storage_class
+      label: Transition back to Standard
+      type: string
+      description: Move files back to Standard storage on first access, avoiding repeated Infrequent Access retrieval charges for files that become hot again.
+      collapsible: true
+      required: false
+      values:
+        - label: After 1 access
+          value: AFTER_1_ACCESS
+    - id: backup_enabled
+      label: Automatic backups
+      type: boolean
+      description: Back up the file system automatically through AWS Backup.
+      default: true
+    - id: section_access_point
+      label: Access point
+      type: section
+    - id: access_point_enabled
+      label: Access point
+      type: boolean
+      description: Create an EFS access point that scopes clients to a directory with fixed POSIX ownership. Recommended when containers should not access the whole file system as root.
+      default: false
+    - id: access_point_root_directory_path
+      label: Root directory path
+      type: string
+      description: Directory exposed through the access point. EFS creates it with the ownership below on first use when the path is not /.
+      required: true
+      show_when:
+        access_point_enabled: true
+      default: /data
+      patterns:
+        - message: Use an absolute path.
+          pattern: ^/
+    - id: access_point_posix_uid
+      label: POSIX user ID
+      type: number
+      description: User ID applied to all requests through the access point and owner of the created directory.
+      min: 0
+      required: true
+      show_when:
+        access_point_enabled: true
+      default: 1000
+    - id: access_point_posix_gid
+      label: POSIX group ID
+      type: number
+      description: Group ID applied to all requests through the access point and owner of the created directory.
+      min: 0
+      required: true
+      show_when:
+        access_point_enabled: true
+      default: 1000
+    - id: access_point_permissions
+      label: Directory permissions
+      type: string
+      description: Octal permissions for the created root directory.
+      required: true
+      show_when:
+        access_point_enabled: true
+      default: "755"
+      patterns:
+        - message: Use a 3- or 4-digit octal string such as 755.
+          pattern: ^[0-7]{3,4}$
+    - id: section_security
+      label: Security
+      type: section
+      description: NFS access is granted through the managed client security group. Attach it to workloads that mount this file system; Ravion modules that reference this file system attach it automatically.
+    - id: allowed_security_group_ids
+      label: Additional allowed security groups
+      type: string_array
+      description: Extra security groups allowed to reach the mount targets over NFS, beyond the managed client security group.
+      add_button_label: Add security group ID
+      collapsible: true
+      placeholder: sg-...
+      patterns:
+        - message: Security group ID must start with sg-.
+          pattern: ^sg-.+
+    - id: allowed_cidr_blocks
+      label: Allowed IPv4 CIDR blocks
+      type: string_array
+      description: IPv4 CIDR blocks allowed to reach the mount targets over NFS.
+      add_button_label: Add CIDR block
+      collapsible: true
+      placeholder: 10.0.0.0/16
+    - id: allowed_ipv6_cidr_blocks
+      label: Allowed IPv6 CIDR blocks
+      type: string_array
+      description: IPv6 CIDR blocks allowed to reach the mount targets over NFS.
+      add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      placeholder: 2001:db8::/64
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: storage/efs
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        access_point_enabled: << module.input.access_point_enabled >>
+        access_point_permissions: << module.input.access_point_permissions >>
+        access_point_posix_gid: << module.input.access_point_posix_gid >>
+        access_point_posix_uid: << module.input.access_point_posix_uid >>
+        access_point_root_directory_path: << module.input.access_point_root_directory_path >>
+        allowed_cidr_blocks: << module.input.allowed_cidr_blocks || [] >>
+        allowed_ipv6_cidr_blocks: << module.input.allowed_ipv6_cidr_blocks || [] >>
+        allowed_security_group_ids: << module.input.allowed_security_group_ids || [] >>
+        backup_enabled: << module.input.backup_enabled >>
+        encrypted: << module.input.encrypted >>
+        kms_key_id: << module.input.kms_key_id || nil >>
+        name: << module.input.name >>
+        performance_mode: << module.input.performance_mode >>
+        provisioned_throughput_in_mibps: '<< module.input.throughput_mode == "provisioned" ? module.input.provisioned_throughput_in_mibps : nil >>'
+        region: << module.input.aws_region >>
+        subnet_ids: << module.input.subnet_ids >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        throughput_mode: << module.input.throughput_mode >>
+        transition_to_archive: << module.input.transition_to_archive || nil >>
+        transition_to_ia: << module.input.transition_to_ia || nil >>
+        transition_to_primary_storage_class: << module.input.transition_to_primary_storage_class || nil >>
+        vpc_id: << module.input.vpc_id >>
+  ui:
+    metrics:
+      - id: storage_bytes
+        name: Storage bytes
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FileSystemId: << stack.output.file_system_id >>
+            StorageClass: Total
+          name: StorageBytes
+          namespace: AWS/EFS
+          region: << stack.output.region >>
+          statistic: Average
+      - id: client_connections
+        name: Client connections
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FileSystemId: << stack.output.file_system_id >>
+          name: ClientConnections
+          namespace: AWS/EFS
+          region: << stack.output.region >>
+          statistic: Average
+      - id: data_read_io_bytes
+        name: Data read bytes
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FileSystemId: << stack.output.file_system_id >>
+          name: DataReadIOBytes
+          namespace: AWS/EFS
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: data_write_io_bytes
+        name: Data write bytes
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FileSystemId: << stack.output.file_system_id >>
+          name: DataWriteIOBytes
+          namespace: AWS/EFS
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: burst_credit_balance
+        name: Burst credit balance
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FileSystemId: << stack.output.file_system_id >>
+          name: BurstCreditBalance
+          namespace: AWS/EFS
+          region: << stack.output.region >>
+          statistic: Average
+      - id: percent_io_limit
+        name: Percent I/O limit
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            FileSystemId: << stack.output.file_system_id >>
+          name: PercentIOLimit
+          namespace: AWS/EFS
+          region: << stack.output.region >>
+          statistic: Average
+  readme: |
+    Amazon EFS file system with mount targets, security groups, automatic backups, and an optional access point.
+
+    ## Overview
+
+    Use this module to create an encrypted Amazon EFS file system inside a Ravion VPC network. Select a VPC network and Ravion provisions the file system, one mount target per private subnet, a mount-target security group, a client security group for consumers, an automatic backup policy, and optionally an access point with fixed POSIX ownership.
+
+    ECS services can reference this module directly: the service mounts the file system into the app container and attaches the client security group automatically.
+
+    Terraform source: [flightcontrolhq/modules/storage/efs](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/storage/efs)
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Shared uploads for ECS services | Files survive task replacement and are shared across all tasks. |
+    | Persistent app data on Fargate | EFS is the AWS-supported persistent storage for Fargate tasks. |
+    | Multi-service shared storage | Several services mount the same file system through their own mount points. |
+    | Cost-optimized cold data | Lifecycle policies move idle files to Infrequent Access or Archive storage. |
+
+    ## Security model
+
+    The module creates two security groups:
+
+    - A **mount-target security group** attached to every mount target. It allows NFS (TCP 2049) only from the client security group, plus any additional security groups or CIDR blocks you allow.
+    - A **client security group** with no ingress rules of its own. Workloads that mount the file system attach this group. ECS services that reference this file system attach it automatically.
+
+    This keeps NFS access closed by default and means no security group changes are needed when consumers are added or removed.
+
+    ## File system settings
+
+    Encryption at rest is enabled by default and cannot be changed after creation. Leave KMS key ARN blank to use the AWS managed key.
+
+    | Field | Default | Description |
+    | --- | --- | --- |
+    | Performance mode | General purpose | Max I/O offers higher aggregate throughput at higher latency; immutable after creation. |
+    | Throughput mode | Bursting | Elastic scales with demand; Provisioned gives fixed throughput. |
+    | Provisioned throughput | 128 MiB/s | Applies only to the provisioned throughput mode. |
+
+    ## Lifecycle and backups
+
+    Lifecycle policies reduce storage cost for files that are not accessed frequently. Transition to Infrequent Access moves idle files to cheaper storage; Transition to Archive requires an Infrequent Access period and suits rarely-read data; Transition back to Standard returns a file to primary storage on first access.
+
+    Automatic backups through AWS Backup are enabled by default.
+
+    ## Access point
+
+    Enable the access point when clients should be scoped to one directory with fixed POSIX ownership instead of the file system root. EFS creates the root directory path with the configured user ID, group ID, and permissions on first use. All requests through the access point act as that POSIX user.
+
+    ECS services that reference this file system mount through the access point automatically when it is enabled.
+
+    ## Configuration
+
+    | Field | Required | Default | Description |
+    | --- | --- | --- | --- |
+    | VPC network | Yes | - | Existing rvn-aws-network module instance |
+    | Name slug | Yes | {project}-{env}-{module} | Name prefix for all EFS resources |
+    | Encryption at rest | No | true | Immutable after creation |
+    | KMS key ARN | No | AWS managed key | Customer key for encryption at rest |
+    | Performance mode | No | generalPurpose | generalPurpose or maxIO; immutable |
+    | Throughput mode | No | bursting | bursting, elastic, or provisioned |
+    | Provisioned throughput (MiB/s) | Yes* | 128 | Required for provisioned throughput mode |
+    | Transition to Infrequent Access | No | - | Lifecycle policy for idle files |
+    | Transition to Archive | No | - | Requires an Infrequent Access transition |
+    | Transition back to Standard | No | - | Move files back to Standard on first access |
+    | Automatic backups | No | true | AWS Backup policy for the file system |
+    | Access point | No | false | Scope clients to a directory with fixed POSIX ownership |
+    | Root directory path | Yes* | /data | Directory exposed through the access point |
+    | POSIX user ID / group ID | Yes* | 1000 | Identity applied to access point requests |
+    | Directory permissions | Yes* | 755 | Octal permissions for the created directory |
+    | Additional allowed security groups | No | [] | Extra NFS sources beyond the client security group |
+    | Allowed IPv4/IPv6 CIDR blocks | No | [] | CIDR-based NFS sources |
+    | Tags | No | Standard Ravion tags | Additional tags applied to resources |
+    | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
+    | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
+    | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
+
+    *Conditionally required based on the selected throughput mode or access point setting.
+
+    ## Design decisions
+
+    - Mount targets are created in the private subnets of the selected VPC network. EFS is internal storage; it is never exposed publicly.
+    - The client security group pattern keeps the mount-target security group static. Consumers gain access by attaching the client group, not by editing ingress rules.
+    - Encryption at rest defaults to on because it cannot be enabled later without recreating the file system.
+    - A single optional access point covers the common case of scoping an application to one directory. Additional access points can be managed outside this module.
+
+    ## Learn more
+
+    - [Amazon EFS documentation](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)
+    - [EFS performance and throughput modes](https://docs.aws.amazon.com/efs/latest/ug/performance.html)
+    - [EFS lifecycle management](https://docs.aws.amazon.com/efs/latest/ug/lifecycle-management-efs.html)
+    - [EFS access points](https://docs.aws.amazon.com/efs/latest/ug/efs-access-points.html)
+    - [Using EFS with Amazon ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/efs-volumes.html)

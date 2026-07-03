@@ -56,7 +56,9 @@ requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] 
 runtime_platform:
   cpu_architecture: << module.input.cpu_architecture >>
   operating_system_family: LINUX
-security_group_ids: << module.input.security_group_ids >>
+security_group_ids: >-
+  << (module.input.security_group_ids != nil ? module.input.security_group_ids : []) |
+  concat(module.input.efs_enabled ? [module.input.efs_client_security_group_id] : []) >>
 subnet_ids: "<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
 tags:
   $include: ./ravion-tags.yml
@@ -70,8 +72,11 @@ task_role_arn: << module.input.task_role_arn || nil >>
 task_role_inline_policies: << module.input.task_role_inline_policies >>
 task_role_policies: << module.input.task_role_policies >>
 volumes: >-
-  << module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name":
+  << (module.input.volumes != nil ? map(module.input.volumes, #.volume_type == "efs" ? {"name":
   #.name, "efs_volume_configuration": #.efs_volume_configuration} : {"name": #.name,
-  "docker_volume_configuration": #.docker_volume_configuration}) : [] >>
+  "docker_volume_configuration": #.docker_volume_configuration}) : []) |
+  concat(module.input.efs_enabled ? [{"name": "efs", "efs_volume_configuration": {"file_system_id":
+  module.input.efs_file_system_id, "transit_encryption": "ENABLED", "authorization_config":
+  (module.input.efs_access_point_id ? {"access_point_id": module.input.efs_access_point_id} : nil)}}] : []) >>
 vpc_id: << module.input.vpc_id >>
 steady_state_wait_enabled: false
