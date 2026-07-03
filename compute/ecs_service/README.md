@@ -438,6 +438,14 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 |------|-------------|
 | nlb_listener_arn | NLB listener ARN (null if not using NLB) |
 
+### Load Balancer
+
+| Name | Description |
+|------|-------------|
+| load_balancer_arn | ARN of the load balancer the service is attached to (null if no LB attachment) |
+| load_balancer_dns_name | DNS name of the attached load balancer, usable as a CloudFront or DNS origin |
+| load_balancer_zone_id | Canonical hosted zone ID of the attached load balancer, for Route53 alias records |
+
 ### Auto Scaling
 
 | Name | Description |

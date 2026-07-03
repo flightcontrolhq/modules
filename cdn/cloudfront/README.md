@@ -435,6 +435,10 @@ module "cdn" {
 | distribution_hosted_zone_ids | A map of distribution key to Route 53 zone ID for alias records. |
 | distribution_statuses | A map of distribution key to current distribution status. |
 | distribution_etags | A map of distribution key to current distribution ETag. |
+| distribution_id | The distribution ID when exactly one distribution is created (null otherwise). |
+| distribution_arn | The distribution ARN when exactly one distribution is created (null otherwise). |
+| distribution_domain_name | The distribution domain name when exactly one distribution is created (null otherwise). |
+| distribution_hosted_zone_id | The Route 53 hosted zone ID when exactly one distribution is created (null otherwise). |
 | origin_access_control_ids | A map of origin_id to OAC ID for S3 origins. |
 | logging_bucket_id | The ID of the logging S3 bucket (null if not created). |
 | logging_bucket_arn | The ARN of the logging S3 bucket (null if not created). |
