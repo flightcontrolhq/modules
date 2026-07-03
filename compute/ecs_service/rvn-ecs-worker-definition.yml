@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.2.2
-  description: Refactor shared build input definitions.
+  version: 0.3.0
+  description: Add app container mount points so task volumes, including EFS, can be mounted into the app container.
 module:
   inputs:
     - id: section_cluster
@@ -93,6 +93,7 @@ module:
         deploy.input.image_ref)), "linux_parameters": {"init_process_enabled": true}, "log_configuration":
         {"log_driver": "awsfirelens"}, "memory": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)),
+        "mount_points": (module.input.app_mount_points != nil ? module.input.app_mount_points : []),
         "name": (stack.output.container_name), "readonly_root_filesystem": false, "repository_credentials":
         (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
         module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
@@ -124,7 +125,8 @@ module:
         {"awslogs-group": stack.output.log_group_name, "awslogs-region": stack.output.region,
         "awslogs-stream-prefix": stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider ==
         "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
-        1024)), "name": (stack.output.container_name), "readonly_root_filesystem": false,
+        1024)), "mount_points": (module.input.app_mount_points != nil ? module.input.app_mount_points :
+        []), "name": (stack.output.container_name), "readonly_root_filesystem": false,
         "repository_credentials": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
         module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
         "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars : []) >>
@@ -168,6 +170,16 @@ module:
 
     Workers support Dockerfile, Nixpacks, and prebuilt image deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For prebuilt images, use Start command to override the image default CMD when the worker process uses a different command.
 
+    ## Persistent storage
+
+    Use Task volumes to attach EFS or Docker volumes to the ECS task, and App mount points to mount those volumes into the worker container by volume name. Sidecars mount the same volumes through their own Mount points setting.
+
+    EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. The module mounts an existing EFS file system; make sure the file system's mount targets allow inbound NFS traffic on port 2049 from the service security group. Transit encryption is enabled by default.
+
+    When the EFS authorization config sets iam to ENABLED, the task role must allow the elasticfilesystem:ClientMount and elasticfilesystem:ClientWrite actions, plus elasticfilesystem:ClientRootAccess when root access is required. Add those permissions with Task role policy ARNs or Task role inline policies.
+
+    Docker volumes apply only to EC2 launch type tasks and keep data on the container instance.
+
     ## Autoscaling
 
     Autoscaling is enabled by default with CPU and memory target tracking. Use custom metric scaling policies for queue depth, lag, backlog, or other workload-specific metrics that better represent worker demand. When autoscaling is disabled, Desired tasks controls how many worker tasks the ECS service keeps running.
@@ -189,6 +201,8 @@ module:
     | Runtime environment variables | No | - | Environment variables passed to the worker container |
     | Runtime secrets | No | - | Secrets injected from SSM Parameter Store or Secrets Manager |
     | Sidecars | No | [] | Additional containers in the worker task |
+    | Task volumes | No | [] | EFS or Docker volumes available to task containers |
+    | App mount points | No | [] | Task volume mounts for the worker container |
 
     ## Design decisions
 

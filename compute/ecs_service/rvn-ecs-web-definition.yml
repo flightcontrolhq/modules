@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.7.2
-  description: Refactor shared build input definitions.
+  version: 0.8.0
+  description: Add app container mount points so task volumes, including EFS, can be mounted into the app container.
 module:
   inputs:
     - id: section_cluster
@@ -447,7 +447,9 @@ module:
         stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
         {"init_process_enabled": true}, "log_configuration": {"log_driver": "awsfirelens"}, "memory":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
-        int(float(module.input.fargate_size.memory_gb) * 1024)), "name": (stack.output.container_name),
+        int(float(module.input.fargate_size.memory_gb) * 1024)), "mount_points":
+        (module.input.app_mount_points != nil ? module.input.app_mount_points : []), "name":
+        (stack.output.container_name),
         "port_mappings": [{"app_protocol": "http", "container_port": (module.input.container_port),
         "protocol": "tcp"}], "readonly_root_filesystem": false, "repository_credentials":
         (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
@@ -483,7 +485,8 @@ module:
         stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
         stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
-        1024)), "name": (stack.output.container_name), "port_mappings": [{"app_protocol": "http",
+        1024)), "mount_points": (module.input.app_mount_points != nil ? module.input.app_mount_points :
+        []), "name": (stack.output.container_name), "port_mappings": [{"app_protocol": "http",
         "container_port": (module.input.container_port), "protocol": "tcp"}], "readonly_root_filesystem":
         false, "repository_credentials": (module.input.image_registry_credentials_secret_arn ?
         {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), "secrets":
@@ -678,6 +681,16 @@ module:
 
     Use Build environment variables for values needed during image builds. Values can be plain strings or references loaded from Parameter Store or Secrets Manager. For Dockerfile builds, enable Inject environment variables in Dockerfile to pass those values as Docker build arguments.
 
+    ## Persistent storage
+
+    Use Task volumes to attach EFS or Docker volumes to the ECS task, and App mount points to mount those volumes into the app container by volume name. Sidecars mount the same volumes through their own Mount points setting.
+
+    EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. The module mounts an existing EFS file system; make sure the file system's mount targets allow inbound NFS traffic on port 2049 from the service security group. Transit encryption is enabled by default.
+
+    When the EFS authorization config sets iam to ENABLED, the task role must allow the elasticfilesystem:ClientMount and elasticfilesystem:ClientWrite actions, plus elasticfilesystem:ClientRootAccess when root access is required. Add those permissions with Task role policy ARNs or Task role inline policies.
+
+    Docker volumes apply only to EC2 launch type tasks and keep data on the container instance.
+
     ## Deployment
 
     Deployment strategy defaults to Rolling. Blue/green, Linear, and Canary use the native ECS traffic-shift controller with production and alternate target groups. The deployment strategy can change between deploys without changing Terraform infrastructure.
@@ -800,6 +813,8 @@ module:
     | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
     | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
     | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
+    | Task volumes                    | No       | []                         | EFS or Docker volumes available to task containers |
+    | App mount points                | No       | []                         | Task volume mounts for the app container           |
     | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
     | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |
     | OpenTofu version override       | No       | Ravion default             | Override the OpenTofu version for the stack        |

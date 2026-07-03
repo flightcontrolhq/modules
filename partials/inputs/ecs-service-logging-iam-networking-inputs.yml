@@ -427,3 +427,31 @@
   item_label: Volume
   required: false
   default: []
+- id: app_mount_points
+  label: App mount points
+  type: object_array
+  description: Optional task volume mounts for the app container. The source volume must match a task volume name.
+  item_inputs:
+    - id: source_volume
+      label: Source volume
+      type: string
+      description: Task volume name to mount into the app container.
+      placeholder: shared-data
+      required: true
+    - id: container_path
+      label: Container path
+      type: string
+      description: Path inside the app container where the volume is mounted.
+      placeholder: /data
+      required: true
+      patterns:
+        - message: Use an absolute container path.
+          pattern: ^/
+    - id: read_only
+      label: Read only
+      type: boolean
+      description: Mount the volume as read-only inside the app container.
+      default: false
+  item_label: Mount point
+  required: false
+  default: []
