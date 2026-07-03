@@ -18,4 +18,6 @@ task_role_arn: <<stack.output.task_role_arn>>
 volumes: >-
   << module.input.efs_enabled ? [{"name": "efs", "efs_volume_configuration": {"file_system_id":
   module.input.efs_file_system_id, "transit_encryption": "ENABLED", "authorization_config":
-  (module.input.efs_access_point_id ? {"access_point_id": module.input.efs_access_point_id} : nil)}}] : [] >>
+  (module.input.efs_access_point_id ? {"access_point_id": module.input.efs_access_point_id, "iam":
+  (module.input.efs_iam_authorization ? "ENABLED" : "DISABLED")} : (module.input.efs_iam_authorization ?
+  {"iam": "ENABLED"} : nil))}}] : [] >>
