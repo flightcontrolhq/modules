@@ -252,31 +252,6 @@ module:
       patterns:
         - message: Invalid CloudFront policy ID. Use the 36-character policy ID, not the name or ARN.
           pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
-    - id: response_headers_policy
-      label: Response headers policy
-      type: string
-      description: Optional headers CloudFront adds to responses, such as security headers or CORS. Leave empty to add none.
-      collapsible: true
-      required: false
-      values:
-        - label: SecurityHeadersPolicy
-          description: Adds security headers such as HSTS, X-Content-Type-Options, and X-Frame-Options.
-          value: 67f7725c-6f97-4210-82d7-5512b31e9d03
-        - label: SimpleCORS
-          description: Allows simple CORS requests from any origin.
-          value: 60669652-455b-4ae9-85a4-c4c02393f86c
-        - label: CORS-With-Preflight
-          description: Allows CORS requests including preflight OPTIONS from any origin.
-          value: 5cc3b908-e619-4b99-88e5-2cf7f45965bd
-        - label: CORS-and-SecurityHeadersPolicy
-          description: Simple CORS plus the security headers set.
-          value: e61eb60c-9c35-4d20-a928-2b84e02af89c
-        - label: CORS-with-preflight-and-SecurityHeadersPolicy
-          description: CORS with preflight plus the security headers set.
-          value: eaab4381-ed33-4a86-88ca-d9558dc6cd63
-        - label: Custom policy ID
-          description: Use a response headers policy you created yourself.
-          value: custom
     - id: cache_behaviors
       label: Custom cache behaviors
       type: object_array
@@ -313,20 +288,20 @@ module:
               value: allow-all
         - id: allowed_methods
           label: Allowed methods
-          type: string_array
-          description: CloudFront accepts only GET,HEAD or GET,HEAD,OPTIONS or all seven methods.
+          type: string
+          description: HTTP methods CloudFront forwards for this path. CloudFront supports only these three combinations.
           required: true
-          default:
-            - GET
-            - HEAD
+          default: read
           values:
-            - value: GET
-            - value: HEAD
-            - value: OPTIONS
-            - value: PUT
-            - value: POST
-            - value: PATCH
-            - value: DELETE
+            - label: Read only
+              description: GET, HEAD
+              value: read
+            - label: Read and OPTIONS
+              description: GET, HEAD, OPTIONS
+              value: read_options
+            - label: All methods
+              description: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
+              value: all
         - id: cache_policy_id
           label: Cache policy
           type: string
@@ -371,6 +346,31 @@ module:
               description: Forwards the CORS headers needed for an S3 origin.
               value: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
       default: []
+    - id: response_headers_policy
+      label: Response headers policy
+      type: string
+      description: Optional headers CloudFront adds to responses, such as security headers or CORS. Leave empty to add none.
+      collapsible: true
+      required: false
+      values:
+        - label: SecurityHeadersPolicy
+          description: Adds security headers such as HSTS, X-Content-Type-Options, and X-Frame-Options.
+          value: 67f7725c-6f97-4210-82d7-5512b31e9d03
+        - label: SimpleCORS
+          description: Allows simple CORS requests from any origin.
+          value: 60669652-455b-4ae9-85a4-c4c02393f86c
+        - label: CORS-With-Preflight
+          description: Allows CORS requests including preflight OPTIONS from any origin.
+          value: 5cc3b908-e619-4b99-88e5-2cf7f45965bd
+        - label: CORS-and-SecurityHeadersPolicy
+          description: Simple CORS plus the security headers set.
+          value: e61eb60c-9c35-4d20-a928-2b84e02af89c
+        - label: CORS-with-preflight-and-SecurityHeadersPolicy
+          description: CORS with preflight plus the security headers set.
+          value: eaab4381-ed33-4a86-88ca-d9558dc6cd63
+        - label: Custom policy ID
+          description: Use a response headers policy you created yourself.
+          value: custom
     - id: response_headers_policy_custom_id
       label: Custom response headers policy ID
       type: string
@@ -494,7 +494,13 @@ module:
         logging_enabled: << module.input.logging_enabled >>
         logging_prefix: ""
         name: << module.input.name >>
-        ordered_cache_behaviors: << module.input.cache_behaviors || [] >>
+        ordered_cache_behaviors: >-
+          << module.input.cache_behaviors != nil ? map(module.input.cache_behaviors, {"path_pattern":
+          #.path_pattern, "target_origin_id": #.target_origin_id, "viewer_protocol_policy":
+          #.viewer_protocol_policy, "allowed_methods": (#.allowed_methods == "all" ? ["DELETE", "GET",
+          "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] : #.allowed_methods == "read_options" ? ["GET",
+          "HEAD", "OPTIONS"] : ["GET", "HEAD"]), "cache_policy_id": #.cache_policy_id,
+          "origin_request_policy_id": (#.origin_request_policy_id || nil)}) : [] >>
         origins: >-
           << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
           module.input.ecs_web_alb_dns_name : module.input.origin_source == "ecs_cluster" ?
