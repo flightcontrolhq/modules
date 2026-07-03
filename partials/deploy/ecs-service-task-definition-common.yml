@@ -6,6 +6,9 @@ family: <<stack.output.task_definition_family>>
 memory: >-
   << string(module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
   int(float(module.input.fargate_size.memory_gb) * 1024)) >>
+ephemeral_storage: >-
+  << module.input.capacity_provider != "ec2" && module.input.task_ephemeral_storage_size_gib ? {size_in_gib:
+  module.input.task_ephemeral_storage_size_gib} : nil >>
 network_mode: awsvpc
 requires_compatibilities: '<< module.input.capacity_provider == "ec2" ? ["EC2"] : ["FARGATE"] >>'
 runtime_platform:

@@ -289,6 +289,7 @@ module "worker_service" {
 |------|-------------|------|---------|----------|
 | task_cpu | CPU units for the task (256, 512, 1024, 2048, 4096, 8192, 16384) | `number` | `256` | no |
 | task_memory | Memory (MiB) for the task (512-122880) | `number` | `512` | no |
+| task_ephemeral_storage_size_gib | Ephemeral storage size in GiB for Fargate tasks (null = AWS default 20 GiB; set value must be 21-200 GiB) | `number` | `null` | no |
 | container_port | Port for the placeholder container | `number` | `80` | no |
 | launch_type | Launch type (FARGATE or EC2) | `string` | `"FARGATE"` | no |
 | network_mode | Docker networking mode (awsvpc, bridge, host, none) | `string` | `"awsvpc"` | no |
