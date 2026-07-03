@@ -93,6 +93,22 @@ variable "task_memory" {
   }
 }
 
+variable "task_ephemeral_storage_size_gib" {
+  type        = number
+  description = "The ephemeral storage size in GiB for Fargate tasks. Set to null to use the AWS default of 20 GiB."
+  default     = null
+
+  validation {
+    condition     = var.task_ephemeral_storage_size_gib == null ? true : var.task_ephemeral_storage_size_gib >= 21 && var.task_ephemeral_storage_size_gib <= 200
+    error_message = "The task_ephemeral_storage_size_gib must be null or between 21 and 200 GiB."
+  }
+
+  validation {
+    condition     = var.task_ephemeral_storage_size_gib == null || (var.launch_type == "FARGATE" && contains(var.requires_compatibilities, "FARGATE"))
+    error_message = "The task_ephemeral_storage_size_gib is only supported when launch_type is FARGATE and requires_compatibilities includes FARGATE."
+  }
+}
+
 variable "launch_type" {
   type        = string
   description = "The launch type for the service (FARGATE or EC2)."

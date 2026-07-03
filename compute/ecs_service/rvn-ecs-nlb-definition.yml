@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.1.2
-  description: Initial version
+  version: 0.1.3
+  description: Add configurable ECS task ephemeral storage.
 module:
   inputs:
     - id: section_cluster
@@ -664,7 +664,7 @@ module:
 
     You can add secondary providers with Also use Fargate, Also use Fargate spot, and Also use EC2. Mixed strategies can reduce cost or increase placement flexibility, but each enabled provider must exist on the selected cluster.
 
-    For Fargate and Fargate Spot, App size defaults to 2 vCPU and 4 GB memory. For EC2 capacity, App vCPU defaults to 1.5 and App memory in GB defaults to 3.5; leave spare CPU and memory on each EC2 instance for the ECS agent and system processes.
+    For Fargate and Fargate Spot, App size defaults to 2 vCPU and 4 GB memory. App ephemeral storage uses the AWS default of 20 GiB unless you increase it to 21-200 GiB. For EC2 capacity, App vCPU defaults to 1.5 and App memory in GB defaults to 3.5; leave spare CPU and memory on each EC2 instance for the ECS agent and system processes.
 
     CPU architecture defaults to x86_64 for broad compatibility. Choose ARM64 only when the image and native dependencies support it.
 
@@ -745,6 +745,7 @@ module:
     | Source IP stickiness             | No       | false                    | Keep source IPs on the same task when possible   |
     | Capacity provider                | Yes      | fargate                  | Primary service capacity provider                |
     | App size                         | No       | 2 vCPU, 4 GB             | Fargate task CPU and memory                      |
+    | App ephemeral storage (GiB)      | No       | 20                       | Fargate task ephemeral storage                   |
     | App vCPU                         | Yes*     | 1.5                      | Required for EC2 capacity                        |
     | App memory in GB                 | Yes*     | 3.5                      | Required for EC2 capacity                        |
     | CPU architecture                 | No       | X86_64                   | x86_64 compatibility or ARM64 cost optimization  |

@@ -66,6 +66,9 @@ task_cpu: >-
 task_memory: >-
   << module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
   int(float(module.input.fargate_size.memory_gb) * 1024) >>
+task_ephemeral_storage_size_gib: >-
+  << module.input.capacity_provider == "ec2" ? nil : (module.input.task_ephemeral_storage_size_gib ||
+  nil) >>
 task_role_arn: << module.input.task_role_arn || nil >>
 task_role_inline_policies: << module.input.task_role_inline_policies >>
 task_role_policies: << module.input.task_role_policies >>
