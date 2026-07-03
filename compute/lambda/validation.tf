@@ -27,7 +27,7 @@ check "zip_package_configuration" {
         )
       )
     )
-    error_message = "For package_type 'Zip', set handler/runtime and exactly one of: filename, (s3_bucket + s3_key), or neither (the module will create a code bucket and seed a placeholder). Do not set image_uri."
+    error_message = "For package_type 'Zip', set handler/runtime and exactly one of: filename, (s3_bucket + s3_key), or neither (the module will create a code bucket and seed a bootstrap package). Do not set image_uri."
   }
 }
 
@@ -36,14 +36,13 @@ check "image_package_configuration" {
     condition = (
       var.package_type != "Image" ||
       (
-        var.image_uri != null &&
+        (var.image_uri != null || var.ecr_repository_creation_enabled) &&
         var.filename == null &&
         var.s3_bucket == null &&
-        var.s3_key == null &&
-        var.s3_object_version == null
+        var.s3_key == null
       )
     )
-    error_message = "For package_type 'Image', set image_uri and do not set filename/s3_* values."
+    error_message = "For package_type 'Image', set image_uri or enable ecr_repository_creation_enabled so the module can seed a bootstrap image. Do not set filename/s3_* values."
   }
 }
 
@@ -59,7 +58,7 @@ check "lambda_at_edge_constraints" {
         length(var.file_system_configs) == 0 &&
         length(var.layers) == 0 &&
         var.dead_letter_target_arn == null &&
-        alltrue([for a in var.architectures : a == "x86_64"]) &&
+        var.architecture == "x86_64" &&
         var.timeout <= 30 &&
         var.memory_size <= 3008
       )

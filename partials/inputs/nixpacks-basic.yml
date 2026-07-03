@@ -1,17 +1,14 @@
 - id: section_nixpacks
   label: Nixpacks
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: section
 - id: nixpacks_install_cmd
   label: Install command
   placeholder: Intelligent default based on your language & framework
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string
 - id: nixpacks_build_cmd
   label: Build command
   placeholder: Intelligent default based on your language & framework
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string

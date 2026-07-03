@@ -10,7 +10,7 @@ resource "aws_lambda_function" "this" {
   package_type = var.package_type
   publish      = var.version_publishing_enabled
 
-  architectures                  = var.architectures
+  architectures                  = [var.architecture]
   memory_size                    = var.memory_size
   timeout                        = var.timeout
   kms_key_arn                    = var.kms_key_arn
@@ -18,13 +18,12 @@ resource "aws_lambda_function" "this" {
   reserved_concurrent_executions = var.reserved_concurrent_executions
   code_signing_config_arn        = var.code_signing_config_arn
 
-  filename          = var.package_type == "Zip" ? var.filename : null
-  source_code_hash  = var.source_code_hash
-  s3_bucket         = var.package_type == "Zip" ? local.effective_s3_bucket : null
-  s3_key            = var.package_type == "Zip" ? local.effective_s3_key : null
-  s3_object_version = var.package_type == "Zip" ? var.s3_object_version : null
+  filename         = var.package_type == "Zip" ? var.filename : null
+  source_code_hash = var.source_code_hash
+  s3_bucket        = var.package_type == "Zip" ? local.effective_s3_bucket : null
+  s3_key           = var.package_type == "Zip" ? local.effective_s3_key : null
 
-  image_uri = var.package_type == "Image" ? var.image_uri : null
+  image_uri = var.package_type == "Image" ? local.effective_image_uri : null
   handler   = var.package_type == "Zip" ? var.handler : null
   runtime   = var.package_type == "Zip" ? var.runtime : null
 
@@ -86,6 +85,14 @@ resource "aws_lambda_function" "this" {
   tags = local.tags
 
   lifecycle {
+    # Ravion deploy owns post-create code promotions; Terraform still manages
+    # runtime and function configuration.
+    ignore_changes = [
+      image_uri,
+      s3_bucket,
+      s3_key,
+    ]
+
     precondition {
       condition = (
         !var.lambda_at_edge_enabled ||
@@ -97,7 +104,7 @@ resource "aws_lambda_function" "this" {
           length(var.layers) == 0 &&
           length(var.file_system_configs) == 0 &&
           var.dead_letter_target_arn == null &&
-          alltrue([for a in var.architectures : a == "x86_64"]) &&
+          var.architecture == "x86_64" &&
           var.timeout <= 30 &&
           var.memory_size <= 3008
         )
@@ -109,6 +116,8 @@ resource "aws_lambda_function" "this" {
   depends_on = [
     aws_iam_role_policy_attachment.managed,
     aws_iam_role_policy.inline,
-    aws_cloudwatch_log_group.this
+    aws_cloudwatch_log_group.this,
+    module.ecr,
+    terraform_data.bootstrap_image
   ]
 }

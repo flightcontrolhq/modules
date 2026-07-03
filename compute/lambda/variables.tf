@@ -39,14 +39,14 @@ variable "package_type" {
   }
 }
 
-variable "architectures" {
-  type        = list(string)
+variable "architecture" {
+  type        = string
   description = "Instruction set architecture for the Lambda function."
-  default     = ["x86_64"]
+  default     = "x86_64"
 
   validation {
-    condition     = length(var.architectures) > 0 && alltrue([for a in var.architectures : contains(["x86_64", "arm64"], a)])
-    error_message = "The architectures must contain one or more values from: 'x86_64', 'arm64'."
+    condition     = contains(["x86_64", "arm64"], var.architecture)
+    error_message = "The architecture must be either 'x86_64' or 'arm64'."
   }
 }
 
@@ -92,12 +92,6 @@ variable "s3_key" {
   default     = null
 }
 
-variable "s3_object_version" {
-  type        = string
-  description = "S3 object version containing the deployment package."
-  default     = null
-}
-
 variable "code_bucket_name" {
   type        = string
   description = "Name for the auto-created S3 bucket used to store the deployment package. Only used when package_type is 'Zip' and neither filename nor s3_bucket is provided. Defaults to '<name>-code-<account_id>'."
@@ -112,8 +106,8 @@ variable "code_bucket_force_destroy_enabled" {
 
 variable "placeholder_object_key" {
   type        = string
-  description = "S3 key for the placeholder deployment package uploaded to the auto-created code bucket."
-  default     = "placeholder.zip"
+  description = "S3 key for the bootstrap package uploaded to the auto-created code bucket."
+  default     = "bootstrap-package.zip"
 }
 
 variable "image_uri" {
@@ -130,6 +124,51 @@ variable "image_config" {
   })
   description = "Container image configuration overrides."
   default     = null
+}
+
+################################################################################
+# ECR Repository
+################################################################################
+
+variable "ecr_repository_creation_enabled" {
+  type        = bool
+  description = "Create an ECR repository for built container image package deployments."
+  default     = false
+}
+
+variable "ecr_repository_name" {
+  type        = string
+  description = "Name of the ECR repository. If null, defaults to var.name."
+  default     = null
+}
+
+variable "ecr_image_tag_mutability" {
+  type        = string
+  description = "Tag mutability setting for the ECR repository."
+  default     = "MUTABLE"
+
+  validation {
+    condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
+    error_message = "The ecr_image_tag_mutability must be 'MUTABLE' or 'IMMUTABLE'."
+  }
+}
+
+variable "ecr_scan_on_push_enabled" {
+  type        = bool
+  description = "Scan images for vulnerabilities on push."
+  default     = true
+}
+
+variable "ecr_force_deletion_enabled" {
+  type        = bool
+  description = "Allow the ECR repository to be deleted even when it contains images."
+  default     = false
+}
+
+variable "ecr_default_lifecycle_policy_enabled" {
+  type        = bool
+  description = "Apply the submodule's built-in lifecycle policy for untagged and older tagged images."
+  default     = false
 }
 
 ################################################################################

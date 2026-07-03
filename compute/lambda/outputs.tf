@@ -100,8 +100,27 @@ output "code_bucket_arn" {
 }
 
 output "code_object_key" {
-  description = "The S3 key of the initial placeholder deployment package, or null if not created."
-  value       = local.create_code_bucket ? aws_s3_object.placeholder[0].key : null
+  description = "The S3 key of the initial bootstrap package, or null if not created."
+  value       = local.create_code_bucket ? aws_s3_object.bootstrap_package[0].key : null
+}
+
+################################################################################
+# ECR
+################################################################################
+
+output "ecr_repository_arn" {
+  description = "The ARN of the ECR repository, or null if disabled."
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_arn : null
+}
+
+output "ecr_repository_name" {
+  description = "The name of the ECR repository, or null if disabled."
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_name : null
+}
+
+output "ecr_repository_url" {
+  description = "The URL of the ECR repository, or null if disabled."
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_url : null
 }
 
 ################################################################################

@@ -3,7 +3,7 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.3.0
+  version: 0.2.3
   description: Add configurable ECS task ephemeral storage.
 module:
   inputs:
