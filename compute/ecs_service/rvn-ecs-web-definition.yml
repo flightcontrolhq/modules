@@ -813,7 +813,7 @@ module:
     | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
     | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
     | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
-    | EFS file system                 | No       | false                      | Mount a Ravion EFS module into the app container   |
+    | EFS file system                 | No       | false                      | Mount an EFS file system into the app container   |
     | EFS mount path                  | Yes*     | /mnt/efs                   | App container path for the referenced file system  |
     | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
     | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |

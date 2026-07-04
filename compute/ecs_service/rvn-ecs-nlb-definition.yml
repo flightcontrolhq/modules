@@ -771,7 +771,7 @@ module:
     | Additional security groups       | No       | []                       | Extra security groups attached to ECS tasks      |
     | Allowed CIDR blocks              | No       | []                       | Direct service access in addition to load balancer traffic |
     | Sidecars                         | No       | []                       | Additional containers in the ECS task            |
-    | EFS file system                  | No       | false                    | Mount a Ravion EFS module into the app container |
+    | EFS file system                  | No       | false                    | Mount an EFS file system into the app container |
     | EFS mount path                   | Yes*     | /mnt/efs                 | App container path for the referenced file system |
     | Tags                             | No       | Standard Ravion tags     | Additional tags applied to resources             |
     | Advanced Terraform variables     | No       | {}                       | Raw lower-level overrides for exceptional cases  |

@@ -372,7 +372,7 @@ module:
 
     ## Overview
 
-    Use this module to create an encrypted Amazon EFS file system inside a Ravion VPC network. Select a VPC network and Ravion provisions the file system, one mount target per private subnet, a mount-target security group, a client security group for consumers, an automatic backup policy, and optionally an access point with fixed POSIX ownership.
+    Use this module to create an encrypted Amazon EFS file system inside a VPC. Select a VPC network and Ravion provisions the file system, one mount target per private subnet, a mount-target security group, a client security group for consumers, an automatic backup policy, and optionally an access point with fixed POSIX ownership.
 
     ECS services can reference this module directly: the service mounts the file system into the app container and attaches the client security group automatically.
 

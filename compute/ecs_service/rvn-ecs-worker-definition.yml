@@ -201,7 +201,7 @@ module:
     | Runtime environment variables | No | - | Environment variables passed to the worker container |
     | Runtime secrets | No | - | Secrets injected from SSM Parameter Store or Secrets Manager |
     | Sidecars | No | [] | Additional containers in the worker task |
-    | EFS file system | No | false | Mount a Ravion EFS module into the worker container |
+    | EFS file system | No | false | Mount an EFS file system into the worker container |
     | EFS mount path | Yes* | /mnt/efs | Worker container path for the referenced file system |
 
     ## Design decisions

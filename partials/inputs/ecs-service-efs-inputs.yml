@@ -4,7 +4,7 @@
 - id: efs_enabled
   label: EFS file system
   type: boolean
-  description: Mount a Ravion EFS file system into the app container. The service attaches the file system's client security group and adds the volume and mount point automatically.
+  description: Mount an EFS file system into the app container. The service attaches the file system's client security group and adds the volume and mount point automatically.
   default: false
 - id: efs
   label: EFS file system
@@ -47,7 +47,7 @@
 - id: efs_iam_authorization
   label: EFS IAM authorization
   type: boolean
-  description: Use the task role to authorize file system access. The task role must allow elasticfilesystem:ClientMount, plus elasticfilesystem:ClientWrite or elasticfilesystem:ClientRootAccess as needed.
+  description: Use the task role to authorize file system access. The task role must allow `elasticfilesystem:ClientMount`, plus `elasticfilesystem:ClientWrite` or `elasticfilesystem:ClientRootAccess` as needed.
   show_when:
     efs_enabled: true
   default: false
