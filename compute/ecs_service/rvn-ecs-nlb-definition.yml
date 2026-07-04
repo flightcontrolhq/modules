@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.1.3
-  description: Add configurable ECS task ephemeral storage.
+  version: 0.1.4
+  description: Add an EFS file system reference that provisions easy persistent storage for the app container.
 module:
   inputs:
     - id: section_cluster
@@ -369,6 +369,7 @@ module:
         environment_variables_description: Runtime environment variables passed to the app container. PORT is added automatically from the container port setting.
     - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
     - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-efs-inputs.yml
     - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
   stack:
     type: opentofu
@@ -490,7 +491,10 @@ module:
         stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
         {"init_process_enabled": true}, "log_configuration": {"log_driver": "awsfirelens"}, "memory":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
-        int(float(module.input.fargate_size.memory_gb) * 1024)), "name": (stack.output.container_name),
+        int(float(module.input.fargate_size.memory_gb) * 1024)), "mount_points":
+        (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
+        (stack.output.container_name),
         "port_mappings": [{"container_port": (module.input.container_port), "protocol":
         (module.input.listener_protocol == "UDP" ? "udp" : "tcp")}], "readonly_root_filesystem": false,
         "repository_credentials": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
@@ -526,7 +530,9 @@ module:
         stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
         stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
-        1024)), "name": (stack.output.container_name), "port_mappings": [{"container_port":
+        1024)), "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
+        (stack.output.container_name), "port_mappings": [{"container_port":
         (module.input.container_port), "protocol": (module.input.listener_protocol == "UDP" ? "udp" : "tcp")}],
         "readonly_root_filesystem": false, "repository_credentials": (module.input.image_registry_credentials_secret_arn ?
         {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), "secrets":
@@ -694,6 +700,12 @@ module:
 
     Use Build environment variables for values needed during image builds. Values can be plain strings or references loaded from Parameter Store or Secrets Manager. For Dockerfile builds, enable Inject environment variables in Dockerfile to pass those values as Docker build arguments.
 
+    ## Persistent storage
+
+    Enable the EFS file system setting, select a Ravion EFS module, and set the EFS mount path. Ravion adds the task volume, mounts it into the app container, attaches the file system's client security group to the service so NFS traffic is allowed, and mounts through the file system's access point when one is enabled. Sidecars mount the same file system through their Mount points setting with `efs` as the source volume.
+
+    EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. Transit encryption is enabled by default. Enable EFS IAM authorization to authorize file system access with the task role; the task role must allow elasticfilesystem:ClientMount, plus elasticfilesystem:ClientWrite or elasticfilesystem:ClientRootAccess as needed.
+
     ## Deployment
 
     Deployment strategy defaults to Rolling. Blue/green, Linear, and Canary use the native ECS traffic-shift controller with production and alternate target groups. The deployment strategy can change between deploys without changing Terraform infrastructure.
@@ -759,7 +771,8 @@ module:
     | Additional security groups       | No       | []                       | Extra security groups attached to ECS tasks      |
     | Allowed CIDR blocks              | No       | []                       | Direct service access in addition to load balancer traffic |
     | Sidecars                         | No       | []                       | Additional containers in the ECS task            |
-    | Task volumes                     | No       | []                       | EFS or Docker volumes mounted by containers      |
+    | EFS file system                  | No       | false                    | Mount an EFS file system into the app container |
+    | EFS mount path                   | Yes*     | /mnt/efs                 | App container path for the referenced file system |
     | Tags                             | No       | Standard Ravion tags     | Additional tags applied to resources             |
     | Advanced Terraform variables     | No       | {}                       | Raw lower-level overrides for exceptional cases  |
     | OpenTofu version override        | No       | Ravion default           | Override the OpenTofu version for the stack      |

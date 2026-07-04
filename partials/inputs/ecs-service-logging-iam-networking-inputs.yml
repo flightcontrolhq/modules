@@ -120,7 +120,7 @@
 - id: section_runtime_networking
   label: Networking and deployment
   type: section
-  description: Configure deployment rollout limits, task network access, sidecars, and task volumes.
+  description: Configure deployment rollout limits, task network access, and sidecars.
 - id: deployment_minimum_healthy_percent
   label: Minimum healthy percent
   type: number
@@ -293,13 +293,13 @@
     - id: mount_points
       label: Mount points
       type: object_array
-      description: Optional task volume mounts for this sidecar. The source volume must match a task volume name.
+      description: Optional task volume mounts for this sidecar. Use the volume name `efs` to mount the EFS file system when the EFS file system setting is enabled.
       item_inputs:
         - id: source_volume
           label: Source volume
           type: string
-          description: Task volume name to mount into the sidecar.
-          placeholder: shared-data
+          description: Task volume name to mount into the sidecar. Use `efs` for the EFS file system volume.
+          placeholder: efs
           required: true
         - id: container_path
           label: Container path
@@ -368,62 +368,5 @@
       placeholder: /app
       required: false
   item_label: Sidecar
-  required: false
-  default: []
-- id: volumes
-  label: Task volumes
-  type: object_array
-  description: Optional ECS task volumes. Use EFS for persistent shared storage that can be mounted by Fargate or EC2 Linux tasks, such as user uploads or shared application data. Use Docker volumes only for EC2 launch type tasks when data can live on the container instance and does not need Fargate support. Each volume can use either EFS or Docker, not both.
-  item_inputs:
-    - id: name
-      label: Volume name
-      type: string
-      description: Required ECS task volume name. Use this name from container mount points.
-      placeholder: shared-data
-      required: true
-      patterns:
-        - message: "Use 1-255 characters: letters, numbers, hyphens, and underscores only."
-          pattern: ^[A-Za-z0-9_-]{1,255}$
-    - id: volume_type
-      label: Volume type
-      type: string
-      description: Choose the backing storage for this task volume.
-      required: true
-      default: efs
-      values:
-        - description: Persistent shared file storage for Fargate or EC2 Linux tasks.
-          label: EFS
-          value: efs
-        - description: Local Docker-managed volume for EC2 launch type tasks only.
-          label: Docker
-          value: docker
-    - id: efs_volume_configuration
-      label: EFS volume configuration
-      type: object
-      description: Configure an existing Amazon EFS file system. Use this when files must survive task replacement, be shared across tasks, or run on Fargate. At minimum provide file_system_id; add an access point and IAM authorization when you need scoped POSIX permissions.
-      placeholder: |-
-        file_system_id: fs-abc123
-        root_directory: /
-        transit_encryption: ENABLED
-        authorization_config:
-          access_point_id: fsap-abc123
-          iam: ENABLED
-      required: true
-      show_when:
-        volume_type: efs
-    - id: docker_volume_configuration
-      label: Docker volume configuration
-      type: object
-      description: Configure a Docker-managed volume for EC2 launch type tasks. Use this only when the service runs on EC2 capacity and the volume can be tied to the container instance. Do not use Docker volumes for Fargate services.
-      placeholder: |-
-        scope: task
-        autoprovision: false
-        driver: local
-        driver_opts: {}
-        labels: {}
-      required: true
-      show_when:
-        volume_type: docker
-  item_label: Volume
   required: false
   default: []
