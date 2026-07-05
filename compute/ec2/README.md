@@ -1,0 +1,182 @@
+# EC2 Service
+
+Runs an app on a stable group of EC2 instances behind an optional Application Load Balancer, with in-place deploys pushed through SSM Run Command. Instances are managed by an Auto Scaling Group but are never replaced by deploys, so per-instance state (root volume, optional data volume) survives every release.
+
+Two runtimes are supported:
+
+- **container** — instances run Docker; each deploy pulls an image and swaps the running container through the module-provided SSM deploy document.
+- **manual** — deploys run a user-provided list of shell commands on each instance through the built-in `AWS-RunShellScript` document; the module only provisions the instances.
+
+## How deploys work
+
+For the **container** runtime the module creates an SSM Command document (`<name>-deploy` — the name is a platform contract derived from the group name) that encodes the whole in-place deploy for one instance:
+
+1. Rebuild the app env file from Terraform-rendered values.
+2. Drain: deregister the instance from the target group and wait (skipped in worker mode).
+3. Swap the release: `docker pull` + container replace.
+4. Health gate: poll `http://localhost:<app_port><health_check_path>` until healthy, or fail the command.
+5. Re-register the instance with the target group and wait until in service.
+
+An orchestrator (the Ravion deploy manager) runs this document against the Auto Scaling Group's instances with its own batching and failure policy, passing:
+
+| Parameter | Value |
+|-----------|-------|
+| `imageUri` | Full image URI including tag or digest |
+| `deployId` | Optional release identifier |
+
+For the **manual** runtime no document is created: the orchestrator sends the service's deploy commands through the built-in `AWS-RunShellScript` document, and draining, health checking, and release mechanics are up to those commands.
+
+New instances launched by the Auto Scaling Group boot from the launch template but hold no release until the orchestrator repeats the deploy against them.
+
+## Usage
+
+### Web service running a container
+
+```hcl
+module "web" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ec2?ref=v1.0.0"
+
+  name       = "my-web"
+  vpc_id     = "vpc-0123456789abcdef0"
+  subnet_ids = ["subnet-aaa", "subnet-bbb"]
+
+  runtime       = "container"
+  instance_type = "t3.small"
+  min_size      = 2
+  max_size      = 4
+
+  app_port          = 3000
+  health_check_path = "/health"
+
+  ecr_repository_creation_enabled = true
+
+  load_balancer_attachment = {
+    target_group = {
+      port = 3000
+      health_check = {
+        path = "/health"
+      }
+    }
+    listener_rules = [
+      {
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/shared/abc/def"
+        conditions = [
+          { type = "host-header", values = ["app.example.com"] }
+        ]
+      }
+    ]
+  }
+  load_balancer_security_group_id = "sg-0123456789abcdef0"
+
+  environment_variables = [
+    { name = "NODE_ENV", value = "production" }
+  ]
+}
+```
+
+### Worker with manual command deploys
+
+```hcl
+module "worker" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ec2?ref=v1.0.0"
+
+  name       = "my-worker"
+  vpc_id     = "vpc-0123456789abcdef0"
+  subnet_ids = ["subnet-aaa", "subnet-bbb"]
+
+  runtime       = "manual"
+  instance_type = "t3.small"
+
+  data_volume_enabled = true
+  data_volume_size    = 50
+}
+```
+
+Deploys then run your own commands on every instance:
+
+```sh
+aws ssm send-command \
+  --document-name AWS-RunShellScript \
+  --targets Key=tag:aws:autoscaling:groupName,Values=my-worker \
+  --parameters commands='["cd /srv/app && git pull","systemctl restart my-worker"]'
+```
+
+## Stable storage
+
+- The root volume and optional data volume are per-instance EBS. They survive every in-place deploy because instances are not replaced, but they are lost when the Auto Scaling Group terminates the instance.
+- For storage that must survive instance termination, mount an EFS file system (`efs_*` variables); it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
+- Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh.
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| opentofu/terraform | >= 1.10.0 |
+| aws | >= 6.0 |
+
+Instances need outbound access to SSM, ECR/S3, and CloudWatch Logs (NAT gateway, public IPs, or VPC endpoints). The default AMI is Amazon Linux 2023; custom AMIs must run cloud-init and include the SSM agent.
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| name | Name prefix for all resources (1-28 chars) | `string` | n/a | yes |
+| tags | Tags for all resources | `map(string)` | `{}` | no |
+| region | AWS region (null = provider region) | `string` | `null` | no |
+| vpc_id | VPC for the instances | `string` | n/a | yes |
+| subnet_ids | Subnets for the Auto Scaling Group | `list(string)` | n/a | yes |
+| associate_public_ip_address | Assign public IPs to instances | `bool` | `false` | no |
+| additional_security_group_ids | Extra security groups on the instances | `list(string)` | `[]` | no |
+| allowed_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
+| runtime | `container` or `manual` | `string` | n/a | yes |
+| app_port | Port the app listens on | `number` | `null` | no |
+| start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
+| environment_variables | Plain env vars written to the app env file | `list(object)` | `[]` | no |
+| health_check_path | Local HTTP path gating deploy success | `string` | `null` | no |
+| deploy_timeout_seconds | Per-instance container deploy script timeout | `number` | `1200` | no |
+| instance_type | EC2 instance type | `string` | n/a | yes |
+| ami_id | Custom AMI (null = latest AL2023) | `string` | `null` | no |
+| key_name | SSH key pair name | `string` | `null` | no |
+| root_volume_size | Root EBS volume size (GB) | `number` | `30` | no |
+| root_volume_type | Root EBS volume type | `string` | `"gp3"` | no |
+| data_volume_enabled | Attach a formatted per-instance data volume | `bool` | `false` | no |
+| data_volume_size | Data volume size (GB) | `number` | `20` | no |
+| data_volume_type | Data volume type | `string` | `"gp3"` | no |
+| data_volume_mount_path | Host mount path for the data volume | `string` | `"/data"` | no |
+| additional_user_data | Extra shell script appended to bootstrap | `string` | `""` | no |
+| min_size | Minimum instances | `number` | `1` | no |
+| max_size | Maximum instances | `number` | `3` | no |
+| desired_capacity | Desired instances (null = group-managed) | `number` | `null` | no |
+| health_check_type | ASG health check: `EC2` or `ELB` | `string` | `"EC2"` | no |
+| health_check_grace_period | Seconds before ASG health checks apply | `number` | `300` | no |
+| cpu_target_tracking_enabled | Scale on average CPU utilization | `bool` | `false` | no |
+| cpu_target_value | CPU utilization target (%) | `number` | `70` | no |
+| load_balancer_attachment | Target group + listener rules (null = worker mode) | `object` | `null` | no |
+| load_balancer_security_group_id | ALB security group allowed to reach the app port | `string` | `null` | no |
+| efs_enabled | Mount an EFS file system on every instance | `bool` | `false` | no |
+| efs_file_system_id | EFS file system ID | `string` | `null` | no |
+| efs_access_point_id | EFS access point to mount through | `string` | `null` | no |
+| efs_client_security_group_id | EFS client security group attached to instances | `string` | `null` | no |
+| efs_mount_path | Host mount path for EFS | `string` | `"/mnt/efs"` | no |
+| ecr_repository_creation_enabled | Create an ECR repository for built images | `bool` | `false` | no |
+| ecr_force_deletion_enabled | Delete the ECR repository even with images | `bool` | `false` | no |
+| log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| autoscaling_group_name | Name of the Auto Scaling Group deploys target |
+| autoscaling_group_arn | ARN of the Auto Scaling Group |
+| ssm_document_name | Name of the SSM deploy document (container runtime; null for manual) |
+| ssm_document_arn | ARN of the SSM deploy document (container runtime; null for manual) |
+| ecr_repository_arn | ARN of the service ECR repository (when created) |
+| ecr_repository_url | URL of the service ECR repository (when created) |
+| target_group_arn | ARN of the service target group (when attached) |
+| target_group_arn_suffix | Target group ARN suffix for CloudWatch dimensions |
+| security_group_id | ID of the instance security group |
+| instance_role_arn | ARN of the instance IAM role |
+| log_group_name | CloudWatch log group receiving app logs |
+| log_stream_prefix | Prefix of per-instance app log streams |
+| aws_account_id | AWS account ID |
+| region | AWS region |

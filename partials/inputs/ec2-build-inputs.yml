@@ -1,0 +1,71 @@
+- id: section_build
+  label: Build config
+  show_when:
+    deploy_type: container
+  type: section
+- id: build_type
+  label: Build type
+  type: string
+  required: true
+  show_when:
+    deploy_type: container
+  default: dockerfile
+  values:
+    - description: Bring your own Dockerfile
+      label: Dockerfile
+      value: dockerfile
+    - description: Automatically build an image based on your code and config
+      label: Nixpacks
+      value: nixpacks
+    - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
+      label: Prebuilt image from registry
+      value: prebuilt_image
+    - description: Skip the build step. Provide a full image URI at deploy time.
+      label: Disabled
+      value: disabled
+- $template: ./build-git-source.yml
+  with:
+    show_when:
+      deploy_type: container
+      build_type:
+        - nixpacks
+        - dockerfile
+- id: image_repository
+  label: Image repository
+  type: string
+  description: Image repository without a tag or digest, such as `nginx`, `ghcr.io/org/app`, or `123456789012.dkr.ecr.us-east-1.amazonaws.com/app`. Private registries that require login are not supported; use a public image or same-account ECR.
+  placeholder: nginx
+  required: true
+  show_when:
+    deploy_type: container
+    build_type: prebuilt_image
+- id: container_start_command
+  label: Start command override
+  type: string
+  description: Optional command that overrides the image default command.
+  collapsible: true
+  required: false
+  show_when:
+    deploy_type: container
+- $template: ./dockerfile-build.yml
+  with:
+    show_when:
+      deploy_type: container
+      build_type: dockerfile
+- $template: ./nixpacks-basic.yml
+  with:
+    show_when:
+      deploy_type: container
+      build_type: nixpacks
+- id: nixpacks_start_cmd
+  label: Nixpacks start command
+  type: string
+  placeholder: Intelligent default based on your language & framework
+  show_when:
+    deploy_type: container
+    build_type: nixpacks
+- $template: ./nixpacks-advanced.yml
+  with:
+    show_when:
+      deploy_type: container
+      build_type: nixpacks

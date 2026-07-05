@@ -1,0 +1,770 @@
+definition:
+  type: rvn-ec2
+  name: EC2 Service
+  description: Stable EC2 instance group running an app behind an optional shared Application Load Balancer, with in-place container deploys or manual command-based deploys.
+release:
+  version: 0.0.1
+  description: Initial module definition.
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      type: $ref:rvn-aws-network
+      mapped_inputs:
+        - $template: ../../partials/templates/network-ref-mapped-inputs.yml
+          with:
+            aws_account_id_default: << ref.input.aws_account_id >>
+            aws_region_default: << ref.input.aws_region >>
+            execution_environment_default: << ref.input.execution_environment_id >>
+            private_subnet_ids_default: <<ref.stack.output.private_subnet_ids>>
+            public_subnet_ids_default: <<ref.stack.output.public_subnet_ids>>
+            vpc_id_default: <<ref.stack.output.vpc_id>>
+      required: true
+    - id: section_service
+      label: EC2 service
+      type: section
+    - id: name
+      immutable: true
+      label: Service name
+      type: string
+      description: Name for the instance group and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: 1-28 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$
+    - id: deploy_type
+      immutable: true
+      label: Deploy type
+      type: string
+      description: How the app runs on the instances. This cannot change after creation because instances are bootstrapped for one deploy type.
+      required: true
+      default: container
+      values:
+        - label: Container
+          description: Instances run Docker; each deploy pulls an image and swaps the running container in place.
+          value: container
+        - label: Manual
+          description: Each deploy runs your list of deploy commands on every instance through SSM Run Command.
+          value: manual
+    - id: deploy_commands
+      label: Deploy commands
+      type: string_array
+      description: Shell commands run in order on every instance by each deploy, via SSM Run Command as root. The deploy fails on an instance when a command exits non-zero.
+      add_button_label: Add command
+      placeholder: systemctl restart my-app
+      required: true
+      show_when:
+        deploy_type: manual
+    - id: private_subnet_placement_enabled
+      label: Run in private subnets
+      type: boolean
+      description: Recommended. Requires a NAT gateway or equivalent for internet access. Turn off to run in public subnets with public IPs.
+      default: true
+    - id: section_instances
+      label: Instances
+      type: section
+      description: Instances are stable. Deploys update them in place and never replace them, so instance storage survives releases.
+    - id: instance_type
+      label: Instance type
+      type: string
+      description: EC2 instance type for the group. The default Amazon Linux 2023 image matches the instance type's CPU architecture automatically; the app build must match it too.
+      required: true
+      no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
+      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
+    - id: min_size
+      label: Min instances
+      type: number
+      description: Minimum instances in the group.
+      min: 0
+      required: true
+      default: 1
+    - id: max_size
+      label: Max instances
+      type: number
+      description: Maximum instances in the group.
+      min: 1
+      required: true
+      default: 3
+    - id: cpu_target_tracking_enabled
+      label: CPU autoscaling
+      type: boolean
+      description: Scale the group between min and max instances to maintain the target average CPU utilization. New instances receive the current release automatically.
+      default: false
+    - id: cpu_target_value
+      label: CPU target (%)
+      type: number
+      max: 100
+      min: 1
+      show_when:
+        cpu_target_tracking_enabled: true
+      default: 70
+    - id: desired_capacity
+      label: Desired instances
+      type: number
+      description: Instances the group keeps running when CPU autoscaling is off. Must be between Min and Max instances. Leave blank to keep the current group size.
+      min: 0
+      required: false
+      show_when:
+        cpu_target_tracking_enabled: false
+    - id: key_name
+      label: SSH key pair name
+      type: string
+      description: Key pair for SSH access. Session Manager shell access works without one.
+      collapsible: true
+      placeholder: my-key-pair
+      required: false
+    - id: ami_id
+      label: Custom AMI ID
+      type: string
+      description: Custom AMI for the instances. Leave blank to use the latest Amazon Linux 2023 image. Custom AMIs must run cloud-init and include the SSM agent.
+      collapsible: true
+      placeholder: ami-...
+      required: false
+    - id: additional_security_group_ids
+      label: Additional security groups
+      type: string_array
+      description: Additional security groups attached to the instances.
+      add_button_label: Add security group ID
+      collapsible: true
+      placeholder: sg-...
+      required: false
+    - id: additional_user_data
+      label: Additional user data
+      type: text
+      description: Additional shell script appended to the instance bootstrap.
+      collapsible: true
+      placeholder: "#!/bin/bash"
+      required: false
+    - $include: ../../partials/inputs/ec2-build-inputs.yml
+    - id: section_web
+      label: Web service
+      type: section
+    - id: web_service_enabled
+      label: Web service
+      type: boolean
+      description: Serve HTTP traffic through a shared Application Load Balancer. Turn off to run a worker group with no load balancer.
+      default: true
+    - id: alb
+      immutable: true
+      label: Application Load Balancer
+      type: $ref:rvn-aws-alb
+      description: Shared load balancer this service attaches its listener rules to.
+      mapped_inputs:
+        - default: <<ref.stack.output.http_listener_arn>>
+          id: alb_http_listener_arn
+          immutable: true
+          label: ALB HTTP listener ARN
+          required: false
+          type: string
+        - default: <<ref.stack.output.https_listener_arn>>
+          id: alb_https_listener_arn
+          immutable: true
+          label: ALB HTTPS listener ARN
+          required: false
+          type: string
+        - default: <<ref.stack.output.security_group_id>>
+          id: alb_security_group_id
+          immutable: true
+          label: ALB security group ID
+          required: true
+          type: string
+      required: true
+      show_when:
+        web_service_enabled: true
+    - id: app_port
+      immutable: true
+      label: App port
+      type: number
+      description: Port the app listens on. PORT is set automatically from this value.
+      max: 65535
+      min: 1
+      required: true
+      show_when:
+        web_service_enabled: true
+      default: 80
+    - id: host_header_values
+      label: Domain host rules
+      type: string_array
+      description: Hostnames that should route to this service, such as app.example.com or *.example.com. Leave empty to use path-based routing.
+      add_button_label: Add domain host
+      placeholder: app.example.com
+      required: false
+      show_when:
+        web_service_enabled: true
+      default: null
+    - id: path_pattern_values
+      label: Path rules
+      type: string_array
+      description: Path patterns that should route to this service, such as /*, /api/*, or /app/*. If both domain host rules and path rules are empty, the service routes all paths with /*.
+      add_button_label: Add path pattern
+      collapsible: true
+      required: false
+      show_when:
+        web_service_enabled: true
+      default: null
+    - id: listener_rule_priority
+      label: Listener rule priority
+      type: number
+      description: Optional ALB listener rule priority. Leave blank to let AWS assign the next available priority.
+      collapsible: true
+      max: 50000
+      min: 1
+      show_when:
+        web_service_enabled: true
+    - id: section_health
+      label: Health check
+      show_when:
+        web_service_enabled: true
+      type: section
+    - id: health_check_path
+      label: Health check path
+      type: string
+      description: HTTP path used by the load balancer health check and by the deploy health gate on each instance. Use a lightweight endpoint that does not require authentication.
+      required: true
+      show_when:
+        web_service_enabled: true
+      default: /
+    - id: health_check_matcher
+      label: Success codes
+      type: string
+      description: HTTP status code matcher for successful health checks.
+      collapsible: true
+      placeholder: 200-399
+      required: true
+      show_when:
+        web_service_enabled: true
+      default: 200-399
+    - id: health_check_interval
+      label: Interval (secs)
+      type: number
+      collapsible: true
+      max: 300
+      min: 5
+      show_when:
+        web_service_enabled: true
+      default: 10
+    - id: health_check_timeout
+      label: Timeout (secs)
+      type: number
+      description: Seconds to wait for the health-check response. Must be lower than the interval.
+      collapsible: true
+      max: 120
+      min: 2
+      show_when:
+        web_service_enabled: true
+      default: 5
+    - id: healthy_threshold
+      label: Healthy threshold
+      type: number
+      collapsible: true
+      max: 10
+      min: 2
+      show_when:
+        web_service_enabled: true
+      default: 2
+    - id: unhealthy_threshold
+      label: Unhealthy threshold
+      type: number
+      collapsible: true
+      max: 10
+      min: 2
+      show_when:
+        web_service_enabled: true
+      default: 2
+    - id: deregistration_delay
+      label: Deregistration delay (secs)
+      type: number
+      description: Seconds the load balancer drains in-flight requests from an instance before each in-place swap. Lower values speed up deploys.
+      collapsible: true
+      max: 3600
+      min: 0
+      show_when:
+        web_service_enabled: true
+      default: 30
+    - id: target_group_stickiness_enabled
+      label: Sticky sessions
+      type: boolean
+      description: Keep repeat requests on the same instance using a load balancer cookie.
+      collapsible: true
+      show_when:
+        web_service_enabled: true
+      default: false
+    - id: target_group_stickiness_cookie_duration
+      label: Stickiness cookie duration (secs)
+      type: number
+      collapsible: true
+      max: 604800
+      min: 1
+      show_when:
+        web_service_enabled: true
+        target_group_stickiness_enabled: true
+      default: 86400
+    - id: section_app_config
+      label: Environment variables
+      type: section
+    - $include: ../../partials/inputs/build-environment-variables.yml
+    - $include: ../../partials/inputs/dockerfile-env-injection.yml
+    - id: environment_variables
+      label: Runtime environment variables
+      type: array
+      description: Environment variables written to the app environment file on each instance — on every deploy for container services, at instance boot for manual services. PORT is added automatically for web services.
+      placeholder: |-
+        - name: NODE_ENV
+          value: production
+    - id: section_storage
+      label: Storage
+      type: section
+      description: Instance volumes survive in-place deploys but not instance termination. Use an EFS file system for storage that must outlive instances.
+    - id: root_volume_size
+      label: Root volume size (GB)
+      type: number
+      collapsible: true
+      max: 16384
+      min: 8
+      default: 30
+    - id: data_volume_enabled
+      label: Data volume
+      type: boolean
+      description: Attach a dedicated EBS data volume to each instance, formatted and mounted at boot. Container apps see it at the same path.
+      default: false
+    - id: data_volume_size
+      label: Data volume size (GB)
+      type: number
+      max: 16384
+      min: 1
+      show_when:
+        data_volume_enabled: true
+      default: 20
+    - id: data_volume_mount_path
+      label: Data volume mount path
+      type: string
+      required: true
+      show_when:
+        data_volume_enabled: true
+      default: /data
+      patterns:
+        - message: Use an absolute path.
+          pattern: ^/
+    - id: efs_enabled
+      label: EFS file system
+      type: boolean
+      description: Mount an EFS file system on every instance. The service attaches the file system's client security group automatically.
+      default: false
+    - id: efs
+      label: EFS file system
+      type: $ref:rvn-efs
+      mapped_inputs:
+        - default: <<ref.stack.output.file_system_id>>
+          id: efs_file_system_id
+          label: EFS file system ID
+          type: string
+        - default: <<ref.stack.output.access_point_id>>
+          id: efs_access_point_id
+          label: EFS access point ID
+          required: false
+          type: string
+        - default: <<ref.stack.output.client_security_group_id>>
+          id: efs_client_security_group_id
+          label: EFS client security group ID
+          type: string
+      required: true
+      show_when:
+        efs_enabled: true
+    - id: efs_mount_path
+      label: EFS mount path
+      type: string
+      description: Host path where the file system is mounted. Container apps see it at the same path.
+      required: true
+      show_when:
+        efs_enabled: true
+      default: /mnt/efs
+      patterns:
+        - message: Use an absolute path.
+          pattern: ^/
+    - $template: ../../partials/templates/builder-infrastructure-inputs.yml
+      with:
+        no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
+    - $include: ../../partials/inputs/misc-section.yml
+    - id: log_retention_in_days
+      label: Log retention (days)
+      type: number
+      description: CloudWatch retention for app logs.
+      collapsible: true
+      min: 1
+      default: 30
+    - id: deploy_timeout_seconds
+      label: Per-instance deploy timeout (secs)
+      type: number
+      description: Timeout for the container deploy script on each instance.
+      collapsible: true
+      max: 14400
+      min: 60
+      show_when:
+        deploy_type: container
+      default: 1200
+    - id: ecr_force_deletion_enabled
+      label: Force delete image repository
+      type: boolean
+      description: Allow the ECR repository to be deleted even when it contains images. Use with care.
+      collapsible: true
+      show_when:
+        deploy_type: container
+      default: false
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/ec2
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        additional_security_group_ids: << module.input.additional_security_group_ids || [] >>
+        additional_user_data: << module.input.additional_user_data || "" >>
+        ami_id: << module.input.ami_id || nil >>
+        app_port: '<< module.input.web_service_enabled ? module.input.app_port : nil >>'
+        cpu_target_tracking_enabled: << module.input.cpu_target_tracking_enabled >>
+        cpu_target_value: << module.input.cpu_target_value >>
+        data_volume_enabled: << module.input.data_volume_enabled >>
+        data_volume_mount_path: << module.input.data_volume_mount_path >>
+        data_volume_size: << module.input.data_volume_size >>
+        deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
+        desired_capacity: '<< module.input.cpu_target_tracking_enabled ? nil : (module.input.desired_capacity || nil) >>'
+        ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
+        ecr_repository_creation_enabled: '<< module.input.deploy_type == "container" && (module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile") >>'
+        efs_access_point_id: '<< module.input.efs_enabled ? (module.input.efs_access_point_id || nil) : nil >>'
+        efs_client_security_group_id: '<< module.input.efs_enabled ? module.input.efs_client_security_group_id : nil >>'
+        efs_enabled: << module.input.efs_enabled >>
+        efs_file_system_id: '<< module.input.efs_enabled ? module.input.efs_file_system_id : nil >>'
+        efs_mount_path: << module.input.efs_mount_path >>
+        environment_variables: << module.input.environment_variables || [] >>
+        health_check_path: '<< module.input.web_service_enabled ? module.input.health_check_path : nil >>'
+        instance_type: << module.input.instance_type >>
+        key_name: << module.input.key_name || nil >>
+        load_balancer_attachment: >-
+          << module.input.web_service_enabled ? {
+            "enabled": true,
+            "target_group": {
+              "port": module.input.app_port,
+              "deregistration_delay": module.input.deregistration_delay,
+              "health_check": {
+                "enabled": true,
+                "path": module.input.health_check_path,
+                "matcher": module.input.health_check_matcher,
+                "interval": module.input.health_check_interval,
+                "timeout": module.input.health_check_timeout,
+                "healthy_threshold": module.input.healthy_threshold,
+                "unhealthy_threshold": module.input.unhealthy_threshold
+              },
+              "stickiness": module.input.target_group_stickiness_enabled ? {
+                "enabled": true,
+                "type": "lb_cookie",
+                "cookie_duration": module.input.target_group_stickiness_cookie_duration
+              } : nil
+            },
+            "listener_rules": [{
+              "listener_arn": module.input.alb_https_listener_arn || module.input.alb_http_listener_arn,
+              "priority": module.input.listener_rule_priority,
+              "conditions": (module.input.host_header_values != nil && module.input.host_header_values != []
+                ? [{"type": "host-header", "values": module.input.host_header_values}] : [])
+                | concat(module.input.path_pattern_values != nil && module.input.path_pattern_values != []
+                  ? [{"type": "path-pattern", "values": module.input.path_pattern_values}]
+                  : (module.input.host_header_values != nil && module.input.host_header_values != []
+                    ? [] : [{"type": "path-pattern", "values": ["/*"]}]))
+            }]
+          } : nil >>
+        load_balancer_security_group_id: '<< module.input.web_service_enabled ? module.input.alb_security_group_id : nil >>'
+        log_retention_in_days: << module.input.log_retention_in_days >>
+        max_size: << module.input.max_size >>
+        min_size: << module.input.min_size >>
+        name: << module.input.name >>
+        region: << module.input.aws_region >>
+        root_volume_size: << module.input.root_volume_size >>
+        runtime: << module.input.deploy_type >>
+        start_command: '<< module.input.deploy_type == "container" ? (module.input.container_start_command || nil) : nil >>'
+        subnet_ids: '<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>'
+        associate_public_ip_address: '<< module.input.private_subnet_placement_enabled ? false : true >>'
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        vpc_id: << module.input.vpc_id >>
+  build:
+    type: >-
+      << module.input.deploy_type == "container" && (module.input.build_type == "nixpacks" ||
+      module.input.build_type == "dockerfile") ? "image" : "disabled" >>
+    timeout: 1800
+    inputs:
+      - $include: ../../partials/inputs/build-inputs.yml
+    source:
+      $include: ../../partials/build/git-source.yml
+    builder: >-
+      << module.input.deploy_type == "container" && module.input.build_type == "dockerfile" ? {type:
+      "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context:
+      module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
+      module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} :
+      module.input.deploy_type == "container" && module.input.build_type == "nixpacks" ? {type: "nixpacks",
+      install_cmd: module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd,
+      start_cmd: module.input.nixpacks_start_cmd, config_file_path:
+      module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path,
+      nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs,
+      apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs, cache_from:
+      {tag: "nixpacks"}} : {type: "disabled"} >>
+    environment_variables: << module.input.build_environment_variables >>
+    destinations: >-
+      << module.input.deploy_type == "container" ? [{id: "ecr", type: "ecr", repository_arn:
+      stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
+      module.input.build_type]}] : [] >>
+    infrastructure:
+      $include: ../../partials/build/infrastructure.yml
+  deploy:
+    type: aws:ec2
+    concurrency:
+      queue_overflow: oldest
+      queue_size: 1
+    timeout: 1800
+    inputs:
+      - id: image_ref
+        label: Image tag or digest
+        type: string
+        description: Image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from registry mode, this is resolved in the repository configured on the module. For disabled builds, pass a full image URI.
+        placeholder: sha256:... or latest or <run-id>-nixpacks
+        required: true
+        show_when:
+          deploy_type: container
+    definition: >-
+      << module.input.deploy_type == "container" ? {"runtime": "container", "image_ref":
+      deploy.input.image_ref} : {"runtime": "manual", "commands": module.input.deploy_commands} >>
+    infrastructure:
+      autoscaling_group_name: << stack.output.autoscaling_group_name >>
+      aws_account_id: << module.input.aws_account_id >>
+      ecr_repository_url: << stack.output.ecr_repository_url >>
+      image_repository: << module.input.image_repository || nil >>
+      region: << stack.output.region >>
+      target_group_arn: << stack.output.target_group_arn >>
+  ui:
+    logs:
+      - id: app_logs
+        name: App logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: << stack.output.log_group_name >>
+          log_stream_prefix: << stack.output.log_stream_prefix >>
+    metrics:
+      - id: cpu_utilization
+        name: CPU utilization
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            AutoScalingGroupName: << stack.output.autoscaling_group_name >>
+          name: CPUUtilization
+          namespace: AWS/EC2
+          region: << stack.output.region >>
+          statistic: Average
+      - id: in_service_instances
+        name: In-service instances
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            AutoScalingGroupName: << stack.output.autoscaling_group_name >>
+          name: GroupInServiceInstances
+          namespace: AWS/AutoScaling
+          region: << stack.output.region >>
+          statistic: Average
+      - id: network_out
+        name: Network out
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            AutoScalingGroupName: << stack.output.autoscaling_group_name >>
+          name: NetworkOut
+          namespace: AWS/EC2
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: request_count
+        name: Request count
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: RequestCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_response_time
+        name: Target response time
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: TargetResponseTime
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: target_5xx_errors
+        name: 5xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HTTPCode_Target_5XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: healthy_hosts
+        name: Healthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HealthyHostCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+  readme: |
+    Stable EC2 instance group running an app behind an optional shared Application Load Balancer, with in-place container deploys or manual command-based deploys.
+
+    ## Overview
+
+    The EC2 Service module runs an app on a group of EC2 instances managed by an Auto Scaling Group. Unlike container platforms that replace tasks on every release, deploys here are **in place**: the app is updated on the existing instances, which are never replaced by deploys, so instance storage survives every release. Container deploys drain each instance from the load balancer, swap the running container, verify health, and re-register it. Manual deploys run your own list of shell commands on every instance.
+
+    Select a VPC network, choose the deploy type, and Ravion provisions the launch template, Auto Scaling Group, instance IAM role and security group, log shipping, and (for the container deploy type) the SSM deploy document and ECR repository for builds. Attach a shared Application Load Balancer for web traffic, or turn the web service off for a worker group.
+
+    Terraform source: [flightcontrolhq/modules/compute/ec2](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ec2)
+
+    ## Use cases
+
+    | Scenario | EC2 Service helps by... |
+    | --- | --- |
+    | Apps that need stable local state | Keeping instances and their EBS volumes across deploys |
+    | Long-lived connections or agents | Swapping the app in place instead of replacing hosts |
+    | Containers without an orchestrator | Running one Docker container per instance group |
+    | Non-container apps | Running your own deploy commands on every instance |
+    | Background workers | Running an instance group with no load balancer |
+    | Sharing one load balancer | Attaching listener rules to a shared ALB module |
+
+    ## Deploy types
+
+    | Deploy type | Build output | On each instance |
+    | --- | --- | --- |
+    | Container | Image in ECR (or a prebuilt registry image) | Docker pulls the image and swaps the running container |
+    | Manual | None (builds are disabled) | The deploy runs your Deploy commands, in order, via SSM Run Command |
+
+    The deploy type is immutable: instances are bootstrapped for one deploy type at launch.
+
+    For the manual deploy type, provide Deploy commands such as `cd /srv/app && git pull` and `systemctl restart my-app`. They run as root on each instance and the deploy fails on an instance when a command exits non-zero. For the container deploy type, an optional start command overrides the image default command.
+
+    ## Load balancing and worker mode
+
+    With Web service enabled, the service references a shared [Application Load Balancer module](#) and creates its own target group and listener rules on the ALB listener (HTTPS when available, otherwise HTTP). Route traffic with Domain host rules, Path rules, or both; when both are empty, the service routes all paths with /*.
+
+    Several EC2 services (and other services) can attach to the same load balancer with different host or path rules.
+
+    Turn Web service off for worker groups. No target group or listener rules are created and deploys skip the drain step.
+
+    ## Deploys
+
+    Container deploys run through an SSM command document created by the module. On each instance, the deploy:
+
+    1. Rebuilds the app environment file from the configured environment variables.
+    2. Drains the instance from the target group (web services).
+    3. Pulls the new image and swaps the running container.
+    4. Polls the local health check path until healthy, failing the deploy on that instance otherwise.
+    5. Re-registers the instance and waits until it is in service.
+
+    Manual deploys skip the document and run the module's Deploy commands on each instance through SSM Run Command (`AWS-RunShellScript`). Draining, health checking, and anything else the deploy needs are up to your commands.
+
+    The deploy-time input depends on the build mode:
+
+    | Build mode | Deploy input |
+    | --- | --- |
+    | Nixpacks or Dockerfile (container) | Image tag or digest in the service ECR repository |
+    | Prebuilt image from registry | Tag for the configured repository |
+    | Disabled (container) | Full image URI |
+    | Manual | None; deploys re-run the configured Deploy commands |
+
+    Instances launched by autoscaling or replacement receive the current release automatically.
+
+    ## Stable storage
+
+    | Storage | Survives deploys | Survives instance termination |
+    | --- | --- | --- |
+    | Root volume | Yes | No |
+    | Data volume | Yes | No |
+    | EFS file system | Yes | Yes |
+
+    Enable the Data volume for fast per-instance state such as caches or embedded databases; it is formatted and mounted at first boot. Enable the EFS file system and select a Ravion EFS module for shared storage that outlives instances; the service attaches the file system's client security group automatically. For the container runtime, both paths are bind-mounted into the app container at the same location.
+
+    ## Scaling and instance health
+
+    Min and Max instances bound the group. Enable CPU autoscaling to scale on average CPU utilization, or leave it off and set Desired instances for a fixed fleet.
+
+    The Auto Scaling Group replaces instances that fail EC2 health checks. Load-balancer-based instance replacement is intentionally off by default because in-place deploys briefly deregister instances; override with Advanced Terraform variables (`health_check_type`) if you prefer it.
+
+    Launch template changes such as a new AMI or bootstrap change apply to newly launched instances only. Existing instances are never replaced automatically; recycle them manually when needed.
+
+    ## Application configuration
+
+    Runtime environment variables are rendered into the app environment file on each instance — on every deploy for container services, and at instance boot for manual services (deploy commands can also rewrite the file). Changing them is a Terraform update followed by a deploy (container) or an instance refresh (manual). Use environment variables for plain configuration only; a dedicated runtime-secrets mechanism (app-side SSM reads) is planned separately.
+
+    Build environment variables apply to Nixpacks and Dockerfile builds; for Dockerfile builds, optionally inject them as build arguments.
+
+    ## Configuration
+
+    | Field | Required | Default | Description |
+    | --- | --- | --- | --- |
+    | VPC network | Yes | - | Existing rvn-aws-network module instance |
+    | Service name | Yes | {project}-{env}-{module} | Name for the instance group and related resources |
+    | Deploy type | Yes | container | Container or Manual; immutable |
+    | Run in private subnets | No | true | Instances in private subnets without public IPs |
+    | Instance type | Yes | - | EC2 instance type for the group |
+    | Min / Max instances | Yes | 1 / 3 | Group size bounds |
+    | CPU autoscaling | No | false | Target-tracking scaling on average CPU |
+    | Desired instances | No | - | Fixed size when autoscaling is off |
+    | Build type | Yes* | dockerfile | Container only: Dockerfile, Nixpacks, Prebuilt image, or Disabled |
+    | Deploy commands | Yes* | - | Commands each manual deploy runs on every instance |
+    | Web service | No | true | Attach to a shared ALB; off for workers |
+    | Application Load Balancer | Yes* | - | Existing rvn-aws-alb module instance |
+    | App port | Yes* | 80 | Port the app listens on; PORT is set automatically |
+    | Domain host / path rules | No | /* | Listener rule routing conditions |
+    | Health check path | Yes* | / | ALB health check and deploy health gate |
+    | Root volume size (GB) | No | 30 | Per-instance root EBS volume |
+    | Data volume | No | false | Per-instance data EBS volume |
+    | EFS file system | No | false | Shared EFS mount on every instance |
+    | Log retention (days) | No | 30 | CloudWatch retention for app logs |
+    | Tags | No | Standard Ravion tags | Additional tags applied to resources |
+    | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
+    | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
+    | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
+
+    *Conditionally required based on the selected deploy type, build type, or web service setting.
+
+    ## Design decisions
+
+    - Deploys are in place by design. The module targets apps that benefit from stable hosts and storage; for immutable-style rollouts, prefer the ECS modules.
+    - One app per instance group. Sharing instances between apps is intentionally out of scope; share the load balancer instead.
+    - The load balancer is a separate shared module so several services can route through one ALB and its rules stay service-owned.
+    - The ASG health check type defaults to EC2 because in-place deploys briefly deregister instances from the target group.
+    - Web metrics panels are empty for worker groups; they apply only when a load balancer is attached.
+
+    ## Learn more
+
+    - [Amazon EC2 Auto Scaling](https://docs.aws.amazon.com/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html)
+    - [AWS Systems Manager Run Command](https://docs.aws.amazon.com/systems-manager/latest/userguide/run-command.html)
+    - [Application Load Balancer listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html)
+    - [Nixpacks documentation](https://nixpacks.com/docs)

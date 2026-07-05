@@ -1,0 +1,47 @@
+################################################################################
+# Auto Scaling Group
+################################################################################
+
+module "autoscaling" {
+  source = "../autoscaling"
+
+  name                = var.name
+  vpc_zone_identifier = var.subnet_ids
+
+  # Capacity
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.desired_capacity
+
+  # Health checks. EC2 by default: in-place deploys briefly deregister
+  # instances from the target group, which ELB health checks would treat
+  # as unhealthy and replace mid-deploy.
+  health_check_type         = var.health_check_type
+  health_check_grace_period = var.health_check_grace_period
+
+  # Use existing launch template (don't create new one)
+  launch_template_creation_enabled = false
+  launch_template_id               = aws_launch_template.app.id
+  launch_template_version          = "$Latest"
+
+  # Register instances with the service target group
+  target_group_arns = local.enable_load_balancer ? [aws_lb_target_group.app[0].arn] : []
+
+  scaling_policies = var.cpu_target_tracking_enabled ? [
+    {
+      name        = "${var.name}-cpu-target-tracking"
+      policy_type = "TargetTrackingScaling"
+
+      target_tracking_configuration = {
+        target_value = var.cpu_target_value
+        predefined_metric_specification = {
+          predefined_metric_type = "ASGAverageCPUUtilization"
+        }
+      }
+    }
+  ] : []
+
+  tags = merge(local.tags, {
+    Name = var.name
+  })
+}
