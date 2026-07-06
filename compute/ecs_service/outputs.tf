@@ -172,6 +172,25 @@ output "test_listener_rule_arn" {
 }
 
 ################################################################################
+# Load Balancer
+################################################################################
+
+output "load_balancer_arn" {
+  description = "The ARN of the load balancer the service is attached to (null if no load balancer attachment)."
+  value       = length(data.aws_lb.attached) > 0 ? data.aws_lb.attached[0].arn : null
+}
+
+output "load_balancer_dns_name" {
+  description = "The DNS name of the load balancer the service is attached to. Useful as a CloudFront or DNS origin (null if no load balancer attachment)."
+  value       = length(data.aws_lb.attached) > 0 ? data.aws_lb.attached[0].dns_name : null
+}
+
+output "load_balancer_zone_id" {
+  description = "The canonical hosted zone ID of the load balancer the service is attached to, for Route53 alias records (null if no load balancer attachment)."
+  value       = length(data.aws_lb.attached) > 0 ? data.aws_lb.attached[0].zone_id : null
+}
+
+################################################################################
 # Auto Scaling
 ################################################################################
 
