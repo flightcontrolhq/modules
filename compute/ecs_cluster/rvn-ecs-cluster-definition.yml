@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.2.1
-  description: Use non-deprecated AWS region lookup.
+  version: 0.2.2
+  description: Use ACM certificate module references for load balancer HTTPS certificates.
 module:
   inputs:
     - id: network
@@ -223,16 +223,19 @@ module:
       show_when:
         public_alb_enabled: true
       type: boolean
-    - add_button_label: Add certificate ARN
-      description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-      id: public_alb_certificate_arns
-      label: Certificate ARNs
-      placeholder: arn:aws:acm:...
+    - description: ACM certificate module for public ALB HTTPS.
+      id: public_alb_certificate
+      label: Certificate
+      mapped_inputs:
+        - default: <<ref.stack.output.certificate_arn>>
+          id: public_alb_certificate_arn
+          label: Public ALB certificate ARN
+          type: string
       required: true
       show_when:
         public_alb_enabled: true
         public_alb_https_enabled: true
-      type: string_array
+      type: $ref:rvn-acm-certificate
     - collapsible: true
       description: SSL policy for public ALB HTTPS.
       id: public_alb_ssl_policy
@@ -292,16 +295,19 @@ module:
       show_when:
         private_alb_enabled: true
       type: boolean
-    - add_button_label: Add certificate ARN
-      description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-      id: private_alb_certificate_arns
-      label: Certificate ARNs
-      placeholder: arn:aws:acm:...
+    - description: ACM certificate module for private ALB HTTPS.
+      id: private_alb_certificate
+      label: Certificate
+      mapped_inputs:
+        - default: <<ref.stack.output.certificate_arn>>
+          id: private_alb_certificate_arn
+          label: Private ALB certificate ARN
+          type: string
       required: true
       show_when:
         private_alb_enabled: true
         private_alb_https_enabled: true
-      type: string_array
+      type: $ref:rvn-acm-certificate
     - collapsible: true
       description: SSL policy for private ALB HTTPS.
       id: private_alb_ssl_policy
@@ -637,7 +643,8 @@ module:
         public_nlb_enabled: << module.input.public_nlb_enabled >>
         name: << module.input.name >>
         private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
-        private_alb_certificate_arns: << module.input.private_alb_certificate_arns >>
+        private_alb_certificate_arns: >-
+          << module.input.private_alb_certificate_arn ? [module.input.private_alb_certificate_arn] : [] >>
         private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
         private_alb_https_enabled: << module.input.private_alb_https_enabled >>
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
@@ -651,7 +658,8 @@ module:
         private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
         private_subnet_ids: << module.input.private_subnet_ids >>
         public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
-        public_alb_certificate_arns: << module.input.public_alb_certificate_arns >>
+        public_alb_certificate_arns: >-
+          << module.input.public_alb_certificate_arn ? [module.input.public_alb_certificate_arn] : [] >>
         public_alb_access_logs_enabled: << module.input.public_alb_access_logs_enabled >>
         public_alb_https_enabled: << module.input.public_alb_https_enabled >>
         public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>
