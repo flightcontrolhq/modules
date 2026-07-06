@@ -156,3 +156,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node tools/ravion-modules/dist/src/cli.js github-releases --plan release-tags.json --create
+
+      - name: Check for published versions
+        id: published_versions
+        run: |
+          node -e 'const fs = require("node:fs"); const plan = JSON.parse(fs.readFileSync("release-tags.json", "utf8")); const published = plan.some((item) => item.action === "create" || item.action === "update"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`);'
+
+      - name: Trigger docs sync
+        if: steps.published_versions.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
+        run: gh api repos/flightcontrolhq/docs/dispatches -f event_type=module-catalog-published
