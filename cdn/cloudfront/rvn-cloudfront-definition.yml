@@ -75,8 +75,8 @@ module:
         - id: ecs_web_alb_dns_name
           label: Service load balancer DNS name
           type: string
-          description: Load balancer DNS name from the selected ECS web service, used as the origin domain.
-          required: false
+          description: Load balancer DNS name from the selected ECS web service, used as the origin domain. If this is empty, update the service to rvn-ecs-web 0.8.0 or later and apply its stack, then re-select the service.
+          required: true
           default: <<ref.stack.output.load_balancer_dns_name>>
     - id: ecs_cluster
       label: ECS cluster
@@ -89,8 +89,8 @@ module:
         - id: ecs_cluster_alb_dns_name
           label: Cluster public ALB DNS name
           type: string
-          description: Public ALB DNS name from the selected ECS cluster, used as the origin domain.
-          required: false
+          description: Public ALB DNS name from the selected ECS cluster, used as the origin domain. If this is empty, the selected cluster has no public ALB or has not applied its stack.
+          required: true
           default: <<ref.stack.output.public_alb_dns_name>>
     - id: origin_domain_name
       label: Origin domain name
