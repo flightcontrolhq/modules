@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.1.4
-  description: Add an EFS file system reference that provisions easy persistent storage for the app container.
+  version: 0.1.5
+  description: Use an ACM certificate module reference for TLS listeners.
 module:
   inputs:
     - id: section_cluster
@@ -203,11 +203,15 @@ module:
           value: TLS
         - label: UDP
           value: UDP
-    - id: tls_certificate_arn
-      label: TLS certificate ARN
-      type: string
-      description: ACM certificate ARN for TLS listeners.
-      placeholder: arn:aws:acm:...
+    - id: tls_certificate
+      label: TLS certificate
+      type: $ref:rvn-acm-certificate
+      description: ACM certificate module for TLS listeners.
+      mapped_inputs:
+        - id: tls_certificate_arn
+          label: TLS certificate ARN
+          type: string
+          default: <<ref.stack.output.certificate_arn>>
       required: true
       show_when:
         listener_protocol: TLS
@@ -636,7 +640,7 @@ module:
     | UDP               | UDP protocols                                   | Sends UDP traffic to the container port              |
     | TLS               | TLS termination or re-encryption at Layer 4     | Uses TLS certificate settings and TLS target protocol |
 
-    TLS listeners require TLS certificate ARN. TLS SSL policy defaults to `ELBSecurityPolicy-TLS13-1-2-2021-06`. TLS ALPN policy is optional; leave it as None unless clients need a specific ALPN behavior. TLS target protocol controls traffic from the NLB to the ECS task: use TCP when the NLB terminates TLS, or TLS when the task should receive encrypted backend traffic.
+    TLS listeners require an ACM certificate module reference. TLS SSL policy defaults to `ELBSecurityPolicy-TLS13-1-2-2021-06`. TLS ALPN policy is optional; leave it as None unless clients need a specific ALPN behavior. TLS target protocol controls traffic from the NLB to the ECS task: use TCP when the NLB terminates TLS, or TLS when the task should receive encrypted backend traffic.
 
     Source IP stickiness is off by default. Enable it when repeat traffic from the same source IP should stay on the same task when possible.
 
@@ -746,7 +750,7 @@ module:
     | Container port                   | Yes      | 3000                     | Port exposed by the app container                |
     | Listener port                    | Yes      | 80                       | Port the NLB listens on                          |
     | Listener protocol                | Yes      | TCP                      | TCP, TLS, or UDP                                 |
-    | TLS certificate ARN              | Yes*     | -                        | Required when Listener protocol is TLS           |
+    | TLS certificate                  | Yes*     | -                        | Required when Listener protocol is TLS           |
     | TLS SSL policy                   | No       | ELBSecurityPolicy-TLS13-1-2-2021-06 | SSL policy for TLS listeners            |
     | TLS ALPN policy                  | No       | None                     | Optional ALPN behavior for TLS listeners         |
     | TLS target protocol              | Yes*     | TCP                      | Backend protocol for TLS listeners               |

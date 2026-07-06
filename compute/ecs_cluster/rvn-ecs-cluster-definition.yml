@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.2.1
-  description: Use non-deprecated AWS region lookup.
+  version: 0.2.2
+  description: Use ACM certificate module references for load balancer HTTPS certificates.
 module:
   inputs:
     - id: network
@@ -223,16 +223,24 @@ module:
       show_when:
         public_alb_enabled: true
       type: boolean
-    - add_button_label: Add certificate ARN
-      description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-      id: public_alb_certificate_arns
-      label: Certificate ARNs
-      placeholder: arn:aws:acm:...
+    - description: ACM certificate module for public ALB HTTPS.
+      id: public_alb_certificate
+      label: Certificate
+      mapped_inputs:
+        - add_button_label: Add certificate ARN
+          default:
+            - <<ref.stack.output.certificate_arn>>
+          description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
+          id: public_alb_certificate_arns
+          label: Certificate ARNs
+          placeholder: arn:aws:acm:...
+          required: true
+          type: string_array
       required: true
       show_when:
         public_alb_enabled: true
         public_alb_https_enabled: true
-      type: string_array
+      type: $ref:rvn-acm-certificate
     - collapsible: true
       description: SSL policy for public ALB HTTPS.
       id: public_alb_ssl_policy
@@ -292,16 +300,24 @@ module:
       show_when:
         private_alb_enabled: true
       type: boolean
-    - add_button_label: Add certificate ARN
-      description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-      id: private_alb_certificate_arns
-      label: Certificate ARNs
-      placeholder: arn:aws:acm:...
+    - description: ACM certificate module for private ALB HTTPS.
+      id: private_alb_certificate
+      label: Certificate
+      mapped_inputs:
+        - add_button_label: Add certificate ARN
+          default:
+            - <<ref.stack.output.certificate_arn>>
+          description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
+          id: private_alb_certificate_arns
+          label: Certificate ARNs
+          placeholder: arn:aws:acm:...
+          required: true
+          type: string_array
       required: true
       show_when:
         private_alb_enabled: true
         private_alb_https_enabled: true
-      type: string_array
+      type: $ref:rvn-acm-certificate
     - collapsible: true
       description: SSL policy for private ALB HTTPS.
       id: private_alb_ssl_policy
