@@ -2,7 +2,7 @@
 # ECR Repository
 #
 # Optional. Creates a repository for Lambda container image builds when
-# Ravion owns the Dockerfile or Nixpacks image build.
+# Ravion owns the Dockerfile image build.
 ################################################################################
 
 module "ecr" {

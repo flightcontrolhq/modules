@@ -10,9 +10,6 @@
     - description: Bring your own Dockerfile
       label: Dockerfile
       value: dockerfile
-    - description: Automatically build an image based on your code and config
-      label: Nixpacks
-      value: nixpacks
     - description: Automatically build an image with Railpack
       label: Railpack
       value: railpack
@@ -23,7 +20,6 @@
   with:
     show_when:
       build_type:
-        - nixpacks
         - dockerfile
         - railpack
 - id: image_repository
@@ -57,20 +53,6 @@
   with:
     show_when:
       build_type: dockerfile
-- $template: ./nixpacks-basic.yml
-  with:
-    show_when:
-      build_type: nixpacks
-- id: nixpacks_start_cmd
-  label: Start command
-  type: string
-  placeholder: Intelligent default based on your language & framework
-  show_when:
-    build_type: nixpacks
-- $template: ./nixpacks-advanced.yml
-  with:
-    show_when:
-      build_type: nixpacks
 - $template: ./railpack.yml
   with:
     show_when:

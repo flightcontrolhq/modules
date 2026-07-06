@@ -2,7 +2,6 @@
   label: Builder config
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   type: section
@@ -13,7 +12,6 @@
   required: true
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   type: string
@@ -30,7 +28,6 @@
   required: true
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   type: string
@@ -42,7 +39,6 @@
   required: false
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   type: string
@@ -54,7 +50,6 @@
   required: false
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   type: string

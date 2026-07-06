@@ -166,7 +166,7 @@ module:
 
     ## Build and deployment
 
-    Workers support Dockerfile, Railpack, Nixpacks, and prebuilt image deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For Railpack builds, you can optionally pin the Railpack version and override install, build, and start commands. For prebuilt images, use Start command to override the image default CMD when the worker process uses a different command.
+    Workers support Dockerfile, Railpack, and prebuilt image deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For Railpack builds, you can optionally pin the Railpack version and override install, build, and start commands. For prebuilt images, use Start command to override the image default CMD when the worker process uses a different command.
 
     ## Autoscaling
 
@@ -179,7 +179,7 @@ module:
     | ECS cluster | Yes | - | Existing rvn-ecs-cluster module instance |
     | Service name | Yes | {project}-{env}-{module} | Name for the ECS service and related resources |
     | Run in private subnets | No | true | Run tasks in private subnets without public IPs |
-    | Build type | Yes | dockerfile | Dockerfile, Railpack, Nixpacks, or Prebuilt image from registry |
+    | Build type | Yes | dockerfile | Dockerfile, Railpack, or Prebuilt image from registry |
     | Start command | No | [] | Command arguments that override a prebuilt image default CMD |
     | Capacity provider | Yes | fargate | Primary service capacity provider |
     | App size | No | 2 vCPU, 4 GB | Fargate task CPU and memory |

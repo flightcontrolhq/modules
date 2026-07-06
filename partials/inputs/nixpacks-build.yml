@@ -1,6 +1,0 @@
-- $template: ./nixpacks-basic.yml
-  with:
-    show_when: $with.show_when
-- $template: ./nixpacks-advanced.yml
-  with:
-    show_when: $with.show_when

@@ -6,7 +6,6 @@
   type: section
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
 - id: ecr_scan_on_push_enabled
@@ -16,7 +15,6 @@
   collapsible: true
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   default: true
@@ -27,7 +25,6 @@
   collapsible: true
   show_when:
     build_type:
-      - nixpacks
       - dockerfile
       - railpack
   default: false
