@@ -435,6 +435,14 @@ module:
           - whitelist
           - blacklist
       default: []
+    - id: section_monitoring
+      label: Monitoring
+      type: section
+    - id: additional_metrics_enabled
+      label: Additional metrics
+      type: boolean
+      description: Enable `CacheHitRate`, `OriginLatency`, and `401/403/404/502/503/504` error rate charts. Adds a flat CloudWatch cost of about $2.40/month per distribution.
+      default: false
     - id: section_logging
       label: Access logging
       type: section
@@ -487,6 +495,7 @@ module:
             enabled: true
         geo_restriction_locations: << module.input.geo_restriction_locations >>
         geo_restriction_type: << module.input.geo_restriction_type >>
+        additional_metrics_enabled: << module.input.additional_metrics_enabled >>
         http_version: << module.input.http_version >>
         logging_bucket_creation_enabled: << module.input.logging_enabled >>
         logging_bucket_domain_name: null
@@ -518,59 +527,28 @@ module:
       (stack.output.distribution_domain_name ? [{"name": "CloudFront domain", "href": "https://" + stack.output.distribution_domain_name}] : []) +
       (module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ? [{"name": module.input.distribution_aliases[0], "href": "https://" + module.input.distribution_aliases[0]}] : [])
       >>
-    metrics:
-      - id: requests
-        name: Requests
-        type: line
-        source:
-          type: cloudwatch
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            DistributionId: << stack.output.distribution_id >>
-            Region: Global
-          name: Requests
-          namespace: AWS/CloudFront
-          region: us-east-1
-          statistic: Sum
-      - id: error_rate_4xx
-        name: 4xx error rate (%)
-        type: line
-        source:
-          type: cloudwatch
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            DistributionId: << stack.output.distribution_id >>
-            Region: Global
-          name: 4xxErrorRate
-          namespace: AWS/CloudFront
-          region: us-east-1
-          statistic: Average
-      - id: error_rate_5xx
-        name: 5xx error rate (%)
-        type: line
-        source:
-          type: cloudwatch
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            DistributionId: << stack.output.distribution_id >>
-            Region: Global
-          name: 5xxErrorRate
-          namespace: AWS/CloudFront
-          region: us-east-1
-          statistic: Average
-      - id: bytes_downloaded
-        name: Bytes downloaded
-        type: line
-        source:
-          type: cloudwatch
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            DistributionId: << stack.output.distribution_id >>
-            Region: Global
-          name: BytesDownloaded
-          namespace: AWS/CloudFront
-          region: us-east-1
-          statistic: Sum
+    metrics: |-
+      <<
+      [
+        {id:"requests", name:"Requests", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"Requests", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}}
+      ] | concat(module.input.additional_metrics_enabled ? [
+        {id:"cache_hit_rate", name:"Cache hit rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"CacheHitRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}}
+      ] : []) | concat([
+        {id:"error_rate_total", name:"Total error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"TotalErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_4xx", name:"4xx error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"4xxErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_5xx", name:"5xx error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"5xxErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"bytes_downloaded", name:"Bytes downloaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesDownloaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}},
+        {id:"bytes_uploaded", name:"Bytes uploaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesUploaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}}
+      ] | concat(module.input.additional_metrics_enabled ? [
+        {id:"origin_latency", name:"Origin latency", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"OriginLatency", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_401", name:"401 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"401ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_403", name:"403 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"403ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_404", name:"404 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"404ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_502", name:"502 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"502ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_503", name:"503 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"503ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_504", name:"504 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"504ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}}
+      ] : [])
+      >>
   readme: |
     CloudFront distribution that serves web applications from ECS services, load balancers, and other custom origins.
 
@@ -658,6 +636,19 @@ module:
     | WAF web ACL ARN | None | Must be a global (CloudFront) WAFv2 web ACL |
     | Geo restriction | None | Whitelist or blacklist ISO country codes |
 
+    ## Monitoring
+
+    The dashboard always shows the default CloudFront distribution metrics: requests, total error rate, 4xx error rate, 5xx error rate, bytes downloaded, and bytes uploaded. CloudFront publishes these default metrics to CloudWatch at no additional CloudWatch metric cost.
+
+    You can also enable all additional metrics charts for cache hit rate, origin latency, and per-status error rates. AWS enables all 8 additional metrics together and CloudWatch charges a flat per-metric monthly rate, about $2.40 per month per distribution at the standard $0.30 per metric rate. This cost does not change with request volume.
+
+    | Additional metric | Useful for |
+    | --- | --- |
+    | Cache hit rate | Checking how much traffic is served from edge cache |
+    | Origin latency | Seeing how long origins take to start responding to CloudFront |
+    | 401, 403, 404 error rates | Separating authentication, authorization, and not-found issues |
+    | 502, 503, 504 error rates | Separating bad gateway, unavailable origin, and timeout issues |
+
     ## Access logging
 
     CloudFront access logging is off by default. When enabled, the module creates an S3 logging bucket automatically and expires log objects after the configured retention days (default 90).
@@ -684,6 +675,7 @@ module:
     | Response headers policy | No | None | Managed security headers or CORS policies, or a custom policy ID |
     | Custom cache behaviors | No | [] | Path-based caching and routing before the default behavior |
     | Price class | No | All edge locations | Edge location coverage |
+    | Additional metrics | No | false | Enables all 8 CloudFront additional metrics and their flat CloudWatch cost |
     | CloudFront access logging | No | false | Creates a logging bucket when enabled |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership tags |
     | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |

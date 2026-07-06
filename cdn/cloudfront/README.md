@@ -11,6 +11,7 @@ Creates and manages AWS CloudFront distributions with support for multiple distr
 - **SSL/TLS**: Custom ACM certificates with configurable minimum TLS version, SNI support
 - **WAF Integration**: Associate a WAFv2 Web ACL (global scope) for edge protection
 - **Access Logging**: Optional S3 logging bucket with lifecycle management, per-distribution log prefixes
+- **Monitoring**: Optional CloudFront additional metrics subscription for cache hit rate, origin latency, and per-status error rates
 - **Edge Functions**: Support for CloudFront Functions and Lambda@Edge associations
 - **Custom Error Pages**: Configurable error response handling with custom pages
 - **Geo Restrictions**: Whitelist or blacklist countries using ISO 3166-1-alpha-2 codes
@@ -294,6 +295,37 @@ module "cdn" {
 }
 ```
 
+### With Additional CloudFront Metrics
+
+```hcl
+module "cdn" {
+  source = "git::https://github.com/user/ravion-modules.git//cdn/cloudfront?ref=v1.0.0"
+
+  name = "my-app"
+
+  distributions = {
+    main = {}
+  }
+
+  origins = [
+    {
+      origin_id              = "alb"
+      domain_name            = "my-alb-123456.us-east-1.elb.amazonaws.com"
+      origin_protocol_policy = "https-only"
+    }
+  ]
+
+  default_cache_behavior = {
+    target_origin_id       = "alb"
+    viewer_protocol_policy = "redirect-to-https"
+  }
+
+  additional_metrics_enabled = true
+}
+```
+
+CloudFront publishes default distribution metrics at no additional CloudWatch metric cost. Enabling `additional_metrics_enabled` creates a monitoring subscription for each distribution and turns on all 8 CloudFront additional metrics: `CacheHitRate`, `OriginLatency`, `401ErrorRate`, `403ErrorRate`, `404ErrorRate`, `502ErrorRate`, `503ErrorRate`, and `504ErrorRate`. CloudWatch bills these as a flat per-metric monthly charge per distribution, regardless of request volume.
+
 ## Requirements
 
 | Name               | Version   |
@@ -374,6 +406,7 @@ module "cdn" {
 | default_root_object | Object returned for root URL requests (e.g., `index.html`). | `string` | `null` | no |
 | retain_on_delete_enabled | Retain (disable) the distribution on delete instead of removing it. | `bool` | `false` | no |
 | deployment_wait_enabled | Wait for the distribution to deploy before completing. | `bool` | `true` | no |
+| additional_metrics_enabled | Enable CloudFront additional metrics in CloudWatch. This enables all 8 additional metrics for each distribution and incurs a fixed per-metric CloudWatch charge. | `bool` | `false` | no |
 
 ### SSL/TLS
 
@@ -604,6 +637,7 @@ module "cdn" {
 | Resource | Count Logic | Purpose |
 |----------|-------------|---------|
 | `aws_cloudfront_distribution` | 1 per entry in `var.distributions` | CloudFront distribution per domain group |
+| `aws_cloudfront_monitoring_subscription` | 0 or 1 per distribution | CloudFront additional metrics subscription when enabled |
 | `aws_cloudfront_origin_access_control` | 0 to N | OAC per S3 origin (shared across distributions) |
 | `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if `logging_bucket_creation_enabled = true`) |
 | `aws_s3_bucket_ownership_controls` | 0 or 1 | Logging bucket ownership (if logging bucket created) |
@@ -624,6 +658,7 @@ module "cdn" {
 - **Modern Cache Policies Only**: This module uses cache policies and origin request policies instead of legacy `forwarded_values`. Reference AWS managed policies by ID or create custom policies outside this module.
 - **OAC Only (No OAI)**: Only Origin Access Control is supported. OAI is legacy and does not work with S3 bucket policies using KMS encryption or S3 Object Lambda.
 - **Multi-Distribution**: All distributions share the same origins, cache behaviors, and settings. Each distribution gets its own aliases, ACM certificate, and logging prefix. Use this for serving the same content under different domain groups.
+- **Additional Metrics Cost**: CloudFront additional metrics are all-or-nothing per distribution. Enabling them turns on all 8 metrics and incurs a fixed CloudWatch per-metric monthly charge per distribution, independent of traffic volume.
 - **Logging Prefixes**: When logging is enabled, each distribution logs under `<logging_prefix><distribution_key>/` to keep logs separated.
 - **Route53 Records**: Create Route53 alias records externally using the `distribution_domain_names` and `distribution_hosted_zone_ids` outputs.
 - **ACM Certificates**: CloudFront requires ACM certificates in `us-east-1` regardless of where other resources are deployed. Provision certificates externally and pass the ARN.

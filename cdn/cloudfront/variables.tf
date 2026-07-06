@@ -237,6 +237,12 @@ variable "deployment_wait_enabled" {
   default     = true
 }
 
+variable "additional_metrics_enabled" {
+  type        = bool
+  description = "Whether to enable CloudFront additional metrics in CloudWatch. This enables all 8 additional metrics for each distribution and incurs a fixed per-metric CloudWatch charge."
+  default     = false
+}
+
 ################################################################################
 # SSL/TLS (Viewer Certificate)
 ################################################################################
