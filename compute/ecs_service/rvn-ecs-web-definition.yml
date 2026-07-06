@@ -3,13 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-<<<<<<< bb-cloudfront
-  version: 0.8.0
+  version: 0.7.5
   description: Expose the attached load balancer ARN, DNS name, and zone ID as stack outputs for CloudFront origins and DNS records.
-=======
-  version: 0.7.4
-  description: Add an EFS file system reference that provisions easy persistent storage for the app container.
->>>>>>> main
 module:
   inputs:
     - id: section_cluster
