@@ -33,6 +33,17 @@ mock_provider "aws" {
       cidr_block = "10.0.0.0/16"
     }
   }
+  mock_data "aws_lb_listener" {
+    defaults = {
+      load_balancer_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock-alb/1234567890123456"
+    }
+  }
+  mock_data "aws_lb" {
+    defaults = {
+      dns_name = "mock-alb-1234567890.us-east-1.elb.amazonaws.com"
+      zone_id  = "Z35SXDOTRQ7X7K"
+    }
+  }
 
   # Computed ARNs must look like real ARNs to pass provider-side
   # validation on referencing resources (task definition, listener
