@@ -1,0 +1,53 @@
+- id: section_storage
+  label: Persistent storage
+  type: section
+- id: efs_enabled
+  label: EFS file system
+  type: boolean
+  description: Mount an EFS file system into the app container. The service attaches the file system's client security group and adds the volume and mount point automatically.
+  default: false
+- id: efs
+  label: EFS file system
+  type: $ref:rvn-efs
+  mapped_inputs:
+    - default: <<ref.stack.output.file_system_id>>
+      id: efs_file_system_id
+      label: EFS file system ID
+      type: string
+    - default: <<ref.stack.output.access_point_id>>
+      id: efs_access_point_id
+      label: EFS access point ID
+      required: false
+      type: string
+    - default: <<ref.stack.output.client_security_group_id>>
+      id: efs_client_security_group_id
+      label: EFS client security group ID
+      type: string
+  required: true
+  show_when:
+    efs_enabled: true
+- id: efs_mount_path
+  label: EFS mount path
+  type: string
+  description: Path inside the app container where the file system is mounted.
+  required: true
+  show_when:
+    efs_enabled: true
+  default: /mnt/efs
+  patterns:
+    - message: Use an absolute container path.
+      pattern: ^/
+- id: efs_read_only
+  label: EFS read only
+  type: boolean
+  description: Mount the file system as read-only inside the app container.
+  show_when:
+    efs_enabled: true
+  default: false
+- id: efs_iam_authorization
+  label: EFS IAM authorization
+  type: boolean
+  description: Use the task role to authorize file system access. The task role must allow `elasticfilesystem:ClientMount`, plus `elasticfilesystem:ClientWrite` or `elasticfilesystem:ClientRootAccess` as needed.
+  show_when:
+    efs_enabled: true
+  default: false
