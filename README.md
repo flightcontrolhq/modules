@@ -16,7 +16,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | Category      | Module            | Description                                                            | Status  |
 | ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
-| `cdn/`        | `cloudfront`      | AWS CloudFront distributions                                           | v1.0.0  |
+| `cdn/`        | `cloudfront`      | AWS CloudFront distributions (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
 | `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
@@ -44,7 +44,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `security/`   | `kms`             | AWS KMS keys (symmetric or asymmetric: signing, encryption, MAC, key agreement) | v1.0.0  |
 | `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
-| `storage/`    | `efs`             | AWS EFS file systems                                                   | Planned |
+| `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
 | `storage/`    | `s3`              | AWS S3 buckets                                                         | v1.0.0  |
 
 ## Usage

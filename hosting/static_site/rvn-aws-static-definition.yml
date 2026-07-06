@@ -3,7 +3,7 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.2.0
+  version: 0.1.6
   description: Add Railpack static builds.
 module:
   build:
@@ -144,12 +144,16 @@ module:
     - id: section_cloudfront
       label: CloudFront settings
       type: section
-    - description: Required if using domain aliases. Must be in us-east-1.
-      id: distribution_acm_certificate_arn
-      label: ACM certificate ARN
-      placeholder: arn:aws:acm:us-east-1:123456789012:certificate/abc-123
+    - description: Required if using domain aliases. The certificate module must be in us-east-1.
+      id: distribution_acm_certificate
+      label: ACM certificate
+      mapped_inputs:
+        - default: <<ref.stack.output.certificate_arn>>
+          id: distribution_acm_certificate_arn
+          label: CloudFront certificate ARN
+          type: string
       required: false
-      type: string
+      type: $ref:rvn-acm-certificate
     - add_button_label: Add domain alias
       default: []
       description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain.
@@ -345,7 +349,7 @@ module:
 
     ## CloudFront distribution
 
-    The module exposes one CloudFront distribution. Domain aliases are optional. Leave them empty to use the default cloudfront.net domain. If you set domain aliases, provide an ACM certificate ARN from us-east-1.
+    The module exposes one CloudFront distribution. Domain aliases are optional. Leave them empty to use the default cloudfront.net domain. If you set domain aliases, select an ACM certificate module created in us-east-1.
 
     The first domain alias is used as the CloudFront distribution comment. The distribution is always created enabled.
 
@@ -407,10 +411,10 @@ module:
     | Static hosting | Default version prefix | Yes | main | Initial and fallback version prefix |
     | Build config | Build type | Yes | Railpack | Railpack, Dockerfile, or Disabled |
     | Build config | Git repository | Required for Railpack and Dockerfile | none | Source repository for builds |
-    | Build config | Base path | No | . | Repository-relative source and build root |
+    | Build config | Source base path | No | . | Path from repository root to source code |
     | Build config | Output directory | Required for Railpack and Dockerfile | dist | Directory uploaded to S3 after build |
     | Build config | Railpack version | No | Ravion default | Optional version for Railpack builds |
-    | CloudFront settings | ACM certificate ARN | Required when using aliases | none | Certificate must be in us-east-1 |
+    | CloudFront settings | ACM certificate | Required when using aliases | none | Certificate module must be in us-east-1 |
     | CloudFront settings | Domain aliases | No | [] | Custom CloudFront aliases |
     | CloudFront settings | Price class | No | PriceClass_All | Edge location coverage |
     | CloudFront settings | Geo restriction | No | none | Optional country allow or deny list |
