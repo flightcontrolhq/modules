@@ -1,6 +1,6 @@
 # S3 Bucket Module
 
-This module creates an AWS S3 bucket with enterprise-grade security best practices including public access blocking, server-side encryption (SSE-S3 or SSE-KMS), versioning, lifecycle rules, and configurable bucket policies.
+This module creates an AWS S3 bucket with enterprise-grade security best practices including public access blocking, server-side encryption (SSE-S3 or SSE-KMS), versioning, CORS rules, lifecycle rules, and configurable bucket policies.
 
 ## Features
 
@@ -8,6 +8,7 @@ This module creates an AWS S3 bucket with enterprise-grade security best practic
 - Public access blocking (all four settings enabled by default)
 - Server-side encryption (SSE-S3 AES256 or SSE-KMS with optional Bucket Keys)
 - Versioning support for object version management
+- CORS rules for browser-based cross-origin access
 - Comprehensive lifecycle rules for storage class transitions and expiration
 - Pre-built policy templates for common use cases (ALB/NLB logs, VPC Flow Logs, HTTPS enforcement)
 - Custom bucket policy support with automatic merging
@@ -96,6 +97,30 @@ module "s3" {
     {
       id = "cleanup-incomplete-uploads"
       abort_incomplete_multipart_upload_days = 7
+    }
+  ]
+
+  tags = {
+    Environment = "production"
+  }
+}
+```
+
+### Bucket with CORS Rules
+
+```hcl
+module "s3" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+
+  name = "my-cors-bucket"
+
+  cors_rules = [
+    {
+      allowed_methods = ["GET", "PUT"]
+      allowed_origins = ["https://app.example.com"]
+      allowed_headers = ["*"]
+      expose_headers  = ["ETag"]
+      max_age_seconds = 3000
     }
   ]
 
@@ -526,6 +551,7 @@ module "s3" {
 | `aws_s3_bucket_public_access_block` | 1 | Block public access settings |
 | `aws_s3_bucket_server_side_encryption_configuration` | 1 | Encryption configuration (SSE-S3 or SSE-KMS) |
 | `aws_s3_bucket_versioning` | 1 | Versioning configuration |
+| `aws_s3_bucket_cors_configuration` | 0 or 1 | CORS rules (when rules provided) |
 | `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Lifecycle rules (when rules provided) |
 | `aws_s3_bucket_policy` | 0 or 1 | Bucket policy (when templates or custom policy provided) |
 
@@ -556,6 +582,12 @@ module "s3" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | versioning_enabled | Whether to enable versioning for the S3 bucket. | `bool` | `false` | no |
+
+### CORS Rules
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| cors_rules | List of CORS rule configurations for browser-based cross-origin access. | `list(object({...}))` | `[]` | no |
 
 ### Lifecycle Rules
 
@@ -626,6 +658,19 @@ The `lifecycle_rules` variable accepts a list of objects with the following stru
 | transitions | List of transitions to different storage classes | `list(object)` | no |
 | noncurrent_version_transitions | Transitions for noncurrent versions | `list(object)` | no |
 | abort_incomplete_multipart_upload_days | Days after which incomplete multipart uploads are aborted | `number` | no |
+
+## CORS Rules
+
+The `cors_rules` variable accepts a list of objects with the following structure:
+
+| Field | Description | Type | Required |
+|-------|-------------|------|----------|
+| id | Optional unique identifier for the rule | `string` | no |
+| allowed_headers | Headers allowed in CORS requests | `list(string)` | no |
+| allowed_methods | HTTP methods allowed in CORS requests. Valid values: `GET`, `PUT`, `HEAD`, `POST`, `DELETE` | `list(string)` | yes |
+| allowed_origins | Origins allowed to make CORS requests | `list(string)` | yes |
+| expose_headers | Response headers browsers may expose to client code | `list(string)` | no |
+| max_age_seconds | Seconds browsers can cache preflight responses | `number` | no |
 
 ### Storage Classes for Transitions
 

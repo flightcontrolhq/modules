@@ -20,6 +20,9 @@ locals {
   # Lifecycle configuration - create only when rules are provided
   create_lifecycle_configuration = length(var.lifecycle_rules) > 0
 
+  # CORS configuration - create only when rules are provided
+  create_cors_configuration = length(var.cors_rules) > 0
+
   # Bucket policy configuration
   # Create bucket policy when either policy templates are specified or custom policy is provided.
   # Callers can override when custom_policy is known-after-apply (otherwise the

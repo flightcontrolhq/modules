@@ -121,6 +121,53 @@ variable "versioning_enabled" {
 }
 
 #-------------------------------------------------------------------------------
+# CORS
+#-------------------------------------------------------------------------------
+
+variable "cors_rules" {
+  type = list(object({
+    id              = optional(string)
+    allowed_headers = optional(list(string), [])
+    allowed_methods = list(string)
+    allowed_origins = list(string)
+    expose_headers  = optional(list(string), [])
+    max_age_seconds = optional(number)
+  }))
+  description = "List of CORS rule configurations for the bucket. Each rule defines allowed origins, methods, headers, exposed headers, and preflight cache duration."
+  default     = []
+
+  validation {
+    condition     = length(var.cors_rules) <= 100
+    error_message = "A bucket can have at most 100 CORS rules."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.cors_rules : length(rule.allowed_methods) > 0])
+    error_message = "Each CORS rule must include at least one allowed method."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.cors_rules : length(rule.allowed_origins) > 0])
+    error_message = "Each CORS rule must include at least one allowed origin."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for rule in var.cors_rules : [
+        for method in rule.allowed_methods :
+        contains(["GET", "PUT", "HEAD", "POST", "DELETE"], method)
+      ]
+    ]))
+    error_message = "CORS allowed_methods values must be one of: GET, PUT, HEAD, POST, DELETE."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.cors_rules : rule.max_age_seconds == null || rule.max_age_seconds >= 0])
+    error_message = "CORS max_age_seconds must be greater than or equal to 0."
+  }
+}
+
+#-------------------------------------------------------------------------------
 # Lifecycle Rules
 #-------------------------------------------------------------------------------
 
