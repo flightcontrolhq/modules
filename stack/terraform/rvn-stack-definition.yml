@@ -4,11 +4,11 @@ definition:
   description: Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
 release:
   version: 1.8.37
-  description: Prevent duplicate stack runs when the primary branch also has an open pull request.
+  description: Prevent duplicate stack runs when the primary branch also has an open pull request and clean up form labels.
 module:
   inputs:
     - id: section_aws
-      label: Where to run Terraform Plan & Apply
+      label: Where to run Terraform plan & apply
       type: section
     - description: Where to execute the Terraform plan & apply steps
       id: aws_account_id
@@ -32,7 +32,7 @@ module:
       values: $values:aws/regions
     - description: Specify the VPC, subnet, and security group for Pipeline Terraform runners. Defaults to the Environment's default Execution Environment
       id: execution_environment_id
-      label: Execution Environment
+      label: Execution environment
       required: false
       show_when:
         default_networking: false
@@ -65,7 +65,7 @@ module:
       placeholder: path/to/watch
       type: string_array
     - id: section_inputs
-      label: Stack Inputs
+      label: Stack inputs
       type: section
     - add_button_label: Add variable file
       description: Relative paths from base path to `.tfvars` or `.tfvars.json` files (equivalent to -var-file flags)
@@ -83,7 +83,7 @@ module:
       placeholder: key/value format with support for from_parameter_store and from_secrets_manager
       type: object
     - id: section_iac
-      label: IaC Tool
+      label: IaC tool
       type: section
     - default: opentofu
       description: Terraform is no longer free open source. OpenTofu is the popular community fork with full Terraform compatibility.

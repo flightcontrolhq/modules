@@ -162,7 +162,7 @@ async function collectModuleDirectories(rootPath: string, directoryPath: string,
     throw error;
   }
 
-  if (entries.some((entry) => entry.isFile() && entry.name === "versions.tf")) {
+  if (entries.some((entry) => entry.isFile() && (entry.name === "versions.tf" || entry.name.endsWith("-definition.yml")))) {
     directories.add(relative(rootPath, directoryPath));
     return;
   }
