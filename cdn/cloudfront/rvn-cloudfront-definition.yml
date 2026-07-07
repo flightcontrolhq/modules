@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications from ECS services, load balancers, and other custom origins.
 release:
-  version: 0.1.0
-  description: Initial module definition.
+  version: 0.1.1
+  description: Fix metrics dashboard refresh after deploys.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -539,7 +539,7 @@ module:
         {id:"error_rate_5xx", name:"5xx error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"5xxErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
         {id:"bytes_downloaded", name:"Bytes downloaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesDownloaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}},
         {id:"bytes_uploaded", name:"Bytes uploaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesUploaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}}
-      ] | concat(module.input.additional_metrics_enabled ? [
+      ]) | concat(module.input.additional_metrics_enabled ? [
         {id:"origin_latency", name:"Origin latency", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"OriginLatency", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
         {id:"error_rate_401", name:"401 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"401ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
         {id:"error_rate_403", name:"403 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"403ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
