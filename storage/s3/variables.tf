@@ -133,7 +133,7 @@ variable "cors_rules" {
     expose_headers  = optional(list(string), [])
     max_age_seconds = optional(number)
   }))
-  description = "List of CORS rule configurations for the bucket. Each rule defines allowed origins, methods, headers, exposed headers, and preflight cache duration."
+  description = "List of CORS rule configurations for the bucket. Each rule defines allowed origins, methods, headers, exposed headers, and preflight cache duration. Note: allowed_headers defaults to [] (no headers permitted in preflight). For PUT/POST operations with custom request headers, set allowed_headers = [\"*\"] or list the specific headers explicitly."
   default     = []
 
   validation {

@@ -872,6 +872,25 @@ run "test_cors_empty_origins" {
   ]
 }
 
+# Test: empty CORS methods rejected
+run "test_cors_empty_methods" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    cors_rules = [
+      {
+        allowed_methods = []
+        allowed_origins = ["https://app.example.com"]
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.cors_rules,
+  ]
+}
+
 #-------------------------------------------------------------------------------
 # Lifecycle Configuration Tests
 #-------------------------------------------------------------------------------
