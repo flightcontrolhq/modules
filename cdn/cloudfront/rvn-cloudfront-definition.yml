@@ -378,6 +378,18 @@ module:
           type: boolean
           description: Require requests matching this path to use a signed URL or signed cookie from one of the trusted key groups.
           default: false
+        - id: trusted_key_group_ids
+          label: Trusted key group IDs
+          type: string_array
+          description: Existing CloudFront key group IDs whose public keys are trusted for signed URLs or signed cookies on this path.
+          add_button_label: Add key group ID
+          required: true
+          show_when:
+            signed_urls_enabled: true
+          patterns:
+            - message: Invalid CloudFront key group ID.
+              pattern: ^[A-Z0-9]+$
+          default: []
       default: []
     - id: section_signed_urls
       label: Signed URLs
@@ -393,8 +405,9 @@ module:
       type: string_array
       description: Existing CloudFront key group IDs whose public keys are trusted for signed URLs or signed cookies. Add at least one key group before enabling Require signed URLs on the default behavior or any custom cache behavior.
       add_button_label: Add key group ID
-      collapsible: true
-      required: false
+      required: true
+      show_when:
+        signed_urls_enabled: true
       patterns:
         - message: Invalid CloudFront key group ID.
           pattern: ^[A-Z0-9]+$
@@ -566,7 +579,7 @@ module:
           "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] : #.allowed_methods == "read_options" ? ["GET",
           "HEAD", "OPTIONS"] : ["GET", "HEAD"]), "cache_policy_id": #.cache_policy_id,
           "origin_request_policy_id": (#.origin_request_policy_id || nil), "trusted_key_groups":
-          (#.signed_urls_enabled ? module.input.trusted_key_group_ids : [])}) : [] >>
+          (#.signed_urls_enabled ? #.trusted_key_group_ids : [])}) : [] >>
         origins: >-
           << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
           module.input.ecs_web_alb_dns_name : module.input.origin_source == "ecs_cluster" ?
@@ -671,7 +684,7 @@ module:
 
     ### Signed URLs
 
-    Enable Require signed URLs to set trusted key groups on the default cache behavior. Each custom cache behavior can also require signed URLs for only that path. Ravion does not create key groups in this module; provide existing CloudFront key group IDs and keep the private signing key in your application.
+    Enable Require signed URLs to set trusted key groups on the default cache behavior. Each custom cache behavior can also require signed URLs for only that path and must provide its own trusted key group IDs. Ravion does not create key groups in this module; provide existing CloudFront key group IDs and keep the private signing key in your application.
 
     ## Certificates
 
@@ -746,7 +759,7 @@ module:
     | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
     | Origin request policy | Yes | AllViewer | AWS managed policies by name, or a custom policy ID |
     | Require signed URLs | No | false | Requires signed URLs or signed cookies on the default behavior |
-    | Trusted key group IDs | No | [] | Existing CloudFront key groups trusted for signatures |
+    | Trusted key group IDs | When signed URLs are enabled | [] | Existing CloudFront key groups trusted for signatures |
     | Response headers policy | No | None | Managed security headers or CORS policies, or a custom policy ID |
     | Custom cache behaviors | No | [] | Path-based caching and routing before the default behavior |
     | Price class | No | All edge locations | Edge location coverage |
