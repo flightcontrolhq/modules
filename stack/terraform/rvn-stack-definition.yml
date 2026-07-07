@@ -152,7 +152,7 @@ module:
               payload:
                 - not:
                     equals: "<< module.input.primary_branch >>"
-                  path: pull_request.base.ref
+                  path: pull_request.head.ref
             id: git-pr
             repo: "<< module.input.repo >>"
             run:
