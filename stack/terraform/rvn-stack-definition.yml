@@ -3,8 +3,8 @@ definition:
   name: Terraform Stack
   description: Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
 release:
-  version: 1.2.1
-  description: fix no more duplicate git triggers when primary branch is a pull request
+  version: 1.8.37
+  description: Prevent duplicate stack runs when the primary branch also has an open pull request.
 module:
   inputs:
     - id: section_aws
