@@ -65,6 +65,7 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = var.default_cache_behavior.cache_policy_id
     origin_request_policy_id   = var.default_cache_behavior.origin_request_policy_id
     response_headers_policy_id = var.default_cache_behavior.response_headers_policy_id
+    trusted_key_groups         = var.default_cache_behavior.trusted_key_groups
 
     dynamic "function_association" {
       for_each = var.default_cache_behavior.function_associations
@@ -96,6 +97,7 @@ resource "aws_cloudfront_distribution" "this" {
       cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
       origin_request_policy_id   = ordered_cache_behavior.value.origin_request_policy_id
       response_headers_policy_id = ordered_cache_behavior.value.response_headers_policy_id
+      trusted_key_groups         = ordered_cache_behavior.value.trusted_key_groups
 
       dynamic "function_association" {
         for_each = ordered_cache_behavior.value.function_associations

@@ -4,7 +4,7 @@ definition:
   description: S3 bucket with public access blocking, encryption, versioning, CORS, lifecycle rules, and configurable bucket policies.
 release:
   version: 0.2.0
-  description: Add CORS rule configuration.
+  description: Add CORS rule configuration and a CloudFront OAC read policy template.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -249,6 +249,20 @@ module:
         - description: Allow VPC Flow Logs delivery.
           label: VPC Flow Logs
           value: vpc_flow_logs
+        - description: Allow CloudFront distributions using Origin Access Control to read objects.
+          label: CloudFront OAC read
+          value: cloudfront_oac_read
+    - add_button_label: Add distribution ARN
+      collapsible: true
+      default: []
+      description: CloudFront distribution ARNs allowed to read objects when the CloudFront OAC read policy template is selected.
+      id: cloudfront_distribution_arns
+      label: CloudFront distribution ARNs
+      patterns:
+        - message: Invalid CloudFront distribution ARN.
+          pattern: ^arn:aws:cloudfront::[0-9]{12}:distribution/[A-Z0-9]+$
+      required: false
+      type: string_array
     - collapsible: true
       description: Custom bucket policy JSON document. If policy templates are also selected, statements are merged.
       id: custom_policy
@@ -339,6 +353,7 @@ module:
         block_public_acls: << module.input.block_public_acls >>
         block_public_policy: << module.input.block_public_policy >>
         bucket_key_enabled: << module.input.bucket_key_enabled >>
+        cloudfront_distribution_arns: << module.input.cloudfront_distribution_arns || [] >>
         cors_rules: << module.input.cors_rules || [] >>
         custom_policy: << module.input.custom_policy >>
         force_destroy_enabled: << module.input.force_destroy_enabled >>
@@ -408,8 +423,11 @@ module:
     | ALB access logs | Allows Application Load Balancer log delivery. |
     | NLB access logs | Allows Network Load Balancer log delivery. |
     | VPC Flow Logs | Allows VPC Flow Logs delivery. |
+    | CloudFront OAC read | Allows selected CloudFront distributions using Origin Access Control to read objects. |
 
     Custom policy JSON can be provided for additional statements. When templates and custom policy are both set, the module merges their statements into one bucket policy.
+
+    For private buckets served through rvn-cloudfront, apply the CloudFront module first, then add the CloudFront OAC read template here with the CloudFront distribution ARN. The bucket remains private because access is granted only to the CloudFront service principal for that distribution.
 
     ## Configuration
 
@@ -427,6 +445,7 @@ module:
     | Lifecycle rules | No | Empty list | Form-based expiration, transition, noncurrent version, and multipart cleanup rules. |
     | Advanced lifecycle rules | No | Empty list | Raw Terraform lifecycle rule shape for tag filters, multiple transitions, and uncommon combinations. |
     | Policy templates | No | Empty list | Adds common bucket policy statements. |
+    | CloudFront distribution ARNs | No | Empty list | Required when the CloudFront OAC read policy template is selected. |
     | Custom policy JSON | No | None | Additional policy statements merged with templates. |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
     | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |

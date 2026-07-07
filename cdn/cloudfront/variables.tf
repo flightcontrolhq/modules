@@ -133,6 +133,7 @@ variable "default_cache_behavior" {
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
+    trusted_key_groups         = optional(list(string), [])
     function_associations = optional(list(object({
       event_type   = string
       function_arn = string
@@ -167,6 +168,7 @@ variable "ordered_cache_behaviors" {
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
+    trusted_key_groups         = optional(list(string), [])
     function_associations = optional(list(object({
       event_type   = string
       function_arn = string

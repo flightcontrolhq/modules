@@ -155,6 +155,28 @@ locals {
   ]
 
   #-----------------------------------------------------------------------------
+  # Policy Template: CloudFront OAC Read
+  #-----------------------------------------------------------------------------
+  # Allows CloudFront distributions that use Origin Access Control to read objects
+  # from this bucket. Access is scoped to the supplied distribution ARNs.
+  policy_cloudfront_oac_read = [
+    {
+      Sid    = "AllowCloudFrontOACRead"
+      Effect = "Allow"
+      Principal = {
+        Service = "cloudfront.amazonaws.com"
+      }
+      Action   = "s3:GetObject"
+      Resource = "${local.bucket_arn}/*"
+      Condition = {
+        StringEquals = {
+          "aws:SourceArn" = var.cloudfront_distribution_arns
+        }
+      }
+    }
+  ]
+
+  #-----------------------------------------------------------------------------
   # Policy Template Lookup Map
   #-----------------------------------------------------------------------------
   # Maps template names to their policy statement lists
@@ -163,6 +185,7 @@ locals {
     alb_access_logs         = local.policy_alb_access_logs
     nlb_access_logs         = local.policy_nlb_access_logs
     vpc_flow_logs           = local.policy_vpc_flow_logs
+    cloudfront_oac_read     = local.policy_cloudfront_oac_read
   }
 
   #-----------------------------------------------------------------------------

@@ -10,7 +10,7 @@ This module creates an AWS S3 bucket with enterprise-grade security best practic
 - Versioning support for object version management
 - CORS rules for browser-based cross-origin access
 - Comprehensive lifecycle rules for storage class transitions and expiration
-- Pre-built policy templates for common use cases (ALB/NLB logs, VPC Flow Logs, HTTPS enforcement)
+- Pre-built policy templates for common use cases (ALB/NLB logs, VPC Flow Logs, CloudFront OAC, HTTPS enforcement)
 - Custom bucket policy support with automatic merging
 - Automatic tag propagation with module defaults
 
@@ -216,42 +216,26 @@ module "nlb_logs" {
 }
 ```
 
-### Bucket with Custom Policy
+### Private Bucket for CloudFront OAC
 
 ```hcl
 module "s3" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
-  name = "my-custom-policy-bucket"
+  name = "private-attachments"
 
-  # Combine templates with custom policy
-  policy_templates = ["deny_insecure_transport"]
-
-  custom_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowCloudFrontAccess"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:GetObject"
-        Resource = "arn:aws:s3:::my-custom-policy-bucket/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudfront::123456789012:distribution/EXAMPLE"
-          }
-        }
-      }
-    ]
-  })
+  policy_templates = ["deny_insecure_transport", "cloudfront_oac_read"]
+  cloudfront_distribution_arns = [
+    "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+  ]
 
   tags = {
     Environment = "production"
   }
 }
 ```
+
+Create or apply the CloudFront distribution first, then add its distribution ARN here so the private bucket can authorize that exact distribution.
 
 ### Full Configuration Example
 
@@ -599,7 +583,8 @@ module "s3" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| policy_templates | List of policy template names to apply. Available: `deny_insecure_transport`, `alb_access_logs`, `nlb_access_logs`, `vpc_flow_logs`. | `list(string)` | `[]` | no |
+| policy_templates | List of policy template names to apply. Available: `deny_insecure_transport`, `alb_access_logs`, `nlb_access_logs`, `vpc_flow_logs`, `cloudfront_oac_read`. | `list(string)` | `[]` | no |
+| cloudfront_distribution_arns | CloudFront distribution ARNs allowed to read objects when `cloudfront_oac_read` is selected. | `list(string)` | `[]` | no |
 | custom_policy | Custom bucket policy JSON document. If provided alongside policy_templates, policies will be merged. | `string` | `null` | no |
 
 ### Public Access Block
@@ -863,6 +848,7 @@ module "s3" {
 - **Public Access Blocked**: All four public access block settings are enabled by default.
 - **Encryption**: Server-side encryption is always enabled. Uses SSE-S3 (AES256) by default, or SSE-KMS when a KMS key is provided.
 - **HTTPS Enforcement**: Use the `deny_insecure_transport` policy template to enforce HTTPS-only access.
+- **CloudFront OAC**: Use the `cloudfront_oac_read` policy template with distribution ARNs to keep buckets private behind CloudFront.
 - **Bucket Keys**: When using SSE-KMS, S3 Bucket Keys are enabled by default to reduce KMS API costs.
 
 ## Notes
@@ -871,5 +857,5 @@ module "s3" {
 - Bucket names must be between 3-63 characters, contain only lowercase letters, numbers, hyphens, and periods.
 - The `force_destroy_enabled` option should be used with caution in production environments.
 - When using lifecycle rules with versioning, consider configuring `noncurrent_version_expiration` to manage storage costs.
-- Policy templates automatically use data sources to get the current account ID, region, and ELB service account for proper policy configuration.
+- Policy templates automatically use data sources and module inputs to get the current account ID, region, ELB service account, and CloudFront distribution ARNs for proper policy configuration.
 - The bucket policy resource depends on the public access block to ensure proper ordering during creation.
