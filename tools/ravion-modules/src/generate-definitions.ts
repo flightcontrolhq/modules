@@ -49,6 +49,7 @@ const DEFAULT_MODULE_PATHS: Record<string, string> = {
   "rvn-ecs-nlb": "compute/ecs_service",
   "rvn-ecs-web": "compute/ecs_service",
   "rvn-static": "hosting/static_site",
+  "rvn-stack": "stack/terraform",
 };
 
 export async function generateDefinitionsFromInventory(

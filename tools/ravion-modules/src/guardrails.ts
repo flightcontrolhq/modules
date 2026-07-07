@@ -21,6 +21,7 @@ const MODULE_CATEGORIES = new Set([
   "monitoring",
   "networking",
   "security",
+  "stack",
   "storage",
 ]);
 
