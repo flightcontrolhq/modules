@@ -8,6 +8,7 @@ Creates and manages AWS CloudFront distributions with support for multiple distr
 - **Multiple Origins**: Support for S3 and custom (ALB, API Gateway, HTTP) origins with per-origin configuration
 - **Modern Cache Policies**: Uses cache policies and origin request policies (no legacy `forwarded_values`)
 - **Origin Access Control**: Automatic OAC creation for S3 origins (recommended over legacy OAI)
+- **Signed URL Enforcement**: Trusted key group wiring for signed URLs and signed cookies
 - **SSL/TLS**: Custom ACM certificates with configurable minimum TLS version, SNI support
 - **WAF Integration**: Associate a WAFv2 Web ACL (global scope) for edge protection
 - **Access Logging**: Optional S3 logging bucket with lifecycle management, per-distribution log prefixes
@@ -82,6 +83,38 @@ module "cdn" {
   }
 }
 ```
+
+### Private S3 Origin with Signed URLs
+
+```hcl
+module "cdn" {
+  source = "git::https://github.com/user/ravion-modules.git//cdn/cloudfront?ref=v1.0.0"
+
+  name = "private-attachments"
+
+  distributions = {
+    main = {}
+  }
+
+  origins = [
+    {
+      origin_id         = "attachments"
+      domain_name       = "private-attachments.s3.us-east-1.amazonaws.com"
+      s3_origin_enabled = true
+    }
+  ]
+
+  default_cache_behavior = {
+    target_origin_id       = "attachments"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+    trusted_key_groups     = ["K123456789EXAMPLE"]
+  }
+}
+```
+
+For private S3 origins, the bucket policy must allow the CloudFront service principal to read objects, scoped to the distribution ARN. If the bucket is managed by `storage/s3`, use the `cloudfront_oac_read` policy template with `cloudfront_distribution_arns = [module.cdn.distribution_arn]`.
 
 ### Multi-Origin (S3 + ALB) with Ordered Cache Behaviors
 
@@ -386,6 +419,7 @@ CloudFront publishes default distribution metrics at no additional CloudWatch me
 | default_cache_behavior.cache_policy_id | Cache policy ID. | `string` | `null` | no |
 | default_cache_behavior.origin_request_policy_id | Origin request policy ID. | `string` | `null` | no |
 | default_cache_behavior.response_headers_policy_id | Response headers policy ID. | `string` | `null` | no |
+| default_cache_behavior.trusted_key_groups | CloudFront key group IDs trusted for signed URLs or signed cookies. | `list(string)` | `[]` | no |
 | default_cache_behavior.function_associations | CloudFront Function associations. | `list(object({event_type, function_arn}))` | `[]` | no |
 | default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, body_inclusion_enabled}))` | `[]` | no |
 | default_cache_behavior.realtime_log_config_arn | Real-time log configuration ARN. | `string` | `null` | no |

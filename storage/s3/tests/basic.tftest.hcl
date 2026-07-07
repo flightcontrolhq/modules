@@ -1359,6 +1359,51 @@ run "test_policy_template_vpc_flow_logs" {
   }
 }
 
+# Test: cloudfront_oac_read template produces valid statements
+run "test_policy_template_cloudfront_oac_read" {
+  command = plan
+
+  variables {
+    name                         = "test-bucket"
+    policy_templates             = ["cloudfront_oac_read"]
+    cloudfront_distribution_arns = ["arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 1
+    error_message = "cloudfront_oac_read template should produce 1 statement."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Sid == "AllowCloudFrontOACRead"
+    error_message = "cloudfront_oac_read statement should have correct Sid."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Principal.Service == "cloudfront.amazonaws.com"
+    error_message = "cloudfront_oac_read statement should use the CloudFront service principal."
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements[0].Condition.StringEquals["aws:SourceArn"]) == 1 && contains(local.policy_template_statements[0].Condition.StringEquals["aws:SourceArn"], "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE")
+    error_message = "cloudfront_oac_read statement should scope access to distribution ARNs."
+  }
+}
+
+# Test: cloudfront_oac_read requires distribution ARNs
+run "test_policy_template_cloudfront_oac_read_requires_arns" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["cloudfront_oac_read"]
+  }
+
+  expect_failures = [
+    var.policy_templates,
+  ]
+}
+
 # Test: multiple policy templates can be combined
 run "test_policy_templates_combined" {
   command = plan
@@ -1439,12 +1484,15 @@ run "test_policy_templates_all_valid" {
 
   variables {
     name             = "test-bucket"
-    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"]
+    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs", "cloudfront_oac_read"]
+    cloudfront_distribution_arns = [
+      "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+    ]
   }
 
   assert {
-    condition     = length(local.policy_template_statements) == 8
-    error_message = "All four templates combined should produce 8 statements (1 + 3 + 2 + 2)."
+    condition     = length(local.policy_template_statements) == 9
+    error_message = "All five templates combined should produce 9 statements (1 + 3 + 2 + 2 + 1)."
   }
 }
 
@@ -1664,12 +1712,15 @@ run "test_bucket_policy_all_templates" {
 
   variables {
     name             = "test-bucket"
-    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"]
+    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs", "cloudfront_oac_read"]
+    cloudfront_distribution_arns = [
+      "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+    ]
   }
 
   assert {
-    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 8
-    error_message = "Bucket policy should contain 8 statements from all templates."
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 9
+    error_message = "Bucket policy should contain 9 statements from all templates."
   }
 }
 

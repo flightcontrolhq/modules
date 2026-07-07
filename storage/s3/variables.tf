@@ -258,15 +258,31 @@ variable "lifecycle_rules" {
 
 variable "policy_templates" {
   type        = list(string)
-  description = "List of policy template names to apply to the bucket. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs."
+  description = "List of policy template names to apply to the bucket. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs, cloudfront_oac_read."
   default     = []
 
   validation {
     condition = alltrue([
       for template in var.policy_templates :
-      contains(["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"], template)
+      contains(["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs", "cloudfront_oac_read"], template)
     ])
-    error_message = "Invalid policy template name. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs."
+    error_message = "Invalid policy template name. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs, cloudfront_oac_read."
+  }
+
+  validation {
+    condition     = !contains(var.policy_templates, "cloudfront_oac_read") || length(var.cloudfront_distribution_arns) > 0
+    error_message = "cloudfront_distribution_arns must contain at least one distribution ARN when cloudfront_oac_read is selected."
+  }
+}
+
+variable "cloudfront_distribution_arns" {
+  type        = list(string)
+  description = "CloudFront distribution ARNs allowed to read objects when the cloudfront_oac_read policy template is selected."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.cloudfront_distribution_arns : can(regex("^arn:aws:cloudfront::[0-9]{12}:distribution/[A-Z0-9]+$", arn))])
+    error_message = "Each CloudFront distribution ARN must use arn:aws:cloudfront::123456789012:distribution/EXAMPLE format."
   }
 }
 
