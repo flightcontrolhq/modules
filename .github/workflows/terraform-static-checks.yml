@@ -32,6 +32,8 @@ jobs:
 
       - name: Initialize TFLint plugins
         run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Validate module syntax
         run: |
