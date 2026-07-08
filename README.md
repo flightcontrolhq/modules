@@ -43,9 +43,10 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `security/`   | `iam`             | AWS IAM roles and policies                                             | v1.0.0  |
 | `security/`   | `kms`             | AWS KMS keys (symmetric or asymmetric: signing, encryption, MAC, key agreement) | v1.0.0  |
 | `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
+| `stack/`      | `terraform`       | Ravion Terraform/OpenTofu stack workflows with git triggers and managed state (includes `rvn-stack` module definition) | v1.2.1  |
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
 | `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
-| `storage/`    | `s3`              | AWS S3 buckets                                                         | v1.0.0  |
+| `storage/`    | `s3`              | AWS S3 buckets with encryption, lifecycle rules, CORS, and bucket policies | v1.0.0  |
 
 ## Usage
 

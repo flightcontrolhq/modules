@@ -1,10 +1,10 @@
 definition:
   type: rvn-cloudfront
   name: CloudFront CDN
-  description: CloudFront CDN distribution that serves web applications from ECS services, load balancers, and other custom origins.
+  description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.1.0
-  description: Initial module definition.
+  version: 0.2.0
+  description: Add private S3 bucket origins with OAC and signed URL enforcement via trusted key groups.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -47,11 +47,11 @@ module:
     - id: section_origin
       label: Origin
       type: section
-      description: Where CloudFront sends requests. ECS web services and clusters share one load balancer, so one distribution can front every service behind it.
+      description: Where CloudFront sends requests. ECS web services and clusters share one load balancer, and private S3 buckets use Origin Access Control.
     - id: origin_source
       label: Origin source
       type: string
-      description: Choose an existing ECS module as the origin, or enter any origin domain name.
+      description: Choose an existing ECS module, private S3 bucket, or custom origin domain name.
       required: true
       default: ecs_web_service
       values:
@@ -61,6 +61,9 @@ module:
         - label: ECS cluster
           description: Use the public ALB of an existing ECS cluster as the origin.
           value: ecs_cluster
+        - label: S3 bucket
+          description: Use a private S3 bucket as the origin with CloudFront Origin Access Control.
+          value: s3_bucket
         - label: Custom domain
           description: Enter any origin domain name, such as a load balancer, API endpoint, or S3 website endpoint.
           value: custom
@@ -100,12 +103,31 @@ module:
       required: true
       show_when:
         origin_source: custom
+    - id: s3_bucket
+      label: S3 bucket
+      type: $ref:rvn-s3
+      description: Private S3 bucket to serve through CloudFront Origin Access Control. After this CloudFront stack applies, add its distribution ARN to the S3 bucket's CloudFront OAC read policy template.
+      required: false
+      show_when:
+        origin_source: s3_bucket
+      mapped_inputs:
+        - id: s3_bucket_regional_domain_name
+          label: S3 bucket regional domain name
+          type: string
+          description: Regional S3 bucket domain name from the selected S3 bucket module.
+          required: true
+          default: <<ref.stack.output.bucket_regional_domain_name>>
     - id: origin_protocol_policy
       label: Origin protocol policy
       type: string
       description: How CloudFront connects to the origin. HTTPS only requires the origin load balancer to serve a certificate valid for the forwarded host.
       required: true
       default: https-only
+      show_when:
+        origin_source:
+          - ecs_web_service
+          - ecs_cluster
+          - custom
       values:
         - label: HTTPS only
           value: https-only
@@ -222,10 +244,13 @@ module:
     - id: origin_request_policy
       label: Origin request policy
       type: string
-      description: Controls what CloudFront forwards to the origin. AllViewer keeps Host-based load balancer routing, cookies, and query strings working.
+      description: Controls what CloudFront forwards to the origin. Use None for private S3 origins so CloudFront can sign OAC requests without forwarding the viewer Host header.
       required: true
       default: 216adef6-5c7f-47e4-b989-5492eafa07d3
       values:
+        - label: None
+          description: Forward only what the cache policy includes. Recommended for private S3 origins with OAC.
+          value: none
         - label: AllViewer (recommended)
           description: Forwards the Host header, cookies, and query strings so load balancer routing and app sessions work.
           value: 216adef6-5c7f-47e4-b989-5492eafa07d3
@@ -238,6 +263,9 @@ module:
         - label: CORS-CustomOrigin
           description: Forwards only the Origin header for CORS. Cookies and Host are not forwarded.
           value: 59781a5b-3903-41f3-afcb-af62929ccde1
+        - label: CORS-S3Origin
+          description: Forwards the CORS headers needed for an S3 origin.
+          value: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
         - label: Custom policy ID
           description: Use an origin request policy you created yourself.
           value: custom
@@ -345,6 +373,44 @@ module:
             - label: CORS-S3Origin
               description: Forwards the CORS headers needed for an S3 origin.
               value: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+        - id: signed_urls_enabled
+          label: Require signed URLs
+          type: boolean
+          description: Require requests matching this path to use a signed URL or signed cookie from one of the trusted key groups.
+          default: false
+        - id: trusted_key_group_ids
+          label: Trusted key group IDs
+          type: string_array
+          description: Existing CloudFront key group IDs whose public keys are trusted for signed URLs or signed cookies on this path.
+          add_button_label: Add key group ID
+          required: true
+          show_when:
+            signed_urls_enabled: true
+          patterns:
+            - message: Invalid CloudFront key group ID.
+              pattern: ^[A-Z0-9]+$
+          default: []
+      default: []
+    - id: section_signed_urls
+      label: Signed URLs
+      type: section
+      description: Restrict viewer access with existing CloudFront key groups. Your app keeps the private key and signs URLs or cookies; this module trusts the key group IDs.
+    - id: signed_urls_enabled
+      label: Require signed URLs
+      type: boolean
+      description: Require signed URLs or signed cookies for the default cache behavior. Unsigned requests receive 403 responses from CloudFront.
+      default: false
+    - id: trusted_key_group_ids
+      label: Trusted key group IDs
+      type: string_array
+      description: Existing CloudFront key group IDs whose public keys are trusted for signed URLs or signed cookies. Add at least one key group before enabling Require signed URLs on the default behavior or any custom cache behavior.
+      add_button_label: Add key group ID
+      required: true
+      show_when:
+        signed_urls_enabled: true
+      patterns:
+        - message: Invalid CloudFront key group ID.
+          pattern: ^[A-Z0-9]+$
       default: []
     - id: response_headers_policy
       label: Response headers policy
@@ -479,11 +545,14 @@ module:
             module.input.cache_policy >>
           origin_request_policy_id: >-
             << module.input.origin_request_policy == "custom" ?
-            module.input.origin_request_policy_custom_id : module.input.origin_request_policy >>
+            module.input.origin_request_policy_custom_id : module.input.origin_request_policy == "none" ? nil :
+            module.input.origin_request_policy >>
           response_headers_policy_id: >-
             << module.input.response_headers_policy == "custom" ?
             module.input.response_headers_policy_custom_id : (module.input.response_headers_policy || nil) >>
           target_origin_id: primary
+          trusted_key_groups: >-
+            << module.input.signed_urls_enabled ? module.input.trusted_key_group_ids : [] >>
           viewer_protocol_policy: << module.input.viewer_protocol_policy >>
         distributions:
           main:
@@ -509,12 +578,15 @@ module:
           #.viewer_protocol_policy, "allowed_methods": (#.allowed_methods == "all" ? ["DELETE", "GET",
           "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] : #.allowed_methods == "read_options" ? ["GET",
           "HEAD", "OPTIONS"] : ["GET", "HEAD"]), "cache_policy_id": #.cache_policy_id,
-          "origin_request_policy_id": (#.origin_request_policy_id || nil)}) : [] >>
+          "origin_request_policy_id": (#.origin_request_policy_id || nil), "trusted_key_groups":
+          (#.signed_urls_enabled ? #.trusted_key_group_ids : [])}) : [] >>
         origins: >-
           << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
           module.input.ecs_web_alb_dns_name : module.input.origin_source == "ecs_cluster" ?
-          module.input.ecs_cluster_alb_dns_name : module.input.origin_domain_name),
-          "origin_protocol_policy": module.input.origin_protocol_policy}] |
+          module.input.ecs_cluster_alb_dns_name : module.input.origin_source == "s3_bucket" ?
+          module.input.s3_bucket_regional_domain_name : module.input.origin_domain_name),
+          "origin_protocol_policy": module.input.origin_protocol_policy, "s3_origin_enabled":
+          module.input.origin_source == "s3_bucket"}] |
           concat(module.input.additional_origins != nil ? module.input.additional_origins : []) >>
         price_class: << module.input.price_class >>
         region: << module.input.aws_region >>
@@ -539,7 +611,7 @@ module:
         {id:"error_rate_5xx", name:"5xx error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"5xxErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
         {id:"bytes_downloaded", name:"Bytes downloaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesDownloaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}},
         {id:"bytes_uploaded", name:"Bytes uploaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesUploaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}}
-      ] | concat(module.input.additional_metrics_enabled ? [
+      ]) | concat(module.input.additional_metrics_enabled ? [
         {id:"origin_latency", name:"Origin latency", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"OriginLatency", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
         {id:"error_rate_401", name:"401 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"401ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
         {id:"error_rate_403", name:"403 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"403ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
@@ -550,11 +622,11 @@ module:
       ] : [])
       >>
   readme: |
-    CloudFront distribution that serves web applications from ECS services, load balancers, and other custom origins.
+    CloudFront distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 
     ## Overview
 
-    The CloudFront module puts the AWS CloudFront edge network in front of a dynamic web application. Point it at an existing ECS web service, an ECS cluster load balancer, or any custom domain, and Ravion provisions the distribution, origin configuration, cache behaviors, optional access logging bucket, and metrics.
+    The CloudFront module puts the AWS CloudFront edge network in front of a dynamic web application or private S3 bucket. Point it at an existing ECS web service, an ECS cluster load balancer, an S3 bucket, or any custom domain, and Ravion provisions the distribution, origin configuration, cache behaviors, optional access logging bucket, and metrics.
 
     The default configuration is safe for dynamic apps: responses are cached at the edge only when your app returns Cache-Control headers, and the full viewer request, including the Host header, cookies, and query strings, is forwarded to the origin. You get TLS termination close to users, HTTP/2 and HTTP/3, connection reuse to the origin, optional WAF, and per-path caching for static assets.
 
@@ -566,6 +638,7 @@ module:
     | --- | --- |
     | Fronting one ECS web service | Using the service's load balancer as the origin with one click |
     | Fronting a whole ECS cluster | Serving every service behind the cluster's public ALB through one distribution |
+    | Serving private attachments | Using an S3 origin with Origin Access Control and optional signed URLs |
     | Speeding up global users | Terminating TLS and HTTP/3 at the nearest edge location |
     | Caching static assets | Adding a cache behavior such as /assets/* with the CachingOptimized policy |
     | Splitting traffic by path | Routing paths like /api/* to additional origins |
@@ -582,6 +655,7 @@ module:
     | --- | --- |
     | ECS web service | Uses the selected service's load balancer DNS name as the origin. The service must run rvn-ecs-web 0.8.0 or later and have applied its stack so the DNS name output exists. |
     | ECS cluster | Uses the cluster's public ALB DNS name as the origin. Every service behind that ALB is reachable through the distribution. |
+    | S3 bucket | Uses the selected bucket's regional S3 domain name as a private origin with CloudFront Origin Access Control. After this CloudFront stack applies, add the distribution ARN to the S3 bucket's CloudFront OAC read policy template. |
     | Custom domain | Any origin domain name, such as an external load balancer, API endpoint, or S3 website endpoint. |
 
     Both ECS options resolve to the same ALB when the service runs on that cluster, so pick whichever is easier to select. One distribution can front all services behind the load balancer.
@@ -602,6 +676,16 @@ module:
 
     Origin protocol policy defaults to HTTPS only. For that to work, the load balancer must have an HTTPS listener with a certificate that is valid for the forwarded Host domain, which is the same certificate the ALB already needs to serve those domains directly. Use HTTP only when the load balancer has no HTTPS listener; traffic from CloudFront to the origin is then unencrypted.
 
+    ### Private S3 origins
+
+    S3 origins use CloudFront Origin Access Control so the bucket can stay private. Use the None origin request policy unless you intentionally need CORS headers, because forwarding the viewer Host header to S3 can break OAC-signed origin requests.
+
+    The bucket policy must allow CloudFront to read objects, scoped to this distribution ARN. For rvn-s3 buckets, apply the CloudFront stack first, then edit the S3 bucket and add the CloudFront OAC read policy template with the CloudFront distribution ARN.
+
+    ### Signed URLs
+
+    Enable Require signed URLs to set trusted key groups on the default cache behavior. Each custom cache behavior can also require signed URLs for only that path and must provide its own trusted key group IDs. Ravion does not create key groups in this module; provide existing CloudFront key group IDs and keep the private signing key in your application.
+
     ## Certificates
 
     Domain aliases require a certificate issued in us-east-1, because CloudFront is a global service. Select an ACM Certificate module instance in the ACM certificate field; its certificate ARN is mapped automatically. Request the certificate with the primary domain and any additional aliases as subject alternative names.
@@ -616,6 +700,7 @@ module:
     | --- | --- | --- |
     | Cache policy | UseOriginCacheControlHeaders-QueryStrings | Caches only responses where the app sends Cache-Control headers |
     | Origin request policy | AllViewer | Forwards Host, cookies, and query strings so app sessions and ALB routing work |
+    | Require signed URLs | false | Allows public viewer access unless enabled with trusted key groups |
     | Allowed methods | All methods | Apps accept form posts and API writes |
     | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
 
@@ -665,6 +750,7 @@ module:
     | Origin source | Yes | ECS web service | ECS web service, ECS cluster, or custom domain |
     | ECS web service | When origin source is ECS web service | None | Service on rvn-ecs-web 0.8.0 or later |
     | ECS cluster | When origin source is ECS cluster | None | Cluster with a public ALB |
+    | S3 bucket | When origin source is S3 bucket | None | Private bucket served through OAC |
     | Origin domain name | When origin source is custom | None | Any reachable origin domain |
     | Origin protocol policy | Yes | HTTPS only | Origin needs a certificate valid for the forwarded host |
     | Additional origins | No | [] | Extra origins for path-based cache behaviors |
@@ -672,6 +758,8 @@ module:
     | Allowed methods | Yes | All methods | Read-only options available for cache-friendly apps |
     | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
     | Origin request policy | Yes | AllViewer | AWS managed policies by name, or a custom policy ID |
+    | Require signed URLs | No | false | Requires signed URLs or signed cookies on the default behavior |
+    | Trusted key group IDs | When signed URLs are enabled | [] | Existing CloudFront key groups trusted for signatures |
     | Response headers policy | No | None | Managed security headers or CORS policies, or a custom policy ID |
     | Custom cache behaviors | No | [] | Path-based caching and routing before the default behavior |
     | Price class | No | All edge locations | Edge location coverage |

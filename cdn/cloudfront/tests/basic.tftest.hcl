@@ -908,4 +908,9 @@ run "test_defaults" {
     condition     = var.default_cache_behavior.compression_enabled == true
     error_message = "compression_enabled should default to true in default_cache_behavior."
   }
+
+  assert {
+    condition     = length(var.default_cache_behavior.trusted_key_groups) == 0
+    error_message = "trusted_key_groups should default to empty list in default_cache_behavior."
+  }
 }

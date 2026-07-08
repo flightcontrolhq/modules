@@ -49,6 +49,7 @@ const DEFAULT_MODULE_PATHS: Record<string, string> = {
   "rvn-ecs-nlb": "compute/ecs_service",
   "rvn-ecs-web": "compute/ecs_service",
   "rvn-static": "hosting/static_site",
+  "rvn-stack": "stack/terraform",
 };
 
 export async function generateDefinitionsFromInventory(
@@ -161,7 +162,7 @@ async function collectModuleDirectories(rootPath: string, directoryPath: string,
     throw error;
   }
 
-  if (entries.some((entry) => entry.isFile() && entry.name === "versions.tf")) {
+  if (entries.some((entry) => entry.isFile() && (entry.name === "versions.tf" || entry.name.endsWith("-definition.yml")))) {
     directories.add(relative(rootPath, directoryPath));
     return;
   }
