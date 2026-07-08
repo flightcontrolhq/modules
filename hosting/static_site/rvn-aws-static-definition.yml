@@ -3,12 +3,12 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.1.5
-  description: Use an ACM certificate module reference for CloudFront custom domains.
+  version: 0.2.0
+  description: "BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`) and rename the Disabled option to Pull from S3 (`none` -> `s3_directory`)."
 module:
   build:
     builder: >-
-      << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
+      << module.input.build_source == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
       || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
       module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
       {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd:
@@ -29,7 +29,7 @@ module:
     source:
       $include: ../../partials/build/git-source.yml
     timeout: 1800
-    type: '<< module.input.build_type == "none" ? "disabled" : "static" >>'
+    type: '<< module.input.build_source == "s3_directory" ? "disabled" : "static" >>'
   deploy:
     definition:
       cloudfront_invalidation_paths: << module.input.cloudfront_invalidation_paths >>
@@ -97,8 +97,8 @@ module:
       label: Build config
       type: section
     - default: nixpacks
-      id: build_type
-      label: Build type
+      id: build_source
+      label: Build source
       required: true
       type: string
       values:
@@ -109,12 +109,12 @@ module:
           label: Dockerfile
           value: dockerfile
         - description: Skip the build step and promote an existing S3 directory at deploy time.
-          label: Disabled
-          value: none
+          label: Pull from S3
+          value: s3_directory
     - $template: ../../partials/inputs/build-git-source.yml
       with:
         show_when:
-          build_type:
+          build_source:
             - nixpacks
             - dockerfile
     - default: dist
@@ -123,22 +123,22 @@ module:
       label: Output directory
       required: true
       show_when:
-        build_type:
+        build_source:
           - nixpacks
           - dockerfile
       type: string
     - $template: ../../partials/inputs/dockerfile-build.yml
       with:
         show_when:
-          build_type: dockerfile
+          build_source: dockerfile
     - $template: ../../partials/inputs/nixpacks-build.yml
       with:
         show_when:
-          build_type: nixpacks
+          build_source: nixpacks
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
-        build_type:
+        build_source:
           - nixpacks
           - dockerfile
     - $include: ../../partials/inputs/dockerfile-env-injection.yml
@@ -312,7 +312,7 @@ module:
     | Hosting a SPA | Rewriting client-side routes to the active version's root object |
     | Hosting docs or generated static files | Serving filesystem-style paths from S3 through CloudFront |
     | Building from source | Running Nixpacks or Dockerfile builds and uploading build output to S3 |
-    | Deploying prebuilt files | Skipping builds and promoting an existing S3 directory |
+    | Pulling from S3 | Skipping builds and promoting an existing S3 directory |
     | Using custom domains | Attaching CloudFront aliases and an ACM certificate |
     | Tuning cache behavior | Managing HTML and asset Cache-Control headers separately |
     | Auditing access | Enabling CloudFront access logs with automatic log bucket creation |
@@ -334,11 +334,11 @@ module:
 
     ## Build options
 
-    | Build type | When to use it |
+    | Build source | When to use it |
     | --- | --- |
     | Nixpacks | Let Ravion detect the static app stack and run the build |
     | Dockerfile | Build static files with a Dockerfile in the selected repository |
-    | Disabled | Build or upload files outside Ravion, then promote an existing S3 directory |
+    | Pull from S3 | Build or upload files outside Ravion, then promote an existing S3 directory |
 
     For Nixpacks and Dockerfile builds, select a Git repository, optional source base path, and output directory. The output directory is the folder Ravion uploads to the hosting bucket after the build.
 
@@ -381,7 +381,7 @@ module:
 
     ## Deploy behavior
 
-    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Disabled builds, enter the existing S3 prefix that already contains the files to promote.
+    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Pull from S3, enter the existing S3 prefix that already contains the files to promote.
 
     CloudFront invalidation paths defaults to /*. This invalidates the full distribution after promotion. Because deployments are versioned, invalidations are often conservative rather than strictly required, but the default favors correctness for users who are changing stable paths.
 
@@ -410,7 +410,7 @@ module:
     | Static hosting | Routing mode | Yes | Single page app | Choose SPA or filesystem URL handling |
     | Static hosting | Default root object | No | index.html | Root object for distribution root requests |
     | Static hosting | Default version prefix | Yes | main | Initial and fallback version prefix |
-    | Build config | Build type | Yes | Nixpacks | Nixpacks, Dockerfile, or Disabled |
+    | Build config | Build source | Yes | Nixpacks | Nixpacks, Dockerfile, or Pull from S3 |
     | Build config | Git repository | Required for Nixpacks and Dockerfile | none | Source repository for builds |
     | Build config | Source base path | No | . | Path from repository root to source code |
     | Build config | Output directory | Required for Nixpacks and Dockerfile | dist | Directory uploaded to S3 after build |

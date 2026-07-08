@@ -1,7 +1,7 @@
 - id: section_builder_config
   label: Builder config
   show_when:
-    build_type:
+    build_source:
       - nixpacks
       - dockerfile
   type: section
@@ -11,7 +11,7 @@
   label: Builder instance type
   required: true
   show_when:
-    build_type:
+    build_source:
       - nixpacks
       - dockerfile
   type: string
@@ -27,7 +27,7 @@
   no_options_message: $with.no_options_message
   required: true
   show_when:
-    build_type:
+    build_source:
       - nixpacks
       - dockerfile
   type: string
@@ -38,7 +38,7 @@
   label: Builder execution environment
   required: false
   show_when:
-    build_type:
+    build_source:
       - nixpacks
       - dockerfile
   type: string
@@ -49,7 +49,7 @@
   label: Builder AMI
   required: false
   show_when:
-    build_type:
+    build_source:
       - nixpacks
       - dockerfile
   type: string
