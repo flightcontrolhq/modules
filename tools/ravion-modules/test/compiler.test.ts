@@ -103,15 +103,15 @@ describe("compiler", () => {
     const inputs = getModuleInputs(compiled.module);
 
     assert.deepEqual(getValueOptions(findInput(inputs, "build_type")), ["dockerfile", "railpack", "prebuilt_image"]);
-    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "source_repo")), ["dockerfile", "railpack"]);
+    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "source_repo")), ["dockerfile", "railpack", "nixpacks"]);
 
     const basePath = findInput(inputs, "source_base_path");
     assert.equal(basePath.label, "Source base path");
-    assert.deepEqual(getBuildTypeShowWhen(basePath), ["dockerfile", "railpack"]);
+    assert.deepEqual(getBuildTypeShowWhen(basePath), ["dockerfile", "railpack", "nixpacks"]);
 
     const railpackVersion = findInput(inputs, "railpack_version");
     assert.equal(railpackVersion.label, "Railpack version");
-    assert.equal(getBuildTypeShowWhen(railpackVersion), "railpack");
+    assert.deepEqual(getBuildTypeShowWhen(railpackVersion), ["railpack", "nixpacks"]);
     assert.deepEqual(railpackVersion.patterns, [
       {
         message: "Leave blank, use latest, a semantic version like 0.29.0, or a v-prefixed version like v0.29.0.",
@@ -120,15 +120,16 @@ describe("compiler", () => {
     ]);
 
     for (const inputId of ["railpack_install_cmd", "railpack_build_cmd", "railpack_start_cmd"]) {
-      assert.equal(getBuildTypeShowWhen(findInput(inputs, inputId)), "railpack");
+      assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, inputId)), ["railpack", "nixpacks"]);
     }
 
-    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack"]);
-    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "section_ecr")), ["dockerfile", "railpack"]);
+    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack", "nixpacks"]);
+    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "section_ecr")), ["dockerfile", "railpack", "nixpacks"]);
 
     const build = getModuleBuild(compiled.module);
     const builder = assertString(build.builder);
     assert.match(builder, /module\.input\.build_type == "railpack"/);
+    assert.match(builder, /module\.input\.build_type == "nixpacks"/);
     assert.match(builder, /\{type: "railpack", railpack_version:/);
     assert.match(builder, /railpack_install_cmd: module\.input\.railpack_install_cmd/);
     assert.match(builder, /railpack_build_cmd: module\.input\.railpack_build_cmd/);
@@ -142,7 +143,7 @@ describe("compiler", () => {
     const ecrRepositoryCreationEnabled = getEcsTerraformVariable(compiled.module, "ecr_repository_creation_enabled");
     assert.equal(
       ecrRepositoryCreationEnabled,
-      '<< module.input.build_type == "dockerfile" || module.input.build_type == "railpack" >>',
+      '<< module.input.build_type == "dockerfile" || module.input.build_type == "railpack" || module.input.build_type == "nixpacks" >>',
     );
   });
 
@@ -151,18 +152,19 @@ describe("compiler", () => {
     const inputs = getModuleInputs(compiled.module);
 
     assert.deepEqual(getValueOptions(findInput(inputs, "build_type")), ["railpack", "dockerfile", "none"]);
-    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "source_repo")), ["dockerfile", "railpack"]);
-    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "output_directory")), ["dockerfile", "railpack"]);
-    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "build_environment_variables")), ["dockerfile", "railpack"]);
+    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "source_repo")), ["dockerfile", "railpack", "nixpacks"]);
+    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "output_directory")), ["dockerfile", "railpack", "nixpacks"]);
+    assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, "build_environment_variables")), ["dockerfile", "railpack", "nixpacks"]);
 
     for (const inputId of ["railpack_version", "railpack_install_cmd", "railpack_build_cmd"]) {
-      assert.equal(getBuildTypeShowWhen(findInput(inputs, inputId)), "railpack");
+      assert.deepEqual(getBuildTypeShowWhen(findInput(inputs, inputId)), ["railpack", "nixpacks"]);
     }
     assert.equal(inputs.some((input) => input.id === "railpack_start_cmd"), false);
 
     const build = getModuleBuild(compiled.module);
     const builder = assertString(build.builder);
     assert.match(builder, /module\.input\.build_type == "railpack"/);
+    assert.match(builder, /module\.input\.build_type == "nixpacks"/);
     assert.match(builder, /\{type: "railpack", railpack_version:/);
     assert.match(builder, /railpack_install_cmd: module\.input\.railpack_install_cmd/);
     assert.match(builder, /railpack_build_cmd: module\.input\.railpack_build_cmd/);

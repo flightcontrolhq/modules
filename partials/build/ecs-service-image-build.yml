@@ -3,7 +3,7 @@ builder: >-
   << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
   || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
   module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} :
-  module.input.build_type == "railpack" ? {type: "railpack", railpack_version:
+  (module.input.build_type == "railpack" || module.input.build_type == "nixpacks") ? {type: "railpack", railpack_version:
   module.input.railpack_version, railpack_install_cmd: module.input.railpack_install_cmd,
   railpack_build_cmd: module.input.railpack_build_cmd, railpack_start_cmd:
   module.input.railpack_start_cmd, cache_from: {tag: "railpack"}} : {type: "disabled"} >>

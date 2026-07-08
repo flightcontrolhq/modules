@@ -11,7 +11,7 @@ module:
       << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
       || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
       module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
-      module.input.build_type == "railpack" ? {type: "railpack", railpack_version:
+      (module.input.build_type == "railpack" || module.input.build_type == "nixpacks") ? {type: "railpack", railpack_version:
       module.input.railpack_version, railpack_install_cmd: module.input.railpack_install_cmd,
       railpack_build_cmd: module.input.railpack_build_cmd, output_directory: module.input.output_directory} :
       {type: "disabled"} >>
@@ -116,6 +116,7 @@ module:
           build_type:
             - dockerfile
             - railpack
+            - nixpacks
     - default: dist
       description: Directory produced by the build and uploaded to S3.
       id: output_directory
@@ -125,6 +126,7 @@ module:
         build_type:
           - dockerfile
           - railpack
+          - nixpacks
       type: string
     - $template: ../../partials/inputs/dockerfile-build.yml
       with:
@@ -133,13 +135,16 @@ module:
     - $template: ../../partials/inputs/railpack.yml
       with:
         show_when:
-          build_type: railpack
+          build_type:
+            - railpack
+            - nixpacks
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
         build_type:
           - dockerfile
           - railpack
+          - nixpacks
     - $include: ../../partials/inputs/dockerfile-env-injection.yml
     - id: section_cloudfront
       label: CloudFront settings
