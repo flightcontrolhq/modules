@@ -131,9 +131,9 @@ describe("compiler", () => {
     assert.match(builder, /module\.input\.build_type == "railpack"/);
     assert.match(builder, /module\.input\.build_type == "nixpacks"/);
     assert.match(builder, /\{type: "railpack", railpack_version:/);
-    assert.match(builder, /railpack_install_cmd: module\.input\.railpack_install_cmd/);
-    assert.match(builder, /railpack_build_cmd: module\.input\.railpack_build_cmd/);
-    assert.match(builder, /railpack_start_cmd:\s+module\.input\.railpack_start_cmd/);
+    assert.match(builder, /install_cmd: module\.input\.railpack_install_cmd/);
+    assert.match(builder, /build_cmd: module\.input\.railpack_build_cmd/);
+    assert.match(builder, /start_cmd:\s+module\.input\.railpack_start_cmd/);
     assert.match(builder, /cache_from: \{tag: "railpack"\}/);
 
     const railpackBranch = builder.slice(builder.indexOf('module.input.build_type == "railpack"'), builder.indexOf(': {type: "disabled"}'));
@@ -166,10 +166,10 @@ describe("compiler", () => {
     assert.match(builder, /module\.input\.build_type == "railpack"/);
     assert.match(builder, /module\.input\.build_type == "nixpacks"/);
     assert.match(builder, /\{type: "railpack", railpack_version:/);
-    assert.match(builder, /railpack_install_cmd: module\.input\.railpack_install_cmd/);
-    assert.match(builder, /railpack_build_cmd: module\.input\.railpack_build_cmd/);
+    assert.match(builder, /install_cmd: module\.input\.railpack_install_cmd/);
+    assert.match(builder, /build_cmd: module\.input\.railpack_build_cmd/);
     assert.match(builder, /output_directory: module\.input\.output_directory/);
-    assert.doesNotMatch(builder, /railpack_start_cmd/);
+    assert.doesNotMatch(builder, /start_cmd/);
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
   });
 });
