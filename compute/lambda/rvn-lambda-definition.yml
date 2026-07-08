@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.2.0
-  description: Initial release
+  version: 0.3.0
+  description: "BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename Prebuilt image from ECR to Pull from image registry (`prebuilt_image` -> `image_registry`), rename Prebuilt package to Pull from S3 (`prebuilt_package` -> `s3_package`), and rename `prebuilt_image_start_command`, `prebuilt_image_entry_point`, and `prebuilt_image_working_directory` to `image_start_command`, `image_entry_point`, and `image_working_directory`."
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -164,8 +164,8 @@ module:
     - id: section_build
       label: Build config
       type: section
-    - id: build_type
-      label: Build type
+    - id: build_source
+      label: Build source
       type: string
       required: true
       default: dockerfile
@@ -177,19 +177,19 @@ module:
           label: Nixpacks
           value: nixpacks
         - description: Skip the build step and provide an existing S3 object key at deploy time.
-          label: Prebuilt package
-          value: prebuilt_package
+          label: Pull from S3
+          value: s3_package
           show_when:
             package_type: Zip
-        - description: Deploy an image from the ECR repository configured on this module. Provide only the tag or digest at deploy time.
-          label: Prebuilt image from ECR
-          value: prebuilt_image
+        - description: Deploy an image from the ECR repository configured on this module. Lambda requires an ECR repository in the same AWS account. Provide only the tag or digest at deploy time.
+          label: Pull from image registry
+          value: image_registry
           show_when:
             package_type: Image
     - $template: ../../partials/inputs/build-git-source.yml
       with:
         show_when:
-          build_type:
+          build_source:
             - nixpacks
             - dockerfile
     - id: output_directory
@@ -200,7 +200,7 @@ module:
       default: /app
       show_when:
         package_type: Zip
-        build_type:
+        build_source:
           - nixpacks
           - dockerfile
     - id: image_repository
@@ -211,8 +211,8 @@ module:
       required: true
       show_when:
         package_type: Image
-        build_type: prebuilt_image
-    - id: prebuilt_image_start_command
+        build_source: image_registry
+    - id: image_start_command
       label: Start command
       type: string_array
       description: Optional command arguments that override the image default command (CMD). Leave empty to use the image default.
@@ -223,8 +223,8 @@ module:
       show_when:
         lambda_type: regional
         package_type: Image
-        build_type: prebuilt_image
-    - id: prebuilt_image_entry_point
+        build_source: image_registry
+    - id: image_entry_point
       label: Entry point
       type: string_array
       description: Optional entry point arguments that override the image default ENTRYPOINT.
@@ -235,8 +235,8 @@ module:
       show_when:
         lambda_type: regional
         package_type: Image
-        build_type: prebuilt_image
-    - id: prebuilt_image_working_directory
+        build_source: image_registry
+    - id: image_working_directory
       label: Working directory
       type: string
       description: Optional working directory override inside the image.
@@ -246,26 +246,26 @@ module:
       show_when:
         lambda_type: regional
         package_type: Image
-        build_type: prebuilt_image
+        build_source: image_registry
     - $template: ../../partials/inputs/dockerfile-build.yml
       with:
         show_when:
-          build_type: dockerfile
+          build_source: dockerfile
     - $template: ../../partials/inputs/nixpacks-basic.yml
       with:
         show_when:
-          build_type: nixpacks
+          build_source: nixpacks
     - id: nixpacks_start_cmd
       label: Start command
       type: string
       placeholder: Intelligent default based on your language & framework
       show_when:
         package_type: Image
-        build_type: nixpacks
+        build_source: nixpacks
     - $template: ../../partials/inputs/nixpacks-advanced.yml
       with:
         show_when:
-          build_type: nixpacks
+          build_source: nixpacks
     - id: section_runtime
       label: Runtime configuration
       show_when:
@@ -390,7 +390,7 @@ module:
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
-        build_type:
+        build_source:
           - nixpacks
           - dockerfile
     - $include: ../../partials/inputs/dockerfile-env-injection.yml
@@ -967,11 +967,11 @@ module:
         handler: >-
           << module.input.package_type == "Zip" ? module.input.handler : nil >>
         image_config: >-
-          << module.input.lambda_type == "edge" || module.input.package_type != "Image" ? nil : ((len(module.input.prebuilt_image_start_command || []) > 0 ||
-          len(module.input.prebuilt_image_entry_point || []) > 0 || module.input.prebuilt_image_working_directory) ? {command:
-          (len(module.input.prebuilt_image_start_command || []) > 0 ? module.input.prebuilt_image_start_command : nil), entry_point:
-          (len(module.input.prebuilt_image_entry_point || []) > 0 ? module.input.prebuilt_image_entry_point : nil),
-          working_directory: module.input.prebuilt_image_working_directory} : nil) >>
+          << module.input.lambda_type == "edge" || module.input.package_type != "Image" ? nil : ((len(module.input.image_start_command || []) > 0 ||
+          len(module.input.image_entry_point || []) > 0 || module.input.image_working_directory) ? {command:
+          (len(module.input.image_start_command || []) > 0 ? module.input.image_start_command : nil), entry_point:
+          (len(module.input.image_entry_point || []) > 0 ? module.input.image_entry_point : nil),
+          working_directory: module.input.image_working_directory} : nil) >>
         kms_key_arn: >-
           << module.input.lambda_type == "edge" ? nil : (module.input.kms_key_arn || nil) >>
         lambda_at_edge_enabled: << module.input.lambda_type == "edge" >>
@@ -1022,30 +1022,30 @@ module:
           << module.input.lambda_type == "edge" ? false : module.input.vpc_execution_policy_enabled >>
   build:
     type: >-
-      << module.input.lambda_type != "edge" && module.input.package_type == "Image" ? ((module.input.build_type == "nixpacks" ||
-      module.input.build_type == "dockerfile") ? "image" : "disabled") : (module.input.build_type
-      == "prebuilt_package" ? "disabled" : "lambda") >>
+      << module.input.lambda_type != "edge" && module.input.package_type == "Image" ? ((module.input.build_source == "nixpacks" ||
+      module.input.build_source == "dockerfile") ? "image" : "disabled") : (module.input.build_source
+      == "s3_package" ? "disabled" : "lambda") >>
     timeout: 1800
     inputs:
       - $include: ../../partials/inputs/build-inputs.yml
     source:
       $include: ../../partials/build/git-source.yml
     builder: >-
-      << module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_type == "dockerfile" ? {type:
+      << module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_source == "dockerfile" ? {type:
       "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context:
       module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
       module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} :
-      module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_type == "nixpacks" ? {type:
+      module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_source == "nixpacks" ? {type:
       "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd:
       module.input.nixpacks_build_cmd, start_cmd: module.input.nixpacks_start_cmd, config_file_path:
       module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path,
       nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs,
       apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs,
-      cache_from: {tag: "nixpacks"}} : module.input.build_type == "dockerfile" ? {type:
+      cache_from: {tag: "nixpacks"}} : module.input.build_source == "dockerfile" ? {type:
       "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context:
       module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
       module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
-      module.input.build_type == "nixpacks" ? {type: "nixpacks", install_cmd:
+      module.input.build_source == "nixpacks" ? {type: "nixpacks", install_cmd:
       module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd,
       config_file_path: module.input.nixpacks_config_file_path, build_path:
       module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs:
@@ -1055,8 +1055,8 @@ module:
     environment_variables: << module.input.build_environment_variables >>
     destinations: >-
       << module.input.lambda_type != "edge" && module.input.package_type == "Image" ? [{id: "ecr", type: "ecr", repository_arn:
-      stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
-      module.input.build_type]}] : [{id: "lambda-package", type: "s3", bucket:
+      stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_source,
+      module.input.build_source]}] : [{id: "lambda-package", type: "s3", bucket:
       stack.output.code_bucket_id, directory: pipeline.run.id, region: stack.output.region}] >>
     infrastructure:
       $include: ../../partials/build/infrastructure.yml
@@ -1074,7 +1074,7 @@ module:
       - id: image_ref
         label: Image tag or digest
         type: string
-        description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from ECR mode, this is resolved in the repository configured on the module. Do not pass a full image URI.
+        description: Pass the image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Pull from image registry mode, this is resolved in the ECR repository configured on the module. Do not pass a full image URI.
         placeholder: sha256:... or latest or <run-id>-nixpacks
         required: true
         show_when:
@@ -1087,7 +1087,7 @@ module:
         << module.input.package_type == "Zip" ? stack.output.code_bucket_id : nil >>
     definition: >-
       << module.input.lambda_type != "edge" && module.input.package_type == "Image" ? {package_type: "image", image_uri:
-      (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
+      (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
       deploy.input.image_ref : module.input.image_repository + ":" + deploy.input.image_ref) : (deploy.input.image_ref
       contains "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url
       + ":" + deploy.input.image_ref))} :
@@ -1187,11 +1187,11 @@ module:
 
     For zip package functions, builds use Nixpacks or a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
 
-    If Build type is Prebuilt package for zip packages, Ravion skips the build step and you provide an existing S3 object key at deploy time.
+    If Build source is Pull from S3 for zip packages, Ravion skips the build step and you provide an existing S3 object key at deploy time.
 
-    For container image functions, Nixpacks and Dockerfile builds produce a Lambda-compatible container image, push it to a module-managed ECR repository, and deployments promote a tag or digest from that repository. Prebuilt image mode skips the build step and promotes a tag or digest from the ECR repository configured on the module. Prebuilt image start command, entry point, and working directory overrides are optional; leave them empty to use the image defaults.
+    For container image functions, Nixpacks and Dockerfile builds produce a Lambda-compatible container image, push it to a module-managed ECR repository, and deployments promote a tag or digest from that repository. Pull from image registry skips the build step and promotes a tag or digest from the ECR repository configured on the module. Image start command, entry point, and working directory overrides are optional; leave them empty to use the image defaults.
 
-    Terraform creates image package functions by pushing a small Lambda-compatible bootstrap image into a module-managed ECR repository during the same apply. For prebuilt image mode, that bootstrap image lets the function be created before the first deployment promotes the configured ECR image tag or digest.
+    Terraform creates image package functions by pushing a small Lambda-compatible bootstrap image into a module-managed ECR repository during the same apply. For Pull from image registry, that bootstrap image lets the function be created before the first deployment promotes the configured ECR image tag or digest.
 
     ## Function configuration
 
@@ -1214,10 +1214,10 @@ module:
     | Lambda function | Runtime | Zip only | nodejs20.x | Lambda runtime string |
     | Lambda function | Memory | Yes | 128 MB | Also affects CPU allocation |
     | Lambda function | Timeout | Yes | 5 seconds | Maximum invocation runtime |
-    | Build config | Build type | Yes | Dockerfile | Zip packages support Dockerfile, Nixpacks, or Prebuilt package. Container images support Dockerfile, Nixpacks, or Prebuilt image from ECR |
+    | Build config | Build source | Yes | Dockerfile | Zip packages support Dockerfile, Nixpacks, or Pull from S3. Container images support Dockerfile, Nixpacks, or Pull from image registry |
     | Build config | Git repository | Required for builds | none | Source repository for Nixpacks and Dockerfile builds |
-    | Build config | Image repository | Prebuilt image only | none | Existing ECR repository URI without a tag or digest |
-    | Build config | Start command | No | Image default | Optional prebuilt image CMD override |
+    | Build config | Image repository | Pull from image registry only | none | Existing ECR repository URI without a tag or digest |
+    | Build config | Start command | No | Image default | Optional image CMD override |
     | Build config | Package output directory | Required for zip builds | /app | Directory zipped and uploaded |
     | Networking | Connect to a VPC | No | false | Shows subnet and security group fields |
     | IAM role | Create IAM role | No | true | Use an existing role by turning this off |
@@ -1233,7 +1233,7 @@ module:
     - Lambda type is immutable. Create a new Lambda module/function to migrate between Regional Lambda and CloudFront Lambda@Edge, especially when the existing function is outside us-east-1.
     - Package type is immutable. Create a new Lambda module/function to migrate between zip packages and container images.
     - Zip package functions use the Lambda build pipeline to upload zip packages to S3 and the Lambda deploy manager to promote those packages.
-    - Container image functions use the image build pipeline to push Dockerfile or Nixpacks builds to ECR. Prebuilt image mode promotes tags or digests from an existing ECR repository.
+    - Container image functions use the image build pipeline to push Dockerfile or Nixpacks builds to ECR. Pull from image registry promotes tags or digests from an existing ECR repository.
     - Terraform creates a bootstrap zip package for zip functions and creates image package functions with a bootstrap image in the module-managed ECR repository.
     - Runtime configuration stays in Terraform to avoid deploy-time configuration drift.
     - The zip code bucket is versioned, but the build output currently passes the S3 key as the primary deploy input.
