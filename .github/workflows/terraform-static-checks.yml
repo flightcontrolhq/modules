@@ -48,7 +48,9 @@ jobs:
           done
 
       - name: Test CloudFront module
-        run: tofu -chdir=cdn/cloudfront test
+        run: |
+          tofu -chdir=cdn/cloudfront init -backend=false
+          tofu -chdir=cdn/cloudfront test
 
       - name: Test CloudFront redirect function
         run: node --test cdn/cloudfront/functions/redirect.test.js
