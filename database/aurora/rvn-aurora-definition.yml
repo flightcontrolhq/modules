@@ -118,7 +118,7 @@ module:
       id: snapshot_identifier
       immutable: true
       label: Snapshot to restore
-      required: false
+      required: true
       show_when:
         restore_mode: snapshot
       type: string
