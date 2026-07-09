@@ -103,15 +103,15 @@ describe("compiler", () => {
     const inputs = getModuleInputs(compiled.module);
 
     assert.deepEqual(getValueOptions(findInput(inputs, "build_source")), ["dockerfile", "railpack", "image_registry"]);
-    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "source_repo")), ["dockerfile", "railpack", "nixpacks"]);
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "source_repo")), ["dockerfile", "railpack"]);
 
     const basePath = findInput(inputs, "source_base_path");
     assert.equal(basePath.label, "Source base path");
-    assert.deepEqual(getBuildSourceShowWhen(basePath), ["dockerfile", "railpack", "nixpacks"]);
+    assert.deepEqual(getBuildSourceShowWhen(basePath), ["dockerfile", "railpack"]);
 
     const railpackVersion = findInput(inputs, "railpack_version");
     assert.equal(railpackVersion.label, "Railpack version");
-    assert.deepEqual(getBuildSourceShowWhen(railpackVersion), ["railpack", "nixpacks"]);
+    assert.equal(getBuildSourceShowWhen(railpackVersion), "railpack");
     assert.deepEqual(railpackVersion.patterns, [
       {
         message: "Leave blank, use latest, a semantic version like 0.29.0, or a v-prefixed version like v0.29.0.",
@@ -120,7 +120,7 @@ describe("compiler", () => {
     ]);
 
     for (const inputId of ["railpack_install_cmd", "railpack_build_cmd", "railpack_start_cmd"]) {
-      assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, inputId)), ["railpack", "nixpacks"]);
+      assert.equal(getBuildSourceShowWhen(findInput(inputs, inputId)), "railpack");
     }
 
     assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack", "nixpacks"]);
