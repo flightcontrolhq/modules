@@ -3,7 +3,7 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.3.0
+  version: 0.3.1
   description: "BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename Prebuilt image from ECR to Pull from image registry (`prebuilt_image` -> `image_registry`), rename Prebuilt package to Pull from S3 (`prebuilt_package` -> `s3_package`), and rename `prebuilt_image_start_command`, `prebuilt_image_entry_point`, and `prebuilt_image_working_directory` to `image_start_command`, `image_entry_point`, and `image_working_directory`."
 module:
   inputs:

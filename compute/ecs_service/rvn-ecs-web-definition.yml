@@ -3,7 +3,7 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.8.0
+  version: 0.8.1
   description: "Add Railpack image builds. BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename the Prebuilt image from registry option to Pull from image registry (`prebuilt_image` -> `image_registry`), and rename `prebuilt_image_start_command` to `image_start_command`."
 module:
   inputs:
