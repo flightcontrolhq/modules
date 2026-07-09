@@ -22,7 +22,6 @@
       build_source:
         - dockerfile
         - railpack
-        - nixpacks
 - id: image_repository
   label: Image repository
   type: string
@@ -57,14 +56,10 @@
 - $template: ./railpack.yml
   with:
     show_when:
-      build_source:
-        - railpack
-        - nixpacks
+      build_source: railpack
 - id: railpack_start_cmd
   label: Start command
   type: string
   placeholder: Railpack default
   show_when:
-    build_source:
-      - railpack
-      - nixpacks
+    build_source: railpack

@@ -4,7 +4,7 @@ definition:
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
   version: 0.2.1
-  description: "BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename the Prebuilt image from registry option to Pull from image registry (`prebuilt_image` -> `image_registry`), and rename `prebuilt_image_start_command` to `image_start_command`."
+  description: "Add Railpack image builds."
 module:
   inputs:
     - id: section_cluster
