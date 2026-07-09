@@ -220,17 +220,17 @@ module:
         capacity_mode: provisioned
       type: string
     - default: 1
-      description: Minimum Aurora Serverless v2 capacity units.
+      description: Minimum Aurora Serverless v2 capacity units. Must not exceed max capacity.
       id: serverless_min_capacity
       label: Min capacity (ACUs)
       max: 256
-      min: 0
+      min: 1
       required: true
       show_when:
         capacity_mode: serverless_v2
       type: number
     - default: 4
-      description: Maximum Aurora Serverless v2 capacity units.
+      description: Maximum Aurora Serverless v2 capacity units. Must be at least min capacity.
       id: serverless_max_capacity
       label: Max capacity (ACUs)
       max: 256
@@ -355,6 +355,7 @@ module:
       type: boolean
     - collapsible: true
       default: 1
+      description: Must not exceed max reader capacity.
       id: autoscaling_min_capacity
       label: Min reader capacity
       min: 0
@@ -363,6 +364,7 @@ module:
       type: number
     - collapsible: true
       default: 3
+      description: Must be at least min reader capacity.
       id: autoscaling_max_capacity
       label: Max reader capacity
       min: 1
@@ -697,11 +699,27 @@ module:
       type: boolean
     - collapsible: true
       default: 7
+      description: AWS supports 7 days, multiples of 31 days up to 23 months, or 731 days.
       id: performance_insights_retention_period
       label: Performance insights retention days
       show_when:
         performance_insights_enabled: true
       type: number
+      values:
+        - label: 7 days
+          value: 7
+        - label: 1 month (31 days)
+          value: 31
+        - label: 2 months (62 days)
+          value: 62
+        - label: 3 months (93 days)
+          value: 93
+        - label: 6 months (186 days)
+          value: 186
+        - label: 12 months (372 days)
+          value: 372
+        - label: 24 months (731 days)
+          value: 731
     - collapsible: true
       id: performance_insights_kms_key_id
       label: Performance insights KMS key ARN
