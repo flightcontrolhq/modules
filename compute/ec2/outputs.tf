@@ -17,13 +17,13 @@ output "autoscaling_group_arn" {
 ################################################################################
 
 output "ssm_document_name" {
-  description = "The name of the SSM deploy document run on each instance by the deploy manager. Null for the manual runtime, which deploys through AWS-RunShellScript."
-  value       = local.container_runtime ? aws_ssm_document.deploy[0].name : null
+  description = "The name of the SSM deploy document run on each instance by the deploy manager."
+  value       = aws_ssm_document.deploy.name
 }
 
 output "ssm_document_arn" {
-  description = "The ARN of the SSM deploy document, when the container runtime creates one."
-  value       = local.container_runtime ? aws_ssm_document.deploy[0].arn : null
+  description = "The ARN of the SSM deploy document."
+  value       = aws_ssm_document.deploy.arn
 }
 
 ################################################################################

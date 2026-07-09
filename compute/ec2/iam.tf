@@ -98,6 +98,51 @@ data "aws_iam_policy_document" "instance" {
       resources = ["*"]
     }
   }
+
+  # Secret env vars: the env-file builder fetches values on the instance.
+  # Same-account grants matching the ECS execution role's secrets access
+  # (compute/ecs_service/task_definition.tf).
+  dynamic "statement" {
+    for_each = length(var.secrets) > 0 ? [1] : []
+    content {
+      sid       = "SecretsManagerRead"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = ["*"]
+      condition {
+        test     = "StringEquals"
+        variable = "aws:ResourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.secrets) > 0 ? [1] : []
+    content {
+      sid = "SsmParameterRead"
+      actions = [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+      ]
+      resources = [
+        "arn:${data.aws_partition.current.partition}:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/*"
+      ]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.secrets) > 0 ? [1] : []
+    content {
+      sid       = "SecretsKmsDecrypt"
+      actions   = ["kms:Decrypt"]
+      resources = ["*"]
+      condition {
+        test     = "StringEquals"
+        variable = "aws:ResourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "instance" {

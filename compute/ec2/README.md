@@ -5,14 +5,14 @@ Runs an app on a stable group of EC2 instances behind an optional Application Lo
 Two runtimes are supported:
 
 - **container** — instances run Docker; each deploy pulls an image and swaps the running container through the module-provided SSM deploy document.
-- **manual** — deploys run a user-provided list of shell commands on each instance through the built-in `AWS-RunShellScript` document; the module only provisions the instances.
+- **manual** — deploys run a user-provided list of shell commands on each instance through the module's SSM deploy document, which refreshes and loads the app env file (plain values and secrets) before running them.
 
 ## How deploys work
 
 For the **container** runtime the module creates an SSM Command document (`<name>-deploy` — the name is a platform contract derived from the group name) that encodes the whole in-place deploy for one instance:
 
-1. Rebuild the app env file from Terraform-rendered values.
-2. Drain: deregister the instance from the target group and wait (skipped in worker mode).
+1. Rebuild the app env file: Terraform-rendered plain values, plus secret values fetched on the instance from Secrets Manager / SSM Parameter Store.
+2. Drain: deregister the instance from the target group and wait (skipped in worker mode, and when the instance is the only registered target — with nothing to shift traffic to, draining only lengthens the outage).
 3. Swap the release: `docker pull` + container replace.
 4. Health gate: poll `http://localhost:<app_port><health_check_path>` until healthy, or fail the command.
 5. Re-register the instance with the target group and wait until in service.
@@ -24,7 +24,7 @@ An orchestrator (the Ravion deploy manager) runs this document against the Auto 
 | `imageUri` | Full image URI including tag or digest |
 | `deployId` | Optional release identifier |
 
-For the **manual** runtime no document is created: the orchestrator sends the service's deploy commands through the built-in `AWS-RunShellScript` document, and draining, health checking, and release mechanics are up to those commands.
+For the **manual** runtime the document (same `<name>-deploy` name) takes a `commands` parameter instead: it rebuilds the app env file (plain values and secret fetches), exports it into the environment, then runs the service's deploy commands in order under `set -euo pipefail` — any failing command fails the deploy on that instance. Draining, health checking, and release mechanics are up to the commands.
 
 New instances launched by the Auto Scaling Group boot from the launch template but hold no release until the orchestrator repeats the deploy against them.
 
@@ -71,6 +71,9 @@ module "web" {
   environment_variables = [
     { name = "NODE_ENV", value = "production" }
   ]
+  secrets = [
+    { name = "DATABASE_URL", value_from = "arn:aws:ssm:us-east-1:123456789012:parameter/my-app/database-url" }
+  ]
 }
 ```
 
@@ -92,11 +95,11 @@ module "worker" {
 }
 ```
 
-Deploys then run your own commands on every instance:
+Deploys then run your own commands on every instance, with the app env file refreshed and loaded first:
 
 ```sh
 aws ssm send-command \
-  --document-name AWS-RunShellScript \
+  --document-name my-worker-deploy \
   --targets Key=tag:aws:autoscaling:groupName,Values=my-worker \
   --parameters commands='["cd /srv/app && git pull","systemctl restart my-worker"]'
 ```
@@ -114,7 +117,7 @@ aws ssm send-command \
 | opentofu/terraform | >= 1.10.0 |
 | aws | >= 6.0 |
 
-Instances need outbound access to SSM, ECR/S3, and CloudWatch Logs (NAT gateway, public IPs, or VPC endpoints). The default AMI is Amazon Linux 2023; custom AMIs must run cloud-init and include the SSM agent.
+Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, and (when secrets are configured) Secrets Manager (NAT gateway, public IPs, or VPC endpoints). The default AMI is Amazon Linux 2023; custom AMIs must run cloud-init and include the SSM agent.
 
 ## Inputs
 
@@ -132,8 +135,9 @@ Instances need outbound access to SSM, ECR/S3, and CloudWatch Logs (NAT gateway,
 | app_port | Port the app listens on | `number` | `null` | no |
 | start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
 | environment_variables | Plain env vars written to the app env file | `list(object)` | `[]` | no |
+| secrets | Secret env vars fetched on-instance from Secrets Manager / SSM Parameter Store (`{name, value_from}`) | `list(object)` | `[]` | no |
 | health_check_path | Local HTTP path gating deploy success | `string` | `null` | no |
-| deploy_timeout_seconds | Per-instance container deploy script timeout | `number` | `1200` | no |
+| deploy_timeout_seconds | Per-instance deploy script timeout | `number` | `1200` | no |
 | instance_type | EC2 instance type | `string` | n/a | yes |
 | ami_id | Custom AMI (null = latest AL2023) | `string` | `null` | no |
 | key_name | SSH key pair name | `string` | `null` | no |
@@ -168,8 +172,8 @@ Instances need outbound access to SSM, ECR/S3, and CloudWatch Logs (NAT gateway,
 |------|-------------|
 | autoscaling_group_name | Name of the Auto Scaling Group deploys target |
 | autoscaling_group_arn | ARN of the Auto Scaling Group |
-| ssm_document_name | Name of the SSM deploy document (container runtime; null for manual) |
-| ssm_document_arn | ARN of the SSM deploy document (container runtime; null for manual) |
+| ssm_document_name | Name of the SSM deploy document |
+| ssm_document_arn | ARN of the SSM deploy document |
 | ecr_repository_arn | ARN of the service ECR repository (when created) |
 | ecr_repository_url | URL of the service ECR repository (when created) |
 | target_group_arn | ARN of the service target group (when attached) |

@@ -309,10 +309,17 @@ module:
     - id: environment_variables
       label: Runtime environment variables
       type: array
-      description: Environment variables written to the app environment file on each instance — on every deploy for container services, at instance boot for manual services. PORT is added automatically for web services.
+      description: Environment variables written to the app environment file on each instance on every deploy (and at instance boot for manual services). PORT is added automatically for web services.
       placeholder: |-
         - name: NODE_ENV
           value: production
+    - id: secrets
+      label: Runtime secrets
+      type: array
+      description: Secret environment variables as an array of {name, value_from} objects. value_from is a Secrets Manager secret ARN, an SSM parameter ARN, or an SSM parameter name; values are fetched on the instance and appended to the app environment file, so they never appear in Terraform state.
+      placeholder: |-
+        - name: DATABASE_URL
+          value_from: arn:aws:ssm:us-east-1:123456789012:parameter/my-secret
     - id: section_storage
       label: Storage
       type: section
@@ -482,6 +489,7 @@ module:
         region: << module.input.aws_region >>
         root_volume_size: << module.input.root_volume_size >>
         runtime: << module.input.deploy_type >>
+        secrets: << module.input.secrets || [] >>
         start_command: '<< module.input.deploy_type == "container" ? (module.input.container_start_command || nil) : nil >>'
         subnet_ids: '<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>'
         associate_public_ip_address: '<< module.input.private_subnet_placement_enabled ? false : true >>'
@@ -681,13 +689,13 @@ module:
 
     Container deploys run through an SSM command document created by the module. On each instance, the deploy:
 
-    1. Rebuilds the app environment file from the configured environment variables.
+    1. Rebuilds the app environment file from the configured environment variables and secrets (secret values are fetched from Secrets Manager / SSM Parameter Store on the instance).
     2. Drains the instance from the target group (web services).
     3. Pulls the new image and swaps the running container.
     4. Polls the local health check path until healthy, failing the deploy on that instance otherwise.
     5. Re-registers the instance and waits until it is in service.
 
-    Manual deploys skip the document and run the module's Deploy commands on each instance through SSM Run Command (`AWS-RunShellScript`). Draining, health checking, and anything else the deploy needs are up to your commands.
+    Manual deploys run the module's Deploy commands on each instance through the same document: it refreshes the app environment file (including secrets) and loads it into the commands' environment first, and any failing command fails the deploy on that instance. Draining, health checking, and anything else the deploy needs are up to your commands.
 
     The deploy-time input depends on the build mode:
 
@@ -720,7 +728,9 @@ module:
 
     ## Application configuration
 
-    Runtime environment variables are rendered into the app environment file on each instance — on every deploy for container services, and at instance boot for manual services (deploy commands can also rewrite the file). Changing them is a Terraform update followed by a deploy (container) or an instance refresh (manual). Use environment variables for plain configuration only; a dedicated runtime-secrets mechanism (app-side SSM reads) is planned separately.
+    Runtime environment variables are rendered into the app environment file on each instance on every deploy, whichever the deploy type — manual deploys additionally run with the file loaded into their environment. Changing them is a Terraform update followed by a deploy.
+
+    Runtime secrets follow the same lifecycle, but only the reference (a Secrets Manager secret ARN, an SSM parameter ARN, or an SSM parameter name) is configured; each instance fetches the value itself when the environment file is built, so secret values never appear in Terraform state or the deploy document. Rotating a secret's value takes effect on the next deploy with no Terraform change. Multi-line secret values are not supported.
 
     Build environment variables apply to Nixpacks and Dockerfile builds; for Dockerfile builds, optionally inject them as build arguments.
 

@@ -32,13 +32,29 @@ locals {
   app_log_path  = "/var/log/ravion/${var.name}/app.log"
 
   # Env-file builder script shared by the container deploy document and
-  # the manual runtime's boot. Values are Terraform-rendered (like an
-  # ECS task definition's environment).
+  # the manual runtime's boot. Plain values are Terraform-rendered (like
+  # an ECS task definition's environment); secrets are fetched on the
+  # instance so their values stay out of state and the SSM document.
   env_file_script = templatefile("${path.module}/templates/env_file.sh.tpl", {
     environment_variables = var.environment_variables
+    secrets               = var.secrets
     app_port              = var.app_port
     env_file_path         = local.env_file_path
+    region                = local.region
   })
+
+  # Prelude of the manual deploy document: refresh the app env file
+  # (plain values and secrets) and export it, so the deploy commands
+  # that follow always run with current configuration. set -e makes any
+  # failing command fail the per-instance invocation.
+  manual_deploy_prelude = <<-EOT
+    #!/bin/bash
+    set -euo pipefail
+    ${local.env_file_script}
+    set -a
+    . "${local.env_file_path}"
+    set +a
+  EOT
 
   deploy_script = local.container_runtime ? templatefile("${path.module}/templates/deploy_container.sh.tpl", {
     name                   = var.name

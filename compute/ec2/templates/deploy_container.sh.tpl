@@ -25,10 +25,20 @@ esac
 docker pull "$IMAGE_URI"
 
 %{ if target_group_arn != "" ~}
-# Drain this instance from the target group before swapping the container
-echo "Deregistering $INSTANCE_ID from the target group"
-aws elbv2 deregister-targets --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
-aws elbv2 wait target-deregistered --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
+# Drain this instance from the target group before swapping the container.
+# Skipped when this instance is the only registered target: there is
+# nothing to shift traffic to, and skipping the deregistration delay and
+# in-service wait shortens the outage the swap causes anyway.
+REGISTERED_TARGETS=$(aws elbv2 describe-target-health --region ${region} --target-group-arn "${target_group_arn}" --query 'length(TargetHealthDescriptions)' --output text)
+DRAIN=0
+if [ "$REGISTERED_TARGETS" -gt 1 ]; then
+  DRAIN=1
+  echo "Deregistering $INSTANCE_ID from the target group"
+  aws elbv2 deregister-targets --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
+  aws elbv2 wait target-deregistered --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
+else
+  echo "Only registered target in the target group; skipping drain"
+fi
 %{ endif ~}
 
 docker rm -f ${name} >/dev/null 2>&1 || true
@@ -67,9 +77,11 @@ fi
 %{ endif ~}
 
 %{ if target_group_arn != "" ~}
-echo "Re-registering $INSTANCE_ID with the target group"
-aws elbv2 register-targets --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
-aws elbv2 wait target-in-service --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
+if [ "$DRAIN" -eq 1 ]; then
+  echo "Re-registering $INSTANCE_ID with the target group"
+  aws elbv2 register-targets --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
+  aws elbv2 wait target-in-service --region ${region} --target-group-arn "${target_group_arn}" --targets Id="$INSTANCE_ID"
+fi
 %{ endif ~}
 
 docker image prune -f >/dev/null 2>&1 || true

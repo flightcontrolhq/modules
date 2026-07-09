@@ -121,6 +121,20 @@ variable "environment_variables" {
   default     = []
 }
 
+variable "secrets" {
+  type = list(object({
+    name       = string
+    value_from = string
+  }))
+  description = "Secret environment variables fetched on the instance and appended to the app environment file on every deploy (and at instance boot for manual). value_from is a Secrets Manager secret ARN, an SSM parameter ARN, or a bare SSM parameter name. Multi-line secret values are not supported (env-file format)."
+  default     = []
+
+  validation {
+    condition     = alltrue([for s in var.secrets : can(regex("^[A-Za-z_][A-Za-z0-9_]*$", s.name))])
+    error_message = "Each secret name must be a valid environment variable name."
+  }
+}
+
 variable "health_check_path" {
   type        = string
   description = "Local HTTP path polled on the instance after each deploy to gate success, such as /health. Requires app_port. Null disables the local health gate."
@@ -134,7 +148,7 @@ variable "health_check_path" {
 
 variable "deploy_timeout_seconds" {
   type        = number
-  description = "Timeout in seconds for the container deploy script on each instance."
+  description = "Timeout in seconds for the deploy document's script on each instance."
   default     = 1200
 
   validation {
