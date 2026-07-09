@@ -749,6 +749,16 @@ module:
 
     The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
 
+    ### Avoid overlapping same-host rules
+
+    Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function returns the original request instead of redirecting. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+
+    For example, a source of `https://example.cloudfront.net/:path*` and destination of `https://example.cloudfront.net/docs/:path*` does not redirect. The destination `/docs/guide` still matches the broad source and would otherwise become `/docs/docs/guide` on the next request.
+
+    Use different hosts for a domain migration, such as `https://docs.example.com/:path*` to `https://www.example.com/docs/:path*`. For same-host testing, use non-overlapping namespaces such as `https://example.cloudfront.net/old/:path*` to `https://example.cloudfront.net/docs/:path*`. To redirect only the root, use the exact source `https://example.cloudfront.net` without a path parameter.
+
+    Redirect patterns do not currently support exclusions such as "all paths except `/docs`".
+
     ## Certificates
 
     Domain aliases require a certificate issued in us-east-1, because CloudFront is a global service. Select an ACM Certificate module instance in the ACM certificate field; its certificate ARN is mapped automatically. Request the certificate with the primary domain and any additional aliases as subject alternative names.

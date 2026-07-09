@@ -407,6 +407,45 @@ Enabling `redirect_rules` is incompatible with caller-supplied CloudFront Functi
 
 The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
 
+#### Avoid Overlapping Same-Host Rules
+
+Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function returns the original request instead of redirecting. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+
+This rule does not redirect because `/docs/guide` still matches the broad `/:path*` source and would become `/docs/docs/guide` on the next request:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://d111111abcdef8.cloudfront.net/:path*"
+    destination = "https://d111111abcdef8.cloudfront.net/docs/:path*"
+  }
+]
+```
+
+Use different source and destination hosts when migrating a domain:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://docs.example.com/:path*"
+    destination = "https://www.example.com/docs/:path*"
+  }
+]
+```
+
+For same-host testing, use a source namespace that does not overlap the destination:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://d111111abcdef8.cloudfront.net/old/:path*"
+    destination = "https://d111111abcdef8.cloudfront.net/docs/:path*"
+  }
+]
+```
+
+The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only the root, use the exact source `https://d111111abcdef8.cloudfront.net` without a path parameter. Redirect patterns do not currently support exclusions such as "all paths except `/docs`".
+
 ## Requirements
 
 | Name               | Version   |
