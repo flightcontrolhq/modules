@@ -409,7 +409,7 @@ The module prevents a rule from redirecting back into its own source pattern. It
 
 #### Avoid Overlapping Same-Host Rules
 
-Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function returns the original request instead of redirecting. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function skips that rule and evaluates the next rule. If no later rule matches, CloudFront sends the original request to the configured origin. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
 
 This rule does not redirect because `/docs/guide` still matches the broad `/:path*` source and would become `/docs/docs/guide` on the next request:
 

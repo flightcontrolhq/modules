@@ -171,10 +171,10 @@ function handler(event) {
 
         var destination = expandDestination(rule.destination, host, captures);
         if (destination === null) {
-            return request;
+            continue;
         }
         if (destination.host === host && matchRoute(rule.source, destination.host, destination.path) !== null) {
-            return request;
+            continue;
         }
         var location = 'https://' + destination.host + destination.path;
         if (rule.preserve_query_string) {

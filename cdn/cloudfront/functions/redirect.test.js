@@ -193,14 +193,24 @@ test('does not redirect into the same source pattern', () => {
     assert.equal(result, event.request);
 });
 
-test('stops after a matching same-route rule would loop', () => {
+test('continues after a matching same-route rule would loop', () => {
     const event = request('www.example.com', '/guide');
     const result = makeHandler([
         rule({source: '/:path*', destination: '/:path*'}),
         rule({source: '/:path*', destination: 'https://other.example.com/:path*'}),
     ])(event);
 
-    assert.equal(result, event.request);
+    assert.equal(result.headers.location.value, 'https://other.example.com/guide');
+});
+
+test('continues after a destination cannot be expanded safely', () => {
+    const event = request('www.example.com', '/guide');
+    const result = makeHandler([
+        rule({source: '/:path*', destination: '/safe/%2e%2e/:path*'}),
+        rule({source: '/:path*', destination: 'https://other.example.com/:path*'}),
+    ])(event);
+
+    assert.equal(result.headers.location.value, 'https://other.example.com/guide');
 });
 
 test('supports all redirect status descriptions', () => {
