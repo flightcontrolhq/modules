@@ -61,14 +61,6 @@ module:
           show_when:
             public_access_enabled: true
           type: string_array
-        - add_button_label: Add availability zone
-          collapsible: true
-          description: Optional cluster Availability Zones. Leave blank to let AWS choose from the subnet group.
-          id: availability_zones
-          immutable: true
-          label: Availability zones
-          required: false
-          type: string_array
       required: true
       type: $ref:rvn-aws-network
     - id: section_database
@@ -333,7 +325,7 @@ module:
     - id: section_readers
       label: Readers
       type: section
-    - default: 1
+    - default: 0
       description: Number of reader instances to create.
       id: reader_count
       label: Reader count
@@ -918,7 +910,6 @@ module:
         autoscaling_scale_out_cooldown: << module.input.autoscaling_scale_out_cooldown >>
         autoscaling_target_connections: << module.input.autoscaling_target_connections >>
         autoscaling_target_cpu: << module.input.autoscaling_target_cpu >>
-        availability_zones: << module.input.availability_zones >>
         backup_retention_period: << module.input.backup_retention_period >>
         backtrack_window: << module.input.backtrack_window >>
         ca_certificate_identifier: << module.input.ca_certificate_identifier >>
@@ -965,6 +956,7 @@ module:
         monitoring_interval: << module.input.monitoring_interval >>
         monitoring_role_arn: << module.input.monitoring_role_arn >>
         monitoring_role_creation_enabled: << module.input.monitoring_role_creation_enabled >>
+        name: << module.input.name >>
         network_type: << module.input.network_type >>
         performance_insights_enabled: << module.input.performance_insights_enabled >>
         performance_insights_kms_key_id: << module.input.performance_insights_kms_key_id >>
@@ -1097,7 +1089,7 @@ module:
 
     ## Networking
 
-    Select a VPC network first. Ravion maps the network's AWS account, region, VPC ID, and private and public subnet IDs into this module. Aurora requires at least two subnets in different Availability Zones, and private subnets are the normal choice for application databases. Optional cluster Availability Zones can be set next to the subnet fields; leave them blank to let AWS choose from the subnet group.
+    Select a VPC network first. Ravion maps the network's AWS account, region, VPC ID, and private and public subnet IDs into this module. Aurora requires at least two subnets in different Availability Zones, and private subnets are the normal choice for application databases. AWS places cluster instances across the Availability Zones of the selected subnets.
 
     Public access is disabled by default, and the DB subnet group uses the private subnet IDs. When Publicly accessible is enabled, the DB subnet group switches to the public subnet IDs because AWS requires public subnets for public database access. Changing this setting after creation replaces the DB subnet group and the cluster.
 
@@ -1109,7 +1101,7 @@ module:
 
     ## Availability and readers
 
-    Reader settings live together in the Availability & readers section. Choose the number of reader instances, an optional separate reader instance class, optional cluster Availability Zones, and an optional default failover promotion tier.
+    Reader settings live together in the Readers section. Choose the number of reader instances, an optional separate reader instance class, and an optional default failover promotion tier. Readers default to 0; add at least one reader in another Availability Zone for production failover.
 
     Reader autoscaling can adjust the number of read replicas based on CPU utilization and, optionally, database connections. Configure min and max reader capacity carefully because autoscaling can increase cost.
 
@@ -1145,7 +1137,7 @@ module:
     | Capacity mode | Yes | Provisioned instances | Choose provisioned instances or Serverless v2. |
     | Instance class | Yes for provisioned | db.t4g.medium | Writer DB instance class for provisioned capacity. |
     | Min and max capacity | Yes for Serverless v2 | 1 to 4 ACUs | Serverless v2 scaling bounds. |
-    | Reader count | No | 1 | Number of reader instances. |
+    | Reader count | No | 0 | Number of reader instances. Add readers for high availability and read scaling. |
     | Database name | No | Blank | Creates an initial database on new clusters when provided. |
     | Username | Yes for new clusters | dbadmin | Master database user. |
     | Publicly accessible | No | false | Switches the DB subnet group to public subnets. Leave disabled unless public database access is intentional. |
