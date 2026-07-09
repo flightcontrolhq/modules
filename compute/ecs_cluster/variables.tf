@@ -103,10 +103,15 @@ variable "public_subnet_ids" {
 # ECS Cluster
 ################################################################################
 
-variable "container_insights_enabled" {
-  type        = bool
-  description = "Enable CloudWatch Container Insights for the ECS cluster."
-  default     = true
+variable "container_insights" {
+  type        = string
+  description = "CloudWatch Container Insights setting for the ECS cluster. Valid values are 'enhanced', 'enabled', and 'disabled'."
+  default     = "enhanced"
+
+  validation {
+    condition     = contains(["enhanced", "enabled", "disabled"], var.container_insights)
+    error_message = "The container_insights value must be 'enhanced', 'enabled', or 'disabled'."
+  }
 }
 
 ################################################################################

@@ -7,7 +7,7 @@ resource "aws_ecs_cluster" "this" {
 
   setting {
     name  = "containerInsights"
-    value = var.container_insights_enabled ? "enabled" : "disabled"
+    value = var.container_insights
   }
 
   tags = merge(local.tags, {
@@ -37,4 +37,3 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
     }
   }
 }
-
