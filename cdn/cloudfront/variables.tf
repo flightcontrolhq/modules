@@ -133,6 +133,7 @@ variable "default_cache_behavior" {
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
+    trusted_key_groups         = optional(list(string), [])
     function_associations = optional(list(object({
       event_type   = string
       function_arn = string
@@ -167,6 +168,7 @@ variable "ordered_cache_behaviors" {
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
+    trusted_key_groups         = optional(list(string), [])
     function_associations = optional(list(object({
       event_type   = string
       function_arn = string
@@ -235,6 +237,12 @@ variable "deployment_wait_enabled" {
   type        = bool
   description = "Whether to wait for the distribution to be deployed before completing."
   default     = true
+}
+
+variable "additional_metrics_enabled" {
+  type        = bool
+  description = "Whether to enable CloudFront additional metrics in CloudWatch. This enables all 8 additional metrics for each distribution and incurs a fixed per-metric CloudWatch charge."
+  default     = false
 }
 
 ################################################################################

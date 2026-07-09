@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.2.4
-  description: Add an EFS file system reference that provisions easy persistent storage for the app container.
+  version: 0.3.1
+  description: "Add Railpack image builds. BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename the Prebuilt image from registry option to Pull from image registry (`prebuilt_image` -> `image_registry`), and rename `prebuilt_image_start_command` to `image_start_command`."
 module:
   inputs:
     - id: section_cluster
@@ -82,12 +82,12 @@ module:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml
       container_definitions: >-
-        << (module.input.firelens_enabled ? [{"command": (len(module.input.prebuilt_image_start_command)
-        > 0 ? module.input.prebuilt_image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.image_start_command)
+        > 0 ? module.input.image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
         "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment":
         (module.input.environment_variables != nil ? module.input.environment_variables : []), "essential": true,
-        "image": (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains
+        "image": (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains
         "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository
         + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
         stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url + ":" +
@@ -115,11 +115,11 @@ module:
         stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
         "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
         "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
-        (len(module.input.prebuilt_image_start_command) > 0 ? module.input.prebuilt_image_start_command : nil), "cpu":
+        (len(module.input.image_start_command) > 0 ? module.input.image_start_command : nil), "cpu":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
         int(float(module.input.fargate_size.vcpu) * 1024)), "environment": (module.input.environment_variables != nil ?
-        module.input.environment_variables : []), "essential": true, "image": (module.input.build_type ==
-        "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
+        module.input.environment_variables : []), "essential": true, "image": (module.input.build_source ==
+        "image_registry" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
         deploy.input.image_ref : module.input.image_repository + ":" + deploy.input.image_ref) :
         (deploy.input.image_ref contains "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
         stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
@@ -171,7 +171,7 @@ module:
 
     ## Build and deployment
 
-    Workers support Dockerfile, Nixpacks, and prebuilt image deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For Fargate and Fargate Spot, App ephemeral storage uses the AWS default of 20 GiB unless you increase it to 21-200 GiB. For prebuilt images, use Start command to override the image default CMD when the worker process uses a different command.
+    Workers support Dockerfile, Railpack, and Pull from image registry deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For Railpack builds, you can optionally pin the Railpack version and override install, build, and start commands. For Fargate and Fargate Spot, App ephemeral storage uses the AWS default of 20 GiB unless you increase it to 21-200 GiB. For image registry deployments, use Start command to override the image default CMD when the worker process uses a different command.
 
     ## Persistent storage
 
@@ -190,8 +190,8 @@ module:
     | ECS cluster | Yes | - | Existing rvn-ecs-cluster module instance |
     | Service name | Yes | {project}-{env}-{module} | Name for the ECS service and related resources |
     | Run in private subnets | No | true | Run tasks in private subnets without public IPs |
-    | Build type | Yes | dockerfile | Dockerfile, Nixpacks, or Prebuilt image from registry |
-    | Start command | No | [] | Command arguments that override a prebuilt image default CMD |
+    | Build source | Yes | dockerfile | Dockerfile, Railpack, or Pull from image registry |
+    | Start command | No | [] | Command arguments that override an image default CMD |
     | Capacity provider | Yes | fargate | Primary service capacity provider |
     | App size | No | 2 vCPU, 4 GB | Fargate task CPU and memory |
     | App ephemeral storage (GiB) | No | 20 | Fargate task ephemeral storage |

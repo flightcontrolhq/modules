@@ -1,8 +1,8 @@
 - id: section_build
   label: Build config
   type: section
-- id: build_type
-  label: Build type
+- id: build_source
+  label: Build source
   type: string
   required: true
   default: dockerfile
@@ -10,18 +10,18 @@
     - description: Bring your own Dockerfile
       label: Dockerfile
       value: dockerfile
-    - description: Automatically build an image based on your code and config
-      label: Nixpacks
-      value: nixpacks
+    - description: Automatically build an image with Railpack
+      label: Railpack
+      value: railpack
     - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
-      label: Prebuilt image from registry
-      value: prebuilt_image
+      label: Pull from image registry
+      value: image_registry
 - $template: ./build-git-source.yml
   with:
     show_when:
-      build_type:
-        - nixpacks
+      build_source:
         - dockerfile
+        - railpack
 - id: image_repository
   label: Image repository
   type: string
@@ -29,7 +29,7 @@
   placeholder: nginx
   required: true
   show_when:
-    build_type: prebuilt_image
+    build_source: image_registry
 - id: image_registry_credentials_secret_arn
   label: Registry credentials secret ARN
   type: string
@@ -38,8 +38,8 @@
   placeholder: arn:aws:secretsmanager:us-east-1:123456789012:secret:registry-creds
   required: false
   show_when:
-    build_type: prebuilt_image
-- id: prebuilt_image_start_command
+    build_source: image_registry
+- id: image_start_command
   label: Start command
   type: string_array
   description: Optional command arguments that override the image default command. For shell behavior, use `/bin/sh`, `-lc`, and your command string as separate arguments.
@@ -48,22 +48,18 @@
   required: false
   default: []
   show_when:
-    build_type: prebuilt_image
+    build_source: image_registry
 - $template: ./dockerfile-build.yml
   with:
     show_when:
-      build_type: dockerfile
-- $template: ./nixpacks-basic.yml
+      build_source: dockerfile
+- $template: ./railpack.yml
   with:
     show_when:
-      build_type: nixpacks
-- id: nixpacks_start_cmd
+      build_source: railpack
+- id: railpack_start_cmd
   label: Start command
   type: string
-  placeholder: Intelligent default based on your language & framework
+  placeholder: Railpack default
   show_when:
-    build_type: nixpacks
-- $template: ./nixpacks-advanced.yml
-  with:
-    show_when:
-      build_type: nixpacks
+    build_source: railpack

@@ -190,8 +190,8 @@ run "basic_ecs_cluster" {
   }
 
   assert {
-    condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "enabled"])
-    error_message = "Container Insights should be enabled by default"
+    condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "enhanced"])
+    error_message = "Container Insights should be enhanced by default"
   }
 }
 
@@ -200,16 +200,30 @@ run "container_insights_disabled" {
   command = plan
 
   variables {
-    container_insights_enabled = false
+    container_insights = "disabled"
   }
 
   assert {
     condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "disabled"])
-    error_message = "Container Insights should be disabled when container_insights_enabled is false"
+    error_message = "Container Insights should be disabled when container_insights is disabled"
   }
 }
 
-# Test 3: Resource tagging
+# Test 3: Container Insights standard mode
+run "container_insights_standard" {
+  command = plan
+
+  variables {
+    container_insights = "enabled"
+  }
+
+  assert {
+    condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "enabled"])
+    error_message = "Container Insights should use standard mode when container_insights is enabled"
+  }
+}
+
+# Test 4: Resource tagging
 run "resource_tagging" {
   command = plan
 
@@ -749,13 +763,13 @@ run "full_configuration" {
   command = plan
 
   variables {
-    container_insights_enabled = true
-    fargate_enabled            = true
-    fargate_spot_enabled       = true
-    ec2_instance_type          = "t3.medium"
-    ec2_min_size               = 0
-    ec2_max_size               = 10
-    ec2_desired_capacity       = 2
+    container_insights   = "enhanced"
+    fargate_enabled      = true
+    fargate_spot_enabled = true
+    ec2_instance_type    = "t3.medium"
+    ec2_min_size         = 0
+    ec2_max_size         = 10
+    ec2_desired_capacity = 2
   }
 
   assert {

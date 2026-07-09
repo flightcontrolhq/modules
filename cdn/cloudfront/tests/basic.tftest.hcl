@@ -835,13 +835,13 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.retain_on_delete == false
-    error_message = "retain_on_delete should default to false."
+    condition     = var.retain_on_delete_enabled == false
+    error_message = "retain_on_delete_enabled should default to false."
   }
 
   assert {
-    condition     = var.wait_for_deployment == true
-    error_message = "wait_for_deployment should default to true."
+    condition     = var.deployment_wait_enabled == true
+    error_message = "deployment_wait_enabled should default to true."
   }
 
   assert {
@@ -885,8 +885,8 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.logging_include_cookies == false
-    error_message = "logging_include_cookies should default to false."
+    condition     = var.logging_cookies_enabled == false
+    error_message = "logging_cookies_enabled should default to false."
   }
 
   assert {
@@ -905,7 +905,12 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.default_cache_behavior.compress == true
-    error_message = "compress should default to true in default_cache_behavior."
+    condition     = var.default_cache_behavior.compression_enabled == true
+    error_message = "compression_enabled should default to true in default_cache_behavior."
+  }
+
+  assert {
+    condition     = length(var.default_cache_behavior.trusted_key_groups) == 0
+    error_message = "trusted_key_groups should default to empty list in default_cache_behavior."
   }
 }

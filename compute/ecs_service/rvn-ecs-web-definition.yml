@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.7.4
-  description: Add an EFS file system reference that provisions easy persistent storage for the app container.
+  version: 0.8.1
+  description: "Add Railpack image builds."
 module:
   inputs:
     - id: section_cluster
@@ -435,13 +435,13 @@ module:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml
       container_definitions: >-
-        << (module.input.firelens_enabled ? [{"command": (len(module.input.prebuilt_image_start_command)
-        > 0 ? module.input.prebuilt_image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.image_start_command)
+        > 0 ? module.input.image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
         "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment": ([{name:
         "PORT", value: string(module.input.container_port)}] | concat(module.input.environment_variables !=
         nil ? module.input.environment_variables : [])), "essential": true, "image":
-        (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains
+        (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains
         "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref :
         module.input.image_repository + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains
         "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
@@ -473,12 +473,12 @@ module:
         stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
         "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
         "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
-        (len(module.input.prebuilt_image_start_command) > 0 ? module.input.prebuilt_image_start_command : nil), "cpu":
+        (len(module.input.image_start_command) > 0 ? module.input.image_start_command : nil), "cpu":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
         int(float(module.input.fargate_size.vcpu) * 1024)), "environment": ([{name: "PORT", value:
         string(module.input.container_port)}] | concat(module.input.environment_variables != nil ?
-        module.input.environment_variables : [])), "essential": true, "image": (module.input.build_type ==
-        "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ?
+        module.input.environment_variables : [])), "essential": true, "image": (module.input.build_source ==
+        "image_registry" ? (deploy.input.image_ref contains "sha256:" ?
         module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
         ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
         stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url +
@@ -596,7 +596,7 @@ module:
     | -------------------------------- | --------------------------------------------------------------- |
     | Deploying a public web app       | Routing host or path traffic through the public cluster ALB      |
     | Hosting an internal HTTP service | Routing private traffic through the private cluster ALB          |
-    | Building from source             | Creating images with Nixpacks or a Dockerfile and pushing to ECR |
+    | Building from source             | Creating images with Railpack or a Dockerfile and pushing to ECR |
     | Bringing an existing image       | Deploying a public or private registry image by tag or digest    |
     | Tuning production capacity       | Combining Fargate, Fargate Spot, or EC2 with autoscaling         |
     | Running release tasks            | Running pre-deploy or post-deploy ECS tasks with the app image   |
@@ -612,16 +612,17 @@ module:
 
     ## Build and image options
 
-    | Build type      | When to use it                                                    |
+    | Build source    | When to use it                                                    |
     | --------------- | ----------------------------------------------------------------- |
-    | Nixpacks        | Let Ravion detect the app stack and build an image from source    |
+    | Railpack        | Let Ravion detect the app stack and build an image from source with Railpack |
     | Dockerfile      | Build from a Dockerfile in the selected repository                |
-    | Prebuilt image from registry | Deploy an existing image from Docker Hub, GHCR, ECR, or registry |
-    | Disabled        | Build outside Ravion and provide a full image URI at deploy time  |
+    | Pull from image registry | Deploy an existing image from Docker Hub, GHCR, ECR, or registry |
 
-    For Nixpacks and Dockerfile builds, provide Git repository, Git branch, and optionally Source base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
+    For Railpack and Dockerfile builds, provide Git repository, Git branch, and optionally Base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
 
-    For Prebuilt image from registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials. Use Start command to override the image default CMD when the prebuilt image needs a different service command.
+    Railpack settings let you optionally pin the Railpack version and override install, build, and start commands. Leave them blank to use Railpack defaults and autodetection.
+
+    For Pull from image registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials. Use Start command to override the image default CMD when the image needs a different service command.
 
     ## Routing and health checks
 
@@ -696,12 +697,12 @@ module:
 
     Deployments update the ECS service task definition with the selected image, generated container definition, awslogs configuration, runtime platform, environment variables, secrets, and capacity-provider-compatible task settings.
 
-    The deploy-time Image value depends on the build mode:
+    The deploy-time Image value depends on the build source:
 
-    | Build mode             | Deploy image value                                  |
+    | Build source           | Deploy image value                                  |
     | ---------------------- | --------------------------------------------------- |
-    | Nixpacks or Dockerfile | Image digest such as sha256:...                     |
-    | Prebuilt image from registry | Tag for the configured repository, such as latest   |
+    | Railpack or Dockerfile | Image digest such as sha256:...            |
+    | Pull from image registry | Tag for the configured repository, such as latest   |
     | Disabled               | Full image URI, ideally pinned by digest            |
 
     Run pre-deploy command and Run post-deploy command start optional one-off ECS tasks before or after each deployment. These commands use the deployed app image, the app container name, the configured task role and execution role, the selected capacity provider strategy, service subnets, service security groups, runtime environment variables, and runtime secrets. Leave either toggle disabled to skip that hook and hide its settings.
@@ -759,7 +760,7 @@ module:
 
     ## Builder settings
 
-    Builder settings apply to Nixpacks and Dockerfile builds.
+    Builder settings apply to Railpack and Dockerfile builds.
 
     | Field                         | Default       | Description                                          |
     | ----------------------------- | ------------- | ---------------------------------------------------- |
@@ -778,12 +779,13 @@ module:
     | Run in private subnets          | No       | true                       | Run tasks in private subnets without public IPs    |
     | Service name                    | Yes      | {project}-{env}-{module}   | Name for the ECS service and related resources     |
     | ECS cluster                     | Yes      | -                          | Existing rvn-ecs-cluster module instance           |
-    | Build type                      | Yes      | dockerfile                 | Dockerfile, Nixpacks, Prebuilt image from registry, or Disabled |
-    | Git repository                  | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
-    | Git branch                      | Yes*     | -                          | Required for Nixpacks and Dockerfile builds        |
+    | Build source                    | Yes      | dockerfile                 | Dockerfile, Railpack, Pull from image registry, or Disabled |
+    | Git repository                  | Yes*     | -                          | Required for Railpack and Dockerfile builds |
+    | Git branch                      | Yes*     | -                          | Required for Railpack and Dockerfile builds |
     | Source base path                | No       | .                          | Path from repository root to source code           |
-    | Image repository                | Yes*     | nginx                      | Required for prebuilt image deployments            |
-    | Start command                   | No       | []                         | Command arguments that override a prebuilt image default CMD |
+    | Railpack version                | No       | Ravion default             | Optional version for Railpack builds               |
+    | Image repository                | Yes*     | nginx                      | Required for image registry deployments            |
+    | Start command                   | No       | []                         | Command arguments that override an image default CMD |
     | Container port                  | Yes      | 80                         | Port exposed by the app container                  |
     | Health check path               | Yes      | /                          | HTTP path used by the target group health check    |
     | Sticky sessions                 | No       | true                       | Keep clients on the same task, and on the same traffic-shift target group when enabled |
@@ -820,13 +822,13 @@ module:
     | OpenTofu version override       | No       | Ravion default             | Override the OpenTofu version for the stack        |
     | Ravion Terraform workspace name | No       | {project}-{env}-{module}   | Override the state backend workspace name          |
 
-    *Conditionally required based on the selected build type or capacity provider.
+    *Conditionally required based on the selected build source or capacity provider.
 
     ## Design decisions
 
     - The module always models an HTTP web service behind an Application Load Balancer. NLB, worker, and service discovery patterns are intentionally outside this module definition.
     - Tasks default to private subnets even for public web services. The ALB is public; the tasks remain private when the VPC has NAT or equivalent egress.
-    - Built images are pushed to an ECR repository created with the service stack. Prebuilt image from registry and disabled build modes let teams bring their own image pipeline.
+    - Built images are pushed to an ECR repository created with the service stack. Pull from image registry lets teams bring their own image pipeline.
     - Desired count uses the autoscaling minimum when autoscaling is enabled and the Desired tasks input when autoscaling is disabled.
     - Advanced Terraform variables exist for exceptional lower-level overrides. Prefer the typed Ravion fields whenever possible.
 
@@ -836,4 +838,4 @@ module:
     - [Application Load Balancer listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html)
     - [Amazon ECS capacity providers](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cluster-capacity-providers.html)
     - [Amazon ECS service auto scaling](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html)
-    - [Nixpacks documentation](https://nixpacks.com/docs)
+    - [Railpack documentation](https://railpack.com/)
