@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.2.0
-  description: Add private S3 bucket origins with OAC and signed URL enforcement via trusted key groups.
+  version: 0.3.0
+  description: Add edge redirects with named path parameters and catch-all routes.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -174,6 +174,59 @@ module:
               value: http-only
             - label: Match viewer
               value: match-viewer
+      default: []
+    - id: section_edge_redirects
+      label: Edge redirects
+      type: section
+      description: Return redirects from CloudFront before contacting an origin. Rules are evaluated in order and the first match wins.
+    - id: redirect_rules
+      label: Redirect rules
+      type: object_array
+      description: Optional URL-pattern redirects handled by a CloudFront Function at viewer request time.
+      collapsible: true
+      required: false
+      item_label: Redirect rule
+      item_title:
+        template: "{source}"
+      item_description: "Redirect to {destination}"
+      item_inputs:
+        - id: source
+          label: Source
+          type: string
+          description: Absolute HTTPS URL or host-agnostic path to match. Use :name for one segment and a final :name* to capture the remaining path.
+          placeholder: https://docs.example.com/:path*
+          required: true
+        - id: destination
+          label: Destination
+          type: string
+          description: Absolute HTTPS URL or host-agnostic path. Named parameters are replaced with values captured by the source.
+          placeholder: https://www.example.com/docs/:path*
+          required: true
+        - id: preserve_query_string
+          label: Preserve query string
+          type: boolean
+          description: Append the request query parameters to the redirect location.
+          default: false
+        - id: redirect_non_read_methods
+          label: Redirect non-read methods
+          type: boolean
+          description: Redirect methods other than GET and HEAD. Requires status 307 or 308 so clients preserve the request method and body.
+          default: false
+        - id: status_code
+          label: Status code
+          type: number
+          description: HTTP redirect status. Use 308 for permanent redirects that preserve the request method.
+          required: true
+          default: 308
+          values:
+            - label: 308 Permanent redirect
+              value: 308
+            - label: 307 Temporary redirect
+              value: 307
+            - label: 301 Moved permanently
+              value: 301
+            - label: 302 Found
+              value: 302
       default: []
     - id: section_default_behavior
       label: Default cache behavior
@@ -572,6 +625,7 @@ module:
         logging_enabled: << module.input.logging_enabled >>
         logging_prefix: ""
         name: << module.input.name >>
+        redirect_rules: << module.input.redirect_rules || [] >>
         ordered_cache_behaviors: >-
           << module.input.cache_behaviors != nil ? map(module.input.cache_behaviors, {"path_pattern":
           #.path_pattern, "target_origin_id": #.target_origin_id, "viewer_protocol_policy":
@@ -642,6 +696,7 @@ module:
     | Speeding up global users | Terminating TLS and HTTP/3 at the nearest edge location |
     | Caching static assets | Adding a cache behavior such as /assets/* with the CachingOptimized policy |
     | Splitting traffic by path | Routing paths like /api/* to additional origins |
+    | Redirecting legacy routes | Matching named path segments and returning redirects at the edge |
     | Protecting an app | Associating a global WAFv2 web ACL and geo restrictions |
     | Auditing traffic | Enabling access logs with an automatically created S3 bucket |
 
@@ -685,6 +740,14 @@ module:
     ### Signed URLs
 
     Enable Require signed URLs to set trusted key groups on the default cache behavior. Each custom cache behavior can also require signed URLs for only that path and must provide its own trusted key group IDs. Ravion does not create key groups in this module; provide existing CloudFront key group IDs and keep the private signing key in your application.
+
+    ## Edge redirects
+
+    Redirect rules run at viewer request time before CloudFront checks its cache or contacts an origin. Rules are evaluated in order and the first match wins. Sources and destinations accept absolute HTTPS URLs or host-agnostic paths. Use `:name` to capture one path segment and a final `:name*` to capture the remaining path, then place those named values anywhere in the destination. Query preservation is optional and disabled by default.
+
+    The managed redirect function is attached to the default cache behavior and every custom cache behavior so redirects cover every request path. CloudFront allows only one viewer-request edge association per behavior, so redirect rules cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
+
+    The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
 
     ## Certificates
 
@@ -754,6 +817,7 @@ module:
     | Origin domain name | When origin source is custom | None | Any reachable origin domain |
     | Origin protocol policy | Yes | HTTPS only | Origin needs a certificate valid for the forwarded host |
     | Additional origins | No | [] | Extra origins for path-based cache behaviors |
+    | Redirect rules | No | [] | Ordered URL-pattern redirects returned before contacting an origin |
     | Viewer protocol policy | Yes | Redirect to HTTPS | How viewers connect to CloudFront |
     | Allowed methods | Yes | All methods | Read-only options available for cache-friendly apps |
     | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
@@ -773,6 +837,7 @@ module:
     - The primary origin is always the load balancer or domain you select, with the fixed origin ID primary. ECS references exist to discover the load balancer DNS name, not to create per-service origins, because listener rules already fan traffic out behind one origin.
     - Caching is disabled by default. A wrong edge cache on dynamic responses is worse than no cache, so caching is an explicit per-path opt-in.
     - The AllViewer origin request policy is the default so Host-based listener rules, cookies, and query strings keep working unchanged behind CloudFront.
+    - Redirects use one managed CloudFront Function shared by the module's distributions and attached to every cache behavior.
     - One module instance manages one distribution. Create additional instances when domains need different edge configuration; they can share the same origin.
     - The certificate is referenced from an ACM Certificate module instance so the us-east-1 requirement is explicit and reusable.
 
