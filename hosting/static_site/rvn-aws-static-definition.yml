@@ -3,7 +3,7 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.2.0
+  version: 0.2.1
   description: "Add Railpack static builds. BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`) and rename the Disabled option to Pull from S3 (`none` -> `s3_directory`)."
 module:
   build:
