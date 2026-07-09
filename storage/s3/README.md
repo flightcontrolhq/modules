@@ -6,7 +6,7 @@ This module creates an AWS S3 bucket with enterprise-grade security best practic
 
 - S3 bucket with configurable naming and force destroy options
 - Public access blocking (all four settings enabled by default)
-- Server-side encryption (SSE-S3 AES256 or SSE-KMS with optional Bucket Keys)
+- Server-side encryption (SSE-S3 AES256 or SSE-KMS with optional Bucket Keys) with SSE-C uploads blocked
 - Versioning support for object version management
 - CORS rules for browser-based cross-origin access
 - Comprehensive lifecycle rules for storage class transitions and expiration
@@ -847,6 +847,7 @@ module "s3" {
 
 - **Public Access Blocked**: All four public access block settings are enabled by default.
 - **Encryption**: Server-side encryption is always enabled. Uses SSE-S3 (AES256) by default, or SSE-KMS when a KMS key is provided.
+- **SSE-C Blocked**: Uploads encrypted with customer-provided keys are blocked to preserve the secure S3 bucket default.
 - **HTTPS Enforcement**: Use the `deny_insecure_transport` policy template to enforce HTTPS-only access.
 - **CloudFront OAC**: Use the `cloudfront_oac_read` policy template with distribution ARNs to keep buckets private behind CloudFront.
 - **Bucket Keys**: When using SSE-KMS, S3 Bucket Keys are enabled by default to reduce KMS API costs.

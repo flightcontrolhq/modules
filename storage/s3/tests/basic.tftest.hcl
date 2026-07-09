@@ -585,6 +585,11 @@ run "test_encryption_sse_s3_default" {
     condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].apply_server_side_encryption_by_default[0].kms_master_key_id) == null
     error_message = "KMS key should be null when using SSE-S3."
   }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].blocked_encryption_types) == tolist(["SSE-C"])
+    error_message = "SSE-C uploads should be blocked."
+  }
 }
 
 # Test: encryption uses SSE-KMS when KMS key is provided
