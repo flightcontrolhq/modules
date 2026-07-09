@@ -10,9 +10,9 @@
     - description: Bring your own Dockerfile
       label: Dockerfile
       value: dockerfile
-    - description: Automatically build an image based on your code and config
-      label: Nixpacks
-      value: nixpacks
+    - description: Automatically build an image with Railpack
+      label: Railpack
+      value: railpack
     - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
       label: Pull from image registry
       value: image_registry
@@ -20,8 +20,8 @@
   with:
     show_when:
       build_source:
-        - nixpacks
         - dockerfile
+        - railpack
 - id: image_repository
   label: Image repository
   type: string
@@ -53,17 +53,13 @@
   with:
     show_when:
       build_source: dockerfile
-- $template: ./nixpacks-basic.yml
+- $template: ./railpack.yml
   with:
     show_when:
-      build_source: nixpacks
-- id: nixpacks_start_cmd
+      build_source: railpack
+- id: railpack_start_cmd
   label: Start command
   type: string
-  placeholder: Intelligent default based on your language & framework
+  placeholder: Railpack default
   show_when:
-    build_source: nixpacks
-- $template: ./nixpacks-advanced.yml
-  with:
-    show_when:
-      build_source: nixpacks
+    build_source: railpack

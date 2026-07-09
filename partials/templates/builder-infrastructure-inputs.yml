@@ -2,8 +2,9 @@
   label: Builder config
   show_when:
     build_source:
-      - nixpacks
       - dockerfile
+      - railpack
+      - nixpacks
   type: section
 - default: ec2
   description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
@@ -12,8 +13,9 @@
   required: true
   show_when:
     build_source:
-      - nixpacks
       - dockerfile
+      - railpack
+      - nixpacks
   type: string
   values:
     - label: EC2
@@ -28,8 +30,9 @@
   required: true
   show_when:
     build_source:
-      - nixpacks
       - dockerfile
+      - railpack
+      - nixpacks
   type: string
   values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
 - collapsible: true
@@ -39,8 +42,9 @@
   required: false
   show_when:
     build_source:
-      - nixpacks
       - dockerfile
+      - railpack
+      - nixpacks
   type: string
   values: $values:ravion/execution_environments
 - collapsible: true
@@ -50,6 +54,7 @@
   required: false
   show_when:
     build_source:
-      - nixpacks
       - dockerfile
+      - railpack
+      - nixpacks
   type: string

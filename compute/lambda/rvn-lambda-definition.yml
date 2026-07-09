@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.3.0
-  description: "BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename Prebuilt image from ECR to Pull from image registry (`prebuilt_image` -> `image_registry`), rename Prebuilt package to Pull from S3 (`prebuilt_package` -> `s3_package`), and rename `prebuilt_image_start_command`, `prebuilt_image_entry_point`, and `prebuilt_image_working_directory` to `image_start_command`, `image_entry_point`, and `image_working_directory`."
+  version: 0.3.1
+  description: "Add Railpack support for zip package and container image builds."
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -173,9 +173,6 @@ module:
         - description: Bring your own Dockerfile
           label: Dockerfile
           value: dockerfile
-        - description: Automatically build a zip package or Lambda container image based on your code and config
-          label: Nixpacks
-          value: nixpacks
         - description: Skip the build step and provide an existing S3 object key at deploy time.
           label: Pull from S3
           value: s3_package
@@ -1185,7 +1182,7 @@ module:
 
     Lambda type and package type are immutable after creation. Lambda@Edge functions must be created in us-east-1, and AWS Lambda does not support changing an existing function between zip packages and container images.
 
-    For zip package functions, builds use Nixpacks or a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
+    For zip package functions, builds use a Dockerfile to produce Lambda package contents from the selected Git repository. The build uploads a zip file to the module-managed code bucket. Deployments take an S3 object key, update the Lambda function code, publish a new version, and move the live alias to that version.
 
     If Build source is Pull from S3 for zip packages, Ravion skips the build step and you provide an existing S3 object key at deploy time.
 
