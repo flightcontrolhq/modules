@@ -625,12 +625,32 @@ module:
       type: section
     - add_button_label: Add log type
       collapsible: true
-      description: Valid values are postgresql for Aurora PostgreSQL, or audit, error, general, and slowquery for Aurora MySQL.
+      description: Engine logs exported to CloudWatch. Each enabled log type is shown on the module Logs tab.
       id: enabled_cloudwatch_logs_exports
       label: CloudWatch log exports
-      placeholder: postgresql
       required: false
       type: string_array
+      values:
+        - label: postgresql
+          show_when:
+            engine: aurora-postgresql
+          value: postgresql
+        - label: audit
+          show_when:
+            engine: aurora-mysql
+          value: audit
+        - label: error
+          show_when:
+            engine: aurora-mysql
+          value: error
+        - label: general
+          show_when:
+            engine: aurora-mysql
+          value: general
+        - label: slowquery
+          show_when:
+            engine: aurora-mysql
+          value: slowquery
     - collapsible: true
       default: 0
       id: monitoring_interval
@@ -1044,6 +1064,114 @@ module:
           statistic: Average
           type: cloudwatch
         type: line
+      - id: acu_utilization
+        name: ACU utilization
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: ACUUtilization
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: volume_bytes_used
+        name: Storage used
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: VolumeBytesUsed
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: read_latency
+        name: Read latency
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: ReadLatency
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: write_latency
+        name: Write latency
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: WriteLatency
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: replica_lag_maximum
+        name: Replica lag (max)
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: AuroraReplicaLagMaximum
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Maximum
+          type: cloudwatch
+        type: line
+      - id: buffer_cache_hit_ratio
+        name: Buffer cache hit ratio
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: BufferCacheHitRatio
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: commit_latency
+        name: Commit latency
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: CommitLatency
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: deadlocks
+        name: Deadlocks
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: Deadlocks
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: network_throughput
+        name: Network throughput
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: NetworkThroughput
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
       - id: volume_read_iops
         name: Volume read IOPS
         source:
@@ -1123,7 +1251,11 @@ module:
 
     Performance Insights is enabled by default with 7 days of retention. Enhanced monitoring can be enabled by setting a monitoring interval.
 
-    CloudWatch alarms can monitor CPU utilization, freeable memory, and database connections. The freeable memory alarm threshold is entered in MiB in Ravion and converted to bytes for Terraform. The Ravion UI also shows Aurora CloudWatch metrics for CPU, memory, connections, serverless capacity, and volume IOPS.
+    CloudWatch alarms can monitor CPU utilization, freeable memory, and database connections. The freeable memory alarm threshold is entered in MiB in Ravion and converted to bytes for Terraform.
+
+    CloudWatch log exports offer engine-specific log types: postgresql for Aurora PostgreSQL, or audit, error, general, and slowquery for Aurora MySQL. Each enabled log type is shown on the module Logs tab.
+
+    The Ravion UI charts Aurora CloudWatch metrics for CPU utilization, freeable memory, database connections, serverless capacity and ACU utilization, storage used, read and write latency, replica lag, buffer cache hit ratio, commit latency, deadlocks, network throughput, and volume IOPS.
 
     ## Configuration
 
