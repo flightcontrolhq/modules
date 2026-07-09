@@ -3,8 +3,8 @@ definition:
   name: Terraform Stack
   description: Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
 release:
-  version: 1.2.2
-  description: Prevent duplicate stack runs when the primary branch also has an open pull request and clean up form labels.
+  version: 1.2.3
+  description: Clarify the cloud block required for Ravion-managed state.
 module:
   inputs:
     - id: section_aws
@@ -115,7 +115,7 @@ module:
       type: string
       values: $values:opentofu/versions
     - default: true
-      description: Overrides any backend config in your Terraform. Disable if using s3 + Dynamo or another third party service like Terraform Cloud for state.
+      description: Use Ravion-managed state. Your Terraform configuration must include an empty `terraform { cloud {} }` block; Ravion supplies the workspace configuration. Disable to use your own backend, including S3 or Terraform Cloud.
       id: use_ravion_state_backend
       label: Use Ravion for your Terraform state
       type: boolean
@@ -191,7 +191,7 @@ module:
 
     - **Automated plan/apply** on git push to your primary branch or via pull requests
     - **Manual execution** for ad-hoc plans, applies, and destroys on the primary branch
-    - **Managed state backend** (optional) replacing external state configuration
+    - **Managed state backend** (optional) for configurations that declare an empty `cloud {}` block
 
     ## Use cases
 
@@ -256,14 +256,22 @@ module:
     | -------------------- | ------------------------------------------------------------------------ |
     | Infrastructure tool  | Terraform or OpenTofu                                                    |
     | Version              | Specific tool version to use                                             |
-    | Ravion state backend | Enable managed state storage (overrides any backend config in your code) |
+    | Ravion state backend | Enable managed state storage for configurations with an empty `cloud {}` block |
 
     ## State management
 
     Terraform and OpenTofu track infrastructure in a state file. Ravion offers two options:
 
-    - **Managed state (default):** Ravion stores and manages your state file. No external backend configuration needed. State is versioned and securely stored.
+    - **Managed state (default):** Ravion stores and manages your state file. Add an empty `cloud {}` block to your Terraform configuration; Ravion supplies the workspace configuration at runtime.
     - **Self-managed state:** Disable the Ravion backend and configure your own (S3, GCS, Azure Storage, etc.) in your Terraform configuration.
+
+    For Ravion-managed state, include:
+
+    ```hcl
+    terraform {
+      cloud {}
+    }
+    ```
 
     ## Terraform vs OpenTofu
 
