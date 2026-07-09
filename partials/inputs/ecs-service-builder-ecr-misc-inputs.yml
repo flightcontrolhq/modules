@@ -5,7 +5,7 @@
   label: Image registry lifecycle
   type: section
   show_when:
-    build_type:
+    build_source:
       - dockerfile
       - railpack
       - nixpacks
@@ -15,7 +15,7 @@
   description: Ask ECR to run its basic vulnerability scan whenever a new image is pushed. Keep this on for early dependency and OS package findings; disable only if another scanner owns image scanning or duplicate findings are noisy.
   collapsible: true
   show_when:
-    build_type:
+    build_source:
       - dockerfile
       - railpack
       - nixpacks
@@ -26,7 +26,7 @@
   description: Allow the ECR repository to be deleted even when it contains images. Use with care.
   collapsible: true
   show_when:
-    build_type:
+    build_source:
       - dockerfile
       - railpack
       - nixpacks
