@@ -190,7 +190,7 @@ module "api_service" {
 | Name | Version |
 |------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 5.0 |
+| aws | >= 6.0 |
 
 ## Inputs
 
@@ -209,7 +209,7 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| container_insights_enabled | Enable CloudWatch Container Insights | `bool` | `true` | no |
+| container_insights | CloudWatch Container Insights setting. Valid values: `enhanced`, `enabled`, `disabled` | `string` | `"enhanced"` | no |
 | capacity_provider_default | Family for the cluster default strategy: `ec2`, `fargate` (includes Fargate Spot when enabled), or `fargate_spot`. AWS forbids mixing Fargate and EC2 providers in one strategy. Defaults to `ec2` if EC2 is enabled, then `fargate`, then `fargate_spot` | `string` | `null` | no |
 
 ### Fargate Capacity Provider
@@ -439,7 +439,7 @@ module "api_service" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │        NETWORK                  │   │      ECS CLUSTER                        │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • container_insights_enabled             │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • container_insights                     │  ║
 ║  │ • tags                      │   │ • private_subnet_ids (required) │   └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘   │ • public_subnet_ids             │                                                 ║
 ║                                    └─────────────────────────────────┘                                                 ║
