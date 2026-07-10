@@ -77,14 +77,14 @@ mock_provider "aws" {
   }
 
   override_resource {
-    target = aws_cloudwatch_log_group.access_logs
+    target = module.cdn.aws_cloudwatch_log_group.access_logs
     values = {
       arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/cloudfront/ravion-test-site"
     }
   }
 
   override_resource {
-    target = aws_cloudwatch_log_delivery_destination.access_logs
+    target = module.cdn.aws_cloudwatch_log_delivery_destination.access_logs
     values = {
       arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:ravion-test-site-access-logs-cw"
     }
@@ -802,43 +802,43 @@ run "primary_domain_falls_back_to_cloudfront_domain" {
 }
 
 #-------------------------------------------------------------------------------
-# Access logging (CloudWatch standard logging v2)
+# Access logging (delegated to cdn/cloudfront)
+#
+# The CloudWatch standard-logging-v2 delivery chain lives inside module.cdn,
+# whose resources are not addressable from run-block assertions, so behavior
+# is pinned through the module outputs in apply mode. Resource-level chain
+# assertions live in cdn/cloudfront's own tests.
 #-------------------------------------------------------------------------------
 
-run "logging_disabled_creates_no_cloudwatch_resources" {
-  command = plan
+run "logging_enabled_by_default_exposes_log_group" {
+  command = apply
 
   assert {
-    condition     = length(aws_cloudwatch_log_group.access_logs) == 0
+    condition     = output.access_log_group_name == "/aws/cloudfront/ravion-test-site"
+    error_message = "Logging defaults to enabled with the CloudWatch destination, so the access-log group output must be the module-managed group name."
+  }
+
+  assert {
+    condition     = output.access_log_group_arn != null
+    error_message = "The access-log group ARN output must be set when CloudWatch logging is active."
+  }
+}
+
+run "logging_disabled_creates_no_cloudwatch_resources" {
+  command = apply
+
+  variables {
+    logging_enabled = false
+  }
+
+  assert {
+    condition     = output.access_log_group_name == null && output.access_log_group_arn == null
     error_message = "No CloudWatch log group should be created when logging is disabled."
   }
 }
 
-run "cloudwatch_logging_creates_delivery_chain" {
-  command = plan
-
-  variables {
-    logging_enabled = true
-  }
-
-  assert {
-    condition     = length(aws_cloudwatch_log_group.access_logs) == 1
-    error_message = "CloudWatch logging (the default destination) must create the access-log group."
-  }
-
-  assert {
-    condition     = length(aws_cloudwatch_log_delivery_source.access_logs) == 1 && length(aws_cloudwatch_log_delivery.access_logs) == 1
-    error_message = "One delivery source and one delivery must be created per distribution."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_log_group.access_logs[0].retention_in_days == 90
-    error_message = "The log group retention must follow logging_retention_days."
-  }
-}
-
 run "s3_logging_destination_skips_cloudwatch" {
-  command = plan
+  command = apply
 
   variables {
     logging_enabled                 = true
@@ -847,7 +847,7 @@ run "s3_logging_destination_skips_cloudwatch" {
   }
 
   assert {
-    condition     = length(aws_cloudwatch_log_group.access_logs) == 0
+    condition     = output.access_log_group_name == null && output.access_log_group_arn == null
     error_message = "No CloudWatch resources should be created when logging_destination is 's3'."
   }
 }

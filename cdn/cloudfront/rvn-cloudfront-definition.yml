@@ -3,15 +3,15 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.2.0
-  description: Add private S3 bucket origins with OAC and signed URL enforcement via trusted key groups.
+  version: 0.3.0
+  description: "Deliver CloudFront access logs to CloudWatch Logs by default with a Ravion logs panel; S3 delivery remains available."
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
     - $merge:
         - ../../partials/inputs/aws-region.yml
       default: us-east-1
-      description: CloudFront is global. This region is used for the optional access logging bucket.
+      description: CloudFront is global. Access logs go to CloudWatch Logs in us-east-1 by default; this region is used for the optional S3 logging bucket.
     - id: section_distribution
       label: Distribution
       type: section
@@ -515,12 +515,26 @@ module:
     - id: logging_enabled
       label: CloudFront access logging
       type: boolean
-      description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
-      default: false
+      description: Enable CloudFront access logging. Logs are delivered to CloudWatch Logs by default and can be viewed in Ravion.
+      default: true
+    - id: logging_destination
+      label: Logging destination
+      type: string
+      description: Where CloudFront delivers access logs.
+      default: cloudwatch
+      show_when:
+        logging_enabled: true
+      values:
+        - description: View access logs directly in Ravion. Ingestion costs more at very high traffic.
+          label: CloudWatch Logs
+          value: cloudwatch
+        - description: Deliver compressed log files to an automatically created S3 bucket. Cheapest for high traffic.
+          label: S3 bucket
+          value: s3
     - id: logging_bucket_retention_days
       label: Logging retention days
       type: number
-      description: Days to retain CloudFront access logs in the automatically created logging bucket.
+      description: Days to retain CloudFront access logs in CloudWatch Logs or the automatically created S3 logging bucket.
       min: 1
       show_when:
         logging_enabled: true
@@ -566,9 +580,10 @@ module:
         geo_restriction_type: << module.input.geo_restriction_type >>
         additional_metrics_enabled: << module.input.additional_metrics_enabled >>
         http_version: << module.input.http_version >>
-        logging_bucket_creation_enabled: << module.input.logging_enabled >>
+        logging_bucket_creation_enabled: << module.input.logging_enabled && module.input.logging_destination == "s3" >>
         logging_bucket_domain_name: null
         logging_bucket_retention_days: << module.input.logging_bucket_retention_days >>
+        logging_destination: << module.input.logging_destination >>
         logging_enabled: << module.input.logging_enabled >>
         logging_prefix: ""
         name: << module.input.name >>
@@ -594,6 +609,12 @@ module:
           $include: ../stack/ravion-tags.yml
         web_acl_id: << module.input.web_acl_id || nil >>
   ui:
+    logs: |-
+      <<
+      module.input.logging_enabled && module.input.logging_destination == "cloudwatch" ?
+      [{"id": "cloudfront_access_logs", "name": "CloudFront access logs", "source": {"type": "cloudwatch", "aws_account_id": module.input.aws_account_id, "region": "us-east-1", "log_group": stack.output.access_log_group_name}}] :
+      []
+      >>
     links: |-
       <<
       (stack.output.distribution_domain_name ? [{"name": "CloudFront domain", "href": "https://" + stack.output.distribution_domain_name}] : []) +
@@ -643,7 +664,7 @@ module:
     | Caching static assets | Adding a cache behavior such as /assets/* with the CachingOptimized policy |
     | Splitting traffic by path | Routing paths like /api/* to additional origins |
     | Protecting an app | Associating a global WAFv2 web ACL and geo restrictions |
-    | Auditing traffic | Enabling access logs with an automatically created S3 bucket |
+    | Auditing traffic | Viewing CloudFront access logs in Ravion or delivering them to S3 |
 
     ## How the ECS connection works
 
@@ -736,14 +757,21 @@ module:
 
     ## Access logging
 
-    CloudFront access logging is off by default. When enabled, the module creates an S3 logging bucket automatically and expires log objects after the configured retention days (default 90).
+    CloudFront access logging is on by default, delivered to CloudWatch Logs and viewable in Ravion. Choose where logs are delivered:
+
+    | Destination | How it works |
+    | --- | --- |
+    | CloudWatch Logs (default) | CloudFront standard logging v2 delivers access logs to a module-managed CloudWatch Logs group, and the module UI shows them in the Logs panel. Log ingestion costs more than S3 at very high traffic. |
+    | S3 bucket | Legacy standard logging delivers compressed log files to an automatically created S3 bucket. Cheapest for high-traffic sites; not viewable in Ravion. |
+
+    Logging retention days defaults to 90 and controls the CloudWatch log group retention or the S3 bucket lifecycle expiry, depending on the destination. CloudWatch retention must be one of the standard CloudWatch Logs retention values (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, and larger).
 
     ## Configuration
 
     | Field | Required | Default | Notes |
     | --- | --- | --- | --- |
     | AWS account | Yes | None | Account for the distribution and logging bucket |
-    | Region | Yes | us-east-1 | Used for the optional logging bucket; CloudFront is global |
+    | Region | Yes | us-east-1 | Used for the optional S3 logging bucket; CloudFront is global and access logs go to CloudWatch Logs in us-east-1 by default |
     | Name slug | Yes | Generated from project, environment, and module IDs | Prefix for distribution comment, OAC, and logging bucket |
     | Domain aliases | No | [] | Custom domains; empty uses the cloudfront.net domain |
     | ACM certificate | When aliases are set | None | rvn-acm-certificate instance issued in us-east-1 |
@@ -764,7 +792,8 @@ module:
     | Custom cache behaviors | No | [] | Path-based caching and routing before the default behavior |
     | Price class | No | All edge locations | Edge location coverage |
     | Additional metrics | No | false | Enables all 8 CloudFront additional metrics and their flat CloudWatch cost |
-    | CloudFront access logging | No | false | Creates a logging bucket when enabled |
+    | CloudFront access logging | No | true | Delivers logs to CloudWatch Logs or S3 |
+    | Logging destination | No | CloudWatch Logs | Visible when logging is enabled; CloudWatch shows logs in Ravion |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership tags |
     | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
 

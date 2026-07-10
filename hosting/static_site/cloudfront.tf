@@ -71,8 +71,9 @@ module "cdn" {
 
   web_acl_id = var.web_acl_id
 
-  logging_enabled                 = var.logging_enabled && var.logging_destination == "s3"
-  logging_bucket_creation_enabled = var.logging_bucket_creation_enabled && var.logging_destination == "s3"
+  logging_enabled                 = var.logging_enabled
+  logging_destination             = var.logging_destination
+  logging_bucket_creation_enabled = var.logging_bucket_creation_enabled
   logging_bucket_domain_name      = var.logging_bucket_domain_name
   logging_prefix                  = var.logging_prefix
   logging_bucket_retention_days   = var.logging_retention_days

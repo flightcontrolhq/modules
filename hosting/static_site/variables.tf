@@ -432,8 +432,8 @@ variable "kvs_initial_data" {
 
 variable "logging_enabled" {
   type        = bool
-  description = "Enable CloudFront access logging."
-  default     = false
+  description = "Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see logging_destination."
+  default     = true
 }
 
 variable "logging_destination" {

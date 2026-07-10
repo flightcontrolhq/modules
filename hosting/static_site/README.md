@@ -15,7 +15,7 @@ Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> v
 - **Multiple distributions** sharing one origin (e.g., a production domain group + staging domain group).
 - **HTTP/2 + HTTP/3** by default.
 - **Optional WAFv2** integration.
-- **Optional access logging** — CloudWatch Logs by default (standard logging v2), with legacy S3 delivery available for cost-sensitive high-traffic sites.
+- **Access logging on by default** — CloudWatch Logs delivery (standard logging v2, via cdn/cloudfront), with legacy S3 delivery available for cost-sensitive high-traffic sites.
 - **Optional CI deploy role** with least-privilege `s3:Put*` + KVS `PutKey`/`DeleteKey` + `cloudfront:CreateInvalidation`.
 - **Origin Shield** support.
 - **SSE-KMS** support on the hosting bucket.
@@ -423,7 +423,7 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| logging_enabled | Enable CloudFront access logging. | `bool` | `false` |
+| logging_enabled | Enable CloudFront access logging. On by default with CloudWatch Logs delivery. | `bool` | `true` |
 | logging_destination | Where access logs are delivered: `cloudwatch` (standard logging v2 into a module-managed CloudWatch Logs group) or `s3` (legacy standard logging). | `string` | `"cloudwatch"` |
 | logging_bucket_creation_enabled | Create a new S3 bucket for logs. Only applies when `logging_destination = "s3"`. | `bool` | `false` |
 | logging_bucket_domain_name | Existing logging bucket domain name. Only applies when `logging_destination = "s3"`. | `string` | `null` |

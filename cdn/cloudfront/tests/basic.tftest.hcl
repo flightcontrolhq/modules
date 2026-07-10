@@ -36,10 +36,25 @@ mock_provider "aws" {
   override_resource {
     target = aws_s3_bucket.logging
     values = {
-      arn         = "arn:aws:s3:::test-cf-logs-123456789012-us-east-1"
-      id          = "test-cf-logs-123456789012-us-east-1"
-      bucket      = "test-cf-logs-123456789012-us-east-1"
-      domain_name = "test-cf-logs-123456789012-us-east-1.s3.amazonaws.com"
+      arn                = "arn:aws:s3:::test-cf-logs-123456789012-us-east-1"
+      id                 = "test-cf-logs-123456789012-us-east-1"
+      bucket_domain_name = "test-cf-logs-123456789012-us-east-1.s3.amazonaws.com"
+    }
+  }
+
+  # The delivery-source and delivery-destination resources validate their ARN
+  # attributes at plan time, so mocked upstream ARNs must be well-formed.
+  override_resource {
+    target = aws_cloudwatch_log_group.access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/cloudfront/test-cf"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudwatch_log_delivery_destination.access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:test-cf-access-logs-cw"
     }
   }
 }
@@ -702,6 +717,120 @@ run "test_logging_retention_invalid_zero" {
   ]
 }
 
+# Test: Invalid logging_bucket_retention_days - not a CloudWatch retention value
+# while logging_destination is 'cloudwatch' (the default)
+run "test_logging_retention_invalid_cloudwatch_value" {
+  command = plan
+
+  variables {
+    logging_bucket_retention_days = 45
+  }
+
+  expect_failures = [
+    var.logging_bucket_retention_days,
+  ]
+}
+
+# Test: 45 days is a valid S3 lifecycle expiry when logging_destination is 's3'
+run "test_logging_retention_non_cloudwatch_value_valid_for_s3" {
+  command = plan
+
+  variables {
+    logging_destination             = "s3"
+    logging_bucket_creation_enabled = true
+    logging_bucket_retention_days   = 45
+  }
+
+  assert {
+    condition     = var.logging_bucket_retention_days == 45
+    error_message = "Any retention >= 1 should be accepted when logging_destination is 's3'."
+  }
+}
+
+# Test: Invalid logging_destination
+run "test_logging_destination_invalid" {
+  command = plan
+
+  variables {
+    logging_destination = "firehose"
+  }
+
+  expect_failures = [
+    var.logging_destination,
+  ]
+}
+
+# Test: Default logging creates the CloudWatch delivery chain (logging is on
+# by default with the 'cloudwatch' destination)
+run "test_logging_default_creates_cloudwatch_chain" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 1
+    error_message = "CloudWatch logging (the default) must create the access-log group."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_delivery_source.access_logs) == 1 && length(aws_cloudwatch_log_delivery.access_logs) == 1
+    error_message = "One delivery source and one delivery must be created per distribution."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_delivery_destination.access_logs) == 1
+    error_message = "Exactly one shared delivery destination must be created."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.access_logs[0].retention_in_days == 90
+    error_message = "The log group retention must follow logging_bucket_retention_days."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 0
+    error_message = "No S3 logging bucket should be created when the destination is 'cloudwatch'."
+  }
+}
+
+# Test: S3 destination keeps the bucket path and creates no CloudWatch resources
+run "test_logging_s3_destination_skips_cloudwatch" {
+  command = plan
+
+  variables {
+    logging_destination             = "s3"
+    logging_bucket_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0 && length(aws_cloudwatch_log_delivery_source.access_logs) == 0 && length(aws_cloudwatch_log_delivery_destination.access_logs) == 0 && length(aws_cloudwatch_log_delivery.access_logs) == 0
+    error_message = "No CloudWatch resources should be created when logging_destination is 's3'."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 1
+    error_message = "The S3 logging bucket must be created when logging_destination is 's3' and logging_bucket_creation_enabled is true."
+  }
+}
+
+# Test: logging_enabled = false creates neither destination's resources
+run "test_logging_disabled_creates_nothing" {
+  command = plan
+
+  variables {
+    logging_enabled                 = false
+    logging_bucket_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0 && length(aws_cloudwatch_log_delivery_source.access_logs) == 0 && length(aws_cloudwatch_log_delivery_destination.access_logs) == 0 && length(aws_cloudwatch_log_delivery.access_logs) == 0
+    error_message = "No CloudWatch resources should be created when logging is disabled."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 0
+    error_message = "No S3 logging bucket should be created when logging is disabled, even with logging_bucket_creation_enabled = true."
+  }
+}
+
 #-------------------------------------------------------------------------------
 # Origin Access Control Validation Tests
 #-------------------------------------------------------------------------------
@@ -870,8 +999,13 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.logging_enabled == false
-    error_message = "logging_enabled should default to false."
+    condition     = var.logging_enabled == true
+    error_message = "logging_enabled should default to true (CloudWatch Logs delivery)."
+  }
+
+  assert {
+    condition     = var.logging_destination == "cloudwatch"
+    error_message = "logging_destination should default to cloudwatch."
   }
 
   assert {

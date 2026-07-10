@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, and view CloudFront access logs in Ravion via CloudWatch delivery."
+  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, and deliver CloudFront access logs to CloudWatch by default with a Ravion logs panel."
 module:
   build:
     builder: >-
@@ -288,8 +288,8 @@ module:
     - id: section_logging
       label: Access logging
       type: section
-    - default: false
-      description: Enable CloudFront access logging.
+    - default: true
+      description: Enable CloudFront access logging. Logs are delivered to CloudWatch Logs by default and can be viewed in Ravion.
       id: logging_enabled
       label: CloudFront access logging
       type: boolean
@@ -357,8 +357,6 @@ module:
     | --- | --- |
     | Hosting a SPA | Rewriting client-side routes to the active version's root object |
     | Hosting docs or generated static files | Serving filesystem-style paths from S3 through CloudFront |
-    | Building from source | Running Railpack or Dockerfile builds and uploading build output to S3 |
-    | Pulling from S3 | Skipping builds and promoting an existing S3 directory |
     | Using custom domains | Attaching CloudFront aliases and an ACM certificate |
     | Tuning cache behavior | Managing HTML and asset Cache-Control headers separately |
     | Custom 404 pages | Serving your build's 404.html with a proper 404 status |
@@ -446,7 +444,7 @@ module:
 
     ## Access logging
 
-    CloudFront access logging is off by default. When enabled, choose where logs are delivered.
+    CloudFront access logging is on by default, delivered to CloudWatch Logs and viewable in Ravion. Choose where logs are delivered:
 
     | Destination | How it works |
     | --- | --- |
@@ -503,7 +501,7 @@ module:
     | CloudFront settings | Origin Shield | No | false | Extra caching layer; region chosen automatically |
     | Cache and headers | Manage Cache-Control headers | No | true | Attaches the cache-control function |
     | Cache and headers | Managed response headers | No | Security headers | AWS managed header sets; add CORS or CORS with preflight |
-    | Access logging | CloudFront access logging | No | false | Delivers logs to CloudWatch Logs or S3 when enabled |
+    | Access logging | CloudFront access logging | No | true | Delivers logs to CloudWatch Logs or S3 |
     | Access logging | Logging destination | No | CloudWatch Logs | Visible when logging is enabled; CloudWatch shows logs in Ravion |
     | Access logging | Logging retention days | No | 90 | Visible when logging is enabled; CloudWatch retention or S3 lifecycle expiry |
     | Deploy config | CloudFront invalidation paths | No | /* | Paths invalidated after promotion |
