@@ -1,5 +1,10 @@
 ...overrides: << module.input.advanced_terraform_variables >>
 allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
+notifications_enabled: << module.input.notifications_enabled >>
+notification_template_id: << module.input.notification_template_id >>
+notification_channel_ref: << module.input.notification_channel_ref >>
+cpu_alarm_threshold: << module.input.cpu_alarm_threshold >>
+memory_alarm_threshold: << module.input.memory_alarm_threshold >>
 public_ip_assignment_enabled: "<< module.input.private_subnet_placement_enabled ? false : true >>"
 auto_scaling:
   enabled: << module.input.auto_scaling_enabled >>
