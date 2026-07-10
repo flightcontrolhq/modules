@@ -274,6 +274,11 @@ module:
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select an AWS account and region to load available EC2 instance types.
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - id: section_deploy
       label: Deploy config
       type: section

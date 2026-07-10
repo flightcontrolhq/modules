@@ -11,6 +11,9 @@ echo "Deploying image $IMAGE_URI (deploy $DEPLOY_ID)"
 TOKEN=$(curl -sf -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
 INSTANCE_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
 
+# Make supervisord available on both newly launched and existing instances.
+${supervisor_install_script}
+
 # Rebuild the app env file on every deploy.
 ${env_file_script}
 
@@ -41,9 +44,19 @@ else
 fi
 %{ endif ~}
 
+# Stop the old supervised process after draining. The runner removes any
+# stale same-named container before starting the requested image.
+/usr/local/bin/supervisorctl -c /etc/supervisord.conf stop "${supervisor_program}" >/dev/null 2>&1 || true
+docker rm -f ${name} >/dev/null 2>&1 || true
+printf '%s\n' "$IMAGE_URI" > "${image_ref_path}"
+
+cat > "${app_runner_path}" <<'APP_RUNNER'
+#!/bin/bash
+set -euo pipefail
+IMAGE_URI=$(cat "${image_ref_path}")
 docker rm -f ${name} >/dev/null 2>&1 || true
 
-RUN_ARGS=(-d --name ${name} --restart unless-stopped --env-file "${env_file_path}")
+RUN_ARGS=(--rm --name ${name} --env-file "${env_file_path}")
 %{ if app_port != null ~}
 RUN_ARGS+=(-p ${app_port}:${app_port})
 %{ endif ~}
@@ -53,11 +66,12 @@ RUN_ARGS+=(-v ${data_volume_mount_path}:${data_volume_mount_path})
 %{ if efs_mount_path != "" ~}
 RUN_ARGS+=(-v ${efs_mount_path}:${efs_mount_path})
 %{ endif ~}
-RUN_ARGS+=(--log-driver awslogs)
-RUN_ARGS+=(--log-opt awslogs-region=${region})
-RUN_ARGS+=(--log-opt awslogs-group=${log_group_name})
-RUN_ARGS+=(--log-opt awslogs-stream=instance/"$INSTANCE_ID"/app-"$DEPLOY_ID")
-docker run "$${RUN_ARGS[@]}" "$IMAGE_URI" ${start_command}
+exec docker run "$${RUN_ARGS[@]}" "$IMAGE_URI" ${start_command}
+APP_RUNNER
+chmod 755 "${app_runner_path}"
+
+${deployment_log_script}
+${supervisor_program_script}
 
 %{ if health_check_path != "" && app_port != null ~}
 # Gate deploy success on the local health check
@@ -71,7 +85,7 @@ for _ in $(seq 1 60); do
 done
 if [ "$HEALTHY" -ne 1 ]; then
   echo "App failed the local health check on port ${app_port}${health_check_path}" >&2
-  docker logs --tail 100 ${name} >&2 || true
+  tail -n 100 "$LOG_PATH" >&2 || true
   exit 1
 fi
 %{ endif ~}

@@ -1,0 +1,106 @@
+mock_provider "aws" {
+  override_data {
+    target = data.aws_caller_identity.current
+    values = {
+      account_id = "123456789012"
+    }
+  }
+
+  override_data {
+    target = data.aws_region.current
+    values = {
+      id   = "us-east-1"
+      name = "us-east-1"
+    }
+  }
+
+  override_data {
+    target = data.aws_partition.current
+    values = {
+      partition = "aws"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_instance_profile.instance
+    values = {
+      arn = "arn:aws:iam::123456789012:instance-profile/supervised-app-instance"
+    }
+  }
+
+  override_resource {
+    target = module.instance_security_group.aws_security_group.this
+    values = {
+      id = "sg-12345678"
+    }
+  }
+
+  override_resource {
+    target = aws_launch_template.app
+    values = {
+      id = "lt-12345678"
+    }
+  }
+}
+
+variables {
+  name          = "supervised-app"
+  region        = "us-east-1"
+  vpc_id        = "vpc-12345678"
+  subnet_ids    = ["subnet-12345678"]
+  instance_type = "t3.micro"
+  ami_id        = "ami-12345678"
+}
+
+run "container_is_supervised_and_logs_per_deployment" {
+  command = plan
+
+  variables {
+    runtime = "container"
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "autorestart=true")
+    error_message = "Container deploys must configure supervisord to restart the app."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "deployment/$${DEPLOY_ID}/instance/{instance_id}")
+    error_message = "Container logs must use deployment- and instance-scoped CloudWatch streams."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "supervisor==4.3.0")
+    error_message = "Instances must install the pinned Supervisor version at bootstrap."
+  }
+
+  assert {
+    condition     = output.log_stream_prefix == "deployment"
+    error_message = "The log stream output must select all deployment-scoped streams."
+  }
+
+}
+
+run "manual_start_command_is_supervised" {
+  command = plan
+
+  variables {
+    runtime              = "manual"
+    manual_start_command = "cd /srv/app && ./bin/server"
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, base64encode("cd /srv/app && ./bin/server"))
+    error_message = "The manual start command must be embedded safely in the deploy document."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "exec /bin/bash -lc")
+    error_message = "Manual deploys must run the long-lived start command through the supervisor runner."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "autorestart=true")
+    error_message = "Manual deploys must configure supervisord to restart the app."
+  }
+}

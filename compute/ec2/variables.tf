@@ -112,6 +112,17 @@ variable "start_command" {
   default     = null
 }
 
+variable "manual_start_command" {
+  type        = string
+  description = "Long-running foreground application command managed and restarted by supervisord in the manual runtime. Deploy commands prepare each release; this command starts it."
+  default     = null
+
+  validation {
+    condition     = var.runtime != "manual" || (var.manual_start_command != null && length(trimspace(var.manual_start_command)) > 0)
+    error_message = "The manual_start_command must be set when runtime is 'manual'."
+  }
+}
+
 variable "environment_variables" {
   type = list(object({
     name  = string

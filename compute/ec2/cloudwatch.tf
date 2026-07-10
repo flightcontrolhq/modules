@@ -1,9 +1,9 @@
 ################################################################################
 # CloudWatch Log Group
 #
-# App logs from every instance land here: the container runtime uses the
-# Docker awslogs driver and the manual runtime ships the app log file
-# through the CloudWatch agent. Streams are prefixed with the instance ID.
+# App stdout and stderr from every instance land here. Supervisord writes
+# each release to its own file, and the CloudWatch agent publishes it to a
+# stream scoped by deployment ID and instance ID.
 ################################################################################
 
 resource "aws_cloudwatch_log_group" "app" {

@@ -7,12 +7,13 @@
 # current release.
 #
 # Container runtime: the document takes imageUri (the full image URI to
-# run) and encodes the whole in-place deploy.
+# run), installs a supervisord program for it, and encodes the whole
+# in-place deploy.
 #
 # Manual runtime: the document takes commands (the service's deploy
-# command list). Before running them it rebuilds the app env file
-# (plain values and secrets) and exports it into the commands'
-# environment, so deploys always see current configuration.
+# command list). Before running them it stops the prior app and rebuilds
+# the app env file. Afterward it starts the configured long-running app
+# command under supervisord.
 #
 # NAMING CONTRACT: the document name is derived by the platform as
 # "<autoscaling_group_name>-deploy" — both names come from var.name in
@@ -27,7 +28,7 @@ resource "aws_ssm_document" "deploy" {
 
   content = local.container_runtime ? yamlencode({
     schemaVersion = "2.2"
-    description   = "In-place container deploy for the ${var.name} EC2 service."
+    description   = "In-place supervised container deploy for the ${var.name} EC2 service."
 
     parameters = {
       imageUri = {
@@ -55,12 +56,12 @@ resource "aws_ssm_document" "deploy" {
     ]
     }) : yamlencode({
     schemaVersion = "2.2"
-    description   = "Manual deploy for the ${var.name} EC2 service: refreshes and loads the app env file, then runs the service's deploy commands."
+    description   = "Manual deploy for the ${var.name} EC2 service: prepares the release, then runs the app under supervisord."
 
     parameters = {
       commands = {
         type        = "StringList"
-        description = "Deploy commands to run on the instance, in order, with the app env file loaded."
+        description = "Release preparation commands to run on the instance, in order, with the app env file loaded."
       }
       deployId = {
         type           = "String"
@@ -79,6 +80,7 @@ resource "aws_ssm_document" "deploy" {
           runCommand = concat(
             [local.manual_deploy_prelude],
             ["{{ commands }}"],
+            [local.manual_deploy_postlude],
           )
         }
       }

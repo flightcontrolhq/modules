@@ -1,7 +1,7 @@
 #!/bin/bash
-# Bootstrap for ${name} EC2 service instances (${runtime} runtime).
+# Bootstrap for ${name} EC2 service instances.
 # Runs once at launch. Deploys are pushed separately through SSM Run
-# Command, so this script only prepares the host.
+# Command, so this script prepares the host for either deploy mode.
 set -euo pipefail
 
 dnf install -y jq unzip
@@ -39,43 +39,17 @@ mount -a -t efs
 
 mkdir -p "$(dirname ${env_file_path})"
 
-%{ if runtime == "container" ~}
+# Install both runtime prerequisites so deploy mode can change without
+# replacing the instance group. The same idempotent supervisor bootstrap
+# also runs during deploys to upgrade existing instances in place.
 dnf install -y docker
 systemctl enable --now docker
-%{ else ~}
-# Manual runtime: deploys run user-provided commands through SSM Run
-# Command. Write the app env file once at boot so commands and apps can
-# source ${env_file_path}; deploy commands may rewrite it. Prepare the
-# conventional app log path and ship it to CloudWatch so apps that
-# write there show up in the logs UI.
+${supervisor_install_script}
+
+# Initialize the app env file. Deploys refresh it before running either mode.
 ${env_file_script}
 
-mkdir -p "$(dirname ${app_log_path})"
-touch ${app_log_path}
-chmod 666 ${app_log_path}
-
 dnf install -y amazon-cloudwatch-agent
-cat > /opt/aws/amazon-cloudwatch-agent/etc/app-logs.json <<'CWCONFIG'
-{
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "${app_log_path}",
-            "log_group_name": "${log_group_name}",
-            "log_stream_name": "instance/{instance_id}/app",
-            "timezone": "UTC"
-          }
-        ]
-      }
-    }
-  }
-}
-CWCONFIG
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s \
-  -c file:/opt/aws/amazon-cloudwatch-agent/etc/app-logs.json
-%{ endif ~}
 
 %{ if additional_user_data != "" ~}
 # Additional user data

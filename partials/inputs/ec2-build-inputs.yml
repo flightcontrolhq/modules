@@ -3,46 +3,44 @@
   show_when:
     deploy_type: container
   type: section
-- id: build_type
-  label: Build type
+- id: build_source
+  label: Build source
   type: string
+  description: Build a container image from source with Dockerfile or Railpack, or deploy an existing image from a configured registry repository.
   required: true
   show_when:
     deploy_type: container
   default: dockerfile
   values:
-    - description: Bring your own Dockerfile
+    - description: Build an image from a Dockerfile in the selected Git repository.
       label: Dockerfile
       value: dockerfile
-    - description: Automatically build an image based on your code and config
-      label: Nixpacks
-      value: nixpacks
+    - description: Let Railpack detect the application and build a container image from source.
+      label: Railpack
+      value: railpack
     - description: Deploy an image from a registry configured on this module. Provide only the tag or digest at deploy time.
-      label: Prebuilt image from registry
-      value: prebuilt_image
-    - description: Skip the build step. Provide a full image URI at deploy time.
-      label: Disabled
-      value: disabled
+      label: Pull from image registry
+      value: image_registry
 - $template: ./build-git-source.yml
   with:
     show_when:
       deploy_type: container
-      build_type:
-        - nixpacks
+      build_source:
         - dockerfile
+        - railpack
 - id: image_repository
   label: Image repository
   type: string
-  description: Image repository without a tag or digest, such as `nginx`, `ghcr.io/org/app`, or `123456789012.dkr.ecr.us-east-1.amazonaws.com/app`. Private registries that require login are not supported; use a public image or same-account ECR.
+  description: Repository without a tag or digest, such as `nginx` or `123456789012.dkr.ecr.us-east-1.amazonaws.com/app`. Registries requiring Docker credentials are unsupported. Same-region private ECR also needs a repository policy that lets the service instance role pull images.
   placeholder: nginx
   required: true
   show_when:
     deploy_type: container
-    build_type: prebuilt_image
+    build_source: image_registry
 - id: container_start_command
   label: Start command override
   type: string
-  description: Optional command that overrides the image default command.
+  description: Optional command string that overrides the image CMD. The image ENTRYPOINT is preserved.
   collapsible: true
   required: false
   show_when:
@@ -51,21 +49,17 @@
   with:
     show_when:
       deploy_type: container
-      build_type: dockerfile
-- $template: ./nixpacks-basic.yml
+      build_source: dockerfile
+- $template: ./railpack.yml
   with:
     show_when:
       deploy_type: container
-      build_type: nixpacks
-- id: nixpacks_start_cmd
-  label: Nixpacks start command
+      build_source: railpack
+- id: railpack_start_cmd
+  label: Start command
   type: string
-  placeholder: Intelligent default based on your language & framework
+  description: Optional start command embedded in the Railpack-built image. Leave blank to use Railpack detection.
+  placeholder: Railpack default
   show_when:
     deploy_type: container
-    build_type: nixpacks
-- $template: ./nixpacks-advanced.yml
-  with:
-    show_when:
-      deploy_type: container
-      build_type: nixpacks
+    build_source: railpack

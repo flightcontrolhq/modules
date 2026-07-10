@@ -1,16 +1,17 @@
 definition:
   type: rvn-ec2
   name: EC2 Service
-  description: Stable EC2 instance group running an app behind an optional shared Application Load Balancer, with in-place container deploys or manual command-based deploys.
+  description: Runs one supervised application on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
   version: 0.0.1
-  description: Initial module definition.
+  description: Add an EC2 service with switchable deploy modes, supervised apps, shared image builds, and deployment-scoped logs.
 module:
   inputs:
     - id: network
       immutable: true
       label: VPC network
       type: $ref:rvn-aws-network
+      description: Existing Ravion network that supplies the AWS account, region, VPC, and public and private subnets for the instances.
       mapped_inputs:
         - $template: ../../partials/templates/network-ref-mapped-inputs.yml
           with:
@@ -35,32 +36,39 @@ module:
         - message: 1-28 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
           pattern: ^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$
     - id: deploy_type
-      immutable: true
       label: Deploy type
       type: string
-      description: How the app runs on the instances. This cannot change after creation because instances are bootstrapped for one deploy type.
+      description: Choose in-place container image deploys or host-level shell commands. Instances support both modes, so this can change after creation.
       required: true
       default: container
       values:
         - label: Container
-          description: Instances run Docker; each deploy pulls an image and swaps the running container in place.
+          description: Pull an image and replace the supervised Docker container on each existing instance.
           value: container
         - label: Manual
-          description: Each deploy runs your list of deploy commands on every instance through SSM Run Command.
+          description: Run release preparation commands on each instance, then start a supervised foreground command on the host.
           value: manual
     - id: deploy_commands
       label: Deploy commands
       type: string_array
-      description: Shell commands run in order on every instance by each deploy, via SSM Run Command as root. The deploy fails on an instance when a command exits non-zero.
+      description: Release preparation commands run as root, in order, on every instance during each manual deploy. Keep them idempotent; any command that exits non-zero fails that instance's deploy.
       add_button_label: Add command
-      placeholder: systemctl restart my-app
+      placeholder: cd /srv/app && git pull
+      required: true
+      show_when:
+        deploy_type: manual
+    - id: manual_start_command
+      label: Manual start command
+      type: string
+      description: Long-running foreground app command that supervisord runs as root after preparation and restarts if it exits. Use a wrapper to drop privileges when needed; the command must not daemonize.
+      placeholder: cd /srv/app && ./bin/server
       required: true
       show_when:
         deploy_type: manual
     - id: private_subnet_placement_enabled
       label: Run in private subnets
       type: boolean
-      description: Recommended. Requires a NAT gateway or equivalent for internet access. Turn off to run in public subnets with public IPs.
+      description: Recommended for production. Private instances need NAT or equivalent outbound access for bootstrap, SSM, logs, and image pulls. Turn off to use public subnets and public IPs.
       default: true
     - id: section_instances
       label: Instances
@@ -69,7 +77,7 @@ module:
     - id: instance_type
       label: Instance type
       type: string
-      description: EC2 instance type for the group. The default Amazon Linux 2023 image matches the instance type's CPU architecture automatically; the app build must match it too.
+      description: EC2 instance type for every host in the group. The default Amazon Linux 2023 AMI follows the selected CPU architecture; supplied or built container images must support the same architecture.
       required: true
       no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
       values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
@@ -95,6 +103,7 @@ module:
     - id: cpu_target_value
       label: CPU target (%)
       type: number
+      description: Average EC2 CPU utilization that target-tracking autoscaling tries to maintain.
       max: 100
       min: 1
       show_when:
@@ -111,14 +120,14 @@ module:
     - id: key_name
       label: SSH key pair name
       type: string
-      description: Key pair for SSH access. Session Manager shell access works without one.
+      description: Optional EC2 key pair for SSH access. Session Manager works without a key when the instance can reach SSM.
       collapsible: true
       placeholder: my-key-pair
       required: false
     - id: ami_id
       label: Custom AMI ID
       type: string
-      description: Custom AMI for the instances. Leave blank to use the latest Amazon Linux 2023 image. Custom AMIs must run cloud-init and include the SSM agent.
+      description: Custom AMI for new instances. Leave blank for the latest architecture-matched Amazon Linux 2023 AMI. Custom images must be AL2023-compatible and include cloud-init, systemd, dnf, AWS CLI, curl, and the SSM agent.
       collapsible: true
       placeholder: ami-...
       required: false
@@ -133,7 +142,7 @@ module:
     - id: additional_user_data
       label: Additional user data
       type: text
-      description: Additional shell script appended to the instance bootstrap.
+      description: Shell script run as root after Ravion's bootstrap on every newly launched instance. Changes apply only to future instances unless you recycle the existing ones.
       collapsible: true
       placeholder: "#!/bin/bash"
       required: false
@@ -177,7 +186,7 @@ module:
       immutable: true
       label: App port
       type: number
-      description: Port the app listens on. PORT is set automatically from this value.
+      description: Port the host application listens on. Container mode publishes the same container port, and PORT is set automatically.
       max: 65535
       min: 1
       required: true
@@ -221,7 +230,7 @@ module:
     - id: health_check_path
       label: Health check path
       type: string
-      description: HTTP path used by the load balancer health check and by the deploy health gate on each instance. Use a lightweight endpoint that does not require authentication.
+      description: HTTP path used by the load balancer health check and by the Container-mode deploy gate on each instance. Use a lightweight endpoint that does not require authentication.
       required: true
       show_when:
         web_service_enabled: true
@@ -229,7 +238,7 @@ module:
     - id: health_check_matcher
       label: Success codes
       type: string
-      description: HTTP status code matcher for successful health checks.
+      description: HTTP status codes the ALB treats as healthy, such as 200-399. The local deploy gate separately requires a response below 400.
       collapsible: true
       placeholder: 200-399
       required: true
@@ -239,6 +248,7 @@ module:
     - id: health_check_interval
       label: Interval (secs)
       type: number
+      description: Seconds between Application Load Balancer health checks.
       collapsible: true
       max: 300
       min: 5
@@ -248,7 +258,7 @@ module:
     - id: health_check_timeout
       label: Timeout (secs)
       type: number
-      description: Seconds to wait for the health-check response. Must be lower than the interval.
+      description: Seconds the Application Load Balancer waits for a health-check response. Must be lower than the interval.
       collapsible: true
       max: 120
       min: 2
@@ -258,6 +268,7 @@ module:
     - id: healthy_threshold
       label: Healthy threshold
       type: number
+      description: Consecutive successful ALB checks required before an instance is healthy.
       collapsible: true
       max: 10
       min: 2
@@ -267,6 +278,7 @@ module:
     - id: unhealthy_threshold
       label: Unhealthy threshold
       type: number
+      description: Consecutive failed ALB checks required before an instance is unhealthy.
       collapsible: true
       max: 10
       min: 2
@@ -276,7 +288,7 @@ module:
     - id: deregistration_delay
       label: Deregistration delay (secs)
       type: number
-      description: Seconds the load balancer drains in-flight requests from an instance before each in-place swap. Lower values speed up deploys.
+      description: Seconds allowed for in-flight requests to drain before a Container-mode in-place swap. Draining is skipped when the instance is the target group's only registered target.
       collapsible: true
       max: 3600
       min: 0
@@ -294,6 +306,7 @@ module:
     - id: target_group_stickiness_cookie_duration
       label: Stickiness cookie duration (secs)
       type: number
+      description: How long the load balancer cookie keeps a client routed to the same instance.
       collapsible: true
       max: 604800
       min: 1
@@ -304,19 +317,29 @@ module:
     - id: section_app_config
       label: Environment variables
       type: section
-    - $include: ../../partials/inputs/build-environment-variables.yml
-    - $include: ../../partials/inputs/dockerfile-env-injection.yml
+    - $merge:
+        - ../../partials/inputs/build-environment-variables.yml
+      show_when:
+        deploy_type: container
+        build_source:
+          - dockerfile
+          - railpack
+    - $merge:
+        - ../../partials/inputs/dockerfile-env-injection.yml
+      show_when:
+        deploy_type: container
+        build_source: dockerfile
     - id: environment_variables
       label: Runtime environment variables
       type: array
-      description: Environment variables written to the app environment file on each instance on every deploy (and at instance boot for manual services). PORT is added automatically for web services.
+      description: Plain, single-line environment variables written to each instance at boot and refreshed on every deploy. PORT is added automatically for web services.
       placeholder: |-
         - name: NODE_ENV
           value: production
     - id: secrets
       label: Runtime secrets
       type: array
-      description: Secret environment variables as an array of {name, value_from} objects. value_from is a Secrets Manager secret ARN, an SSM parameter ARN, or an SSM parameter name; values are fetched on the instance and appended to the app environment file, so they never appear in Terraform state.
+      description: Secret environment variables as {name, value_from} objects. Use a same-account Secrets Manager ARN, SSM parameter ARN, or SSM parameter name. Values are fetched on each instance and stay out of Terraform state; multi-line values are unsupported.
       placeholder: |-
         - name: DATABASE_URL
           value_from: arn:aws:ssm:us-east-1:123456789012:parameter/my-secret
@@ -327,6 +350,7 @@ module:
     - id: root_volume_size
       label: Root volume size (GB)
       type: number
+      description: Encrypted gp3 root volume size for each instance. It survives in-place deploys but is deleted with the instance.
       collapsible: true
       max: 16384
       min: 8
@@ -334,11 +358,12 @@ module:
     - id: data_volume_enabled
       label: Data volume
       type: boolean
-      description: Attach a dedicated EBS data volume to each instance, formatted and mounted at boot. Container apps see it at the same path.
+      description: Attach an independent encrypted gp3 EBS volume to each instance and mount it on the host. Container mode bind-mounts the same path. The volume is deleted with the instance and is not shared.
       default: false
     - id: data_volume_size
       label: Data volume size (GB)
       type: number
+      description: Size of the dedicated EBS data volume attached to each instance.
       max: 16384
       min: 1
       show_when:
@@ -347,6 +372,7 @@ module:
     - id: data_volume_mount_path
       label: Data volume mount path
       type: string
+      description: Absolute host path for the data volume. Container deploys bind-mount the same path into the app container.
       required: true
       show_when:
         data_volume_enabled: true
@@ -362,6 +388,7 @@ module:
     - id: efs
       label: EFS file system
       type: $ref:rvn-efs
+      description: Existing Ravion EFS module to mount on every instance for shared storage that survives instance replacement.
       mapped_inputs:
         - default: <<ref.stack.output.file_system_id>>
           id: efs_file_system_id
@@ -393,6 +420,12 @@ module:
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
+        show_when:
+          deploy_type: container
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - $include: ../../partials/inputs/misc-section.yml
     - id: log_retention_in_days
       label: Log retention (days)
@@ -404,20 +437,21 @@ module:
     - id: deploy_timeout_seconds
       label: Per-instance deploy timeout (secs)
       type: number
-      description: Timeout for the container deploy script on each instance.
+      description: Maximum time allowed for the SSM deploy script on each instance, for both container and manual deploys.
       collapsible: true
       max: 14400
       min: 60
-      show_when:
-        deploy_type: container
       default: 1200
     - id: ecr_force_deletion_enabled
       label: Force delete image repository
       type: boolean
-      description: Allow the ECR repository to be deleted even when it contains images. Use with care.
+      description: Allow the Ravion-created ECR repository for Dockerfile or Railpack builds to be deleted while it still contains images. Use with care.
       collapsible: true
       show_when:
         deploy_type: container
+        build_source:
+          - dockerfile
+          - railpack
       default: false
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
@@ -439,7 +473,7 @@ module:
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
         desired_capacity: '<< module.input.cpu_target_tracking_enabled ? nil : (module.input.desired_capacity || nil) >>'
         ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
-        ecr_repository_creation_enabled: '<< module.input.deploy_type == "container" && (module.input.build_type == "nixpacks" || module.input.build_type == "dockerfile") >>'
+        ecr_repository_creation_enabled: '<< module.input.build_source == "dockerfile" || module.input.build_source == "railpack" >>'
         efs_access_point_id: '<< module.input.efs_enabled ? (module.input.efs_access_point_id || nil) : nil >>'
         efs_client_security_group_id: '<< module.input.efs_enabled ? module.input.efs_client_security_group_id : nil >>'
         efs_enabled: << module.input.efs_enabled >>
@@ -483,6 +517,7 @@ module:
           } : nil >>
         load_balancer_security_group_id: '<< module.input.web_service_enabled ? module.input.alb_security_group_id : nil >>'
         log_retention_in_days: << module.input.log_retention_in_days >>
+        manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.manual_start_command : nil >>'
         max_size: << module.input.max_size >>
         min_size: << module.input.min_size >>
         name: << module.input.name >>
@@ -497,33 +532,8 @@ module:
           $include: ../../partials/stack/ravion-tags.yml
         vpc_id: << module.input.vpc_id >>
   build:
-    type: >-
-      << module.input.deploy_type == "container" && (module.input.build_type == "nixpacks" ||
-      module.input.build_type == "dockerfile") ? "image" : "disabled" >>
-    timeout: 1800
-    inputs:
-      - $include: ../../partials/inputs/build-inputs.yml
-    source:
-      $include: ../../partials/build/git-source.yml
-    builder: >-
-      << module.input.deploy_type == "container" && module.input.build_type == "dockerfile" ? {type:
-      "dockerfile", dockerfile: module.input.dockerfile || "Dockerfile", context:
-      module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
-      module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} :
-      module.input.deploy_type == "container" && module.input.build_type == "nixpacks" ? {type: "nixpacks",
-      install_cmd: module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd,
-      start_cmd: module.input.nixpacks_start_cmd, config_file_path:
-      module.input.nixpacks_config_file_path, build_path: module.input.nixpacks_build_path,
-      nixpacks_version: module.input.nixpacks_version, nix_pkgs: module.input.nixpacks_nix_pkgs,
-      apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs: module.input.nixpacks_nix_libs, cache_from:
-      {tag: "nixpacks"}} : {type: "disabled"} >>
-    environment_variables: << module.input.build_environment_variables >>
-    destinations: >-
-      << module.input.deploy_type == "container" ? [{id: "ecr", type: "ecr", repository_arn:
-      stack.output.ecr_repository_arn, tags: [pipeline.run.id + "-" + module.input.build_type,
-      module.input.build_type]}] : [] >>
-    infrastructure:
-      $include: ../../partials/build/infrastructure.yml
+    $merge: ../../partials/build/ecs-service-image-build.yml
+    type: '<< module.input.deploy_type == "manual" || module.input.build_source == "image_registry" ? "disabled" : "image" >>'
   deploy:
     type: aws:ec2
     concurrency:
@@ -534,8 +544,8 @@ module:
       - id: image_ref
         label: Image tag or digest
         type: string
-        description: Image tag or digest to deploy. For Nixpacks or Dockerfile builds, this is resolved in the Ravion-created ECR repository. For Prebuilt image from registry mode, this is resolved in the repository configured on the module. For disabled builds, pass a full image URI.
-        placeholder: sha256:... or latest or <run-id>-nixpacks
+        description: Image tag or digest to deploy. For Dockerfile or Railpack builds, this is resolved in the Ravion-created ECR repository. For Pull from image registry mode, this is resolved in the repository configured on the module.
+        placeholder: sha256:... or latest or <run-id>-railpack
         required: true
         show_when:
           deploy_type: container
@@ -547,6 +557,7 @@ module:
       aws_account_id: << module.input.aws_account_id >>
       ecr_repository_url: << stack.output.ecr_repository_url >>
       image_repository: << module.input.image_repository || nil >>
+      log_group_name: << stack.output.log_group_name >>
       region: << stack.output.region >>
       target_group_arn: << stack.output.target_group_arn >>
   ui:
@@ -645,68 +656,122 @@ module:
           region: << stack.output.region >>
           statistic: Average
   readme: |
-    Stable EC2 instance group running an app behind an optional shared Application Load Balancer, with in-place container deploys or manual command-based deploys.
+    Runs one supervised application on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 
     ## Overview
 
-    The EC2 Service module runs an app on a group of EC2 instances managed by an Auto Scaling Group. Unlike container platforms that replace tasks on every release, deploys here are **in place**: the app is updated on the existing instances, which are never replaced by deploys, so instance storage survives every release. Container deploys drain each instance from the load balancer, swap the running container, verify health, and re-register it. Manual deploys run your own list of shell commands on every instance.
+    The EC2 Service module runs one supervisord-managed application on an EC2 Auto Scaling Group. Deploys update the existing hosts in place instead of creating a new task or instance for every release. Container mode replaces a Docker container on each host; Manual mode runs host-level preparation commands and then starts a foreground command. You can switch modes without replacing the group.
 
-    Select a VPC network, choose the deploy type, and Ravion provisions the launch template, Auto Scaling Group, instance IAM role and security group, log shipping, and (for the container deploy type) the SSM deploy document and ECR repository for builds. Attach a shared Application Load Balancer for web traffic, or turn the web service off for a worker group.
+    Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule on a shared Application Load Balancer. The Auto Scaling Group can still terminate instances because of scaling, health failures, or operator action. Root and data EBS volumes survive releases, but not instance termination.
 
     Terraform source: [flightcontrolhq/modules/compute/ec2](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ec2)
 
     ## Use cases
 
-    | Scenario | EC2 Service helps by... |
-    | --- | --- |
-    | Apps that need stable local state | Keeping instances and their EBS volumes across deploys |
-    | Long-lived connections or agents | Swapping the app in place instead of replacing hosts |
-    | Containers without an orchestrator | Running one Docker container per instance group |
-    | Non-container apps | Running your own deploy commands on every instance |
-    | Background workers | Running an instance group with no load balancer |
-    | Sharing one load balancer | Attaching listener rules to a shared ALB module |
+    | Scenario | Why this module fits | Example |
+    | --- | --- | --- |
+    | Existing host-installed application | Manual deploys can update files and dependencies directly on every host | A legacy Node, Ruby, or JVM service that is not packaged as a container |
+    | Host customization is part of the workload | A custom AMI and Additional user data can install agents, libraries, or host services | A vendor runtime that needs an OS package or host monitoring agent |
+    | Disposable per-host state should survive releases | In-place deploys retain each instance's encrypted root and optional data volume | Model files, build artifacts, or a rebuildable local cache |
+    | One container needs a stable host | Container mode replaces the app container without replacing the EC2 instance | A licensed service tied to host identity, when its license permits scaling |
+    | Background processing without HTTP routing | Web service can be disabled, leaving a supervised worker group | A queue consumer that specifically needs host access or local cache |
+    | Several services share one ALB | Each service owns a target group and host/path listener rule | `api.example.com` and `admin.example.com` on one shared ALB |
+
+    Do not treat per-instance EBS as durable application storage. Use EFS for shared files that must survive instance replacement, and use a managed database for relational or transactional data.
+
+    ## EC2 Service or ECS?
+
+    For a normal stateless containerized web service or worker, prefer an ECS Web Service, ECS Worker Service, or ECS Network Service. ECS gives you immutable task revisions, scheduler-managed replacement, sidecars, Fargate or shared EC2 capacity, and rolling or traffic-shift deployment strategies.
+
+    Choose EC2 Service only when a concrete host-level requirement outweighs those ECS benefits:
+
+    | Decision | EC2 Service | ECS deployment |
+    | --- | --- | --- |
+    | Release model | Updates the app on existing hosts through SSM | Starts new task revisions and replaces old tasks |
+    | Packaging | Container image or host-level manual commands | Container image |
+    | Host access | Direct instance access, custom AMI, and bootstrap script | Tasks are the deployment unit; hosts are abstracted or cluster-managed |
+    | Process model | One supervised app per instance group | App container plus optional sidecars and release tasks |
+    | Capacity | Dedicated Auto Scaling Group for this app | Fargate, Fargate Spot, or shared/dedicated ECS EC2 capacity |
+    | Local storage | EBS survives deploys but is lost with an instance | Task-local storage is ephemeral; EFS can survive task replacement |
+    | Deployment safety | Sequential in-place updates; a one-instance service has an interruption | Rolling, blue/green, linear, or canary options, depending on the ECS module |
+
+    Selecting EC2 capacity for an ECS service does not make it equivalent to this module. ECS on EC2 still deploys replaceable tasks through the ECS scheduler. This module deploys directly to stable hosts and gives the application the whole instance.
 
     ## Deploy types
 
-    | Deploy type | Build output | On each instance |
+    | Deploy type | Build behavior | On each instance |
     | --- | --- | --- |
-    | Container | Image in ECR (or a prebuilt registry image) | Docker pulls the image and swaps the running container |
-    | Manual | None (builds are disabled) | The deploy runs your Deploy commands, in order, via SSM Run Command |
+    | Container | Dockerfile, Railpack, or image registry | Pull the selected image, replace the app container, and run it under supervisord |
+    | Manual | Build disabled | Run Deploy commands as root on every host, then run Manual start command under supervisord |
 
-    The deploy type is immutable: instances are bootstrapped for one deploy type at launch.
+    Instances are prepared for both modes at launch. Supervisord owns the long-running process and restarts it after an unexpected exit. In Container mode, Start command override replaces the image CMD but preserves its ENTRYPOINT. In Manual mode, the start command must remain in the foreground and should explicitly drop root privileges when the app should run as another user.
 
-    For the manual deploy type, provide Deploy commands such as `cd /srv/app && git pull` and `systemctl restart my-app`. They run as root on each instance and the deploy fails on an instance when a command exits non-zero. For the container deploy type, an optional start command overrides the image default command.
+    ## Build sources
+
+    | Build source | Build output | Deploy input |
+    | --- | --- | --- |
+    | Dockerfile | Build from the selected Git repository and push to the service ECR repository | Image tag or digest |
+    | Railpack | Detect and build the app from the selected Git repository, then push to service ECR | Image tag or digest |
+    | Pull from image registry | Skip the build and use Image repository from the module | Tag or digest within that repository |
+
+    Build settings apply only to Container mode. Manual mode disables the build pipeline. Registry username/password credentials are not supported. Public images work directly; same-region private ECR requires repository permissions for the generated `<service-name>-instance` role.
+
+    ## Worked examples
+
+    ### Host-installed application
+
+    Use Manual mode when the release genuinely needs to update the host rather than replace a container. For example, bootstrap an `app` user and an initial checkout with Additional user data, then configure:
+
+    ```text
+    Deploy type: Manual
+    Deploy commands:
+      runuser -u app -- git -C /srv/orders pull --ff-only
+      runuser -u app -- bash -c 'cd /srv/orders && ./bin/install-dependencies'
+      runuser -u app -- bash -c 'cd /srv/orders && ./bin/build-assets'
+    Manual start command:
+      exec runuser -u app -- /srv/orders/bin/server
+    ```
+
+    Every Deploy command runs on every instance, so keep commands repeatable and do not put a cluster-wide one-time migration in this list. Manual releases follow whatever source or artifact selection your commands implement. Use Container mode for digest-addressed image releases; use ECS when you need scheduler-managed rollback or traffic shifting.
+
+    ### Container that needs host customization
+
+    Choose Container mode with a custom AMI or Additional user data when the app is containerized but also needs host software that ECS does not model for the service. A typical web configuration uses at least two instances, App port `3000`, Health check path `/health`, and host or path rules on a shared ALB. Use Dockerfile or Railpack for Ravion builds, or Pull from image registry when an external pipeline already publishes the image.
+
+    If the requirement is only "run my container," use ECS instead. The EC2 choice should come from a real host dependency, stable-host requirement, or manual operational constraint.
+
+    ### Worker with a rebuildable local cache
+
+    Turn Web service off, keep Container mode, and enable a Data volume mounted at a path such as `/var/cache/app`. This is appropriate when the worker can recreate the cache after an instance is replaced. It is not appropriate for the only copy of jobs, uploads, or database data.
 
     ## Load balancing and worker mode
 
-    With Web service enabled, the service references a shared [Application Load Balancer module](#) and creates its own target group and listener rules on the ALB listener (HTTPS when available, otherwise HTTP). Route traffic with Domain host rules, Path rules, or both; when both are empty, the service routes all paths with /*.
+    With Web service enabled, select a shared Ravion Application Load Balancer. The service creates an HTTP instance target group and a listener rule on the ALB's HTTPS listener when available, otherwise its HTTP listener. Route traffic with Domain host rules, Path rules, or both; when both are empty, the rule matches `/*`.
 
     Several EC2 services (and other services) can attach to the same load balancer with different host or path rules.
 
-    Turn Web service off for worker groups. No target group or listener rules are created and deploys skip the drain step.
+    Turn Web service off for worker groups. No target group, listener rule, ALB health check, or local HTTP deploy gate is configured.
 
     ## Deploys
 
     Container deploys run through an SSM command document created by the module. On each instance, the deploy:
 
-    1. Rebuilds the app environment file from the configured environment variables and secrets (secret values are fetched from Secrets Manager / SSM Parameter Store on the instance).
-    2. Drains the instance from the target group (web services).
-    3. Pulls the new image and swaps the running container.
-    4. Polls the local health check path until healthy, failing the deploy on that instance otherwise.
-    5. Re-registers the instance and waits until it is in service.
+    1. Rebuilds the app environment file and fetches configured secret values on the instance.
+    2. Pulls the selected image before interrupting the running app.
+    3. For a web service with another registered target, deregisters and drains this instance.
+    4. Stops the prior process, replaces the app container, and starts it under supervisord.
+    5. Polls the local health path for an HTTP response below 400, failing that instance's deploy otherwise.
+    6. Re-registers a drained instance and waits for the ALB to mark it in service.
 
-    Manual deploys run the module's Deploy commands on each instance through the same document: it refreshes the app environment file (including secrets) and loads it into the commands' environment first, and any failing command fails the deploy on that instance. Draining, health checking, and anything else the deploy needs are up to your commands.
+    A web service with only one registered target skips draining because there is nowhere to move traffic; replacing its process still causes an interruption. Use at least two instances when availability during container deploys matters.
 
-    The deploy-time input depends on the build mode:
+    Manual deploys refresh and load the app environment file, stop the prior app, and run Deploy commands as root in order on every instance. Any non-zero exit fails that instance and leaves its prior app stopped. Supervisord starts Manual start command only after all preparation commands succeed. Manual mode does not automatically drain the ALB or run a health gate; implement those behaviors in your commands if required.
 
-    | Build mode | Deploy input |
-    | --- | --- |
-    | Nixpacks or Dockerfile (container) | Image tag or digest in the service ECR repository |
-    | Prebuilt image from registry | Tag for the configured repository |
-    | Disabled (container) | Full image URI |
-    | Manual | None; deploys re-run the configured Deploy commands |
+    The EC2 deploy manager also runs the current release document against instances launched by autoscaling or replacement so they catch up to the active release.
 
-    Instances launched by autoscaling or replacement receive the current release automatically.
+    ## Logs
+
+    App stdout and stderr from the supervised process are sent to `/ravion/ec2/<service-name>` in CloudWatch Logs. Every deployment and instance has a distinct stream named `deployment/<deployment-id>/instance/<instance-id>`. SSM preparation and deploy-script output appears with the deployment command rather than in this app stream.
 
     ## Stable storage
 
@@ -716,60 +781,114 @@ module:
     | Data volume | Yes | No |
     | EFS file system | Yes | Yes |
 
-    Enable the Data volume for fast per-instance state such as caches or embedded databases; it is formatted and mounted at first boot. Enable the EFS file system and select a Ravion EFS module for shared storage that outlives instances; the service attaches the file system's client security group automatically. For the container runtime, both paths are bind-mounted into the app container at the same location.
+    Root and Data volumes are encrypted gp3 EBS volumes with delete-on-termination enabled. Use the Data volume only for independent, rebuildable per-host files such as caches, model downloads, or generated artifacts. Do not use it for the only copy of a database, upload, or job.
+
+    Enable EFS and select a Ravion EFS module for shared files that must outlive instances. The service mounts the file system through its access point when present and attaches the EFS client security group to each instance. Container mode bind-mounts the Data and EFS host paths into the app container at the same paths.
 
     ## Scaling and instance health
 
-    Min and Max instances bound the group. Enable CPU autoscaling to scale on average CPU utilization, or leave it off and set Desired instances for a fixed fleet.
+    Min instances and Max instances bound the group. Enable CPU autoscaling to target average EC2 CPU utilization. When autoscaling is off, Desired instances sets a fixed target; leaving it blank preserves the group's current desired size during stack updates.
 
     The Auto Scaling Group replaces instances that fail EC2 health checks. Load-balancer-based instance replacement is intentionally off by default because in-place deploys briefly deregister instances; override with Advanced Terraform variables (`health_check_type`) if you prefer it.
 
-    Launch template changes such as a new AMI or bootstrap change apply to newly launched instances only. Existing instances are never replaced automatically; recycle them manually when needed.
+    Launch template changes such as a new AMI, instance type, volume setting, or Additional user data apply to newly launched instances only. The module does not perform an instance refresh, so recycle existing instances deliberately when a host-level change must roll out.
 
     ## Application configuration
 
-    Runtime environment variables are rendered into the app environment file on each instance on every deploy, whichever the deploy type — manual deploys additionally run with the file loaded into their environment. Changing them is a Terraform update followed by a deploy.
+    Runtime environment variables must be single-line values. They are rendered into the app environment file at instance boot and on every deploy. Container mode passes the file to Docker; Manual mode loads it before Deploy commands and Manual start command. A configuration change requires a stack update and then a deploy to restart the app with the new values.
 
-    Runtime secrets follow the same lifecycle, but only the reference (a Secrets Manager secret ARN, an SSM parameter ARN, or an SSM parameter name) is configured; each instance fetches the value itself when the environment file is built, so secret values never appear in Terraform state or the deploy document. Rotating a secret's value takes effect on the next deploy with no Terraform change. Multi-line secret values are not supported.
+    Runtime secrets use same-account Secrets Manager or SSM Parameter Store references. Each instance fetches values while rebuilding its environment file, so the values do not enter Terraform state or the SSM document. A rotated value takes effect on the next deploy without a stack change. Multi-line secret values are unsupported.
 
-    Build environment variables apply to Nixpacks and Dockerfile builds; for Dockerfile builds, optionally inject them as build arguments.
+    Build environment variables apply to Railpack and Dockerfile builds; for Dockerfile builds, optionally inject them as build arguments.
 
     ## Configuration
 
+    ### Service and instances
+
     | Field | Required | Default | Description |
     | --- | --- | --- | --- |
-    | VPC network | Yes | - | Existing rvn-aws-network module instance |
+    | VPC network | Yes | - | Existing network supplying account, region, VPC, and subnets |
     | Service name | Yes | {project}-{env}-{module} | Name for the instance group and related resources |
-    | Deploy type | Yes | container | Container or Manual; immutable |
-    | Run in private subnets | No | true | Instances in private subnets without public IPs |
-    | Instance type | Yes | - | EC2 instance type for the group |
-    | Min / Max instances | Yes | 1 / 3 | Group size bounds |
-    | CPU autoscaling | No | false | Target-tracking scaling on average CPU |
-    | Desired instances | No | - | Fixed size when autoscaling is off |
-    | Build type | Yes* | dockerfile | Container only: Dockerfile, Nixpacks, Prebuilt image, or Disabled |
-    | Deploy commands | Yes* | - | Commands each manual deploy runs on every instance |
-    | Web service | No | true | Attach to a shared ALB; off for workers |
-    | Application Load Balancer | Yes* | - | Existing rvn-aws-alb module instance |
-    | App port | Yes* | 80 | Port the app listens on; PORT is set automatically |
-    | Domain host / path rules | No | /* | Listener rule routing conditions |
-    | Health check path | Yes* | / | ALB health check and deploy health gate |
-    | Root volume size (GB) | No | 30 | Per-instance root EBS volume |
-    | Data volume | No | false | Per-instance data EBS volume |
-    | EFS file system | No | false | Shared EFS mount on every instance |
-    | Log retention (days) | No | 30 | CloudWatch retention for app logs |
-    | Tags | No | Standard Ravion tags | Additional tags applied to resources |
-    | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
-    | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
-    | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
+    | Deploy type | Yes | container | Switchable Container or Manual in-place deployment |
+    | Deploy commands | Yes* | - | Root-level, per-instance preparation commands for Manual mode |
+    | Manual start command | Yes* | - | Foreground Manual-mode process managed by supervisord |
+    | Run in private subnets | No | true | Use private subnets without public IPs; outbound access is still required |
+    | Instance type | Yes | - | EC2 type used for every instance; architecture must match the app |
+    | Min instances / Max instances | Yes | 1 / 3 | Auto Scaling Group capacity bounds |
+    | CPU autoscaling | No | false | Target-tracking scaling on average EC2 CPU utilization |
+    | CPU target (%) | No | 70 | CPU target used when autoscaling is enabled |
+    | Desired instances | No | - | Fixed target when CPU autoscaling is off; blank preserves current size |
+    | SSH key pair name | No | - | Optional SSH key; Session Manager does not require one |
+    | Custom AMI ID | No | Latest AL2023 | AMI for future instances; must support the module bootstrap |
+    | Additional security groups | No | [] | Extra security groups attached to every instance |
+    | Additional user data | No | - | Root shell script run after Ravion bootstrap on future instances |
 
-    *Conditionally required based on the selected deploy type, build type, or web service setting.
+    ### Container builds
+
+    | Field | Required | Default | Description |
+    | --- | --- | --- | --- |
+    | Build source | Yes* | dockerfile | Dockerfile, Railpack, or Pull from image registry in Container mode |
+    | Git repository | Yes* | - | Source repository for Dockerfile and Railpack builds |
+    | Source base path | No | . | Repository-relative application and build root |
+    | Dockerfile path / build context | No | Dockerfile / . | Dockerfile build locations relative to the source root |
+    | Railpack version | No | Ravion default | Optional Railpack version override |
+    | Railpack install / build / start commands | No | Detected | Optional Railpack command overrides |
+    | Image repository | Yes* | - | Repository without tag or digest for registry deployments |
+    | Start command override | No | Image CMD | Container command override; preserves image ENTRYPOINT |
+    | Build environment variables | No | {} | Values and secret references available only during image builds |
+    | Inject environment variables in Dockerfile | No | false | Pass build environment values as Docker build arguments |
+    | Builder instance type / size | Yes* | ec2 / c7a.4xlarge | On-demand or Spot build runner and its EC2 size |
+
+    Git branch and Git ref are optional inputs on each build run. They default to the repository's default branch and its current head.
+
+    ### Web routing and health
+
+    | Field | Required | Default | Description |
+    | --- | --- | --- | --- |
+    | Web service | No | true | Attach HTTP routing to a shared ALB; disable for workers |
+    | Application Load Balancer | Yes* | - | Existing Ravion ALB receiving this service's listener rule |
+    | App port | Yes* | 80 | Host app port; Container mode maps the same container port and sets PORT |
+    | Domain host rules / Path rules | No | empty / empty | Listener conditions; both empty produces `/*` |
+    | Listener rule priority | No | AWS assigned | Optional explicit ALB rule order |
+    | Health check path | Yes* | / | Path used by the ALB and local container deploy gate |
+    | Success codes | Yes* | 200-399 | ALB health matcher; local deploys separately require a status below 400 |
+    | Interval / Timeout (secs) | No | 10 / 5 | ALB health-check timing |
+    | Healthy / Unhealthy threshold | No | 2 / 2 | Consecutive ALB checks needed to change health state |
+    | Deregistration delay (secs) | No | 30 | Drain time when another target can serve traffic |
+    | Sticky sessions | No | false | Keep repeat clients on one instance with an ALB cookie |
+    | Stickiness cookie duration (secs) | No | 86400 | Cookie lifetime when stickiness is enabled |
+
+    ### Application data and operations
+
+    | Field | Required | Default | Description |
+    | --- | --- | --- | --- |
+    | Runtime environment variables | No | [] | Plain single-line values refreshed on every deploy |
+    | Runtime secrets | No | [] | Same-account Secrets Manager or SSM references fetched on each host |
+    | Root volume size (GB) | No | 30 | Encrypted per-instance gp3 volume deleted with the instance |
+    | Data volume / size / mount path | No | false / 20 / /data | Independent encrypted EBS volume for rebuildable per-host files |
+    | EFS file system | No | false | Enable shared storage that outlives instances |
+    | EFS file system reference / mount path | Yes* | - / /mnt/efs | Ravion EFS module and its host/container mount path |
+    | Log retention (days) | No | 30 | CloudWatch retention for supervised app logs |
+    | Per-instance deploy timeout (secs) | No | 1200 | SSM script timeout for either deploy mode |
+    | Force delete image repository | No | false | Permit deletion of a non-empty Ravion-created ECR repository |
+    | Tags | No | Standard Ravion tags | Additional tags applied to resources |
+    | Advanced Terraform variables | No | {} | Lower-level overrides for exceptional settings |
+    | OpenTofu version override | No | Ravion default | Stack OpenTofu version override |
+    | Ravion Terraform workspace name | No | {project}-{env}-{module}-{stack} | State backend workspace override |
+
+    *Conditionally required or visible based on Deploy type, Build source, Web service, CPU autoscaling, Data volume, or EFS file system.
 
     ## Design decisions
 
-    - Deploys are in place by design. The module targets apps that benefit from stable hosts and storage; for immutable-style rollouts, prefer the ECS modules.
+    - ECS is the default recommendation for stateless container services. Use this module when manual host deployment, host customization, or stable-host behavior is an actual requirement.
+    - Deploys are in place by design. They do not replace instances, but scaling, health recovery, and manual operations still can.
+    - Instances are prepared for both deploy modes so the Deploy type can change without replacing the group.
+    - Supervisord manages one app process per instance. A one-instance service is interrupted while that process is replaced.
+    - Supervisor 4.3.0 is installed from PyPI. Instances need outbound access to PyPI or an equivalent package source during bootstrap and when deploys ensure the pinned version.
     - One app per instance group. Sharing instances between apps is intentionally out of scope; share the load balancer instead.
     - The load balancer is a separate shared module so several services can route through one ALB and its rules stay service-owned.
     - The ASG health check type defaults to EC2 because in-place deploys briefly deregister instances from the target group.
+    - Launch template changes do not trigger an instance refresh, preserving per-host state until you choose to recycle instances.
     - Web metrics panels are empty for worker groups; they apply only when a load balancer is attached.
 
     ## Learn more
@@ -777,4 +896,6 @@ module:
     - [Amazon EC2 Auto Scaling](https://docs.aws.amazon.com/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html)
     - [AWS Systems Manager Run Command](https://docs.aws.amazon.com/systems-manager/latest/userguide/run-command.html)
     - [Application Load Balancer listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html)
-    - [Nixpacks documentation](https://nixpacks.com/docs)
+    - [Amazon ECS services](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_services.html)
+    - [Supervisor documentation](https://supervisord.org/)
+    - [Railpack documentation](https://railpack.com/)

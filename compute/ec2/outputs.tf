@@ -78,8 +78,8 @@ output "log_group_name" {
 }
 
 output "log_stream_prefix" {
-  description = "Prefix of per-instance app log streams inside the log group."
-  value       = "instance"
+  description = "Prefix of deployment- and instance-scoped app log streams inside the log group."
+  value       = "deployment"
 }
 
 ################################################################################

@@ -40,6 +40,15 @@ resource "aws_iam_instance_profile" "instance" {
 ################################################################################
 
 data "aws_iam_policy_document" "instance" {
+  # SSM Run Command resolves the configured CloudWatch destination before
+  # creating its per-command stdout/stderr streams. DescribeLogGroups does
+  # not support resource-level permissions.
+  statement {
+    sid       = "DescribeAppLogGroups"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
   # App log shipping (Docker awslogs driver and CloudWatch agent)
   statement {
     sid = "AppLogs"
