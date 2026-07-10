@@ -176,7 +176,7 @@ resource "aws_iam_role_policy_attachment" "task_additional" {
 
 # Inline task role policies
 resource "aws_iam_role_policy" "task_inline" {
-  for_each = local.create_task_role ? var.task_role_inline_policies : {}
+  for_each = { for name, policy in var.task_role_inline_policies : name => policy if local.create_task_role }
 
   name   = each.key
   role   = aws_iam_role.task[0].id
