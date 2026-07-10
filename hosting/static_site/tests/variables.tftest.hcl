@@ -799,6 +799,11 @@ run "primary_domain_falls_back_to_cloudfront_domain" {
     condition     = output.primary_domain == module.cdn.distribution_domain_names["main"]
     error_message = "primary_domain must fall back to the CloudFront domain name when no aliases are configured."
   }
+
+  assert {
+    condition     = output.primary_distribution_id == module.cdn.distribution_ids["main"]
+    error_message = "primary_distribution_id must be the primary distribution's ID."
+  }
 }
 
 #-------------------------------------------------------------------------------

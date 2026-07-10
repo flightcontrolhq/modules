@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, and deliver CloudFront access logs to CloudWatch by default with a Ravion logs panel."
+  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, deliver CloudFront access logs to CloudWatch by default with a Ravion logs panel, and chart the default CloudFront metrics."
 module:
   build:
     builder: >-
@@ -442,6 +442,10 @@ module:
 
     Use Response headers policy ID to attach an existing CloudFront response headers policy. Use Managed response headers policy when this module should create one for security headers, CORS, custom headers, or removed headers. Either option replaces the Managed response headers selection, so carry equivalent security headers in your own policy. Avoid putting Cache-Control into a response headers policy unless you intentionally want to override the cache-control function.
 
+    ## Monitoring
+
+    The module dashboard shows the default CloudFront distribution metrics: requests, total error rate, 4xx error rate, 5xx error rate, bytes downloaded, and bytes uploaded. CloudFront publishes these at no additional CloudWatch cost. A 4xx spike usually means missing files or newly broken links; because missing files return real 404s and blocked requests return 403s, the two are distinguishable in the access logs.
+
     ## Access logging
 
     CloudFront access logging is on by default, delivered to CloudWatch Logs and viewable in Ravion. Choose where logs are delivered:
@@ -589,3 +593,82 @@ module:
       [{"name": stack.output.primary_domain, "href": "https://" + stack.output.primary_domain}] :
       []
       >>
+    metrics:
+      - id: requests
+        name: Requests
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: Requests
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Sum
+      - id: error_rate_total
+        name: Total error rate (%)
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: TotalErrorRate
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Average
+      - id: error_rate_4xx
+        name: 4xx error rate (%)
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: 4xxErrorRate
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Average
+      - id: error_rate_5xx
+        name: 5xx error rate (%)
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: 5xxErrorRate
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Average
+      - id: bytes_downloaded
+        name: Bytes downloaded
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: BytesDownloaded
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Sum
+      - id: bytes_uploaded
+        name: Bytes uploaded
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: BytesUploaded
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Sum

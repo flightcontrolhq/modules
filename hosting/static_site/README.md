@@ -447,6 +447,7 @@ No external apply-time tools required.
 | hosting_bucket_regional_domain_name | Regional domain name of the hosting bucket. |
 | hosting_bucket_region | AWS region of the hosting bucket. |
 | distribution_ids | Map of distribution key -> CloudFront distribution ID. |
+| primary_distribution_id | CloudFront distribution ID of the primary distribution. |
 | cloudfront_distribution_arns_map | Map of distribution key -> distribution ARN. |
 | cloudfront_distribution_arns | List of all CloudFront distribution ARNs. |
 | distribution_domain_names | Map of distribution key -> CloudFront domain name. |
