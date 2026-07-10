@@ -15,7 +15,7 @@ Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> v
 - **Multiple distributions** sharing one origin (e.g., a production domain group + staging domain group).
 - **HTTP/2 + HTTP/3** by default.
 - **Optional WAFv2** integration.
-- **Optional access logging** (existing or module-created bucket).
+- **Optional access logging** — CloudWatch Logs by default (standard logging v2), with legacy S3 delivery available for cost-sensitive high-traffic sites.
 - **Optional CI deploy role** with least-privilege `s3:Put*` + KVS `PutKey`/`DeleteKey` + `cloudfront:CreateInvalidation`.
 - **Origin Shield** support.
 - **SSE-KMS** support on the hosting bucket.
@@ -424,10 +424,11 @@ No external apply-time tools required.
 | Name | Description | Type | Default |
 |---|---|---|---|
 | logging_enabled | Enable CloudFront access logging. | `bool` | `false` |
-| logging_bucket_creation_enabled | Create a new S3 bucket for logs. | `bool` | `false` |
-| logging_bucket_domain_name | Existing logging bucket domain name. | `string` | `null` |
-| logging_prefix | Base prefix for log files. | `string` | `""` |
-| logging_retention_days | Days to retain logs in the created bucket. | `number` | `90` |
+| logging_destination | Where access logs are delivered: `cloudwatch` (standard logging v2 into a module-managed CloudWatch Logs group) or `s3` (legacy standard logging). | `string` | `"cloudwatch"` |
+| logging_bucket_creation_enabled | Create a new S3 bucket for logs. Only applies when `logging_destination = "s3"`. | `bool` | `false` |
+| logging_bucket_domain_name | Existing logging bucket domain name. Only applies when `logging_destination = "s3"`. | `string` | `null` |
+| logging_prefix | Base prefix for log files. Only applies when `logging_destination = "s3"`. | `string` | `""` |
+| logging_retention_days | Days to retain logs: CloudWatch log group retention (`cloudwatch`) or S3 lifecycle expiry on the module-created bucket (`s3`). | `number` | `90` |
 
 ### Deploy Role
 
@@ -464,6 +465,8 @@ No external apply-time tools required.
 | deploy_role_name | Name of the deploy role. |
 | set_active_version_command | Bash snippet that flips the `active` KVS key to `$VERSION`. |
 | invalidation_commands | Map of distribution key -> ready-to-run `aws cloudfront create-invalidation`. Rarely needed. |
+| access_log_group_name | Name of the CloudWatch Logs group receiving CloudFront access logs. Null unless CloudWatch logging is enabled. |
+| access_log_group_arn | ARN of the CloudWatch Logs access-log group. Null unless CloudWatch logging is enabled. |
 
 ## Security Considerations
 

@@ -436,28 +436,44 @@ variable "logging_enabled" {
   default     = false
 }
 
+variable "logging_destination" {
+  type        = string
+  description = "Where CloudFront delivers access logs when logging_enabled is true. 'cloudwatch' uses CloudFront standard logging v2 into a module-managed CloudWatch Logs group (viewable in the Ravion UI; ingestion costs more at very high traffic). 's3' uses legacy standard logging into an S3 bucket (cheapest for high traffic)."
+  default     = "cloudwatch"
+
+  validation {
+    condition     = contains(["cloudwatch", "s3"], var.logging_destination)
+    error_message = "The logging_destination must be 'cloudwatch' or 's3'."
+  }
+}
+
 variable "logging_bucket_creation_enabled" {
   type        = bool
-  description = "Whether to create a new S3 bucket for CloudFront access logs. Ignored if logging_enabled is false."
+  description = "Whether to create a new S3 bucket for CloudFront access logs. Only applies when logging_enabled is true and logging_destination is 's3'."
   default     = false
 }
 
 variable "logging_bucket_domain_name" {
   type        = string
-  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when logging_enabled is true and logging_bucket_creation_enabled is false."
+  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when logging_enabled is true, logging_destination is 's3', and logging_bucket_creation_enabled is false."
   default     = null
 }
 
 variable "logging_prefix" {
   type        = string
-  description = "Base S3 key prefix for access logs. Each distribution logs under '<logging_prefix><distribution_key>/'."
+  description = "Base S3 key prefix for access logs. Each distribution logs under '<logging_prefix><distribution_key>/'. Only applies when logging_destination is 's3'."
   default     = ""
 }
 
 variable "logging_retention_days" {
   type        = number
-  description = "Days to retain CloudFront access logs (only applies to the bucket created when logging_bucket_creation_enabled = true)."
+  description = "Days to retain CloudFront access logs — the CloudWatch log group retention when logging_destination is 'cloudwatch', or the S3 lifecycle expiry when logging_destination is 's3' with a module-created bucket."
   default     = 90
+
+  validation {
+    condition     = var.logging_destination != "cloudwatch" || contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.logging_retention_days)
+    error_message = "When logging_destination is 'cloudwatch', logging_retention_days must be a valid CloudWatch Logs retention value (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, or 3653)."
+  }
 }
 
 ################################################################################

@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, and link the site's primary domain from the module UI."
+  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, and view CloudFront access logs in Ravion via CloudWatch delivery."
 module:
   build:
     builder: >-
@@ -289,12 +289,26 @@ module:
       label: Access logging
       type: section
     - default: false
-      description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
+      description: Enable CloudFront access logging.
       id: logging_enabled
       label: CloudFront access logging
       type: boolean
+    - default: cloudwatch
+      description: Where CloudFront delivers access logs.
+      id: logging_destination
+      label: Logging destination
+      show_when:
+        logging_enabled: true
+      type: string
+      values:
+        - description: View access logs directly in Ravion. Ingestion costs more at very high traffic.
+          label: CloudWatch Logs
+          value: cloudwatch
+        - description: Deliver compressed log files to an automatically created S3 bucket. Cheapest for high traffic.
+          label: S3 bucket
+          value: s3
     - default: 90
-      description: Days to retain CloudFront access logs in the automatically created logging bucket.
+      description: Days to retain CloudFront access logs in CloudWatch Logs or the automatically created S3 logging bucket.
       id: logging_retention_days
       label: Logging retention days
       min: 1
@@ -350,7 +364,7 @@ module:
     | Custom 404 pages | Serving your build's 404.html with a proper 404 status |
     | Protecting the site | Attaching a WAF web ACL and default security headers |
     | Serving high traffic | Enabling Origin Shield to boost cache hit ratio |
-    | Auditing access | Enabling CloudFront access logs with automatic log bucket creation |
+    | Auditing access | Viewing CloudFront access logs in Ravion or delivering them to S3 |
 
     ## Hosting and routing
 
@@ -432,9 +446,14 @@ module:
 
     ## Access logging
 
-    CloudFront access logging is off by default. When enabled, the module automatically creates a logging bucket and stores CloudFront access logs there.
+    CloudFront access logging is off by default. When enabled, choose where logs are delivered.
 
-    Logging retention days defaults to 90 and controls how long logs are retained in the automatically created logging bucket.
+    | Destination | How it works |
+    | --- | --- |
+    | CloudWatch Logs (default) | CloudFront standard logging v2 delivers access logs to a module-managed CloudWatch Logs group, and the module UI shows them in the Logs panel. Log ingestion costs more than S3 at very high traffic. |
+    | S3 bucket | Legacy standard logging delivers compressed log files to an automatically created S3 bucket. Cheapest for high-traffic sites; not viewable in Ravion. |
+
+    Logging retention days defaults to 90 and controls the CloudWatch log group retention or the S3 bucket lifecycle expiry, depending on the destination. CloudWatch retention must be one of the standard CloudWatch Logs retention values (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, and larger).
 
     ## Deploy behavior
 
@@ -484,8 +503,9 @@ module:
     | CloudFront settings | Origin Shield | No | false | Extra caching layer; region chosen automatically |
     | Cache and headers | Manage Cache-Control headers | No | true | Attaches the cache-control function |
     | Cache and headers | Managed response headers | No | Security headers | AWS managed header sets; add CORS or CORS with preflight |
-    | Access logging | CloudFront access logging | No | false | Creates a logging bucket when enabled |
-    | Access logging | Logging retention days | No | 90 | Visible when logging is enabled |
+    | Access logging | CloudFront access logging | No | false | Delivers logs to CloudWatch Logs or S3 when enabled |
+    | Access logging | Logging destination | No | CloudWatch Logs | Visible when logging is enabled; CloudWatch shows logs in Ravion |
+    | Access logging | Logging retention days | No | 90 | Visible when logging is enabled; CloudWatch retention or S3 lifecycle expiry |
     | Deploy config | CloudFront invalidation paths | No | /* | Paths invalidated after promotion |
     | Deploy config | Successful deploys to retain | No | 20 | Old S3 deploy prefixes to retain |
     | Terraform settings | Terraform execution environment | No | unset | Override Terraform runner environment |
@@ -500,7 +520,7 @@ module:
 
     The CloudFront distribution is always enabled. If traffic should not yet use the distribution, leave DNS records pointed elsewhere until ready.
 
-    Access logging automatically creates its logging bucket when enabled. This avoids requiring users to pre-create and wire a separate logging bucket for the common audit trail use case.
+    Access logging manages its own delivery infrastructure when enabled — a CloudWatch log group for the default destination, or an automatically created logging bucket for S3. This avoids requiring users to pre-create and wire log storage for the common audit trail use case.
 
     CloudFront and KVS behavior is intentionally versioned. Promotions change which S3 prefix is active rather than overwriting files in place.
 
@@ -539,6 +559,7 @@ module:
         html_cache_control: << module.input.html_cache_control >>
         html_path_overrides: << module.input.html_path_overrides >>
         logging_bucket_domain_name: null
+        logging_destination: << module.input.logging_destination >>
         logging_prefix: ""
         logging_retention_days: << module.input.logging_retention_days >>
         cache_control_enabled: << module.input.cache_control_enabled >>
@@ -558,6 +579,12 @@ module:
           $include: ../stack/ravion-tags.yml
         web_acl_id: << module.input.web_acl_id || nil >>
   ui:
+    logs: |-
+      <<
+      module.input.logging_enabled && module.input.logging_destination == "cloudwatch" ?
+      [{"id": "cloudfront_access_logs", "name": "CloudFront access logs", "source": {"type": "cloudwatch", "aws_account_id": module.input.aws_account_id, "region": "us-east-1", "log_group": stack.output.access_log_group_name}}] :
+      []
+      >>
     links: |-
       <<
       stack.output.primary_domain ?

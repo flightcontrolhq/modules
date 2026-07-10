@@ -148,6 +148,20 @@ output "invalidation_commands" {
 }
 
 ################################################################################
+# Logging
+################################################################################
+
+output "access_log_group_name" {
+  description = "Name of the CloudWatch Logs group receiving CloudFront access logs. Null unless logging_enabled is true and logging_destination is 'cloudwatch'."
+  value       = try(aws_cloudwatch_log_group.access_logs[0].name, null)
+}
+
+output "access_log_group_arn" {
+  description = "ARN of the CloudWatch Logs access-log group. Null unless CloudWatch logging is enabled."
+  value       = try(aws_cloudwatch_log_group.access_logs[0].arn, null)
+}
+
+################################################################################
 # Account & Region
 ################################################################################
 

@@ -66,6 +66,29 @@ mock_provider "aws" {
       id = "module-cache-policy-11111111-2222-3333-4444-555555555555"
     }
   }
+
+  # The delivery-source and delivery-destination resources validate their ARN
+  # attributes at plan time, so mocked upstream ARNs must be well-formed.
+  override_resource {
+    target = module.cdn.aws_cloudfront_distribution.this
+    values = {
+      arn = "arn:aws:cloudfront::123456789012:distribution/E2EXAMPLE123"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudwatch_log_group.access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/cloudfront/ravion-test-site"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudwatch_log_delivery_destination.access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:ravion-test-site-access-logs-cw"
+    }
+  }
 }
 
 variables {
@@ -776,6 +799,78 @@ run "primary_domain_falls_back_to_cloudfront_domain" {
     condition     = output.primary_domain == module.cdn.distribution_domain_names["main"]
     error_message = "primary_domain must fall back to the CloudFront domain name when no aliases are configured."
   }
+}
+
+#-------------------------------------------------------------------------------
+# Access logging (CloudWatch standard logging v2)
+#-------------------------------------------------------------------------------
+
+run "logging_disabled_creates_no_cloudwatch_resources" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0
+    error_message = "No CloudWatch log group should be created when logging is disabled."
+  }
+}
+
+run "cloudwatch_logging_creates_delivery_chain" {
+  command = plan
+
+  variables {
+    logging_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 1
+    error_message = "CloudWatch logging (the default destination) must create the access-log group."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_delivery_source.access_logs) == 1 && length(aws_cloudwatch_log_delivery.access_logs) == 1
+    error_message = "One delivery source and one delivery must be created per distribution."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.access_logs[0].retention_in_days == 90
+    error_message = "The log group retention must follow logging_retention_days."
+  }
+}
+
+run "s3_logging_destination_skips_cloudwatch" {
+  command = plan
+
+  variables {
+    logging_enabled                 = true
+    logging_destination             = "s3"
+    logging_bucket_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0
+    error_message = "No CloudWatch resources should be created when logging_destination is 's3'."
+  }
+}
+
+run "logging_destination_rejects_unknown" {
+  command = plan
+
+  variables {
+    logging_destination = "firehose"
+  }
+
+  expect_failures = [var.logging_destination]
+}
+
+run "cloudwatch_retention_rejects_invalid_value" {
+  command = plan
+
+  variables {
+    logging_enabled        = true
+    logging_retention_days = 45
+  }
+
+  expect_failures = [var.logging_retention_days]
 }
 
 #-------------------------------------------------------------------------------
