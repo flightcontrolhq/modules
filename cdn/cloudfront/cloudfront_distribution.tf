@@ -143,7 +143,7 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "logging_config" {
-    for_each = var.logging_enabled ? [1] : []
+    for_each = local.s3_logging_enabled ? [1] : []
     content {
       bucket          = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
       prefix          = "${var.logging_prefix}${each.key}/"

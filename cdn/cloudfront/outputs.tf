@@ -66,18 +66,28 @@ output "origin_access_control_ids" {
 ################################################################################
 
 output "logging_bucket_id" {
-  description = "The ID of the logging S3 bucket."
-  value       = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].id : null
+  description = "The ID of the logging S3 bucket. Null unless S3 logging is active with a module-created bucket."
+  value       = try(aws_s3_bucket.logging[0].id, null)
 }
 
 output "logging_bucket_arn" {
-  description = "The ARN of the logging S3 bucket."
-  value       = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].arn : null
+  description = "The ARN of the logging S3 bucket. Null unless S3 logging is active with a module-created bucket."
+  value       = try(aws_s3_bucket.logging[0].arn, null)
 }
 
 output "logging_bucket_domain_name" {
-  description = "The domain name of the logging S3 bucket."
-  value       = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : null
+  description = "The domain name of the logging S3 bucket. Null unless S3 logging is active with a module-created bucket."
+  value       = try(aws_s3_bucket.logging[0].bucket_domain_name, null)
+}
+
+output "access_log_group_name" {
+  description = "Name of the CloudWatch Logs group receiving CloudFront access logs. Null unless logging_enabled is true and logging_destination is 'cloudwatch'."
+  value       = try(aws_cloudwatch_log_group.access_logs[0].name, null)
+}
+
+output "access_log_group_arn" {
+  description = "ARN of the CloudWatch Logs access-log group. Null unless CloudWatch logging is enabled."
+  value       = try(aws_cloudwatch_log_group.access_logs[0].arn, null)
 }
 
 ################################################################################
