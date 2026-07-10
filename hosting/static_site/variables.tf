@@ -188,9 +188,15 @@ variable "kms_key_arn" {
 # Origin
 ################################################################################
 
+variable "origin_shield_enabled" {
+  type        = bool
+  description = "Enable CloudFront Origin Shield in front of the hosting bucket. Reduces origin load and improves cache hit ratio for high-traffic sites. The Origin Shield region is derived automatically from the bucket region: same region when CloudFront offers Origin Shield there, otherwise the nearest supported region per the AWS mapping table. Set origin_shield_region to override."
+  default     = false
+}
+
 variable "origin_shield_region" {
   type        = string
-  description = "Optional AWS region to enable CloudFront Origin Shield in. Reduces origin load and improves cache hit ratio for global distributions."
+  description = "Override the automatically derived Origin Shield region. Only used when origin_shield_enabled is true. Leave null to derive from the bucket region."
   default     = null
 }
 
@@ -209,8 +215,8 @@ variable "additional_origin_headers" {
 
 variable "cache_policy_id" {
   type        = string
-  description = "CloudFront cache policy ID for the default behavior. Defaults to AWS-managed CachingOptimized (long-cache, suitable for hashed assets)."
-  default     = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  description = "CloudFront cache policy ID for the default behavior. When null (the default), the module creates a cache policy identical to AWS-managed CachingOptimized but with a 1-year default TTL — safe because versioned deploys change the cache key on every promotion, and S3 objects carry no Cache-Control of their own. Set to a policy ID (e.g. CachingOptimized 658327ea-f89d-4fab-a63d-7e88639e58f6) to use your own."
+  default     = null
 }
 
 variable "origin_request_policy_id" {
@@ -219,15 +225,29 @@ variable "origin_request_policy_id" {
   default     = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
 }
 
-variable "security_headers_enabled" {
-  type        = bool
-  description = "Attach the AWS-managed SecurityHeadersPolicy (HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, X-XSS-Protection) when neither `response_headers_policy_id` nor `response_headers_policy` is set. Disable if the site must be embeddable in cross-origin iframes (SAMEORIGIN blocks that) or if you want no response-headers policy at all."
-  default     = true
+variable "response_headers_presets" {
+  type        = list(string)
+  description = <<-EOT
+    AWS-managed response-header sets to attach when neither `response_headers_policy_id` nor `response_headers_policy` is set. CloudFront allows exactly one response-headers policy per cache behavior, so the selection maps onto the single AWS-managed policy that covers the combination:
+
+      - "security_headers": HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, X-XSS-Protection. Remove it if the site must be embeddable in cross-origin iframes (SAMEORIGIN blocks that).
+      - "cors": Access-Control-Allow-Origin: * for simple CORS requests (SimpleCORS).
+      - "cors_preflight": CORS from any origin including OPTIONS preflight (Allow-Methods/Expose-Headers). Supersedes "cors" when both are selected.
+
+    Pass an empty list to attach no response-headers policy.
+  EOT
+  default     = ["security_headers"]
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for p in var.response_headers_presets : contains(["security_headers", "cors", "cors_preflight"], p)])
+    error_message = "The response_headers_presets entries must be 'security_headers', 'cors', or 'cors_preflight'."
+  }
 }
 
 variable "response_headers_policy_id" {
   type        = string
-  description = "ID of an externally-managed CloudFront response-headers policy to attach to the default behavior. Use when you have a centrally-managed policy (e.g. an org-wide CSP) you want to share across distributions. Takes precedence over `response_headers_policy` and the `security_headers_enabled` default. Note: do NOT put `Cache-Control` in this policy with override=true; it will fight the cache-control function."
+  description = "ID of an externally-managed CloudFront response-headers policy to attach to the default behavior. Use when you have a centrally-managed policy (e.g. an org-wide CSP) you want to share across distributions. Takes precedence over `response_headers_policy` and the `response_headers_presets` default. Note: do NOT put `Cache-Control` in this policy with override=true; it will fight the cache-control function."
   default     = null
 }
 
@@ -286,7 +306,7 @@ variable "response_headers_policy" {
 
     Coexists with the cache-control function: the function writes Cache-Control on every response in viewer-response, then the response-headers policy applies. Don't put Cache-Control in `custom_headers` with override=true unless you intentionally want to overwrite what the function set.
 
-    Precedence on the default behavior: caller-supplied `response_headers_policy_id` > this module-managed policy > AWS-managed SecurityHeadersPolicy (when `security_headers_enabled` is true). Set to null (default) to fall through to the managed security headers default.
+    Precedence on the default behavior: caller-supplied `response_headers_policy_id` > this module-managed policy > AWS-managed policy selected by `response_headers_presets`. Set to null (default) to fall through to the presets default.
   EOT
   default     = null
 

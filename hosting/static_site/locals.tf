@@ -1,5 +1,51 @@
 locals {
   region = coalesce(var.region, data.aws_region.current.region)
+
+  # Origin Shield region derivation. CloudFront offers Origin Shield only in
+  # regions with a regional edge cache; for buckets in those regions the
+  # shield lives in the same region, otherwise in the nearest supported
+  # region per the AWS mapping table (entries past the documented eight are
+  # this module's nearest-region picks for newer regions):
+  # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html
+  origin_shield_supported_regions = [
+    "us-east-1", "us-east-2", "us-west-2",
+    "ap-south-1", "ap-northeast-1", "ap-northeast-2",
+    "ap-southeast-1", "ap-southeast-2",
+    "eu-central-1", "eu-west-1", "eu-west-2",
+    "sa-east-1", "me-central-1",
+  ]
+
+  origin_shield_nearest_region = {
+    # AWS-documented mappings
+    "us-west-1"    = "us-west-2"
+    "af-south-1"   = "eu-west-1"
+    "ap-east-1"    = "ap-southeast-1"
+    "ca-central-1" = "us-east-1"
+    "eu-south-1"   = "eu-central-1"
+    "eu-west-3"    = "eu-west-2"
+    "eu-north-1"   = "eu-west-2"
+    "me-south-1"   = "ap-south-1"
+    # Nearest supported region for newer regions not covered by the AWS table
+    "ap-east-2"      = "ap-northeast-1"
+    "ap-northeast-3" = "ap-northeast-1"
+    "ap-south-2"     = "ap-south-1"
+    "ap-southeast-3" = "ap-southeast-1"
+    "ap-southeast-4" = "ap-southeast-2"
+    "ap-southeast-5" = "ap-southeast-1"
+    "ap-southeast-7" = "ap-southeast-1"
+    "ca-west-1"      = "us-west-2"
+    "eu-central-2"   = "eu-central-1"
+    "eu-south-2"     = "eu-west-2"
+    "il-central-1"   = "me-central-1"
+    "mx-central-1"   = "us-east-1"
+  }
+
+  origin_shield_region = coalesce(
+    var.origin_shield_region,
+    contains(local.origin_shield_supported_regions, local.region)
+    ? local.region
+    : lookup(local.origin_shield_nearest_region, local.region, "us-east-1"),
+  )
 }
 
 locals {
@@ -34,21 +80,38 @@ locals {
 
   managed_cache_disabled_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
 
-  # AWS-managed SecurityHeadersPolicy: HSTS, X-Content-Type-Options nosniff,
-  # X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin,
-  # X-XSS-Protection 1; mode=block.
-  managed_security_headers_id = "67f7725c-6f97-4210-82d7-5512b31e9d03"
+  # Caller-supplied cache_policy_id wins over the module-managed 1-year policy.
+  effective_cache_policy_id = var.cache_policy_id != null ? var.cache_policy_id : aws_cloudfront_cache_policy.this[0].id
+
+  # response_headers_presets -> AWS-managed response-headers policy ID.
+  # CloudFront allows exactly one response-headers policy per behavior, so the
+  # preset combination selects the single managed policy that covers it. IDs
+  # from https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-response-headers-policies.html
+  # cors_preflight implies cors (the preflight policies are supersets of
+  # SimpleCORS), so selecting it with or without "cors" behaves identically.
+  presets_security  = contains(var.response_headers_presets, "security_headers")
+  presets_preflight = contains(var.response_headers_presets, "cors_preflight")
+  presets_cors      = contains(var.response_headers_presets, "cors") || local.presets_preflight
+
+  managed_response_headers_policy_id = (
+    local.presets_preflight && local.presets_security ? "eaab4381-ed33-4a86-88ca-d9558dc6cd63" : # CORS-with-preflight-and-SecurityHeadersPolicy
+    local.presets_preflight ? "5cc3b908-e619-4b99-88e5-2cf7f45965bd" :                           # CORS-With-Preflight
+    local.presets_cors && local.presets_security ? "e61eb60c-9c35-4d20-a928-2b84e02af89c" :      # CORS-and-SecurityHeadersPolicy
+    local.presets_cors ? "60669652-455b-4ae9-85a4-c4c02393f86c" :                                # SimpleCORS
+    local.presets_security ? "67f7725c-6f97-4210-82d7-5512b31e9d03" :                            # SecurityHeadersPolicy
+    null
+  )
 
   # Precedence: caller-supplied response_headers_policy_id > module-managed
-  # policy from var.response_headers_policy > AWS-managed SecurityHeadersPolicy
-  # (attached by default; disable with security_headers_enabled = false). The
-  # cache-control function always runs regardless — it's a separate
-  # viewer-response association.
+  # policy from var.response_headers_policy > AWS-managed policy selected by
+  # response_headers_presets (security headers by default). The cache-control
+  # function always runs regardless — it's a separate viewer-response
+  # association.
   module_response_headers_policy_id = try(aws_cloudfront_response_headers_policy.this[0].id, null)
   effective_response_headers_policy_id = try(coalesce(
     var.response_headers_policy_id,
     local.module_response_headers_policy_id,
-    var.security_headers_enabled ? local.managed_security_headers_id : null,
+    local.managed_response_headers_policy_id,
   ), null)
 
   # Missing objects return real 404s (the bucket policy grants CloudFront
@@ -88,6 +151,7 @@ locals {
 
   cff_rewrite_name             = substr(replace("${var.name}-rewrite", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   cff_cache_control_name       = substr(replace("${var.name}-cache-ctl", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
+  cache_policy_name            = substr(replace("${var.name}-cache", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   response_headers_policy_name = substr(replace("${var.name}-rh", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   kvs_name                     = substr(replace("${var.name}-kvs", "/[^a-zA-Z0-9-]/", "-"), 0, 64)
   deploy_role_name             = var.deploy_role_name != null ? var.deploy_role_name : "${var.name}-deploy"

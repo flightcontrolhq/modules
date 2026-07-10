@@ -214,11 +214,11 @@ Two CloudFront Functions split responsibilities cleanly:
 | rewriter | viewer-request | Looks up the active version in the KVS and prepends `/<version>/` to the URI so each promotion produces a fresh cache key. |
 | cache-control | viewer-response | Writes `Cache-Control` on every response based on the rewritten URI shape. HTML responses revalidate on every navigation; hashed assets get the immutable 1-year browser cache. These headers steer the **browser only** — CloudFront never uses viewer-response headers for its own edge TTLs. |
 
-**CDN-side cache policy** (defaults to AWS-managed `CachingOptimized`, 1y TTL, no headers/cookies/QS — overridable via `cache_policy_id`):
+**CDN-side cache policy** (defaults to a module-managed policy: 1-year default TTL, gzip+brotli, no headers/cookies/QS in the key — overridable via `cache_policy_id`):
 
 | Path pattern | Cache policy | Why |
 |---|---|---|
-| (default) | `CachingOptimized` | The rewriter pins every URL to `/<version>/...`, so each response has a version-unique cache key — safe to cache at the edge for a year regardless of HTML vs asset. |
+| (default) | module-managed (1y TTL) | The rewriter pins every URL to `/<version>/...`, so each response has a version-unique cache key — safe to cache at the edge for a year regardless of HTML vs asset. |
 | `no_cache_paths` | AWS-managed `CachingDisabled` | Optional escape hatch — versioning makes per-path cache busting unnecessary in most cases. |
 
 **Browser-side `Cache-Control`** (written by the viewer-response function when `cache_control_enabled = true`, the default):
@@ -252,11 +252,22 @@ If the root key doesn't exist, viewers still get a correct 404 status — just w
 
 ## Custom response headers (security, CORS, etc.)
 
-For everything *other than* `Cache-Control` — HSTS, CSP, X-Frame-Options, Referrer-Policy, X-Content-Type-Options, CORS, custom headers, header stripping — there are three layers. Precedence on the default behavior: caller-supplied `response_headers_policy_id` > module-managed `response_headers_policy` > managed security-headers default.
+For everything *other than* `Cache-Control` — HSTS, CSP, X-Frame-Options, Referrer-Policy, X-Content-Type-Options, CORS, custom headers, header stripping — there are three layers. Precedence on the default behavior: caller-supplied `response_headers_policy_id` > module-managed `response_headers_policy` > AWS-managed policy selected by `response_headers_presets`.
 
-### Default: AWS-managed `SecurityHeadersPolicy`
+### Default: AWS-managed presets via `response_headers_presets`
 
-Out of the box (`security_headers_enabled = true`), the module attaches the AWS-managed `SecurityHeadersPolicy` when no other policy is configured. It sets HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, and `X-XSS-Protection`. Set `security_headers_enabled = false` if the site must be embeddable in cross-origin iframes (SAMEORIGIN blocks that) or if you want no policy at all.
+CloudFront allows exactly one response-headers policy per cache behavior, so preset combinations map onto the single AWS-managed policy that covers them:
+
+| `response_headers_presets` | Managed policy attached |
+|---|---|
+| `["security_headers"]` (default) | `SecurityHeadersPolicy` — HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-XSS-Protection` |
+| `["cors"]` | `SimpleCORS` — `Access-Control-Allow-Origin: *` for simple requests |
+| `["cors_preflight"]` | `CORS-With-Preflight` — CORS from any origin incl. `OPTIONS` preflight |
+| `["security_headers", "cors"]` | `CORS-and-SecurityHeadersPolicy` |
+| `["security_headers", "cors_preflight"]` | `CORS-with-preflight-and-SecurityHeadersPolicy` |
+| `[]` | none |
+
+`cors_preflight` supersedes `cors` when both are selected (the preflight policies are supersets of SimpleCORS). Pass `[]` if the site must be embeddable in cross-origin iframes (SAMEORIGIN blocks that) or if you want no policy at all.
 
 ### Module-managed (declarative): `response_headers_policy`
 
@@ -326,7 +337,7 @@ module "site" {
 }
 ```
 
-`response_headers_policy_id` and `response_headers_policy` can both be set — the caller-supplied id wins on the default behavior, but the module-managed policy is still created and exposed via `module_response_headers_policy_id` so you can attach it elsewhere. Setting either one replaces the managed security-headers default, so carry equivalent security headers in your own policy.
+`response_headers_policy_id` and `response_headers_policy` can both be set — the caller-supplied id wins on the default behavior, but the module-managed policy is still created and exposed via `module_response_headers_policy_id` so you can attach it elsewhere. Setting either one replaces the `response_headers_presets` default, so carry equivalent security headers in your own policy.
 
 > **Don't put `Cache-Control` in `custom_headers` with `override = true`** unless you intentionally want to overwrite what the cache-control function set. Response-headers policies apply *after* CloudFront Functions, so a policy-set value with override beats the function. The whole point of the function is to discriminate HTML from assets at the URI level, which a static policy can't do.
 
@@ -380,16 +391,17 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| origin_shield_region | Enable Origin Shield in this region. | `string` | `null` |
+| origin_shield_enabled | Enable Origin Shield; the region is derived from the bucket region (nearest supported region when CloudFront doesn't offer Origin Shield there). | `bool` | `false` |
+| origin_shield_region | Override the derived Origin Shield region. Only used when `origin_shield_enabled = true`. | `string` | `null` (auto) |
 | additional_origin_headers | Extra custom headers sent to S3. | `list(object({name, value}))` | `[]` |
 
 ### Cache Behavior
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| cache_policy_id | Default cache policy ID. | `string` | AWS-managed CachingOptimized |
+| cache_policy_id | Cache policy ID for the default behavior. | `string` | `null` (module-managed 1-year policy) |
 | origin_request_policy_id | Origin request policy ID. | `string` | AWS-managed CORS-S3Origin |
-| security_headers_enabled | Attach the AWS-managed `SecurityHeadersPolicy` when no other response-headers policy is configured. | `bool` | `true` |
+| response_headers_presets | AWS-managed response-header sets (`security_headers`, `cors`, `cors_preflight`) attached when no other response-headers policy is configured. Combinations map to AWS's managed combo policies. | `list(string)` | `["security_headers"]` |
 | response_headers_policy_id | Externally-managed response-headers policy ID (e.g. an org-wide CSP). Wins over `response_headers_policy` when both are set. | `string` | `null` |
 | response_headers_policy | Declarative module-managed response-headers policy: HSTS, CSP, X-Frame-Options, Referrer-Policy, CORS, custom headers, removed headers. See README for the full shape and an example. | `object(...)` | `null` |
 | no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
@@ -440,6 +452,7 @@ No external apply-time tools required.
 | distribution_hosted_zone_ids | Map of distribution key -> Route53 zone ID for alias records. |
 | cloudfront_function_arn | ARN of the viewer-request rewriter function. |
 | cache_control_function_arn | ARN of the viewer-response Cache-Control writer function. Null when `cache_control_enabled = false`. |
+| cache_policy_id | ID of the cache policy attached to the default behavior (caller-supplied when set, otherwise module-managed). |
 | response_headers_policy_id | ID of the response-headers policy attached to the default behavior (caller-supplied id when set, otherwise the module-managed one, otherwise null). |
 | module_response_headers_policy_id | ID of the module-managed response-headers policy. Null when `var.response_headers_policy` is null. |
 | cloudfront_keyvaluestore_arn | ARN of the KeyValueStore. |
@@ -455,7 +468,7 @@ No external apply-time tools required.
 - Hosting bucket has all four S3 public access block settings enabled by default (inherited from `storage/s3`).
 - CloudFront uses OAC, not OAI — supports SSE-KMS and Object Lambda.
 - Bucket policy grants `s3:GetObject` and `s3:ListBucket` only to `cloudfront.amazonaws.com` scoped to the specific distribution ARNs created by this module (defense in depth). `ListBucket` exists so missing keys return 404 instead of 403; the rewriter guarantees S3 never receives a request that would produce an actual listing.
-- The AWS-managed `SecurityHeadersPolicy` (HSTS, nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy) is attached by default; disable via `security_headers_enabled = false` or supersede it with your own policy.
+- The AWS-managed `SecurityHeadersPolicy` (HSTS, nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy) is attached by default; remove it via `response_headers_presets = []` or supersede it with your own policy.
 - Optional deploy role uses a fully user-supplied trust policy — no implicit cross-account trust.
 - TLS 1.2+ enforced on the viewer side (`minimum_protocol_version` defaults to `TLSv1.2_2021`).
 - HTTP -> HTTPS redirect is the default viewer protocol policy.

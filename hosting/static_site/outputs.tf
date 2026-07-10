@@ -65,6 +65,11 @@ output "cache_control_function_arn" {
   value       = try(aws_cloudfront_function.cache_control[0].arn, null)
 }
 
+output "cache_policy_id" {
+  description = "ID of the cache policy attached to the default behavior. Caller-supplied `cache_policy_id` when set, otherwise the module-managed 1-year policy."
+  value       = local.effective_cache_policy_id
+}
+
 output "response_headers_policy_id" {
   description = "ID of the response-headers policy attached to the default cache behavior. Caller-supplied `response_headers_policy_id` when set, otherwise the module-managed policy created from `response_headers_policy`, otherwise null."
   value       = local.effective_response_headers_policy_id

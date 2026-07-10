@@ -34,10 +34,10 @@ module "cdn" {
       domain_name       = module.hosting.bucket_regional_domain_name
       s3_origin_enabled = true
       custom_headers    = var.additional_origin_headers
-      origin_shield = var.origin_shield_region == null ? null : {
+      origin_shield = var.origin_shield_enabled ? {
         enabled              = true
-        origin_shield_region = var.origin_shield_region
-      }
+        origin_shield_region = local.origin_shield_region
+      } : null
     }
   ]
 
@@ -47,7 +47,7 @@ module "cdn" {
     allowed_methods              = ["GET", "HEAD", "OPTIONS"]
     cached_methods               = ["GET", "HEAD"]
     compression_enabled          = true
-    cache_policy_id              = var.cache_policy_id
+    cache_policy_id              = local.effective_cache_policy_id
     origin_request_policy_id     = var.origin_request_policy_id
     response_headers_policy_id   = local.effective_response_headers_policy_id
     function_associations        = local.cff_associations

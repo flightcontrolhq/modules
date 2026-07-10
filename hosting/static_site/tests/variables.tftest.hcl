@@ -59,6 +59,13 @@ mock_provider "aws" {
       id = "module-rh-policy-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     }
   }
+
+  override_resource {
+    target = aws_cloudfront_cache_policy.this
+    values = {
+      id = "module-cache-policy-11111111-2222-3333-4444-555555555555"
+    }
+  }
 }
 
 variables {
@@ -442,8 +449,8 @@ run "response_headers_policy_defaults_to_managed_security_headers" {
   }
 
   assert {
-    condition     = var.security_headers_enabled == true
-    error_message = "security_headers_enabled should default to true."
+    condition     = tolist(var.response_headers_presets) == tolist(["security_headers"])
+    error_message = "response_headers_presets should default to ['security_headers']."
   }
 
   assert {
@@ -452,17 +459,79 @@ run "response_headers_policy_defaults_to_managed_security_headers" {
   }
 }
 
-run "security_headers_disabled_attaches_no_policy" {
+run "response_headers_presets_empty_attaches_no_policy" {
   command = plan
 
   variables {
-    security_headers_enabled = false
+    response_headers_presets = []
   }
 
   assert {
     condition     = local.effective_response_headers_policy_id == null
-    error_message = "No response-headers policy should be attached when security_headers_enabled = false and no caller policy is set."
+    error_message = "No response-headers policy should be attached when response_headers_presets is empty and no caller policy is set."
   }
+}
+
+run "response_headers_presets_map_to_managed_combo_policies" {
+  command = plan
+
+  variables {
+    response_headers_presets = ["security_headers", "cors"]
+  }
+
+  assert {
+    condition     = local.effective_response_headers_policy_id == "e61eb60c-9c35-4d20-a928-2b84e02af89c"
+    error_message = "security_headers + cors must map to the AWS-managed CORS-and-SecurityHeadersPolicy — CloudFront only allows one response-headers policy per behavior, so combinations resolve to the managed combo policy."
+  }
+}
+
+run "response_headers_presets_preflight_supersedes_cors" {
+  command = plan
+
+  variables {
+    response_headers_presets = ["cors", "cors_preflight", "security_headers"]
+  }
+
+  assert {
+    condition     = local.effective_response_headers_policy_id == "eaab4381-ed33-4a86-88ca-d9558dc6cd63"
+    error_message = "cors_preflight + security_headers (with or without redundant 'cors') must map to CORS-with-preflight-and-SecurityHeadersPolicy."
+  }
+}
+
+run "response_headers_presets_cors_only" {
+  command = plan
+
+  variables {
+    response_headers_presets = ["cors"]
+  }
+
+  assert {
+    condition     = local.effective_response_headers_policy_id == "60669652-455b-4ae9-85a4-c4c02393f86c"
+    error_message = "cors alone must map to the AWS-managed SimpleCORS policy."
+  }
+}
+
+run "response_headers_presets_preflight_only" {
+  command = plan
+
+  variables {
+    response_headers_presets = ["cors_preflight"]
+  }
+
+  assert {
+    condition     = local.effective_response_headers_policy_id == "5cc3b908-e619-4b99-88e5-2cf7f45965bd"
+    error_message = "cors_preflight alone must map to the AWS-managed CORS-With-Preflight policy."
+  }
+}
+
+run "response_headers_presets_reject_unknown_values" {
+  command = plan
+
+  variables {
+    response_headers_presets = ["security_headers", "csp"]
+  }
+
+  expect_failures = [var.response_headers_presets]
 }
 
 run "response_headers_policy_creates_resource_when_set" {
@@ -618,6 +687,105 @@ run "response_headers_policy_validates_frame_option" {
   }
 
   expect_failures = [var.response_headers_policy]
+}
+
+#-------------------------------------------------------------------------------
+# Origin Shield region derivation
+#
+# origin_shield_enabled is a plain boolean; the shield region is derived from
+# the bucket region — same region when CloudFront offers Origin Shield there,
+# otherwise the nearest supported region per the AWS mapping table.
+# origin_shield_region overrides the derivation.
+#-------------------------------------------------------------------------------
+
+run "origin_shield_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition     = var.origin_shield_enabled == false
+    error_message = "origin_shield_enabled should default to false."
+  }
+}
+
+run "origin_shield_same_region_when_supported" {
+  command = plan
+
+  variables {
+    region = "eu-west-1"
+  }
+
+  assert {
+    condition     = local.origin_shield_region == "eu-west-1"
+    error_message = "Buckets in a region where CloudFront offers Origin Shield must shield in the same region."
+  }
+}
+
+run "origin_shield_nearest_region_when_unsupported" {
+  command = plan
+
+  variables {
+    region = "ca-central-1"
+  }
+
+  assert {
+    condition     = local.origin_shield_region == "us-east-1"
+    error_message = "Buckets in ca-central-1 must shield in us-east-1 per the AWS nearest-region mapping."
+  }
+}
+
+run "origin_shield_explicit_region_overrides_derivation" {
+  command = plan
+
+  variables {
+    region               = "eu-west-1"
+    origin_shield_region = "us-east-2"
+  }
+
+  assert {
+    condition     = local.origin_shield_region == "us-east-2"
+    error_message = "An explicit origin_shield_region must override the derived region."
+  }
+}
+
+#-------------------------------------------------------------------------------
+# Cache policy (module-managed 1-year edge TTL)
+#-------------------------------------------------------------------------------
+
+run "cache_policy_defaults_to_module_managed_one_year" {
+  command = plan
+
+  assert {
+    condition     = var.cache_policy_id == null
+    error_message = "cache_policy_id should default to null so the module-managed 1-year policy is used."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_cache_policy.this) == 1
+    error_message = "The module-managed cache policy must be created when cache_policy_id is null."
+  }
+
+  assert {
+    condition     = aws_cloudfront_cache_policy.this[0].default_ttl == 31536000 && aws_cloudfront_cache_policy.this[0].max_ttl == 31536000
+    error_message = "The module-managed cache policy must cache at the edge for up to 1 year - S3 sends no Cache-Control, so the default TTL governs edge lifetime, and versioned cache keys make long TTLs safe."
+  }
+}
+
+run "cache_policy_id_override_skips_module_policy" {
+  command = plan
+
+  variables {
+    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_cache_policy.this) == 0
+    error_message = "No module-managed cache policy should be created when the caller supplies cache_policy_id."
+  }
+
+  assert {
+    condition     = local.effective_cache_policy_id == "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    error_message = "The caller-supplied cache policy ID must be attached to the default behavior."
+  }
 }
 
 #-------------------------------------------------------------------------------

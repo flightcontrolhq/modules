@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Serve real 404s and the build's 404.html error page, attach AWS managed security headers by default, fix the HTML Cache-Control default so browsers pick up new deploys immediately, and add WAF web ACL and Origin Shield options."
+  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, and add WAF web ACL and Origin Shield options."
 module:
   build:
     builder: >-
@@ -204,12 +204,11 @@ module:
       required: false
       type: string
     - collapsible: true
-      description: Enable CloudFront Origin Shield in this region to improve cache hit ratio and reduce S3 load for high-traffic sites. Pick the region closest to the hosting bucket.
-      id: origin_shield_region
-      label: Origin Shield region
-      required: false
-      type: string
-      values: $values:aws/regions
+      default: false
+      description: Add a CloudFront Origin Shield caching layer in front of the S3 bucket to improve cache hit ratio and reduce S3 load for high-traffic sites. The Origin Shield region is chosen automatically based on the bucket region.
+      id: origin_shield_enabled
+      label: Origin Shield
+      type: boolean
     - id: section_cache_headers
       label: Cache and headers
       type: section
@@ -241,12 +240,23 @@ module:
       show_when:
         cache_control_enabled: true
       type: string_array
-    - default: true
-      description: Attach the AWS managed SecurityHeadersPolicy (HSTS, nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy) when no other response headers policy is configured. Disable if the site must be embeddable in cross-origin iframes.
-      id: security_headers_enabled
+    - default:
+        - security_headers
+      description: AWS managed response header sets applied when no custom response headers policy is configured. Selections combine into a single AWS managed policy.
+      id: response_headers_presets
       collapsible: true
-      label: Security headers
-      type: boolean
+      label: Managed response headers
+      type: string_array
+      values:
+        - description: HSTS, nosniff, X-Frame-Options SAMEORIGIN, and Referrer-Policy on every response. Remove if the site must be embeddable in cross-origin iframes.
+          label: Security headers
+          value: security_headers
+        - description: Allow simple CORS requests from any origin.
+          label: CORS
+          value: cors
+        - description: Allow CORS requests from any origin, including OPTIONS preflight.
+          label: CORS with preflight
+          value: cors_preflight
     - collapsible: true
       description: Optional externally managed CloudFront response headers policy ID for security headers, CORS, or custom headers. Replaces the default security headers policy.
       id: response_headers_policy_id
@@ -260,7 +270,7 @@ module:
       required: false
       type: object
     - collapsible: true
-      description: CloudFront cache policy ID for the default behavior. Defaults to AWS managed CachingOptimized.
+      description: CloudFront cache policy ID for the default behavior. By default the module manages a policy that caches at the edge for up to a year, which is safe because every deploy changes the cache key.
       id: cache_policy_id
       label: Cache policy ID
       type: string
@@ -298,9 +308,7 @@ module:
       label: Deploy config
       type: section
     - add_button_label: Add invalidation path
-      default:
-        - /*
-      description: CloudFront paths to invalidate after promotion. Defaults to invalidating the full distribution.
+      description: CloudFront paths to invalidate after promotion.
       id: cloudfront_invalidation_paths
       label: CloudFront invalidation paths
       type: string_array
@@ -395,24 +403,30 @@ module:
 
     WAF web ACL ARN optionally associates a global (CloudFront) WAFv2 web ACL with the distribution.
 
-    Origin Shield region optionally adds a CloudFront Origin Shield layer in front of the S3 bucket. For high-traffic sites this improves the cache hit ratio and reduces origin load; pick the region closest to the hosting bucket.
+    Origin Shield adds an extra CloudFront caching layer in front of the S3 bucket. For high-traffic sites this improves the cache hit ratio and reduces origin load. The Origin Shield region is chosen automatically: the bucket region when CloudFront offers Origin Shield there, otherwise the nearest supported region per the AWS mapping.
 
     ## Cache and headers
 
-    Manage Cache-Control headers is enabled by default. When enabled, the module attaches a CloudFront Function that sets different browser cache headers for HTML-like responses and static assets. These headers steer the browser only — CloudFront edge freshness comes from the versioned deploys, which change the cache key on every promotion.
+    Caching happens at two independent layers, controlled by two different settings:
+
+    1. CloudFront edge caching is controlled by the Cache policy. It decides how long CloudFront keeps responses fetched from S3 at its edge locations. The default module-managed policy caches objects for up to a year with compression enabled. Long edge caching is safe here because every deploy is promoted under a new version prefix: the prefix is part of the CDN cache key, so a promotion switches CloudFront to fresh cache entries immediately and old entries simply stop being requested. You rarely need to change this policy.
+
+    2. Browser caching is controlled by the Cache-Control headers from Manage Cache-Control headers, which is enabled by default. A CloudFront Function writes these headers onto responses as they leave CloudFront for the viewer. By that point CloudFront has already made its own caching decision, so these headers are used only by the browser and never affect edge caching.
+
+    The browser headers split responses into two groups:
 
     | Setting | Default | Purpose |
     | --- | --- | --- |
-    | HTML Cache-Control | Terraform module default: public, max-age=0, must-revalidate | Browsers revalidate HTML on every navigation, so a new deploy is visible on the next page load |
-    | Asset Cache-Control | Terraform module default: public, max-age=31536000, immutable | Lets versioned assets be cached by browsers for a long time |
+    | HTML Cache-Control | Terraform module default: public, max-age=0, must-revalidate | Browsers store HTML but revalidate on every navigation with a cheap conditional request that CloudFront answers from its edge cache, so a new deploy is visible on the next page load |
+    | Asset Cache-Control | Terraform module default: public, max-age=31536000, immutable | Hashed assets never change at a given URL across versions, so browsers cache them for a year and skip revalidation entirely |
     | HTML cache path overrides | Terraform module defaults for service workers, manifests, favicon, robots, and sitemap | Treats stable root files as HTML-like responses instead of immutable assets |
-    | No-cache path patterns | [] | Bypasses CloudFront caching for selected path patterns |
-    | Cache policy ID | AWS managed CachingOptimized by default | Controls CloudFront cache behavior |
+    | No-cache path patterns | [] | Bypasses CloudFront edge caching for selected path patterns |
+    | Cache policy ID | Module-managed 1-year policy by default | Controls how CloudFront caches responses from S3 at the edge |
     | Origin request policy ID | AWS managed CORS-S3Origin by default | Controls what CloudFront forwards to S3 |
 
-    Security headers is enabled by default and attaches the AWS managed SecurityHeadersPolicy (HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy) when no other response headers policy is configured. Disable it if the site must be embeddable in cross-origin iframes.
+    Managed response headers selects AWS managed response header sets. Security headers is selected by default and adds HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, and Referrer-Policy to every response; remove it if the site must be embeddable in cross-origin iframes. Add CORS or CORS with preflight to allow cross-origin requests from any origin. CloudFront allows one response headers policy per distribution behavior, so the selections combine into the single matching AWS managed policy (CORS with preflight supersedes CORS when both are selected).
 
-    Use Response headers policy ID to attach an existing CloudFront response headers policy. Use Managed response headers policy when this module should create one for security headers, CORS, custom headers, or removed headers. Either option replaces the default security headers policy, so carry equivalent security headers in your own policy. Avoid putting Cache-Control into a response headers policy unless you intentionally want to override the cache-control function.
+    Use Response headers policy ID to attach an existing CloudFront response headers policy. Use Managed response headers policy when this module should create one for security headers, CORS, custom headers, or removed headers. Either option replaces the Managed response headers selection, so carry equivalent security headers in your own policy. Avoid putting Cache-Control into a response headers policy unless you intentionally want to override the cache-control function.
 
     ## Access logging
 
@@ -424,7 +438,11 @@ module:
 
     The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Pull from S3, enter the existing S3 prefix that already contains the files to promote.
 
-    CloudFront invalidation paths defaults to /*. This invalidates the full distribution after promotion. Because deployments are versioned, invalidations are often conservative rather than strictly required, but the default favors correctness for users who are changing stable paths.
+    CloudFront invalidation paths defaults to /*, which invalidates the full distribution after each promotion. Because deployments are versioned, promotion already changes the CDN cache key for every page and asset — invalidation is not what makes a new deploy visible.
+
+    Keep the default /* when files are served from stable paths that get overwritten in place: the root 404.html copy, Pull from S3 deploys that re-upload to the same S3 directory, or anything else outside the versioned prefixes. /* counts as a single path toward CloudFront's free invalidation tier (1,000 paths per month), so the default costs nothing in typical use.
+
+    Clear the invalidation paths when every deploy promotes a fresh S3 directory and you do not rely on a custom 404 page changing between deploys. Skipping invalidation makes promotions complete faster because the deploy does not wait for CloudFront to finish invalidating. If you later change 404.html, add /404.html (or /*) back for that deploy or invalidate manually.
 
     Successful deploys to retain defaults to 20. Older deploy directories are pruned from the hosting bucket based on this setting.
 
@@ -461,9 +479,9 @@ module:
     | CloudFront settings | Price class | No | PriceClass_All | Edge location coverage |
     | CloudFront settings | Geo restriction | No | none | Optional country allow or deny list |
     | CloudFront settings | WAF web ACL ARN | No | none | Global WAFv2 web ACL for the distribution |
-    | CloudFront settings | Origin Shield region | No | none | Extra caching layer for high-traffic sites |
+    | CloudFront settings | Origin Shield | No | false | Extra caching layer; region chosen automatically |
     | Cache and headers | Manage Cache-Control headers | No | true | Attaches the cache-control function |
-    | Cache and headers | Security headers | No | true | AWS managed SecurityHeadersPolicy by default |
+    | Cache and headers | Managed response headers | No | Security headers | AWS managed header sets; add CORS or CORS with preflight |
     | Access logging | CloudFront access logging | No | false | Creates a logging bucket when enabled |
     | Access logging | Logging retention days | No | 90 | Visible when logging is enabled |
     | Deploy config | CloudFront invalidation paths | No | /* | Paths invalidated after promotion |
@@ -525,10 +543,10 @@ module:
         name: << module.input.name >>
         no_cache_paths: << module.input.no_cache_paths >>
         origin_request_policy_id: << module.input.origin_request_policy_id >>
-        origin_shield_region: << module.input.origin_shield_region || nil >>
+        origin_shield_enabled: << module.input.origin_shield_enabled >>
         price_class: << module.input.price_class >>
         region: << module.input.aws_region >>
-        security_headers_enabled: << module.input.security_headers_enabled >>
+        response_headers_presets: << module.input.response_headers_presets >>
         response_headers_policy: >-
           << module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ?
           module.input.response_headers_policy : nil >>
