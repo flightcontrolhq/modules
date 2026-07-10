@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.3.0
-  description: Add cluster-level CloudWatch CPU/memory alarms wired to Ravion notifications via the ravion provider.
+  version: 0.3.1
+  description: "Add cluster-level CloudWatch CPU/memory alarms wired to Ravion notifications via the ravion provider. BREAKING: Replace the boolean Container insights input with a select supporting enhanced observability."
 module:
   inputs:
     - id: network
@@ -39,11 +39,18 @@ module:
       id: load_balancer_deletion_protection_enabled
       label: Load balancer deletion protection
       type: boolean
-    - default: true
-      description: Enables CloudWatch Container Insights for detailed task, container, network, storage, and EC2 capacity metrics beyond the basic ECS CPU and memory metrics available by default.
-      id: container_insights_enabled
+    - default: enhanced
+      description: Configures CloudWatch Container Insights for the ECS cluster. Enhanced observability adds detailed task and container metrics and may increase CloudWatch costs.
+      id: container_insights
       label: Container insights
-      type: boolean
+      type: string
+      values:
+        - label: Enhanced observability
+          value: enhanced
+        - label: Standard
+          value: enabled
+        - label: Disabled
+          value: disabled
     - id: section_capacity
       label: Capacity providers
       type: section
@@ -223,16 +230,24 @@ module:
       show_when:
         public_alb_enabled: true
       type: boolean
-    - add_button_label: Add certificate ARN
-      description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-      id: public_alb_certificate_arns
-      label: Certificate ARNs
-      placeholder: arn:aws:acm:...
+    - description: ACM certificate module for public ALB HTTPS.
+      id: public_alb_certificate
+      label: Certificate
+      mapped_inputs:
+        - add_button_label: Add certificate ARN
+          default:
+            - <<ref.stack.output.certificate_arn>>
+          description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
+          id: public_alb_certificate_arns
+          label: Certificate ARNs
+          placeholder: arn:aws:acm:...
+          required: true
+          type: string_array
       required: true
       show_when:
         public_alb_enabled: true
         public_alb_https_enabled: true
-      type: string_array
+      type: $ref:rvn-acm-certificate
     - collapsible: true
       description: SSL policy for public ALB HTTPS.
       id: public_alb_ssl_policy
@@ -292,16 +307,24 @@ module:
       show_when:
         private_alb_enabled: true
       type: boolean
-    - add_button_label: Add certificate ARN
-      description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-      id: private_alb_certificate_arns
-      label: Certificate ARNs
-      placeholder: arn:aws:acm:...
+    - description: ACM certificate module for private ALB HTTPS.
+      id: private_alb_certificate
+      label: Certificate
+      mapped_inputs:
+        - add_button_label: Add certificate ARN
+          default:
+            - <<ref.stack.output.certificate_arn>>
+          description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
+          id: private_alb_certificate_arns
+          label: Certificate ARNs
+          placeholder: arn:aws:acm:...
+          required: true
+          type: string_array
       required: true
       show_when:
         private_alb_enabled: true
         private_alb_https_enabled: true
-      type: string_array
+      type: $ref:rvn-acm-certificate
     - collapsible: true
       description: SSL policy for private ALB HTTPS.
       id: private_alb_ssl_policy
@@ -609,7 +632,7 @@ module:
     | --------------------- | -------- | -------------------- | ------------------------------------------------------------- |
     | VPC network           | Yes      | —                    | Existing VPC, subnets, AWS account, and region                |
     | Name slug             | Yes      | `{project}-{env}`    | Name prefix for ECS and load balancer resources               |
-    | Container insights    | No       | `true`               | Collect task, service, cluster, and EC2 metrics in CloudWatch |
+    | Container insights    | No       | `enhanced`           | Collect enhanced task, service, cluster, and EC2 metrics in CloudWatch |
     | Fargate               | No       | `true`               | Allow services to use Fargate capacity                        |
     | Fargate Spot          | No       | `true`               | Allow services to use lower-cost interruptible Fargate Spot   |
     | EC2 instance type     | No       | —                    | Enables EC2 capacity when selected                            |
@@ -643,7 +666,7 @@ module:
     - **Private subnet placement:** ECS tasks and EC2 capacity use private subnets from the selected VPC
     - **Public ingress by default:** Public ALBs use Terraform's default internet ingress unless overridden in Terraform
     - **Private ingress by default:** Private ALBs use Terraform's default RFC1918 private CIDR ranges unless overridden
-    - **Container Insights enabled:** Production metrics are collected by default for operational visibility
+    - **Enhanced Container Insights:** Enhanced production metrics are collected by default for operational visibility
 
     ## Learn more
 
@@ -678,7 +701,7 @@ module:
         ec2_security_group_ids: << module.input.ec2_security_group_ids >>
         ec2_spot_instance_types: << module.input.ec2_spot_instance_types >>
         ec2_user_data: << module.input.ec2_user_data >>
-        container_insights_enabled: << module.input.container_insights_enabled >>
+        container_insights: << module.input.container_insights >>
         fargate_enabled: << module.input.fargate_enabled >>
         fargate_spot_enabled: << module.input.fargate_spot_enabled >>
         private_alb_enabled: << module.input.private_alb_enabled >>

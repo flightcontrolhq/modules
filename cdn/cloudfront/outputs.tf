@@ -33,6 +33,40 @@ output "distribution_etags" {
 }
 
 ################################################################################
+# Edge Redirects
+################################################################################
+
+output "redirect_function_arn" {
+  description = "The ARN of the managed viewer-request redirect function, or null when redirect rules are disabled."
+  value       = try(aws_cloudfront_function.redirect[0].arn, null)
+}
+
+output "redirect_function_name" {
+  description = "The name of the managed viewer-request redirect function, or null when redirect rules are disabled."
+  value       = try(aws_cloudfront_function.redirect[0].name, null)
+}
+
+output "distribution_id" {
+  description = "The ID of the CloudFront distribution when exactly one distribution is created (null otherwise)."
+  value       = length(aws_cloudfront_distribution.this) == 1 ? values(aws_cloudfront_distribution.this)[0].id : null
+}
+
+output "distribution_arn" {
+  description = "The ARN of the CloudFront distribution when exactly one distribution is created (null otherwise)."
+  value       = length(aws_cloudfront_distribution.this) == 1 ? values(aws_cloudfront_distribution.this)[0].arn : null
+}
+
+output "distribution_domain_name" {
+  description = "The domain name of the CloudFront distribution when exactly one distribution is created (null otherwise)."
+  value       = length(aws_cloudfront_distribution.this) == 1 ? values(aws_cloudfront_distribution.this)[0].domain_name : null
+}
+
+output "distribution_hosted_zone_id" {
+  description = "The Route 53 hosted zone ID of the CloudFront distribution when exactly one distribution is created (null otherwise)."
+  value       = length(aws_cloudfront_distribution.this) == 1 ? values(aws_cloudfront_distribution.this)[0].hosted_zone_id : null
+}
+
+################################################################################
 # Origin Access Control
 ################################################################################
 

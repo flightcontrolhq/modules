@@ -1,5 +1,5 @@
 locals {
-  region    = coalesce(var.region, data.aws_region.current.id)
+  region    = coalesce(var.region, data.aws_region.current.region)
   partition = data.aws_partition.current.partition
 }
 

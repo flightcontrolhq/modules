@@ -10,6 +10,7 @@ import {
   publishDefinitions,
   PublishError,
   type ModuleDefinitionInput,
+  type ModuleDefinitionPatchInput,
   type ModuleVersionInput,
   type RavionModuleApiClient,
 } from "../src/publish.js";
@@ -25,6 +26,7 @@ describe("publish", () => {
       { action: "create-version", dryRun: false },
     ]);
     assert.deepEqual(client.createdDefinitions, [{ type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }]);
+    assert.deepEqual(client.patchedDefinitions, [{ id: "definition-1", isGlobalPublished: true }]);
     assert.deepEqual(client.createdVersions.map(({ moduleDefinitionId, version, description, config }) => ({ moduleDefinitionId, version, description, config })), [
       { moduleDefinitionId: "definition-1", version: "1.2.3", description: "Add subnet options.", config: { inputs: [{ id: "name", type: "string", label: "Name" }] } },
     ]);
@@ -345,7 +347,7 @@ describe("publish", () => {
       await client.listModuleDefinitions();
       await client.listModuleVersions("vpc");
       await client.createModuleDefinition({ type: "ravion-aws-new", name: "New", description: "New module." });
-      await client.patchModuleDefinition({ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "New description." });
+      await client.patchModuleDefinition({ id: "vpc", name: "AWS VPC", description: "New description." });
       await client.createModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} });
     } finally {
       globalThis.fetch = originalFetch;
@@ -435,7 +437,7 @@ class MockRavionClient implements RavionModuleApiClient {
   definitions: RemoteModuleDefinition[];
   versionsByDefinitionId: Record<string, RemoteModuleVersion[]>;
   createdDefinitions: ModuleDefinitionInput[] = [];
-  patchedDefinitions: RemoteModuleDefinition[] = [];
+  patchedDefinitions: ModuleDefinitionPatchInput[] = [];
   createdVersions: ModuleVersionInput[] = [];
   onListModuleVersions?: (moduleDefinitionId: string) => Promise<RemoteModuleVersion[]>;
   onCreateVersion?: (input: ModuleVersionInput) => Promise<void>;
@@ -456,10 +458,15 @@ class MockRavionClient implements RavionModuleApiClient {
     return definition;
   }
 
-  async patchModuleDefinition(input: RemoteModuleDefinition): Promise<RemoteModuleDefinition> {
+  async patchModuleDefinition(input: ModuleDefinitionPatchInput): Promise<RemoteModuleDefinition> {
     this.patchedDefinitions.push(input);
-    this.definitions = this.definitions.map((definition) => (definition.id === input.id ? input : definition));
-    return input;
+    const patched = this.definitions.map((definition) => (definition.id === input.id ? { ...definition, ...input } : definition));
+    this.definitions = patched;
+    const definition = patched.find((item) => item.id === input.id);
+    if (!definition) {
+      throw new Error(`Definition ${input.id} not found`);
+    }
+    return definition;
   }
 
   async listModuleVersions(moduleDefinitionId: string): Promise<RemoteModuleVersion[]> {

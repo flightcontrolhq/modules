@@ -1,21 +1,19 @@
-type: '<< module.input.build_type == "prebuilt_image" ? "disabled" : "image" >>'
+type: '<< module.input.build_source == "image_registry" ? "disabled" : "image" >>'
 builder: >-
-  << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
+  << module.input.build_source == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
   || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
   module.input.dockerfile_inject_env_variables, cache_from: {tag: "dockerfile"}} :
-  module.input.build_type == "nixpacks" ? {type: "nixpacks", install_cmd:
-  module.input.nixpacks_install_cmd, build_cmd: module.input.nixpacks_build_cmd, start_cmd:
-  module.input.nixpacks_start_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path:
-  module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs:
-  module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs:
-  module.input.nixpacks_nix_libs, cache_from: {tag: "nixpacks"}} : {type: "disabled"} >>
+  (module.input.build_source == "railpack" || module.input.build_source == "nixpacks") ? {type: "railpack", railpack_version:
+  module.input.railpack_version, install_cmd: module.input.railpack_install_cmd,
+  build_cmd: module.input.railpack_build_cmd, start_cmd:
+  module.input.railpack_start_cmd, cache_from: {tag: "railpack"}} : {type: "disabled"} >>
 destinations:
   - id: ecr
     type: ecr
     repository_arn: << stack.output.ecr_repository_arn >>
     tags:
-      - <<pipeline.run.id>>-<< module.input.build_type >>
-      - << module.input.build_type >>
+      - <<pipeline.run.id>>-<< module.input.build_source >>
+      - << module.input.build_source >>
 environment_variables: << module.input.build_environment_variables >>
 infrastructure:
   $include: ./infrastructure.yml

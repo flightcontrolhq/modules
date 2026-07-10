@@ -289,6 +289,7 @@ module "worker_service" {
 |------|-------------|------|---------|----------|
 | task_cpu | CPU units for the task (256, 512, 1024, 2048, 4096, 8192, 16384) | `number` | `256` | no |
 | task_memory | Memory (MiB) for the task (512-122880) | `number` | `512` | no |
+| task_ephemeral_storage_size_gib | Ephemeral storage size in GiB for Fargate tasks (null = AWS default 20 GiB; set value must be 21-200 GiB) | `number` | `null` | no |
 | container_port | Port for the placeholder container | `number` | `80` | no |
 | launch_type | Launch type (FARGATE or EC2) | `string` | `"FARGATE"` | no |
 | network_mode | Docker networking mode (awsvpc, bridge, host, none) | `string` | `"awsvpc"` | no |
@@ -436,6 +437,14 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 | Name | Description |
 |------|-------------|
 | nlb_listener_arn | NLB listener ARN (null if not using NLB) |
+
+### Load Balancer
+
+| Name | Description |
+|------|-------------|
+| load_balancer_arn | ARN of the load balancer the service is attached to (null if no LB attachment) |
+| load_balancer_dns_name | DNS name of the attached load balancer, usable as a CloudFront or DNS origin |
+| load_balancer_zone_id | Canonical hosted zone ID of the attached load balancer, for Route53 alias records |
 
 ### Auto Scaling
 

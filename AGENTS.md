@@ -242,6 +242,19 @@ tofu init
 tofu validate
 ```
 
+### Provider Lock Files
+
+Each module commits its `.terraform.lock.hcl`. A committed lock file must contain the registry `zh:` checksums, not just a local `h1:` platform hash — Ravion runners on linux_amd64 fail `tofu init` with a checksum-verification error otherwise.
+
+- `tofu init` run with `-plugin-dir` or a filesystem provider mirror records only the local platform's `h1:` hash and **no** `zh:` checksums. Never commit a lock file produced that way.
+- To generate a correct lock file, run from the module directory:
+
+  ```bash
+  tofu providers lock -platform=linux_amd64 -platform=darwin_arm64
+  ```
+
+- If registry access is unavailable, copy the provider's hash block from another module's committed lock file that pins the same provider source and version (adjust the `constraints` line to match this module's `versions.tf`).
+
 ### When Creating New Modules
 
 1. Create the directory structure: `<category>/<module-name>/`
@@ -250,7 +263,8 @@ tofu validate
 4. Add validation to variables where applicable
 5. Include comprehensive examples in the module README
 6. **Update the root README.md Module Directory table**
-7. Format and validate before committing
+7. Generate `.terraform.lock.hcl` with registry checksums (see Provider Lock Files)
+8. Format and validate before committing
 
 ### When Modifying Existing Modules
 

@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.3.0
-  description: Add CloudWatch CPU/memory alarms wired to Ravion notifications via the ravion provider.
+  version: 0.3.2
+  description: "Add Railpack image builds and CloudWatch CPU/memory alarms wired to Ravion notifications via the ravion provider. BREAKING: Rename the Build type input to Build source (`build_type` -> `build_source`), rename the Prebuilt image from registry option to Pull from image registry (`prebuilt_image` -> `image_registry`), and rename `prebuilt_image_start_command` to `image_start_command`."
 module:
   inputs:
     - id: section_cluster
@@ -43,6 +43,7 @@ module:
         environment_variables_description: Runtime environment variables passed to the worker container.
     - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
     - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-efs-inputs.yml
     - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
     - id: section_notifications
       label: Alarm notifications
@@ -131,18 +132,20 @@ module:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml
       container_definitions: >-
-        << (module.input.firelens_enabled ? [{"command": (len(module.input.prebuilt_image_start_command)
-        > 0 ? module.input.prebuilt_image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.image_start_command)
+        > 0 ? module.input.image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
         "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment":
         (module.input.environment_variables != nil ? module.input.environment_variables : []), "essential": true,
-        "image": (module.input.build_type == "prebuilt_image" ? (deploy.input.image_ref contains
+        "image": (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains
         "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository
         + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
         stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url + ":" +
         deploy.input.image_ref)), "linux_parameters": {"init_process_enabled": true}, "log_configuration":
         {"log_driver": "awsfirelens"}, "memory": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)),
+        "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []),
         "name": (stack.output.container_name), "readonly_root_filesystem": false, "repository_credentials":
         (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
         module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
@@ -162,11 +165,11 @@ module:
         stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
         "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
         "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
-        (len(module.input.prebuilt_image_start_command) > 0 ? module.input.prebuilt_image_start_command : nil), "cpu":
+        (len(module.input.image_start_command) > 0 ? module.input.image_start_command : nil), "cpu":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
         int(float(module.input.fargate_size.vcpu) * 1024)), "environment": (module.input.environment_variables != nil ?
-        module.input.environment_variables : []), "essential": true, "image": (module.input.build_type ==
-        "prebuilt_image" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
+        module.input.environment_variables : []), "essential": true, "image": (module.input.build_source ==
+        "image_registry" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
         deploy.input.image_ref : module.input.image_repository + ":" + deploy.input.image_ref) :
         (deploy.input.image_ref contains "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
         stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
@@ -174,7 +177,9 @@ module:
         {"awslogs-group": stack.output.log_group_name, "awslogs-region": stack.output.region,
         "awslogs-stream-prefix": stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider ==
         "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
-        1024)), "name": (stack.output.container_name), "readonly_root_filesystem": false,
+        1024)), "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
+        (stack.output.container_name), "readonly_root_filesystem": false,
         "repository_credentials": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
         module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
         "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars : []) >>
@@ -216,7 +221,13 @@ module:
 
     ## Build and deployment
 
-    Workers support Dockerfile, Nixpacks, and prebuilt image deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For prebuilt images, use Start command to override the image default CMD when the worker process uses a different command.
+    Workers support Dockerfile, Railpack, and Pull from image registry deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For Railpack builds, you can optionally pin the Railpack version and override install, build, and start commands. For Fargate and Fargate Spot, App ephemeral storage uses the AWS default of 20 GiB unless you increase it to 21-200 GiB. For image registry deployments, use Start command to override the image default CMD when the worker process uses a different command.
+
+    ## Persistent storage
+
+    Enable the EFS file system setting, select a Ravion EFS module, and set the EFS mount path. Ravion adds the task volume, mounts it into the worker container, attaches the file system's client security group to the service so NFS traffic is allowed, and mounts through the file system's access point when one is enabled. Sidecars mount the same file system through their Mount points setting with `efs` as the source volume.
+
+    EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. Transit encryption is enabled by default. Enable EFS IAM authorization to authorize file system access with the task role; the task role must allow elasticfilesystem:ClientMount, plus elasticfilesystem:ClientWrite or elasticfilesystem:ClientRootAccess as needed.
 
     ## Autoscaling
 
@@ -229,16 +240,19 @@ module:
     | ECS cluster | Yes | - | Existing rvn-ecs-cluster module instance |
     | Service name | Yes | {project}-{env}-{module} | Name for the ECS service and related resources |
     | Run in private subnets | No | true | Run tasks in private subnets without public IPs |
-    | Build type | Yes | dockerfile | Dockerfile, Nixpacks, or Prebuilt image from registry |
-    | Start command | No | [] | Command arguments that override a prebuilt image default CMD |
+    | Build source | Yes | dockerfile | Dockerfile, Railpack, or Pull from image registry |
+    | Start command | No | [] | Command arguments that override an image default CMD |
     | Capacity provider | Yes | fargate | Primary service capacity provider |
     | App size | No | 2 vCPU, 4 GB | Fargate task CPU and memory |
+    | App ephemeral storage (GiB) | No | 20 | Fargate task ephemeral storage |
     | Autoscaling | No | true | Enable CPU and optional memory target tracking |
     | Desired tasks | Yes* | 1 | Number of worker tasks when autoscaling is disabled |
     | Custom metric scaling policies | No | [] | Queue/backlog-oriented target tracking policies |
     | Runtime environment variables | No | - | Environment variables passed to the worker container |
     | Runtime secrets | No | - | Secrets injected from SSM Parameter Store or Secrets Manager |
     | Sidecars | No | [] | Additional containers in the worker task |
+    | EFS file system | No | false | Mount an EFS file system into the worker container |
+    | EFS mount path | Yes* | /mnt/efs | Worker container path for the referenced file system |
 
     ## Design decisions
 

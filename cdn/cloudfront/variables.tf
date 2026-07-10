@@ -120,6 +120,134 @@ variable "origins" {
 }
 
 ################################################################################
+# Edge Redirects
+################################################################################
+
+variable "redirect_rules" {
+  type = list(object({
+    source                    = string
+    destination               = string
+    preserve_query_string     = optional(bool, false)
+    redirect_non_read_methods = optional(bool, false)
+    status_code               = optional(number, 308)
+  }))
+  description = "Ordered viewer-request redirect rules using absolute HTTPS URLs or host-agnostic paths with named path parameters. The first matching rule wins."
+  default     = []
+
+  validation {
+    condition     = length(var.redirect_rules) <= 50
+    error_message = "No more than 50 redirect rules can be configured."
+  }
+
+  validation {
+    condition = alltrue([
+      for route in concat(
+        [for rule in var.redirect_rules : rule.source],
+        [for rule in var.redirect_rules : rule.destination],
+      ) :
+      startswith(route, "/") || (
+        startswith(route, "https://") &&
+        length(split("/", trimprefix(route, "https://"))[0]) <= 253 &&
+        alltrue([
+          for label in split(".", split("/", trimprefix(route, "https://"))[0]) :
+          length(label) >= 1 && length(label) <= 63 &&
+          can(regex("^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$", label))
+        ])
+      )
+    ])
+    error_message = "Each redirect source and destination must be a host-agnostic path or an absolute HTTPS URL with a valid hostname."
+  }
+
+  validation {
+    condition = alltrue([
+      for route in concat(
+        [for rule in var.redirect_rules : rule.source],
+        [for rule in var.redirect_rules : rule.destination],
+      ) :
+      length(route) <= 4096 && (
+        can(regex(
+          "^/(?:[A-Za-z0-9._~!$&'()+,;=@%-]+|:[A-Za-z][A-Za-z0-9_]*\\*?)(?:/(?:[A-Za-z0-9._~!$&'()+,;=@%-]+|:[A-Za-z][A-Za-z0-9_]*\\*?))*$",
+          route,
+          )) || route == "/" || can(regex(
+          "^https://[A-Za-z0-9.-]+(?:/(?:[A-Za-z0-9._~!$&'()+,;=@%-]+|:[A-Za-z][A-Za-z0-9_]*\\*?)(?:/(?:[A-Za-z0-9._~!$&'()+,;=@%-]+|:[A-Za-z][A-Za-z0-9_]*\\*?))*)?$",
+          route,
+        ))
+      )
+    ])
+    error_message = "Redirect routes must be at most 4096 characters and contain only URI-safe literal segments, :name parameters, or :name* catch-all parameters."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.redirect_rules :
+      length(regexall("/:([A-Za-z][A-Za-z0-9_]*)(?:\\*)?", rule.source)) ==
+      length(distinct([
+        for parameter in regexall("/:([A-Za-z][A-Za-z0-9_]*)(?:\\*)?", rule.source) : parameter[0]
+      ]))
+    ])
+    error_message = "Each named parameter may appear only once in a redirect source."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.redirect_rules : alltrue([
+        for parameter in regexall("/:([A-Za-z][A-Za-z0-9_]*)(?:\\*)?", rule.source) :
+        !contains(["__proto__", "prototype", "constructor"], parameter[0])
+      ])
+    ])
+    error_message = "Redirect parameter names cannot be __proto__, prototype, or constructor."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.redirect_rules :
+      length(regexall("/:[A-Za-z][A-Za-z0-9_]*\\*", rule.source)) <= 1 &&
+      (length(regexall("/:[A-Za-z][A-Za-z0-9_]*\\*", rule.source)) == 0 || endswith(rule.source, "*"))
+    ])
+    error_message = "A redirect source may contain at most one catch-all parameter, and it must be the final segment."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.redirect_rules : alltrue([
+        for parameter in regexall("/:([A-Za-z][A-Za-z0-9_]*)(?:\\*)?", rule.destination) :
+        contains(
+          [for source_parameter in regexall("/:([A-Za-z][A-Za-z0-9_]*)(?:\\*)?", rule.source) : source_parameter[0]],
+          parameter[0],
+        )
+      ])
+    ])
+    error_message = "Every named parameter in a redirect destination must be declared by its source."
+  }
+
+  validation {
+    condition = alltrue([
+      for route in concat(
+        [for rule in var.redirect_rules : rule.source],
+        [for rule in var.redirect_rules : rule.destination],
+      ) :
+      length(regexall("%", route)) == length(regexall("%[0-9A-Fa-f]{2}", route))
+    ])
+    error_message = "Every percent sign in a redirect source or destination must begin a two-digit percent escape."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.redirect_rules : contains([301, 302, 307, 308], rule.status_code)
+    ])
+    error_message = "Each redirect status_code must be 301, 302, 307, or 308."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.redirect_rules :
+      !rule.redirect_non_read_methods || contains([307, 308], rule.status_code)
+    ])
+    error_message = "Redirect rules that include non-read methods must use status code 307 or 308 to preserve the request method and body."
+  }
+}
+
+################################################################################
 # Default Cache Behavior
 ################################################################################
 
@@ -133,6 +261,7 @@ variable "default_cache_behavior" {
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
+    trusted_key_groups         = optional(list(string), [])
     function_associations = optional(list(object({
       event_type   = string
       function_arn = string
@@ -167,6 +296,7 @@ variable "ordered_cache_behaviors" {
     cache_policy_id            = optional(string)
     origin_request_policy_id   = optional(string)
     response_headers_policy_id = optional(string)
+    trusted_key_groups         = optional(list(string), [])
     function_associations = optional(list(object({
       event_type   = string
       function_arn = string
@@ -235,6 +365,12 @@ variable "deployment_wait_enabled" {
   type        = bool
   description = "Whether to wait for the distribution to be deployed before completing."
   default     = true
+}
+
+variable "additional_metrics_enabled" {
+  type        = bool
+  description = "Whether to enable CloudFront additional metrics in CloudWatch. This enables all 8 additional metrics for each distribution and incurs a fixed per-metric CloudWatch charge."
+  default     = false
 }
 
 ################################################################################

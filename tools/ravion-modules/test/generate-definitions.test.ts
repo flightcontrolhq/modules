@@ -66,6 +66,23 @@ describe("definition generation", () => {
     assert.equal(result.generated[0].version, "1.2.0");
     assert.match(result.generated[0].content, /version: 1\.2\.0/);
   });
+
+  it("generates stack-only definitions without Terraform files", async () => {
+    const rootPath = await createModuleRoot([]);
+    const stackPath = join(rootPath, "stack", "terraform");
+    await mkdir(stackPath, { recursive: true });
+    await writeFile(join(stackPath, "rvn-stack-definition.yml"), "definition:\n  type: rvn-stack\n");
+    const inventory = createInventory();
+    inventory.definitions = [{ id: "stack", type: "rvn-stack", name: "Stack", description: "Terraform stack." }];
+    inventory.versionsByDefinitionId = {
+      stack: [{ moduleDefinitionId: "stack", version: "1.8.37", description: "Stack definition.", config: { inputs: [] } }],
+    };
+
+    const result = await generateDefinitionsFromInventory(inventory, rootPath);
+
+    assert.deepEqual(result.missing, []);
+    assert.equal(result.generated[0].modulePath, "stack/terraform");
+  });
 });
 
 async function createModuleRoot(modulePaths: string[]): Promise<string> {

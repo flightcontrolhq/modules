@@ -190,7 +190,7 @@ module "api_service" {
 | Name | Version |
 |------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 5.0 |
+| aws | >= 6.0 |
 
 ## Inputs
 
@@ -198,7 +198,7 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| name | Name prefix for all resources | `string` | n/a | yes |
+| name | Name prefix for all resources. Maximum length depends on enabled load balancers: 28 for public ALB, 27 for private ALB, 24 for public NLB, and 23 for private NLB. | `string` | n/a | yes |
 | tags | Map of tags to assign to resources | `map(string)` | `{}` | no |
 | load_balancer_deletion_protection_enabled | If true, load balancers created by this module cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
 | vpc_id | VPC ID for ECS resources | `string` | n/a | yes |
@@ -209,7 +209,7 @@ module "api_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| container_insights_enabled | Enable CloudWatch Container Insights | `bool` | `true` | no |
+| container_insights | CloudWatch Container Insights setting. Valid values: `enhanced`, `enabled`, `disabled` | `string` | `"enhanced"` | no |
 | capacity_provider_default | Family for the cluster default strategy: `ec2`, `fargate` (includes Fargate Spot when enabled), or `fargate_spot`. AWS forbids mixing Fargate and EC2 providers in one strategy. Defaults to `ec2` if EC2 is enabled, then `fargate`, then `fargate_spot` | `string` | `null` | no |
 
 ### Fargate Capacity Provider
@@ -439,7 +439,7 @@ module "api_service" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │        NETWORK                  │   │      ECS CLUSTER                        │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • container_insights_enabled             │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • container_insights                     │  ║
 ║  │ • tags                      │   │ • private_subnet_ids (required) │   └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘   │ • public_subnet_ids             │                                                 ║
 ║                                    └─────────────────────────────────┘                                                 ║

@@ -1,0 +1,859 @@
+definition:
+  type: rvn-cloudfront
+  name: CloudFront CDN
+  description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
+release:
+  version: 0.3.0
+  description: Add edge redirects with named path parameters and catch-all routes.
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      default: us-east-1
+      description: CloudFront is global. This region is used for the optional access logging bucket.
+    - id: section_distribution
+      label: Distribution
+      type: section
+    - id: name
+      immutable: true
+      label: Name slug
+      type: string
+      description: Name prefix for the distribution comment, origin access control, and logging bucket.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: 1-63 letters, numbers, or hyphens. Start with a letter.
+          pattern: ^[a-zA-Z][a-zA-Z0-9-]{0,62}$
+    - id: distribution_aliases
+      label: Domain aliases
+      type: string_array
+      description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain. Aliases must match the domain host rules on the origin load balancer when it routes by host.
+      add_button_label: Add domain alias
+      default: []
+    - id: certificate
+      label: ACM certificate
+      type: $ref:rvn-acm-certificate
+      description: Certificate for the domain aliases. Required when aliases are set. CloudFront requires the certificate to be issued in us-east-1.
+      required: false
+      mapped_inputs:
+        - id: acm_certificate_arn
+          label: ACM certificate ARN
+          type: string
+          description: Certificate ARN from the selected ACM certificate module. Must be in us-east-1.
+          placeholder: arn:aws:acm:us-east-1:123456789012:certificate/abc-123
+          required: false
+          default: <<ref.stack.output.certificate_arn>>
+    - id: section_origin
+      label: Origin
+      type: section
+      description: Where CloudFront sends requests. ECS web services and clusters share one load balancer, and private S3 buckets use Origin Access Control.
+    - id: origin_source
+      label: Origin source
+      type: string
+      description: Choose an existing ECS module, private S3 bucket, or custom origin domain name.
+      required: true
+      default: ecs_web_service
+      values:
+        - label: ECS web service
+          description: Use the load balancer of an existing ECS web service as the origin.
+          value: ecs_web_service
+        - label: ECS cluster
+          description: Use the public ALB of an existing ECS cluster as the origin.
+          value: ecs_cluster
+        - label: S3 bucket
+          description: Use a private S3 bucket as the origin with CloudFront Origin Access Control.
+          value: s3_bucket
+        - label: Custom domain
+          description: Enter any origin domain name, such as a load balancer, API endpoint, or S3 website endpoint.
+          value: custom
+    - id: ecs_web_service
+      label: ECS web service
+      type: $ref:rvn-ecs-web
+      description: ECS web service whose load balancer becomes the origin. The service must be on rvn-ecs-web 0.8.0 or later so its stack exposes the load balancer DNS name.
+      required: false
+      show_when:
+        origin_source: ecs_web_service
+      mapped_inputs:
+        - id: ecs_web_alb_dns_name
+          label: Service load balancer DNS name
+          type: string
+          description: Load balancer DNS name from the selected ECS web service, used as the origin domain. If this is empty, update the service to rvn-ecs-web 0.8.0 or later and apply its stack, then re-select the service.
+          required: true
+          default: <<ref.stack.output.load_balancer_dns_name>>
+    - id: ecs_cluster
+      label: ECS cluster
+      type: $ref:rvn-ecs-cluster
+      description: ECS cluster whose public ALB becomes the origin. Listener rules on the ALB keep routing requests to the right services.
+      required: false
+      show_when:
+        origin_source: ecs_cluster
+      mapped_inputs:
+        - id: ecs_cluster_alb_dns_name
+          label: Cluster public ALB DNS name
+          type: string
+          description: Public ALB DNS name from the selected ECS cluster, used as the origin domain. If this is empty, the selected cluster has no public ALB or has not applied its stack.
+          required: true
+          default: <<ref.stack.output.public_alb_dns_name>>
+    - id: origin_domain_name
+      label: Origin domain name
+      type: string
+      description: Domain name CloudFront connects to for the primary origin.
+      placeholder: my-alb-1234567890.us-east-1.elb.amazonaws.com
+      required: true
+      show_when:
+        origin_source: custom
+    - id: s3_bucket
+      label: S3 bucket
+      type: $ref:rvn-s3
+      description: Private S3 bucket to serve through CloudFront Origin Access Control. After this CloudFront stack applies, add its distribution ARN to the S3 bucket's CloudFront OAC read policy template.
+      required: false
+      show_when:
+        origin_source: s3_bucket
+      mapped_inputs:
+        - id: s3_bucket_regional_domain_name
+          label: S3 bucket regional domain name
+          type: string
+          description: Regional S3 bucket domain name from the selected S3 bucket module.
+          required: true
+          default: <<ref.stack.output.bucket_regional_domain_name>>
+    - id: origin_protocol_policy
+      label: Origin protocol policy
+      type: string
+      description: How CloudFront connects to the origin. HTTPS only requires the origin load balancer to serve a certificate valid for the forwarded host.
+      required: true
+      default: https-only
+      show_when:
+        origin_source:
+          - ecs_web_service
+          - ecs_cluster
+          - custom
+      values:
+        - label: HTTPS only
+          value: https-only
+        - label: HTTP only
+          value: http-only
+        - label: Match viewer
+          value: match-viewer
+    - id: additional_origins
+      label: Additional origins
+      type: object_array
+      description: Optional extra origins that custom cache behaviors can route paths to. Each origin needs a unique ID.
+      collapsible: true
+      required: false
+      item_label: Origin
+      item_title:
+        template: "{origin_id}"
+      item_description: "{domain_name}"
+      item_inputs:
+        - id: origin_id
+          label: Origin ID
+          type: string
+          description: Unique identifier referenced by cache behaviors. The primary origin uses the ID primary.
+          required: true
+        - id: domain_name
+          label: Domain name
+          type: string
+          placeholder: assets.example.com
+          required: true
+        - id: origin_path
+          label: Origin path
+          type: string
+          description: Optional path prefix CloudFront adds to requests sent to this origin.
+          placeholder: /base-path
+          required: false
+        - id: origin_protocol_policy
+          label: Origin protocol policy
+          type: string
+          required: true
+          default: https-only
+          values:
+            - label: HTTPS only
+              value: https-only
+            - label: HTTP only
+              value: http-only
+            - label: Match viewer
+              value: match-viewer
+      default: []
+    - id: section_edge_redirects
+      label: Edge redirects
+      type: section
+      description: Return redirects from CloudFront before contacting an origin. Rules are evaluated in order and the first match wins.
+    - id: redirect_rules
+      label: Redirect rules
+      type: object_array
+      description: Optional URL-pattern redirects handled by a CloudFront Function at viewer request time.
+      collapsible: true
+      required: false
+      item_label: Redirect rule
+      item_title:
+        template: "{source}"
+      item_description: "Redirect to {destination}"
+      item_inputs:
+        - id: source
+          label: Source
+          type: string
+          description: Absolute HTTPS URL or host-agnostic path to match. Use :name for one segment and a final :name* to capture the remaining path.
+          placeholder: https://docs.example.com/:path*
+          required: true
+        - id: destination
+          label: Destination
+          type: string
+          description: Absolute HTTPS URL or host-agnostic path. Named parameters are replaced with values captured by the source.
+          placeholder: https://www.example.com/docs/:path*
+          required: true
+        - id: preserve_query_string
+          label: Preserve query string
+          type: boolean
+          description: Append the request query parameters to the redirect location.
+          default: false
+        - id: redirect_non_read_methods
+          label: Redirect non-read methods
+          type: boolean
+          description: Redirect methods other than GET and HEAD. Requires status 307 or 308 so clients preserve the request method and body.
+          default: false
+        - id: status_code
+          label: Status code
+          type: number
+          description: HTTP redirect status. Use 308 for permanent redirects that preserve the request method.
+          required: true
+          default: 308
+          values:
+            - label: 308 Permanent redirect
+              value: 308
+            - label: 307 Temporary redirect
+              value: 307
+            - label: 301 Moved permanently
+              value: 301
+            - label: 302 Found
+              value: 302
+      default: []
+    - id: section_default_behavior
+      label: Default cache behavior
+      type: section
+      description: Applies to every request that does not match a custom cache behavior path.
+    - id: viewer_protocol_policy
+      label: Viewer protocol policy
+      type: string
+      description: How viewers connect to CloudFront.
+      required: true
+      default: redirect-to-https
+      values:
+        - label: Redirect to HTTPS
+          value: redirect-to-https
+        - label: HTTPS only
+          value: https-only
+        - label: Allow all
+          value: allow-all
+    - id: allowed_methods
+      label: Allowed methods
+      type: string
+      description: HTTP methods CloudFront forwards to the origin. Use all methods for apps that accept form posts or API writes.
+      required: true
+      default: all
+      values:
+        - label: All methods
+          description: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
+          value: all
+        - label: Read and OPTIONS
+          description: GET, HEAD, OPTIONS
+          value: read_options
+        - label: Read only
+          description: GET, HEAD
+          value: read
+    - id: cache_policy
+      label: Cache policy
+      type: string
+      description: Controls edge caching for the default behavior. The default respects your app's Cache-Control headers, so nothing is cached unless the app asks for it.
+      required: true
+      default: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
+      values:
+        - label: UseOriginCacheControlHeaders-QueryStrings (recommended)
+          description: Caches only responses with Cache-Control headers from your app. Query strings are part of the cache key.
+          value: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
+        - label: UseOriginCacheControlHeaders
+          description: Caches only responses with Cache-Control headers from your app. Query strings are not part of the cache key.
+          value: 83da9c7e-98b4-4e11-a168-04f0df8e2c65
+        - label: CachingDisabled
+          description: No edge caching. Every request goes to the origin.
+          value: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+        - label: CachingOptimized
+          description: Long default TTLs with compression support. Best for static content.
+          value: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        - label: Custom policy ID
+          description: Use a cache policy you created yourself.
+          value: custom
+    - id: cache_policy_custom_id
+      label: Custom cache policy ID
+      type: string
+      description: ID of a cache policy from your AWS account.
+      placeholder: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+      required: true
+      show_when:
+        cache_policy: custom
+      patterns:
+        - message: Invalid CloudFront policy ID. Use the 36-character policy ID, not the name or ARN.
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+    - id: origin_request_policy
+      label: Origin request policy
+      type: string
+      description: Controls what CloudFront forwards to the origin. Use None for private S3 origins so CloudFront can sign OAC requests without forwarding the viewer Host header.
+      required: true
+      default: 216adef6-5c7f-47e4-b989-5492eafa07d3
+      values:
+        - label: None
+          description: Forward only what the cache policy includes. Recommended for private S3 origins with OAC.
+          value: none
+        - label: AllViewer (recommended)
+          description: Forwards the Host header, cookies, and query strings so load balancer routing and app sessions work.
+          value: 216adef6-5c7f-47e4-b989-5492eafa07d3
+        - label: AllViewerExceptHostHeader
+          description: Forwards everything except Host. The origin sees its own domain, which breaks host-based listener rules.
+          value: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        - label: AllViewerAndCloudFrontHeaders-2022-06
+          description: AllViewer plus CloudFront headers such as viewer country and device type.
+          value: 33f36d7e-f396-46d9-90e0-52428a34d9dc
+        - label: CORS-CustomOrigin
+          description: Forwards only the Origin header for CORS. Cookies and Host are not forwarded.
+          value: 59781a5b-3903-41f3-afcb-af62929ccde1
+        - label: CORS-S3Origin
+          description: Forwards the CORS headers needed for an S3 origin.
+          value: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+        - label: Custom policy ID
+          description: Use an origin request policy you created yourself.
+          value: custom
+    - id: origin_request_policy_custom_id
+      label: Custom origin request policy ID
+      type: string
+      description: ID of an origin request policy from your AWS account.
+      placeholder: 216adef6-5c7f-47e4-b989-5492eafa07d3
+      required: true
+      show_when:
+        origin_request_policy: custom
+      patterns:
+        - message: Invalid CloudFront policy ID. Use the 36-character policy ID, not the name or ARN.
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+    - id: cache_behaviors
+      label: Custom cache behaviors
+      type: object_array
+      description: Optional path-based behaviors evaluated before the default behavior, such as caching /assets/* or routing /api/* to another origin.
+      collapsible: true
+      required: false
+      item_label: Cache behavior
+      item_title:
+        template: "{path_pattern}"
+      item_description: "Origin: {target_origin_id}"
+      item_inputs:
+        - id: path_pattern
+          label: Path pattern
+          type: string
+          placeholder: /assets/*
+          required: true
+        - id: target_origin_id
+          label: Target origin ID
+          type: string
+          description: Origin this behavior routes to. Use primary for the main origin or the ID of an additional origin.
+          required: true
+          default: primary
+        - id: viewer_protocol_policy
+          label: Viewer protocol policy
+          type: string
+          required: true
+          default: redirect-to-https
+          values:
+            - label: Redirect to HTTPS
+              value: redirect-to-https
+            - label: HTTPS only
+              value: https-only
+            - label: Allow all
+              value: allow-all
+        - id: allowed_methods
+          label: Allowed methods
+          type: string
+          description: HTTP methods CloudFront forwards for this path. CloudFront supports only these three combinations.
+          required: true
+          default: read
+          values:
+            - label: Read only
+              description: GET, HEAD
+              value: read
+            - label: Read and OPTIONS
+              description: GET, HEAD, OPTIONS
+              value: read_options
+            - label: All methods
+              description: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
+              value: all
+        - id: cache_policy_id
+          label: Cache policy
+          type: string
+          description: Controls edge caching for this path. For a custom cache policy, override ordered_cache_behaviors in Advanced Terraform variables.
+          required: true
+          default: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          values:
+            - label: CachingOptimized
+              description: Long default TTLs with compression support. Best for static assets.
+              value: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            - label: CachingOptimizedForUncompressedObjects
+              description: Like CachingOptimized but without compression in the cache key.
+              value: b2884449-e4de-46a7-ac36-70bc7f1ddd6d
+            - label: CachingDisabled
+              description: No edge caching for this path.
+              value: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            - label: UseOriginCacheControlHeaders
+              description: Cache according to the Cache-Control headers your app returns.
+              value: 83da9c7e-98b4-4e11-a168-04f0df8e2c65
+            - label: UseOriginCacheControlHeaders-QueryStrings
+              description: Origin-controlled caching with query strings included in the cache key.
+              value: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
+        - id: origin_request_policy_id
+          label: Origin request policy
+          type: string
+          description: What CloudFront forwards to the origin for this path. Leave empty to forward only what the cache policy includes.
+          required: false
+          values:
+            - label: AllViewer
+              description: Forwards the Host header, cookies, and query strings.
+              value: 216adef6-5c7f-47e4-b989-5492eafa07d3
+            - label: AllViewerExceptHostHeader
+              description: Forwards everything except the Host header.
+              value: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            - label: AllViewerAndCloudFrontHeaders-2022-06
+              description: AllViewer plus CloudFront headers such as viewer country and device type.
+              value: 33f36d7e-f396-46d9-90e0-52428a34d9dc
+            - label: CORS-CustomOrigin
+              description: Forwards only the Origin header for CORS.
+              value: 59781a5b-3903-41f3-afcb-af62929ccde1
+            - label: CORS-S3Origin
+              description: Forwards the CORS headers needed for an S3 origin.
+              value: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+        - id: signed_urls_enabled
+          label: Require signed URLs
+          type: boolean
+          description: Require requests matching this path to use a signed URL or signed cookie from one of the trusted key groups.
+          default: false
+        - id: trusted_key_group_ids
+          label: Trusted key group IDs
+          type: string_array
+          description: Existing CloudFront key group IDs whose public keys are trusted for signed URLs or signed cookies on this path.
+          add_button_label: Add key group ID
+          required: true
+          show_when:
+            signed_urls_enabled: true
+          patterns:
+            - message: Invalid CloudFront key group ID.
+              pattern: ^[A-Z0-9]+$
+          default: []
+      default: []
+    - id: section_signed_urls
+      label: Signed URLs
+      type: section
+      description: Restrict viewer access with existing CloudFront key groups. Your app keeps the private key and signs URLs or cookies; this module trusts the key group IDs.
+    - id: signed_urls_enabled
+      label: Require signed URLs
+      type: boolean
+      description: Require signed URLs or signed cookies for the default cache behavior. Unsigned requests receive 403 responses from CloudFront.
+      default: false
+    - id: trusted_key_group_ids
+      label: Trusted key group IDs
+      type: string_array
+      description: Existing CloudFront key group IDs whose public keys are trusted for signed URLs or signed cookies. Add at least one key group before enabling Require signed URLs on the default behavior or any custom cache behavior.
+      add_button_label: Add key group ID
+      required: true
+      show_when:
+        signed_urls_enabled: true
+      patterns:
+        - message: Invalid CloudFront key group ID.
+          pattern: ^[A-Z0-9]+$
+      default: []
+    - id: response_headers_policy
+      label: Response headers policy
+      type: string
+      description: Optional headers CloudFront adds to responses, such as security headers or CORS. Leave empty to add none.
+      collapsible: true
+      required: false
+      values:
+        - label: SecurityHeadersPolicy
+          description: Adds security headers such as HSTS, X-Content-Type-Options, and X-Frame-Options.
+          value: 67f7725c-6f97-4210-82d7-5512b31e9d03
+        - label: SimpleCORS
+          description: Allows simple CORS requests from any origin.
+          value: 60669652-455b-4ae9-85a4-c4c02393f86c
+        - label: CORS-With-Preflight
+          description: Allows CORS requests including preflight OPTIONS from any origin.
+          value: 5cc3b908-e619-4b99-88e5-2cf7f45965bd
+        - label: CORS-and-SecurityHeadersPolicy
+          description: Simple CORS plus the security headers set.
+          value: e61eb60c-9c35-4d20-a928-2b84e02af89c
+        - label: CORS-with-preflight-and-SecurityHeadersPolicy
+          description: CORS with preflight plus the security headers set.
+          value: eaab4381-ed33-4a86-88ca-d9558dc6cd63
+        - label: Custom policy ID
+          description: Use a response headers policy you created yourself.
+          value: custom
+    - id: response_headers_policy_custom_id
+      label: Custom response headers policy ID
+      type: string
+      description: ID of a response headers policy from your AWS account.
+      placeholder: 67f7725c-6f97-4210-82d7-5512b31e9d03
+      required: true
+      show_when:
+        response_headers_policy: custom
+      patterns:
+        - message: Invalid CloudFront policy ID. Use the 36-character policy ID, not the name or ARN.
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+    - id: section_settings
+      label: Distribution settings
+      type: section
+    - id: price_class
+      label: Price class
+      type: string
+      description: You can reduce edge locations for some cost savings if it becomes an issue.
+      default: PriceClass_All
+      values:
+        - label: All edge locations
+          value: PriceClass_All
+        - label: Most edge locations
+          value: PriceClass_200
+        - label: US, Canada, Europe
+          value: PriceClass_100
+    - id: http_version
+      label: HTTP version
+      type: string
+      collapsible: true
+      default: http2and3
+      values:
+        - label: HTTP/2 and HTTP/3
+          value: http2and3
+        - label: HTTP/2
+          value: http2
+        - label: HTTP/1.1
+          value: http1.1
+    - id: web_acl_id
+      label: WAF web ACL ARN
+      type: string
+      description: Optional WAFv2 web ACL to associate with the distribution. Must be a global (CloudFront) web ACL.
+      collapsible: true
+      placeholder: arn:aws:wafv2:us-east-1:123456789012:global/webacl/name/abc-123
+      required: false
+    - id: geo_restriction_type
+      label: Geo restriction
+      type: string
+      default: none
+      values:
+        - label: None
+          value: none
+        - label: Whitelist
+          value: whitelist
+        - label: Blacklist
+          value: blacklist
+    - id: geo_restriction_locations
+      label: Geo restriction country codes
+      type: string_array
+      show_when:
+        geo_restriction_type:
+          - whitelist
+          - blacklist
+      default: []
+    - id: section_monitoring
+      label: Monitoring
+      type: section
+    - id: additional_metrics_enabled
+      label: Additional metrics
+      type: boolean
+      description: Enable `CacheHitRate`, `OriginLatency`, and `401/403/404/502/503/504` error rate charts. Adds a flat CloudWatch cost of about $2.40/month per distribution.
+      default: false
+    - id: section_logging
+      label: Access logging
+      type: section
+    - id: logging_enabled
+      label: CloudFront access logging
+      type: boolean
+      description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
+      default: false
+    - id: logging_bucket_retention_days
+      label: Logging retention days
+      type: number
+      description: Days to retain CloudFront access logs in the automatically created logging bucket.
+      min: 1
+      show_when:
+        logging_enabled: true
+      default: 90
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $include: ../../partials/inputs/execution-environment.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: cdn/cloudfront
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        default_cache_behavior:
+          allowed_methods: >-
+            << module.input.allowed_methods == "all" ? ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH",
+            "POST", "PUT"] : module.input.allowed_methods == "read_options" ? ["GET", "HEAD", "OPTIONS"] :
+            ["GET", "HEAD"] >>
+          cache_policy_id: >-
+            << module.input.cache_policy == "custom" ? module.input.cache_policy_custom_id :
+            module.input.cache_policy >>
+          origin_request_policy_id: >-
+            << module.input.origin_request_policy == "custom" ?
+            module.input.origin_request_policy_custom_id : module.input.origin_request_policy == "none" ? nil :
+            module.input.origin_request_policy >>
+          response_headers_policy_id: >-
+            << module.input.response_headers_policy == "custom" ?
+            module.input.response_headers_policy_custom_id : (module.input.response_headers_policy || nil) >>
+          target_origin_id: primary
+          trusted_key_groups: >-
+            << module.input.signed_urls_enabled ? module.input.trusted_key_group_ids : [] >>
+          viewer_protocol_policy: << module.input.viewer_protocol_policy >>
+        distributions:
+          main:
+            acm_certificate_arn: << module.input.acm_certificate_arn || nil >>
+            aliases: << module.input.distribution_aliases || [] >>
+            comment: >-
+              << module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ?
+              module.input.distribution_aliases[0] : nil >>
+            enabled: true
+        geo_restriction_locations: << module.input.geo_restriction_locations >>
+        geo_restriction_type: << module.input.geo_restriction_type >>
+        additional_metrics_enabled: << module.input.additional_metrics_enabled >>
+        http_version: << module.input.http_version >>
+        logging_bucket_creation_enabled: << module.input.logging_enabled >>
+        logging_bucket_domain_name: null
+        logging_bucket_retention_days: << module.input.logging_bucket_retention_days >>
+        logging_enabled: << module.input.logging_enabled >>
+        logging_prefix: ""
+        name: << module.input.name >>
+        redirect_rules: << module.input.redirect_rules || [] >>
+        ordered_cache_behaviors: >-
+          << module.input.cache_behaviors != nil ? map(module.input.cache_behaviors, {"path_pattern":
+          #.path_pattern, "target_origin_id": #.target_origin_id, "viewer_protocol_policy":
+          #.viewer_protocol_policy, "allowed_methods": (#.allowed_methods == "all" ? ["DELETE", "GET",
+          "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] : #.allowed_methods == "read_options" ? ["GET",
+          "HEAD", "OPTIONS"] : ["GET", "HEAD"]), "cache_policy_id": #.cache_policy_id,
+          "origin_request_policy_id": (#.origin_request_policy_id || nil), "trusted_key_groups":
+          (#.signed_urls_enabled ? #.trusted_key_group_ids : [])}) : [] >>
+        origins: >-
+          << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
+          module.input.ecs_web_alb_dns_name : module.input.origin_source == "ecs_cluster" ?
+          module.input.ecs_cluster_alb_dns_name : module.input.origin_source == "s3_bucket" ?
+          module.input.s3_bucket_regional_domain_name : module.input.origin_domain_name),
+          "origin_protocol_policy": module.input.origin_protocol_policy, "s3_origin_enabled":
+          module.input.origin_source == "s3_bucket"}] |
+          concat(module.input.additional_origins != nil ? module.input.additional_origins : []) >>
+        price_class: << module.input.price_class >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        web_acl_id: << module.input.web_acl_id || nil >>
+  ui:
+    links: |-
+      <<
+      (stack.output.distribution_domain_name ? [{"name": "CloudFront domain", "href": "https://" + stack.output.distribution_domain_name}] : []) +
+      (module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ? [{"name": module.input.distribution_aliases[0], "href": "https://" + module.input.distribution_aliases[0]}] : [])
+      >>
+    metrics: |-
+      <<
+      [
+        {id:"requests", name:"Requests", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"Requests", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}}
+      ] | concat(module.input.additional_metrics_enabled ? [
+        {id:"cache_hit_rate", name:"Cache hit rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"CacheHitRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}}
+      ] : []) | concat([
+        {id:"error_rate_total", name:"Total error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"TotalErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_4xx", name:"4xx error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"4xxErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_5xx", name:"5xx error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"5xxErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"bytes_downloaded", name:"Bytes downloaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesDownloaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}},
+        {id:"bytes_uploaded", name:"Bytes uploaded", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"BytesUploaded", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Sum"}}
+      ]) | concat(module.input.additional_metrics_enabled ? [
+        {id:"origin_latency", name:"Origin latency", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"OriginLatency", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_401", name:"401 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"401ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_403", name:"403 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"403ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_404", name:"404 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"404ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_502", name:"502 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"502ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_503", name:"503 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"503ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}},
+        {id:"error_rate_504", name:"504 error rate (%)", type:"line", source:{type:"cloudwatch", aws_account_id:module.input.aws_account_id, dimensions:{DistributionId:stack.output.distribution_id, Region:"Global"}, name:"504ErrorRate", namespace:"AWS/CloudFront", region:"us-east-1", statistic:"Average"}}
+      ] : [])
+      >>
+  readme: |
+    CloudFront distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
+
+    ## Overview
+
+    The CloudFront module puts the AWS CloudFront edge network in front of a dynamic web application or private S3 bucket. Point it at an existing ECS web service, an ECS cluster load balancer, an S3 bucket, or any custom domain, and Ravion provisions the distribution, origin configuration, cache behaviors, optional access logging bucket, and metrics.
+
+    The default configuration is safe for dynamic apps: responses are cached at the edge only when your app returns Cache-Control headers, and the full viewer request, including the Host header, cookies, and query strings, is forwarded to the origin. You get TLS termination close to users, HTTP/2 and HTTP/3, connection reuse to the origin, optional WAF, and per-path caching for static assets.
+
+    Terraform source: [flightcontrolhq/modules/cdn/cloudfront](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/cdn/cloudfront)
+
+    ## Use cases
+
+    | Scenario | CloudFront helps by... |
+    | --- | --- |
+    | Fronting one ECS web service | Using the service's load balancer as the origin with one click |
+    | Fronting a whole ECS cluster | Serving every service behind the cluster's public ALB through one distribution |
+    | Serving private attachments | Using an S3 origin with Origin Access Control and optional signed URLs |
+    | Speeding up global users | Terminating TLS and HTTP/3 at the nearest edge location |
+    | Caching static assets | Adding a cache behavior such as /assets/* with the CachingOptimized policy |
+    | Splitting traffic by path | Routing paths like /api/* to additional origins |
+    | Redirecting legacy routes | Matching named path segments and returning redirects at the edge |
+    | Protecting an app | Associating a global WAFv2 web ACL and geo restrictions |
+    | Auditing traffic | Enabling access logs with an automatically created S3 bucket |
+
+    ## How the ECS connection works
+
+    An ECS cluster load balancer routes requests to services using listener rules that match the request's host and path. CloudFront preserves that behavior: the default origin request policy (AWS managed AllViewer) forwards the viewer's Host header to the load balancer, so the same listener rules keep routing each request to the right service.
+
+    That means the origin is really the load balancer, not an individual service:
+
+    | Origin source | What it does |
+    | --- | --- |
+    | ECS web service | Uses the selected service's load balancer DNS name as the origin. The service must run rvn-ecs-web 0.8.0 or later and have applied its stack so the DNS name output exists. |
+    | ECS cluster | Uses the cluster's public ALB DNS name as the origin. Every service behind that ALB is reachable through the distribution. |
+    | S3 bucket | Uses the selected bucket's regional S3 domain name as a private origin with CloudFront Origin Access Control. After this CloudFront stack applies, add the distribution ARN to the S3 bucket's CloudFront OAC read policy template. |
+    | Custom domain | Any origin domain name, such as an external load balancer, API endpoint, or S3 website endpoint. |
+
+    Both ECS options resolve to the same ALB when the service runs on that cluster, so pick whichever is easier to select. One distribution can front all services behind the load balancer.
+
+    ### Domain aliases and host routing
+
+    If your services route by Domain host rules, the forwarded Host header must match those rules:
+
+    - Add each domain to Domain aliases (for example app.example.com and api.example.com).
+    - Point the domains' DNS at the CloudFront distribution domain.
+    - Keep the same domains in the ECS services' Domain host rules.
+
+    Without aliases, CloudFront forwards its default cloudfront.net domain as the Host header. That only works when services route by path rules (or a /* rule), not by host.
+
+    Cache behaviors are path-based only. If different domains need different edge settings, such as caching, WAF, or geo restrictions, create one CloudFront module instance per domain group. All of them can share the same load balancer origin.
+
+    ### TLS between CloudFront and the origin
+
+    Origin protocol policy defaults to HTTPS only. For that to work, the load balancer must have an HTTPS listener with a certificate that is valid for the forwarded Host domain, which is the same certificate the ALB already needs to serve those domains directly. Use HTTP only when the load balancer has no HTTPS listener; traffic from CloudFront to the origin is then unencrypted.
+
+    ### Private S3 origins
+
+    S3 origins use CloudFront Origin Access Control so the bucket can stay private. Use the None origin request policy unless you intentionally need CORS headers, because forwarding the viewer Host header to S3 can break OAC-signed origin requests.
+
+    The bucket policy must allow CloudFront to read objects, scoped to this distribution ARN. For rvn-s3 buckets, apply the CloudFront stack first, then edit the S3 bucket and add the CloudFront OAC read policy template with the CloudFront distribution ARN.
+
+    ### Signed URLs
+
+    Enable Require signed URLs to set trusted key groups on the default cache behavior. Each custom cache behavior can also require signed URLs for only that path and must provide its own trusted key group IDs. Ravion does not create key groups in this module; provide existing CloudFront key group IDs and keep the private signing key in your application.
+
+    ## Edge redirects
+
+    Redirect rules run at viewer request time before CloudFront checks its cache or contacts an origin. Rules are evaluated in order and the first match wins. Sources and destinations accept absolute HTTPS URLs or host-agnostic paths. Use `:name` to capture one path segment and a final `:name*` to capture the remaining path, then place those named values anywhere in the destination. Query preservation is optional and disabled by default.
+
+    The managed redirect function is attached to the default cache behavior and every custom cache behavior so redirects cover every request path. CloudFront allows only one viewer-request edge association per behavior, so redirect rules cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
+
+    The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
+
+    ### Avoid overlapping same-host rules
+
+    Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function skips that rule and evaluates the next rule. If no later rule matches, CloudFront sends the original request to the configured origin. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+
+    For example, a source of `https://example.cloudfront.net/:path*` and destination of `https://example.cloudfront.net/docs/:path*` does not redirect. The destination `/docs/guide` still matches the broad source and would otherwise become `/docs/docs/guide` on the next request.
+
+    Use different hosts for a domain migration, such as `https://docs.example.com/:path*` to `https://www.example.com/docs/:path*`. For same-host testing, use non-overlapping namespaces such as `https://example.cloudfront.net/old/:path*` to `https://example.cloudfront.net/docs/:path*`. To redirect only the root, use the exact source `https://example.cloudfront.net` without a path parameter.
+
+    Redirect patterns do not currently support exclusions such as "all paths except `/docs`".
+
+    ## Certificates
+
+    Domain aliases require a certificate issued in us-east-1, because CloudFront is a global service. Select an ACM Certificate module instance in the ACM certificate field; its certificate ARN is mapped automatically. Request the certificate with the primary domain and any additional aliases as subject alternative names.
+
+    This certificate is for viewers connecting to CloudFront. The load balancer keeps its own regional certificate for the origin leg.
+
+    ## Caching
+
+    The default cache behavior applies to all requests that do not match a custom cache behavior path:
+
+    | Setting | Default | Why |
+    | --- | --- | --- |
+    | Cache policy | UseOriginCacheControlHeaders-QueryStrings | Caches only responses where the app sends Cache-Control headers |
+    | Origin request policy | AllViewer | Forwards Host, cookies, and query strings so app sessions and ALB routing work |
+    | Require signed URLs | false | Allows public viewer access unless enabled with trusted key groups |
+    | Allowed methods | All methods | Apps accept form posts and API writes |
+    | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
+
+    With the default cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
+
+    Response headers policy is optional and adds headers such as the SecurityHeadersPolicy set or CORS headers to every response.
+
+    To cache static content, add Custom cache behaviors. A typical setup adds /assets/* or /static/* with the CachingOptimized policy and GET, HEAD methods. Each behavior can also target an additional origin for path-based traffic splitting. Per-behavior policies use the managed policy lists; for a custom per-path policy, override ordered_cache_behaviors in Advanced Terraform variables.
+
+    CloudFront accepts only three allowed-method combinations per behavior: GET,HEAD; GET,HEAD,OPTIONS; or all seven methods.
+
+    ## Distribution settings
+
+    | Field | Default | Notes |
+    | --- | --- | --- |
+    | Price class | All edge locations | Reduce edge coverage for cost savings if needed |
+    | HTTP version | HTTP/2 and HTTP/3 | Maximum protocol version for viewers |
+    | WAF web ACL ARN | None | Must be a global (CloudFront) WAFv2 web ACL |
+    | Geo restriction | None | Whitelist or blacklist ISO country codes |
+
+    ## Monitoring
+
+    The dashboard always shows the default CloudFront distribution metrics: requests, total error rate, 4xx error rate, 5xx error rate, bytes downloaded, and bytes uploaded. CloudFront publishes these default metrics to CloudWatch at no additional CloudWatch metric cost.
+
+    You can also enable all additional metrics charts for cache hit rate, origin latency, and per-status error rates. AWS enables all 8 additional metrics together and CloudWatch charges a flat per-metric monthly rate, about $2.40 per month per distribution at the standard $0.30 per metric rate. This cost does not change with request volume.
+
+    | Additional metric | Useful for |
+    | --- | --- |
+    | Cache hit rate | Checking how much traffic is served from edge cache |
+    | Origin latency | Seeing how long origins take to start responding to CloudFront |
+    | 401, 403, 404 error rates | Separating authentication, authorization, and not-found issues |
+    | 502, 503, 504 error rates | Separating bad gateway, unavailable origin, and timeout issues |
+
+    ## Access logging
+
+    CloudFront access logging is off by default. When enabled, the module creates an S3 logging bucket automatically and expires log objects after the configured retention days (default 90).
+
+    ## Configuration
+
+    | Field | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | AWS account | Yes | None | Account for the distribution and logging bucket |
+    | Region | Yes | us-east-1 | Used for the optional logging bucket; CloudFront is global |
+    | Name slug | Yes | Generated from project, environment, and module IDs | Prefix for distribution comment, OAC, and logging bucket |
+    | Domain aliases | No | [] | Custom domains; empty uses the cloudfront.net domain |
+    | ACM certificate | When aliases are set | None | rvn-acm-certificate instance issued in us-east-1 |
+    | Origin source | Yes | ECS web service | ECS web service, ECS cluster, or custom domain |
+    | ECS web service | When origin source is ECS web service | None | Service on rvn-ecs-web 0.8.0 or later |
+    | ECS cluster | When origin source is ECS cluster | None | Cluster with a public ALB |
+    | S3 bucket | When origin source is S3 bucket | None | Private bucket served through OAC |
+    | Origin domain name | When origin source is custom | None | Any reachable origin domain |
+    | Origin protocol policy | Yes | HTTPS only | Origin needs a certificate valid for the forwarded host |
+    | Additional origins | No | [] | Extra origins for path-based cache behaviors |
+    | Redirect rules | No | [] | Ordered URL-pattern redirects returned before contacting an origin |
+    | Viewer protocol policy | Yes | Redirect to HTTPS | How viewers connect to CloudFront |
+    | Allowed methods | Yes | All methods | Read-only options available for cache-friendly apps |
+    | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
+    | Origin request policy | Yes | AllViewer | AWS managed policies by name, or a custom policy ID |
+    | Require signed URLs | No | false | Requires signed URLs or signed cookies on the default behavior |
+    | Trusted key group IDs | When signed URLs are enabled | [] | Existing CloudFront key groups trusted for signatures |
+    | Response headers policy | No | None | Managed security headers or CORS policies, or a custom policy ID |
+    | Custom cache behaviors | No | [] | Path-based caching and routing before the default behavior |
+    | Price class | No | All edge locations | Edge location coverage |
+    | Additional metrics | No | false | Enables all 8 CloudFront additional metrics and their flat CloudWatch cost |
+    | CloudFront access logging | No | false | Creates a logging bucket when enabled |
+    | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership tags |
+    | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
+
+    ## Design decisions
+
+    - The primary origin is always the load balancer or domain you select, with the fixed origin ID primary. ECS references exist to discover the load balancer DNS name, not to create per-service origins, because listener rules already fan traffic out behind one origin.
+    - Caching is disabled by default. A wrong edge cache on dynamic responses is worse than no cache, so caching is an explicit per-path opt-in.
+    - The AllViewer origin request policy is the default so Host-based listener rules, cookies, and query strings keep working unchanged behind CloudFront.
+    - Redirects use one managed CloudFront Function shared by the module's distributions and attached to every cache behavior.
+    - One module instance manages one distribution. Create additional instances when domains need different edge configuration; they can share the same origin.
+    - The certificate is referenced from an ACM Certificate module instance so the us-east-1 requirement is explicit and reusable.
+
+    ## Learn more
+
+    - [Amazon CloudFront developer guide](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html)
+    - [Using managed cache and origin request policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)
+    - [Requirements for using alternate domain names](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/CNAMEs.html#alternate-domain-names-requirements)
+    - [Amazon CloudFront metrics](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/programming-cloudwatch-metrics.html)

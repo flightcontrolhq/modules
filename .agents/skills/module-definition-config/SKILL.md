@@ -230,7 +230,7 @@ Always include standard tags unless there is a specific reason not to: `Owner`, 
 For ECS service modules, keep infrastructure provisioning and release deployment separate:
 
 - `module.stack` creates service scaffolding, ECR repository, IAM roles, target group/rules, log group, and autoscaling resources.
-- `module.build.type` evaluates to `image` only for `nixpacks` and `dockerfile`; it is `disabled` for `public_image` and `disabled` build modes.
+- `module.build.type` evaluates to `image` only for `railpack` and `dockerfile`; it is `disabled` for `public_image` and `disabled` build modes.
 - `module.build.destinations` pushes to the service ECR repository with run-specific and build-type tags.
 - `module.deploy.type: aws:ecs` owns ECS task-definition rendering and service update.
 - `module.deploy.inputs.deploy_image` means digest for built images, tag for public images, and full image URI for disabled builds.

@@ -44,6 +44,13 @@ export interface ModuleDefinitionInput {
   description: string;
 }
 
+export interface ModuleDefinitionPatchInput {
+  id: string;
+  name?: string;
+  description?: string;
+  isGlobalPublished?: boolean;
+}
+
 export interface ModuleVersionInput {
   moduleDefinitionId: string;
   version: string;
@@ -70,7 +77,7 @@ const DEFAULT_RAVION_API_URL = "https://api.ravion.com";
 export interface RavionModuleApiClient {
   listModuleDefinitions(): Promise<RemoteModuleDefinition[]>;
   createModuleDefinition(input: ModuleDefinitionInput): Promise<RemoteModuleDefinition>;
-  patchModuleDefinition(input: RemoteModuleDefinition): Promise<RemoteModuleDefinition>;
+  patchModuleDefinition(input: ModuleDefinitionPatchInput): Promise<RemoteModuleDefinition>;
   listModuleVersions(moduleDefinitionId: string): Promise<RemoteModuleVersion[]>;
   createModuleVersion(input: ModuleVersionInput): Promise<RemoteModuleVersion>;
 }
@@ -145,6 +152,10 @@ export async function publishDefinitions(
           type: definition.type,
           name: definition.name,
           description: definition.description,
+        });
+        remoteDefinition = await client.patchModuleDefinition({
+          id: remoteDefinition.id,
+          isGlobalPublished: true,
         });
         definitionsByType.set(remoteDefinition.type, remoteDefinition);
         inventory.versionsByDefinitionId[remoteDefinition.id] = [];
@@ -744,11 +755,11 @@ class HttpRavionModuleApiClient implements RavionModuleApiClient {
     return this.call<RemoteModuleDefinition>("POST", "/module-definitions", { data: input });
   }
 
-  async patchModuleDefinition(input: RemoteModuleDefinition): Promise<RemoteModuleDefinition> {
+  async patchModuleDefinition(input: ModuleDefinitionPatchInput): Promise<RemoteModuleDefinition> {
     return this.call<RemoteModuleDefinition>(
       "PATCH",
       `/module-definitions/${encodeURIComponent(input.id)}`,
-      { data: { name: input.name, description: input.description } },
+      { data: { name: input.name, description: input.description, isGlobalPublished: input.isGlobalPublished } },
     );
   }
 

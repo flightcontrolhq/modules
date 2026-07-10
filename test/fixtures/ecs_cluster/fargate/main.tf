@@ -78,7 +78,7 @@ module "ecs_cluster" {
   fargate_spot_enabled = false
 
   # Disable Container Insights to reduce costs for testing
-  container_insights_enabled = false
+  container_insights = "disabled"
 
   tags = local.common_tags
 }

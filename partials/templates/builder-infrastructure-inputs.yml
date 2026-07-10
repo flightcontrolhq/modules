@@ -1,9 +1,10 @@
 - id: section_builder_config
   label: Builder config
   show_when:
-    build_type:
-      - nixpacks
+    build_source:
       - dockerfile
+      - railpack
+      - nixpacks
   type: section
 - default: ec2
   description: Use EC2 for quick start or EC2 spot for cheaper, but potentially delayed builds.
@@ -11,9 +12,10 @@
   label: Builder instance type
   required: true
   show_when:
-    build_type:
-      - nixpacks
+    build_source:
       - dockerfile
+      - railpack
+      - nixpacks
   type: string
   values:
     - label: EC2
@@ -27,9 +29,10 @@
   no_options_message: $with.no_options_message
   required: true
   show_when:
-    build_type:
-      - nixpacks
+    build_source:
       - dockerfile
+      - railpack
+      - nixpacks
   type: string
   values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>&costUnit=minute
 - collapsible: true
@@ -38,17 +41,20 @@
   label: Builder execution environment
   required: false
   show_when:
-    build_type:
-      - nixpacks
+    build_source:
       - dockerfile
+      - railpack
+      - nixpacks
   type: string
+  values: $values:ravion/execution_environments
 - collapsible: true
   description: Optional AMI ID for build runners. Leave empty to use the default runner image.
   id: build_ami
   label: Builder AMI
   required: false
   show_when:
-    build_type:
-      - nixpacks
+    build_source:
       - dockerfile
+      - railpack
+      - nixpacks
   type: string

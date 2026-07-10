@@ -2,41 +2,35 @@
   description: Path to a custom Nixpacks config file, relative to the repository root or configured source base path.
   id: nixpacks_config_file_path
   label: Nixpacks config file path
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string
 - collapsible: true
   description: Application path for Nixpacks to build, relative to the repository root or configured source base path.
   id: nixpacks_build_path
   label: Nixpacks build path
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string
 - collapsible: true
   description: Optional Nixpacks version to use for the build. Leave blank to use the default version.
   id: nixpacks_version
   label: Nixpacks version
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string
 - collapsible: true
   description: Additional Nix packages to install during the Nixpacks build.
   id: nixpacks_nix_pkgs
   label: Nix packages
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string_array
 - collapsible: true
   description: Additional APT packages to install during the Nixpacks build.
   id: nixpacks_apt_pkgs
   label: APT packages
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string_array
 - collapsible: true
   description: Additional Nix libraries to make available during the Nixpacks build.
   id: nixpacks_nix_libs
   label: Nix libraries
-  show_when:
-    build_type: nixpacks
+  show_when: $with.show_when
   type: string_array

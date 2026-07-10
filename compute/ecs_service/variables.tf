@@ -93,6 +93,22 @@ variable "task_memory" {
   }
 }
 
+variable "task_ephemeral_storage_size_gib" {
+  type        = number
+  description = "The ephemeral storage size in GiB for Fargate tasks. Set to null to use the AWS default of 20 GiB."
+  default     = null
+
+  validation {
+    condition     = var.task_ephemeral_storage_size_gib == null ? true : var.task_ephemeral_storage_size_gib >= 21 && var.task_ephemeral_storage_size_gib <= 200
+    error_message = "The task_ephemeral_storage_size_gib must be null or between 21 and 200 GiB."
+  }
+
+  validation {
+    condition     = var.task_ephemeral_storage_size_gib == null || (var.launch_type == "FARGATE" && contains(var.requires_compatibilities, "FARGATE"))
+    error_message = "The task_ephemeral_storage_size_gib is only supported when launch_type is FARGATE and requires_compatibilities includes FARGATE."
+  }
+}
+
 variable "launch_type" {
   type        = string
   description = "The launch type for the service (FARGATE or EC2)."
@@ -479,6 +495,28 @@ variable "load_balancer_security_group_id" {
   validation {
     condition     = var.load_balancer_security_group_id == null || can(regex("^sg-", var.load_balancer_security_group_id))
     error_message = "The load_balancer_security_group_id must be a valid security group ID starting with 'sg-'."
+  }
+}
+
+variable "load_balancer_ingress_cidr_blocks" {
+  type        = list(string)
+  description = "IPv4 CIDR blocks allowed to access a service-created NLB listener. Only used when load_balancer_attachment.nlb_listener is set and load_balancer_security_group_id is provided."
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.load_balancer_ingress_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All load_balancer_ingress_cidr_blocks must be valid IPv4 CIDR blocks."
+  }
+}
+
+variable "load_balancer_ingress_ipv6_cidr_blocks" {
+  type        = list(string)
+  description = "IPv6 CIDR blocks allowed to access a service-created NLB listener. Only used when load_balancer_attachment.nlb_listener is set and load_balancer_security_group_id is provided."
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.load_balancer_ingress_ipv6_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All load_balancer_ingress_ipv6_cidr_blocks must be valid IPv6 CIDR blocks."
   }
 }
 

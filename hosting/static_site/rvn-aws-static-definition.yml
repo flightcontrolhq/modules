@@ -3,19 +3,18 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.1.2
-  description: Mark destructive static hosting inputs immutable
+  version: 0.2.1
+  description: "Add Railpack static builds."
 module:
   build:
     builder: >-
-      << module.input.build_type == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
+      << module.input.build_source == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
       || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
       module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
-      {type: "nixpacks", install_cmd: module.input.nixpacks_install_cmd, build_cmd:
-      module.input.nixpacks_build_cmd, config_file_path: module.input.nixpacks_config_file_path, build_path:
-      module.input.nixpacks_build_path, nixpacks_version: module.input.nixpacks_version, nix_pkgs:
-      module.input.nixpacks_nix_pkgs, apt_pkgs: module.input.nixpacks_apt_pkgs, nix_libs:
-      module.input.nixpacks_nix_libs, output_directory: module.input.output_directory} >>
+      (module.input.build_source == "railpack" || module.input.build_source == "nixpacks") ? {type: "railpack", railpack_version:
+      module.input.railpack_version, install_cmd: module.input.railpack_install_cmd,
+      build_cmd: module.input.railpack_build_cmd, output_directory: module.input.output_directory} :
+      {type: "disabled"} >>
     destinations:
       - bucket: << stack.output.hosting_bucket_id >>
         id: hosting-bucket
@@ -29,7 +28,7 @@ module:
     source:
       $include: ../../partials/build/git-source.yml
     timeout: 1800
-    type: '<< module.input.build_type == "none" ? "disabled" : "static" >>'
+    type: '<< module.input.build_source == "s3_directory" ? "disabled" : "static" >>'
   deploy:
     definition:
       cloudfront_invalidation_paths: << module.input.cloudfront_invalidation_paths >>
@@ -96,51 +95,70 @@ module:
     - id: section_build
       label: Build config
       type: section
-    - default: nixpacks
-      id: build_type
-      label: Build type
+    - default: railpack
+      id: build_source
+      label: Build source
       required: true
       type: string
       values:
-        - description: Automatically build static files based on your code and config
-          label: Nixpacks
-          value: nixpacks
+        - description: Automatically build static files with Railpack
+          label: Railpack
+          value: railpack
         - description: Bring your own Dockerfile
           label: Dockerfile
           value: dockerfile
         - description: Skip the build step and promote an existing S3 directory at deploy time.
-          label: Disabled
-          value: none
-    - $include: ../../partials/inputs/build-git-source.yml
+          label: Pull from S3
+          value: s3_directory
+    - $template: ../../partials/inputs/build-git-source.yml
+      with:
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - default: dist
       description: Directory produced by the build and uploaded to S3.
       id: output_directory
       label: Output directory
       required: true
       show_when:
-        build_type:
-          - nixpacks
+        build_source:
           - dockerfile
+          - railpack
+          - nixpacks
       type: string
-    - $include: ../../partials/inputs/dockerfile-build.yml
-    - $include: ../../partials/inputs/nixpacks-basic.yml
-    - $include: ../../partials/inputs/nixpacks-advanced.yml
+    - $template: ../../partials/inputs/dockerfile-build.yml
+      with:
+        show_when:
+          build_source: dockerfile
+    - $template: ../../partials/inputs/railpack.yml
+      with:
+        show_when:
+          build_source:
+            - railpack
+            - nixpacks
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
       show_when:
-        build_type:
-          - nixpacks
+        build_source:
           - dockerfile
+          - railpack
+          - nixpacks
     - $include: ../../partials/inputs/dockerfile-env-injection.yml
     - id: section_cloudfront
       label: CloudFront settings
       type: section
-    - description: Required if using domain aliases. Must be in us-east-1.
-      id: distribution_acm_certificate_arn
-      label: ACM certificate ARN
-      placeholder: arn:aws:acm:us-east-1:123456789012:certificate/abc-123
+    - description: Required if using domain aliases. The certificate module must be in us-east-1.
+      id: distribution_acm_certificate
+      label: ACM certificate
+      mapped_inputs:
+        - default: <<ref.stack.output.certificate_arn>>
+          id: distribution_acm_certificate_arn
+          label: CloudFront certificate ARN
+          type: string
       required: false
-      type: string
+      type: $ref:rvn-acm-certificate
     - add_button_label: Add domain alias
       default: []
       description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain.
@@ -285,7 +303,7 @@ module:
 
     The Static Hosting module creates an AWS S3 hosting bucket, a CloudFront distribution, CloudFront KeyValueStore version routing, and the supporting edge functions needed to serve versioned static files.
 
-    Use it for single-page apps, generated documentation, static marketing sites, downloadable assets, or any static file tree that should be served through CloudFront. Ravion can build files from a Git repository with Nixpacks or a Dockerfile, or you can disable builds and promote an existing S3 directory at deploy time.
+    Use it for single-page apps, generated documentation, static marketing sites, downloadable assets, or any static file tree that should be served through CloudFront. Ravion can build files from a Git repository with Railpack or a Dockerfile, or you can disable builds and promote an existing S3 directory at deploy time.
 
     Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
 
@@ -297,8 +315,8 @@ module:
     | --- | --- |
     | Hosting a SPA | Rewriting client-side routes to the active version's root object |
     | Hosting docs or generated static files | Serving filesystem-style paths from S3 through CloudFront |
-    | Building from source | Running Nixpacks or Dockerfile builds and uploading build output to S3 |
-    | Deploying prebuilt files | Skipping builds and promoting an existing S3 directory |
+    | Building from source | Running Railpack or Dockerfile builds and uploading build output to S3 |
+    | Pulling from S3 | Skipping builds and promoting an existing S3 directory |
     | Using custom domains | Attaching CloudFront aliases and an ACM certificate |
     | Tuning cache behavior | Managing HTML and asset Cache-Control headers separately |
     | Auditing access | Enabling CloudFront access logs with automatic log bucket creation |
@@ -320,15 +338,15 @@ module:
 
     ## Build options
 
-    | Build type | When to use it |
+    | Build source | When to use it |
     | --- | --- |
-    | Nixpacks | Let Ravion detect the static app stack and run the build |
+    | Railpack | Let Ravion detect the static app stack and run the build with Railpack |
     | Dockerfile | Build static files with a Dockerfile in the selected repository |
-    | Disabled | Build or upload files outside Ravion, then promote an existing S3 directory |
+    | Pull from S3 | Build or upload files outside Ravion, then promote an existing S3 directory |
 
-    For Nixpacks and Dockerfile builds, select a Git repository, optional source base path, and output directory. The output directory is the folder Ravion uploads to the hosting bucket after the build.
+    For Railpack and Dockerfile builds, select a Git repository, optional Base path, and output directory. The output directory is the folder Ravion uploads to the hosting bucket after the build.
 
-    Nixpacks settings let you override install command, build command, config path, build path, Nixpacks version, Nix packages, APT packages, and Nix libraries.
+    Railpack settings let you optionally pin the Railpack version and override install and build commands. Leave them blank to use Railpack defaults and autodetection.
 
     Docker settings let you choose the Dockerfile path and Docker build context. Inject environment variables in Dockerfile passes build environment variables as Docker build arguments.
 
@@ -336,7 +354,7 @@ module:
 
     ## CloudFront distribution
 
-    The module exposes one CloudFront distribution. Domain aliases are optional. Leave them empty to use the default cloudfront.net domain. If you set domain aliases, provide an ACM certificate ARN from us-east-1.
+    The module exposes one CloudFront distribution. Domain aliases are optional. Leave them empty to use the default cloudfront.net domain. If you set domain aliases, select an ACM certificate module created in us-east-1.
 
     The first domain alias is used as the CloudFront distribution comment. The distribution is always created enabled.
 
@@ -367,7 +385,7 @@ module:
 
     ## Deploy behavior
 
-    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Disabled builds, enter the existing S3 prefix that already contains the files to promote.
+    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Pull from S3, enter the existing S3 prefix that already contains the files to promote.
 
     CloudFront invalidation paths defaults to /*. This invalidates the full distribution after promotion. Because deployments are versioned, invalidations are often conservative rather than strictly required, but the default favors correctness for users who are changing stable paths.
 
@@ -375,7 +393,7 @@ module:
 
     ## Builder config
 
-    Builder config is only used for Nixpacks and Dockerfile builds.
+    Builder config is only used for Railpack and Dockerfile builds.
 
     | Field | Default | Purpose |
     | --- | --- | --- |
@@ -396,11 +414,12 @@ module:
     | Static hosting | Routing mode | Yes | Single page app | Choose SPA or filesystem URL handling |
     | Static hosting | Default root object | No | index.html | Root object for distribution root requests |
     | Static hosting | Default version prefix | Yes | main | Initial and fallback version prefix |
-    | Build config | Build type | Yes | Nixpacks | Nixpacks, Dockerfile, or Disabled |
-    | Build config | Git repository | Required for Nixpacks and Dockerfile | none | Source repository for builds |
+    | Build config | Build source | Yes | Railpack | Railpack, Dockerfile, or Pull from S3 |
+    | Build config | Git repository | Required for Railpack and Dockerfile | none | Source repository for builds |
     | Build config | Source base path | No | . | Path from repository root to source code |
-    | Build config | Output directory | Required for Nixpacks and Dockerfile | dist | Directory uploaded to S3 after build |
-    | CloudFront settings | ACM certificate ARN | Required when using aliases | none | Certificate must be in us-east-1 |
+    | Build config | Output directory | Required for Railpack and Dockerfile | dist | Directory uploaded to S3 after build |
+    | Build config | Railpack version | No | Ravion default | Optional version for Railpack builds |
+    | CloudFront settings | ACM certificate | Required when using aliases | none | Certificate module must be in us-east-1 |
     | CloudFront settings | Domain aliases | No | [] | Custom CloudFront aliases |
     | CloudFront settings | Price class | No | PriceClass_All | Edge location coverage |
     | CloudFront settings | Geo restriction | No | none | Optional country allow or deny list |

@@ -1,10 +1,10 @@
 definition:
   type: rvn-s3
   name: S3 Bucket
-  description: S3 bucket with public access blocking, encryption, versioning, lifecycle rules, and configurable bucket policies.
+  description: S3 bucket with public access blocking, encryption, versioning, CORS, lifecycle rules, and configurable bucket policies.
 release:
-  version: 0.1.0
-  description: Initial S3 bucket module definition
+  version: 0.3.1
+  description: Block SSE-C uploads and prevent recurring S3 encryption plan changes.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -249,6 +249,20 @@ module:
         - description: Allow VPC Flow Logs delivery.
           label: VPC Flow Logs
           value: vpc_flow_logs
+        - description: Allow CloudFront distributions using Origin Access Control to read objects.
+          label: CloudFront OAC read
+          value: cloudfront_oac_read
+    - add_button_label: Add distribution ARN
+      collapsible: true
+      default: []
+      description: CloudFront distribution ARNs allowed to read objects when the CloudFront OAC read policy template is selected.
+      id: cloudfront_distribution_arns
+      label: CloudFront distribution ARNs
+      patterns:
+        - message: Invalid CloudFront distribution ARN.
+          pattern: ^arn:aws:cloudfront::[0-9]{12}:distribution/[A-Z0-9]+$
+      required: false
+      type: string_array
     - collapsible: true
       description: Custom bucket policy JSON document. If policy templates are also selected, statements are merged.
       id: custom_policy
@@ -260,6 +274,73 @@ module:
         }
       required: false
       type: text
+    - id: section_cors
+      label: CORS
+      type: section
+    - collapsible: true
+      default: []
+      description: Configure Cross-Origin Resource Sharing rules for browser access to bucket objects.
+      id: cors_rules
+      item_inputs:
+        - description: Optional unique identifier for this CORS rule.
+          id: id
+          label: Rule ID
+          required: false
+          type: string
+        - add_button_label: Add allowed origin
+          description: Origins allowed to make cross-origin requests to this bucket.
+          id: allowed_origins
+          label: Allowed origins
+          placeholder: https://example.com
+          required: true
+          type: string_array
+        - add_button_label: Add allowed method
+          description: HTTP methods allowed for cross-origin requests.
+          id: allowed_methods
+          label: Allowed methods
+          required: true
+          type: string_array
+          values:
+            - label: GET
+              value: GET
+            - label: PUT
+              value: PUT
+            - label: HEAD
+              value: HEAD
+            - label: POST
+              value: POST
+            - label: DELETE
+              value: DELETE
+        - add_button_label: Add allowed header
+          collapsible: true
+          default: []
+          description: Request headers allowed in cross-origin requests. Use * to allow any header.
+          id: allowed_headers
+          label: Allowed headers
+          required: false
+          type: string_array
+        - add_button_label: Add exposed header
+          collapsible: true
+          default: []
+          description: Response headers browsers may expose to client code.
+          id: expose_headers
+          label: Exposed headers
+          required: false
+          type: string_array
+        - collapsible: true
+          description: Seconds browsers can cache CORS preflight responses.
+          id: max_age_seconds
+          label: Max age (seconds)
+          min: 0
+          required: false
+          type: number
+      item_label: CORS rule
+      item_title:
+        template: "{allowed_origins}"
+        fallback: CORS rule
+      label: CORS rules
+      required: false
+      type: object_array
     - $include: ../../partials/inputs/terraform-settings.yml
     - $include: ../../partials/inputs/execution-environment.yml
     - $include: ../../partials/inputs/tags.yml
@@ -272,6 +353,8 @@ module:
         block_public_acls: << module.input.block_public_acls >>
         block_public_policy: << module.input.block_public_policy >>
         bucket_key_enabled: << module.input.bucket_key_enabled >>
+        cloudfront_distribution_arns: << module.input.cloudfront_distribution_arns || [] >>
+        cors_rules: << module.input.cors_rules || [] >>
         custom_policy: << module.input.custom_policy >>
         force_destroy_enabled: << module.input.force_destroy_enabled >>
         ignore_public_acls: << module.input.ignore_public_acls >>
@@ -300,11 +383,11 @@ module:
           $include: ../../partials/stack/ravion-tags.yml
         versioning_enabled: << module.input.versioning_enabled >>
   readme: |
-    S3 bucket with public access blocking, encryption, versioning, lifecycle rules, and configurable bucket policies.
+    S3 bucket with public access blocking, encryption, versioning, CORS, lifecycle rules, and configurable bucket policies.
 
     ## Overview
 
-    Use this module to create an Amazon S3 bucket with secure defaults and common operational controls exposed in Ravion. The module blocks public access by default, enables server-side encryption, and can manage versioning, lifecycle rules, and bucket policy statements.
+    Use this module to create an Amazon S3 bucket with secure defaults and common operational controls exposed in Ravion. The module blocks public access by default, enables server-side encryption, and can manage versioning, CORS rules, lifecycle rules, and bucket policy statements.
 
     ## Use cases
 
@@ -312,6 +395,7 @@ module:
     | --- | --- |
     | Application object storage | Create a private bucket with encryption and tags. |
     | Access log storage | Use ALB, NLB, or VPC Flow Logs policy templates with lifecycle expiration. |
+    | Browser uploads or downloads | Add CORS rules for approved web origins and methods. |
     | Compliance retention | Enable versioning and lifecycle rules for noncurrent versions. |
     | Custom integrations | Attach custom bucket policy statements while preserving public access block settings. |
 
@@ -319,11 +403,15 @@ module:
 
     Public access block settings are enabled by default: Block public ACLs, Block public policies, Ignore public ACLs, and Restrict public buckets. Leave these enabled for private application buckets and log buckets unless you have a specific public bucket design.
 
-    The bucket uses SSE-S3 AES256 encryption by default. Set KMS key ID to use SSE-KMS. Bucket key remains enabled by default for SSE-KMS to reduce KMS request volume.
+    The bucket uses SSE-S3 AES256 encryption by default and blocks SSE-C uploads. Set KMS key ID to use SSE-KMS. Bucket key remains enabled by default for SSE-KMS to reduce KMS request volume.
 
     ## Lifecycle rules
 
     Lifecycle rules can expire current objects, expire noncurrent versions, transition current or noncurrent versions to colder storage classes, and abort incomplete multipart uploads. The lifecycle rule form covers the common one-transition-per-rule cases. Advanced lifecycle rules accept the Terraform lifecycle rule shape, including id, enabled, prefix, tags, expiration, noncurrent_version_expiration, transitions, noncurrent_version_transitions, and abort_incomplete_multipart_upload_days.
+
+    ## CORS
+
+    CORS rules allow browser-based applications on approved origins to make cross-origin requests to bucket objects. Each rule includes allowed origins and methods, with optional allowed request headers, exposed response headers, and browser preflight cache duration.
 
     ## Bucket policies
 
@@ -335,8 +423,11 @@ module:
     | ALB access logs | Allows Application Load Balancer log delivery. |
     | NLB access logs | Allows Network Load Balancer log delivery. |
     | VPC Flow Logs | Allows VPC Flow Logs delivery. |
+    | CloudFront OAC read | Allows selected CloudFront distributions using Origin Access Control to read objects. |
 
     Custom policy JSON can be provided for additional statements. When templates and custom policy are both set, the module merges their statements into one bucket policy.
+
+    For private buckets served through rvn-cloudfront, apply the CloudFront module first, then add the CloudFront OAC read template here with the CloudFront distribution ARN. The bucket remains private because access is granted only to the CloudFront service principal for that distribution.
 
     ## Configuration
 
@@ -350,9 +441,11 @@ module:
     | KMS key ID | No | None | Uses SSE-KMS when set; otherwise uses SSE-S3 AES256. |
     | Bucket key | No | true | Applies to SSE-KMS only. |
     | Versioning | No | false | Keeps multiple versions of objects. |
+    | CORS rules | No | Empty list | Browser cross-origin access rules for approved origins and methods. |
     | Lifecycle rules | No | Empty list | Form-based expiration, transition, noncurrent version, and multipart cleanup rules. |
     | Advanced lifecycle rules | No | Empty list | Raw Terraform lifecycle rule shape for tag filters, multiple transitions, and uncommon combinations. |
     | Policy templates | No | Empty list | Adds common bucket policy statements. |
+    | CloudFront distribution ARNs | No | Empty list | Required when the CloudFront OAC read policy template is selected. |
     | Custom policy JSON | No | None | Additional policy statements merged with templates. |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
     | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |

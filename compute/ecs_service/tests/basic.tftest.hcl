@@ -33,6 +33,17 @@ mock_provider "aws" {
       cidr_block = "10.0.0.0/16"
     }
   }
+  mock_data "aws_lb_listener" {
+    defaults = {
+      load_balancer_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock-alb/1234567890123456"
+    }
+  }
+  mock_data "aws_lb" {
+    defaults = {
+      dns_name = "mock-alb-1234567890.us-east-1.elb.amazonaws.com"
+      zone_id  = "Z35SXDOTRQ7X7K"
+    }
+  }
 
   # Computed ARNs must look like real ARNs to pass provider-side
   # validation on referencing resources (task definition, listener
@@ -534,6 +545,17 @@ run "custom_task_configuration" {
     condition     = aws_ecs_task_definition.this.memory == "2048"
     error_message = "Task memory should be 2048"
   }
+}
+
+run "ephemeral_storage_requires_fargate_task_compatibility" {
+  command = plan
+
+  variables {
+    task_ephemeral_storage_size_gib = 21
+    requires_compatibilities        = ["EC2"]
+  }
+
+  expect_failures = [var.task_ephemeral_storage_size_gib]
 }
 
 ################################################################################
