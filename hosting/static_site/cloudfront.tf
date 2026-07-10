@@ -11,9 +11,10 @@
 #
 # The viewer-response CloudFront Function (created when cache_control_enabled =
 # true, the default) sets Cache-Control on every response based on the
-# rewritten URI shape: HTML responses get a short s-maxage + long
-# stale-while-revalidate, hashed assets get the immutable 1-year browser
-# cache. See functions/cache_control.js for the classification rules.
+# rewritten URI shape. These headers only steer the BROWSER — CloudFront
+# ignores viewer-response headers for edge TTLs. HTML responses get
+# revalidate-always, hashed assets get the immutable 1-year browser cache.
+# See functions/cache_control.js for the classification rules.
 ################################################################################
 
 module "cdn" {
@@ -54,6 +55,8 @@ module "cdn" {
   }
 
   ordered_cache_behaviors = local.ordered_behaviors
+
+  custom_error_responses = local.custom_error_responses
 
   default_root_object     = var.default_root_object
   price_class             = var.price_class

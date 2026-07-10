@@ -114,17 +114,29 @@ run "default_version_default_is_main" {
   }
 }
 
-run "default_version_accepts_versions_prefix" {
+run "default_version_accepts_single_segment" {
+  command = plan
+
+  variables {
+    default_version = "v_2026-07-10.1"
+  }
+
+  assert {
+    condition     = var.default_version == "v_2026-07-10.1"
+    error_message = "default_version should accept single-segment names with letters, numbers, '.', '_', '-'."
+  }
+}
+
+run "default_version_rejects_multi_segment" {
   command = plan
 
   variables {
     default_version = "versions/v1"
   }
 
-  assert {
-    condition     = var.default_version == "versions/v1"
-    error_message = "default_version should accept 'versions/v1'."
-  }
+  # Multi-segment versions would break the cache-control function, which
+  # strips exactly one leading path segment to recover the viewer-facing path.
+  expect_failures = [var.default_version]
 }
 
 run "default_version_rejects_invalid_chars" {
@@ -135,6 +147,18 @@ run "default_version_rejects_invalid_chars" {
   }
 
   expect_failures = [var.default_version]
+}
+
+run "kvs_initial_data_rejects_multi_segment_versions" {
+  command = plan
+
+  variables {
+    kvs_initial_data = {
+      "staging.example.com" = "versions/v1"
+    }
+  }
+
+  expect_failures = [var.kvs_initial_data]
 }
 
 #-------------------------------------------------------------------------------
@@ -294,8 +318,8 @@ run "cache_control_defaults" {
   }
 
   assert {
-    condition     = var.html_cache_control == "s-maxage=5, stale-while-revalidate=31536000"
-    error_message = "html_cache_control should default to short s-maxage + long stale-while-revalidate."
+    condition     = var.html_cache_control == "public, max-age=0, must-revalidate"
+    error_message = "html_cache_control should default to browser revalidate-always — the header only steers the browser (CloudFront ignores viewer-response headers for edge TTLs), and max-age=0 + must-revalidate makes version flips visible on the first navigation."
   }
 
   assert {
@@ -332,7 +356,7 @@ run "cache_control_function_body_carries_template_values" {
   command = plan
 
   assert {
-    condition     = strcontains(local.cff_cache_control_code, "s-maxage=5, stale-while-revalidate=31536000")
+    condition     = strcontains(local.cff_cache_control_code, "public, max-age=0, must-revalidate")
     error_message = "html_cache_control value must be substituted into the viewer-response function body."
   }
 
@@ -404,7 +428,7 @@ run "cache_control_disabled_skips_function" {
 # as the override for callers with a centrally-managed policy.
 #-------------------------------------------------------------------------------
 
-run "response_headers_policy_defaults_to_no_resource" {
+run "response_headers_policy_defaults_to_managed_security_headers" {
   command = plan
 
   assert {
@@ -418,8 +442,26 @@ run "response_headers_policy_defaults_to_no_resource" {
   }
 
   assert {
+    condition     = var.security_headers_enabled == true
+    error_message = "security_headers_enabled should default to true."
+  }
+
+  assert {
+    condition     = local.effective_response_headers_policy_id == "67f7725c-6f97-4210-82d7-5512b31e9d03"
+    error_message = "Default behavior should attach the AWS-managed SecurityHeadersPolicy when neither response_headers_policy nor response_headers_policy_id is set."
+  }
+}
+
+run "security_headers_disabled_attaches_no_policy" {
+  command = plan
+
+  variables {
+    security_headers_enabled = false
+  }
+
+  assert {
     condition     = local.effective_response_headers_policy_id == null
-    error_message = "Default behavior should attach no response-headers policy when neither response_headers_policy nor response_headers_policy_id is set."
+    error_message = "No response-headers policy should be attached when security_headers_enabled = false and no caller policy is set."
   }
 }
 
@@ -576,6 +618,91 @@ run "response_headers_policy_validates_frame_option" {
   }
 
   expect_failures = [var.response_headers_policy]
+}
+
+#-------------------------------------------------------------------------------
+# 404 handling (error_document)
+#
+# Missing objects return real 404s because the bucket policy grants CloudFront
+# s3:ListBucket. When error_document is set (default '404.html'), a custom
+# error response serves it as the 404 body while keeping the 404 status. The
+# error-page fetch bypasses the viewer-request rewrite, so the key resolves at
+# the bucket root — deploys copy <version>/404.html there at promotion.
+#-------------------------------------------------------------------------------
+
+run "error_document_default_wires_custom_error_response" {
+  command = plan
+
+  assert {
+    condition     = var.error_document == "404.html"
+    error_message = "error_document should default to '404.html'."
+  }
+
+  assert {
+    condition     = length(local.custom_error_responses) == 1
+    error_message = "Exactly one custom error response should be configured when error_document is set."
+  }
+
+  assert {
+    condition     = local.custom_error_responses[0].error_code == 404 && local.custom_error_responses[0].response_code == 404
+    error_message = "The custom error response must keep the real 404 status — never rewrite it to 200 (SEO) and never map 403 (a 403 now only means blocked, e.g. WAF)."
+  }
+
+  assert {
+    condition     = local.custom_error_responses[0].response_page_path == "/404.html"
+    error_message = "The response page path must be the bucket-root key derived from error_document."
+  }
+
+  assert {
+    condition     = local.custom_error_responses[0].error_caching_min_ttl == 10
+    error_message = "error_caching_min_ttl should default to 10 seconds so newly deployed files become visible quickly."
+  }
+}
+
+run "error_document_empty_disables_custom_error_response" {
+  command = plan
+
+  variables {
+    error_document = ""
+  }
+
+  assert {
+    condition     = length(local.custom_error_responses) == 0
+    error_message = "No custom error response should be configured when error_document is an empty string. Empty (not null) is the disable signal — null applies the variable default."
+  }
+}
+
+run "error_document_null_falls_back_to_default" {
+  command = plan
+
+  variables {
+    error_document = null
+  }
+
+  assert {
+    condition     = local.custom_error_responses[0].response_page_path == "/404.html"
+    error_message = "Passing null must apply the default '404.html' (nullable = false), so definition-layer nils never silently disable the error page."
+  }
+}
+
+run "error_document_rejects_leading_slash" {
+  command = plan
+
+  variables {
+    error_document = "/404.html"
+  }
+
+  expect_failures = [var.error_document]
+}
+
+run "error_caching_min_ttl_rejects_out_of_range" {
+  command = plan
+
+  variables {
+    error_caching_min_ttl = 31536001
+  }
+
+  expect_failures = [var.error_caching_min_ttl]
 }
 
 run "response_headers_policy_id_alone_works_without_module_policy" {

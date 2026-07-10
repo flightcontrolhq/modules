@@ -34,15 +34,38 @@ locals {
 
   managed_cache_disabled_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
 
-  # Caller-supplied response_headers_policy_id wins over the module-managed
-  # one. Both can be null (no policy attached); the cache-control function
-  # still runs because it's a separate viewer-response association.
+  # AWS-managed SecurityHeadersPolicy: HSTS, X-Content-Type-Options nosniff,
+  # X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin,
+  # X-XSS-Protection 1; mode=block.
+  managed_security_headers_id = "67f7725c-6f97-4210-82d7-5512b31e9d03"
+
+  # Precedence: caller-supplied response_headers_policy_id > module-managed
+  # policy from var.response_headers_policy > AWS-managed SecurityHeadersPolicy
+  # (attached by default; disable with security_headers_enabled = false). The
+  # cache-control function always runs regardless — it's a separate
+  # viewer-response association.
   module_response_headers_policy_id = try(aws_cloudfront_response_headers_policy.this[0].id, null)
-  effective_response_headers_policy_id = (
-    var.response_headers_policy_id != null
-    ? var.response_headers_policy_id
-    : local.module_response_headers_policy_id
-  )
+  effective_response_headers_policy_id = try(coalesce(
+    var.response_headers_policy_id,
+    local.module_response_headers_policy_id,
+    var.security_headers_enabled ? local.managed_security_headers_id : null,
+  ), null)
+
+  # Missing objects return real 404s (the bucket policy grants CloudFront
+  # s3:ListBucket, so S3 distinguishes NoSuchKey from AccessDenied). When
+  # error_document is set, serve it as the 404 body while keeping the 404
+  # status. The error-page fetch bypasses the viewer-request rewrite, so the
+  # key resolves at the bucket root — deploys copy <version>/404.html there
+  # at promotion time. A genuine 403 now only means "blocked" (e.g. WAF),
+  # never "file missing", so it is deliberately not mapped.
+  custom_error_responses = var.error_document == "" ? [] : [
+    {
+      error_code            = 404
+      response_code         = 404
+      response_page_path    = "/${var.error_document}"
+      error_caching_min_ttl = var.error_caching_min_ttl
+    }
+  ]
 
   no_cache_behaviors = [
     for path in var.no_cache_paths : {
