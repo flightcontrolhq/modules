@@ -272,6 +272,11 @@ variable "task_role_inline_policies" {
   type        = any
   description = "Inline IAM policies to attach to the task role, keyed by policy name. Values are policy documents as HCL/JSON objects. Only used if task_role_arn is null."
   default     = {}
+
+  validation {
+    condition     = can(keys(var.task_role_inline_policies))
+    error_message = "The task_role_inline_policies must be an object keyed by policy name."
+  }
 }
 
 variable "execution_role_policies" {

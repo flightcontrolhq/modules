@@ -619,6 +619,16 @@ run "task_role_inline_policies_allow_mixed_document_shapes" {
   }
 }
 
+run "task_role_inline_policies_reject_non_object_values" {
+  command = plan
+
+  variables {
+    task_role_inline_policies = ["not-an-object"]
+  }
+
+  expect_failures = [var.task_role_inline_policies]
+}
+
 ################################################################################
 # Test: ECS Exec Enabled
 ################################################################################
