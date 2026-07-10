@@ -792,10 +792,12 @@ run "cache_policy_id_override_skips_module_policy" {
 # 404 handling (error_document)
 #
 # Missing objects return real 404s because the bucket policy grants CloudFront
-# s3:ListBucket. When error_document is set (default '404.html'), a custom
-# error response serves it as the 404 body while keeping the 404 status. The
-# error-page fetch bypasses the viewer-request rewrite, so the key resolves at
-# the bucket root — deploys copy <version>/404.html there at promotion.
+# s3:ListBucket. The 404 custom error response is always emitted so
+# error_caching_min_ttl always applies; the response page is only attached
+# when error_document is set (default '404.html'), serving it as the 404 body
+# while keeping the 404 status. The error-page fetch bypasses the
+# viewer-request rewrite, so the key resolves at the bucket root — deploys
+# copy <version>/404.html there at promotion.
 #-------------------------------------------------------------------------------
 
 run "error_document_default_wires_custom_error_response" {
@@ -827,16 +829,27 @@ run "error_document_default_wires_custom_error_response" {
   }
 }
 
-run "error_document_empty_disables_custom_error_response" {
+run "error_document_empty_serves_plain_404s_with_ttl" {
   command = plan
 
   variables {
-    error_document = ""
+    error_document        = ""
+    error_caching_min_ttl = 0
   }
 
   assert {
-    condition     = length(local.custom_error_responses) == 0
-    error_message = "No custom error response should be configured when error_document is an empty string. Empty (not null) is the disable signal — null applies the variable default."
+    condition     = length(local.custom_error_responses) == 1
+    error_message = "The 404 custom error response must still be emitted when error_document is empty so error_caching_min_ttl is never silently ignored."
+  }
+
+  assert {
+    condition     = local.custom_error_responses[0].response_page_path == null
+    error_message = "No response page must be attached when error_document is empty — viewers get the plain 404."
+  }
+
+  assert {
+    condition     = local.custom_error_responses[0].error_caching_min_ttl == 0
+    error_message = "error_caching_min_ttl must apply even when the custom error page is disabled."
   }
 }
 

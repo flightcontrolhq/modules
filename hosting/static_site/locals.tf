@@ -121,11 +121,14 @@ locals {
   # key resolves at the bucket root — deploys copy <version>/404.html there
   # at promotion time. A genuine 403 now only means "blocked" (e.g. WAF),
   # never "file missing", so it is deliberately not mapped.
-  custom_error_responses = var.error_document == "" ? [] : [
+  # The 404 custom error response is always emitted so error_caching_min_ttl
+  # always applies; the response page is only attached when error_document is
+  # set.
+  custom_error_responses = [
     {
       error_code            = 404
-      response_code         = 404
-      response_page_path    = "/${var.error_document}"
+      response_code         = var.error_document == "" ? null : 404
+      response_page_path    = var.error_document == "" ? null : "/${var.error_document}"
       error_caching_min_ttl = var.error_caching_min_ttl
     }
   ]

@@ -341,7 +341,7 @@ variable "error_document" {
 
 variable "error_caching_min_ttl" {
   type        = number
-  description = "Seconds CloudFront caches 404 error responses at the edge before re-checking the origin. Only used when error_document is set. Keep this short so newly deployed files become visible quickly after a promotion."
+  description = "Seconds CloudFront caches 404 error responses at the edge before re-checking the origin. Applies whether or not error_document is set. Keep this short so newly deployed files become visible quickly after a promotion."
   default     = 10
 
   validation {

@@ -248,7 +248,7 @@ When `error_document` is set (default `"404.html"`), a CloudFront custom error r
 aws s3 cp "s3://$BUCKET/$VERSION/404.html" "s3://$BUCKET/404.html"
 ```
 
-If the root key doesn't exist, viewers still get a correct 404 status — just with a plain body. Two caveats: hosts pinned to older versions via KVS share the most recently promoted 404 page, and a changed 404 page needs an invalidation of `/404.html` (or `/*`) to propagate through the edge cache. Set `error_document = ""` to disable the custom page entirely (null applies the default — null means "use default" in Terraform); `error_caching_min_ttl` (default 10s) controls how long the edge caches 404 responses.
+If the root key doesn't exist, viewers still get a correct 404 status — just with a plain body. Two caveats: hosts pinned to older versions via KVS share the most recently promoted 404 page, and a changed 404 page needs an invalidation of `/404.html` (or `/*`) to propagate through the edge cache. Set `error_document = ""` to disable the custom page entirely (null applies the default — null means "use default" in Terraform); `error_caching_min_ttl` (default 10s) controls how long the edge caches 404 responses and applies whether or not the custom page is enabled.
 
 ## Custom response headers (security, CORS, etc.)
 
@@ -467,7 +467,7 @@ No external apply-time tools required.
 
 - Hosting bucket has all four S3 public access block settings enabled by default (inherited from `storage/s3`).
 - CloudFront uses OAC, not OAI — supports SSE-KMS and Object Lambda.
-- Bucket policy grants `s3:GetObject` and `s3:ListBucket` only to `cloudfront.amazonaws.com` scoped to the specific distribution ARNs created by this module (defense in depth). `ListBucket` exists so missing keys return 404 instead of 403; the rewriter guarantees S3 never receives a request that would produce an actual listing.
+- Bucket policy grants `s3:GetObject` and `s3:ListBucket` only to `cloudfront.amazonaws.com` scoped to the specific distribution ARNs created by this module (defense in depth). `ListBucket` exists so missing keys return 404 instead of 403. It carries no `s3:prefix` condition because S3's implicit 404-vs-403 check evaluates `ListBucket` without prefix context — a condition would fail closed and reintroduce 403s. Listing exposure is prevented at the distribution level instead: `default_root_object` intercepts `/` before any function runs, and the origin request policy forwards no query strings, so a request shape that returns a listing can never reach S3 (see data.tf for the full rationale).
 - The AWS-managed `SecurityHeadersPolicy` (HSTS, nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy) is attached by default; remove it via `response_headers_presets = []` or supersede it with your own policy.
 - Optional deploy role uses a fully user-supplied trust policy — no implicit cross-account trust.
 - TLS 1.2+ enforced on the viewer side (`minimum_protocol_version` defaults to `TLSv1.2_2021`).
