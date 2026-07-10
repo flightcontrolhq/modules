@@ -51,6 +51,23 @@ output "distribution_hosted_zone_ids" {
   value       = module.cdn.distribution_hosted_zone_ids
 }
 
+output "primary_domain" {
+  description = "Primary viewer-facing domain of the primary distribution ('main', or the lexically first key): the first alias when aliases are configured, otherwise the CloudFront domain name (e.g. 'd123.cloudfront.net')."
+  value = (
+    length(var.distributions[local.primary_distribution_key].aliases) > 0
+    ? var.distributions[local.primary_distribution_key].aliases[0]
+    : module.cdn.distribution_domain_names[local.primary_distribution_key]
+  )
+}
+
+output "distribution_primary_domains" {
+  description = "Map of distribution key -> primary domain: the first alias when aliases are configured, otherwise the CloudFront domain name."
+  value = {
+    for k, d in var.distributions :
+    k => length(d.aliases) > 0 ? d.aliases[0] : module.cdn.distribution_domain_names[k]
+  }
+}
+
 ################################################################################
 # Edge / Versioning
 ################################################################################

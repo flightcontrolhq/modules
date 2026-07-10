@@ -57,6 +57,10 @@ locals {
 
   origin_id = "s3-hosting"
 
+  # "main" is the conventional primary distribution; fall back to the lexically
+  # first key so primary_domain works for any distributions map.
+  primary_distribution_key = contains(keys(var.distributions), "main") ? "main" : sort(keys(var.distributions))[0]
+
   # The CF Function reads `active` from KVS unless callers seed it themselves.
   active_kvs_seed = merge(
     { active = var.default_version },

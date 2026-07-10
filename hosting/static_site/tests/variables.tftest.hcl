@@ -748,6 +748,37 @@ run "origin_shield_explicit_region_overrides_derivation" {
 }
 
 #-------------------------------------------------------------------------------
+# Primary domain output
+#-------------------------------------------------------------------------------
+
+run "primary_domain_uses_first_alias_when_set" {
+  command = apply
+
+  variables {
+    distributions = {
+      main = {
+        aliases             = ["app.example.com", "www.example.com"]
+        acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+      }
+    }
+  }
+
+  assert {
+    condition     = output.primary_domain == "app.example.com"
+    error_message = "primary_domain must be the first alias when aliases are configured."
+  }
+}
+
+run "primary_domain_falls_back_to_cloudfront_domain" {
+  command = apply
+
+  assert {
+    condition     = output.primary_domain == module.cdn.distribution_domain_names["main"]
+    error_message = "primary_domain must fall back to the CloudFront domain name when no aliases are configured."
+  }
+}
+
+#-------------------------------------------------------------------------------
 # Cache policy (module-managed 1-year edge TTL)
 #-------------------------------------------------------------------------------
 

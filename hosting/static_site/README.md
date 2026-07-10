@@ -450,6 +450,8 @@ No external apply-time tools required.
 | cloudfront_distribution_arns | List of all CloudFront distribution ARNs. |
 | distribution_domain_names | Map of distribution key -> CloudFront domain name. |
 | distribution_hosted_zone_ids | Map of distribution key -> Route53 zone ID for alias records. |
+| primary_domain | Primary viewer-facing domain of the primary distribution: first alias if configured, otherwise the CloudFront domain name. |
+| distribution_primary_domains | Map of distribution key -> primary domain (first alias, else CloudFront domain). |
 | cloudfront_function_arn | ARN of the viewer-request rewriter function. |
 | cache_control_function_arn | ARN of the viewer-response Cache-Control writer function. Null when `cache_control_enabled = false`. |
 | cache_policy_id | ID of the cache policy attached to the default behavior (caller-supplied when set, otherwise module-managed). |
