@@ -2,13 +2,13 @@
 
 End-to-end composite module for hosting static sites on AWS using S3 + CloudFront. Composes [`storage/s3`](../../storage/s3) and [`cdn/cloudfront`](../../cdn/cloudfront).
 
-Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> version` map; a single CloudFront Function rewrites every viewer request to `/<version>/...` before the cache lookup. Promoting or rolling back a build is one `put-key` call against the KVS.
+Every deployment is stored in a versioned S3 directory. A CloudFront KeyValueStore holds a `host -> version` map, and `deployment_cache_mode` chooses whether the active version is resolved before or after CloudFront cache lookup. Promoting or rolling back a build is one `put-key` call against the KVS.
 
 ## Features
 
 - **Versioned-by-default**: every deploy lands at `s3://<bucket>/<version>/`, the KVS `active` key points at the live one.
 - **Instant rollback**: flip `active` (or any per-host KVS entry) — KVS reads at the edge propagate within seconds.
-- **No CloudFront invalidations needed**: the rewriter changes the rewritten URI, which is part of the cache key, so each promotion is automatically a fresh cache key.
+- **No default CloudFront invalidation**: versioned mode changes the cache key on promotion; stale-while-revalidate mode converges through bounded CDN revalidation.
 - **Two routing styles**: `spa` (every non-asset path serves `<version>/index.html` for client-side routers) and `filesystem` (clean URLs, `/foo` → `<version>/foo/index.html`).
 - **Per-host overrides**: pin staging to a specific version, run PR previews on `pr-*.preview.example.com` subdomains, gradual cutovers — all via KVS keys.
 - **Origin Access Control (OAC)** by default — no public buckets, no legacy OAI.
@@ -77,7 +77,7 @@ module "site" {
 }
 ```
 
-The viewer-response function automatically classifies every response as HTML or asset by the rewritten URI extension — no `long_cache_paths`, no per-project asset directory list. Hashed assets like `/_astro/foo.abc123.js` or `/main.def456.css` get `immutable, max-age=1y`; SPA routes like `/dashboard`, root files like `/favicon.ico`, and `*.html` documents get `s-maxage=5, stale-while-revalidate=31536000`.
+The viewer-response function automatically classifies every response as HTML or asset. Hashed assets get `public, max-age=31536000, immutable`. HTML defaults to `no-cache` in versioned mode and `max-age=0, stale-while-revalidate=300` in stale-while-revalidate mode.
 
 ### Filesystem (Astro/Hugo/MkDocs)
 
@@ -203,32 +203,25 @@ Only the default `aws` provider is required. ACM certificates for CloudFront ali
 
 ## Cache strategy
 
-Two CloudFront Functions split responsibilities cleanly:
+`deployment_cache_mode` is independent of `routing`:
 
-| Function | Event | Job |
+| Setting | `versioned` | `stale_while_revalidate` |
 |---|---|---|
-| rewriter | viewer-request | Looks up the active version in the KVS and prepends `/<version>/` to the URI so each promotion produces a fresh cache key. |
-| cache-control | viewer-response | Writes `Cache-Control` on every response based on the rewritten URI shape. HTML responses get a short s-maxage + long `stale-while-revalidate`; hashed assets get the immutable 1-year browser cache. |
+| HTML cache key | Version-specific | Stable and partitioned by viewer `Host` |
+| Promotion | KVS pointer flip creates a new cache identity | KVS pointer is resolved on origin request |
+| HTML browser default | `no-cache` | `max-age=0, stale-while-revalidate=300` |
+| HTML CDN policy | AWS-managed CachingOptimized by default; does not bridge deployments | `public, s-maxage=5, stale-while-revalidate=300, stale-if-error=300` injected on origin response |
+| Asset browser policy | `public, max-age=31536000, immutable` | `public, max-age=31536000, immutable` |
+| Cutover | Version-specific after an edge observes KVS promotion | Per-page convergence; bounded stale content is allowed |
+| Lambda@Edge | No | One function associated with origin request and origin response |
 
-**CDN-side cache policy** (defaults to AWS-managed `CachingOptimized`, 1y TTL, no headers/cookies/QS — overridable via `cache_policy_id`):
+In `versioned` mode, the viewer-request function prepends the active version before cache lookup. Browser HTML validates before reuse, while immutable public asset URLs remain warm in browsers. `cache_policy_id` and `origin_request_policy_id` may be overridden only in this mode. Versioned mode has no origin-response processing: externally uploaded objects with missing or incorrect `Content-Type` are not repaired at cache fill and CloudFront may skip compression.
 
-| Path pattern | Cache policy | Why |
-|---|---|---|
-| (default) | `CachingOptimized` | The rewriter pins every URL to `/<version>/...`, so each response has a version-unique cache key — safe to cache at the edge for a year regardless of HTML vs asset. |
-| `no_cache_paths` | AWS-managed `CachingDisabled` | Optional escape hatch — versioning makes per-path cache busting unnecessary in most cases. |
+In `stale_while_revalidate` mode, the viewer URI stays stable. The viewer-request function passes the active version in `X-Ravion-Version`; a Lambda@Edge origin-request trigger resolves the versioned S3 URI, and the same function's origin-response trigger injects CDN cache-fill headers and repairs `Content-Type` on both `200` and `304` responses. The internal version header is forwarded but excluded from the cache key. Module-managed cache and origin request policies are mandatory, so caller values for `cache_policy_id` and `origin_request_policy_id` are rejected.
 
-**Browser-side `Cache-Control`** (written by the viewer-response function when `cache_control_enabled = true`, the default):
+SWR is appropriate only when bounded stale public content is acceptable. Stale HTML may reference an old hashed asset that is no longer present in the active version on an edge miss. Keep old deployment directories through the stale window and configure correctness-critical routes such as checkout, account, pricing, and inventory in `no_cache_paths`.
 
-| Rewritten URI shape | `Cache-Control` | Why |
-|---|---|---|
-| URI in `html_path_overrides` (`/service-worker.js`, `/sw.js`, `/manifest.json`, `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`) | `s-maxage=5, stale-while-revalidate=31536000` | Stable, non-hashed root files. Caching them as `immutable` is dangerous — a wedged service worker can brick a site until users clear site data. Override the list per-project with `html_path_overrides`. |
-| Contains a dotted segment (e.g. `/.well-known/openid-configuration`) | `s-maxage=5, stale-while-revalidate=31536000` | RFC 8615 well-known URIs and dot-prefixed config directories are served verbatim and are not content-hashed. |
-| No file extension or ends in `.html` / `.htm` | `s-maxage=5, stale-while-revalidate=31536000` | Catches SPA routes (`/dashboard`) after the rewriter sent them to `/<v>/index.html`, filesystem routes (`/about/`) sent to `/<v>/about/index.html`, and explicit `.html` requests. CDN edge holds HTML for 5s fresh then serves stale while it revalidates against S3 in the background, so flips of `active` propagate within ~5s without ever blocking on a cache miss — and browsers never store HTML as immutable. |
-| Any other extension (`.js`, `.css`, `.png`, `.woff2`, …) | `public, max-age=31536000, immutable` | Every asset URL is pinned to `/<version>/...` by the rewriter, so the bytes at a given URL never change between deploys. Browsers can cache these for a year and skip even conditional revalidation. |
-
-Tune the headers via `html_cache_control` and `assets_cache_control`. Add or remove always-revalidate root files via `html_path_overrides` (pass `[]` to opt out of the defaults). Set `cache_control_enabled = false` to skip the function entirely and delegate `Cache-Control` to S3 object metadata or to a caller-supplied `response_headers_policy_id`. The `response_headers_policy_id` variable is for orthogonal headers (HSTS, CSP, COOP/COEP, etc.) — it coexists with the cache-control function and shouldn't carry `Cache-Control` itself.
-
-> **Why the function lives in viewer-response, not viewer-request:** CloudFront resolves which cache behavior (and therefore which response-headers policy) to use from the **original viewer URI**, before any viewer-request function runs. SPA routes like `/dashboard` have no extension, so a static `*.html` ordered behavior cannot match them; the default behavior's response-headers policy is the only thing that ever gets attached. That's how [ENG-4785](https://linear.app/flightcontrol/issue/ENG-4785/) happened — the immutable assets policy on the default behavior leaked onto every HTML response. Setting `Cache-Control` in viewer-response sidesteps cache-behavior matching entirely and keys off the rewritten URI shape, where HTML vs asset is unambiguous from the file extension.
+The viewer-response function always controls browser-facing headers when `cache_control_enabled = true`; SWR's origin-response headers separately control what CloudFront caches. Tune browser headers with `html_cache_control` and `assets_cache_control`, and use `html_path_overrides` for stable root files.
 
 ## Custom response headers (security, CORS, etc.)
 
@@ -311,7 +304,7 @@ module "site" {
 | Name | Version |
 |---|---|
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 5.0 |
+| aws | >= 6.0 |
 
 No external apply-time tools required.
 
@@ -328,6 +321,7 @@ No external apply-time tools required.
 | Name | Description | Type | Default |
 |---|---|---|---|
 | routing | URI rewrite style: `spa` or `filesystem`. | `string` | `"spa"` |
+| deployment_cache_mode | Cache consistency model: `versioned` or `stale_while_revalidate`. | `string` | `"versioned"` |
 | default_version | Fallback version prefix when KVS has neither host nor `active` entries. Also seeds `active` on first apply. | `string` | `"main"` |
 | distributions | Map of CloudFront distributions sharing the same origin. | `map(object)` | `{ main = {} }` |
 | tags | Tags to apply to all resources. | `map(string)` | `{}` |
@@ -363,14 +357,14 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| cache_policy_id | Default cache policy ID. | `string` | AWS-managed CachingOptimized |
-| origin_request_policy_id | Origin request policy ID. | `string` | AWS-managed CORS-S3Origin |
+| cache_policy_id | Optional versioned-mode cache policy ID. Rejected in SWR mode. | `string` | `null` (AWS-managed CachingOptimized effectively) |
+| origin_request_policy_id | Optional versioned-mode origin request policy ID. Rejected in SWR mode. | `string` | `null` (AWS-managed CORS-S3Origin effectively) |
 | response_headers_policy_id | Externally-managed response-headers policy ID (e.g. an org-wide CSP). Wins over `response_headers_policy` when both are set. | `string` | `null` |
 | response_headers_policy | Declarative module-managed response-headers policy: HSTS, CSP, X-Frame-Options, Referrer-Policy, CORS, custom headers, removed headers. See README for the full shape and an example. | `object(...)` | `null` |
 | no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
 | default_root_object | Object name for `/` requests. | `string` | `"index.html"` |
 | cache_control_enabled | Attach the viewer-response Cache-Control function. | `bool` | `true` |
-| html_cache_control | Cache-Control value for HTML responses (no extension, `.html`/`.htm`, dotted segments, or `html_path_overrides`). | `string` | `"s-maxage=5, stale-while-revalidate=31536000"` |
+| html_cache_control | Optional browser Cache-Control value for HTML responses. | `string` | `null` (`no-cache` versioned; bounded SWR in SWR mode) |
 | assets_cache_control | Cache-Control value for hashed asset responses (any non-html file extension not in `html_path_overrides`). | `string` | `"public, max-age=31536000, immutable"` |
 | html_path_overrides | Exact-match viewer URIs that always get `html_cache_control` regardless of extension. Defaults cover service-worker/PWA/SEO files. | `list(string)` | `["/service-worker.js", "/sw.js", "/manifest.json", "/manifest.webmanifest", "/favicon.ico", "/robots.txt", "/sitemap.xml"]` |
 
@@ -427,7 +421,7 @@ No external apply-time tools required.
 
 - Hosting bucket has all four S3 public access block settings enabled by default (inherited from `storage/s3`).
 - CloudFront uses OAC, not OAI — supports SSE-KMS and Object Lambda.
-- Bucket policy grants `s3:GetObject` only to `cloudfront.amazonaws.com` scoped to the specific distribution ARNs created by this module (defense in depth).
+- Bucket policy grants scoped `s3:GetObject` and `s3:ListBucket` to `cloudfront.amazonaws.com`, allowing missing objects to remain `404` while genuine authorization failures remain `403`.
 - Optional deploy role uses a fully user-supplied trust policy — no implicit cross-account trust.
 - TLS 1.2+ enforced on the viewer side (`minimum_protocol_version` defaults to `TLSv1.2_2021`).
 - HTTP -> HTTPS redirect is the default viewer protocol policy.

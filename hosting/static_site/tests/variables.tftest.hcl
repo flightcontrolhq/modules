@@ -24,6 +24,15 @@ mock_provider "aws" {
   }
 }
 
+mock_provider "archive" {
+  override_data {
+    target = data.archive_file.edge_router
+    values = {
+      output_base64sha256 = "dGVzdA=="
+    }
+  }
+}
+
 # CloudFront distribution, KVS, CloudFront Functions, and the optional
 # response-headers policy all run through the us_east_1 alias. Their resource
 # overrides live here so apply-mode tests don't hit the real CloudFront API
@@ -35,6 +44,35 @@ mock_provider "aws" {
     target = aws_cloudfront_function.rewrite
     values = {
       arn = "arn:aws:cloudfront::123456789012:function/test-rewrite"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudfront_cache_policy.swr
+    values = {
+      id = "swr-cache-policy"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudfront_origin_request_policy.swr
+    values = {
+      id = "swr-origin-policy"
+    }
+  }
+
+  override_resource {
+    target = aws_lambda_function.edge_router
+    values = {
+      arn           = "arn:aws:lambda:us-east-1:123456789012:function:test-edge-router"
+      qualified_arn = "arn:aws:lambda:us-east-1:123456789012:function:test-edge-router:1"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.edge_router
+    values = {
+      arn = "arn:aws:iam::123456789012:role/test-edge-router"
     }
   }
 
@@ -99,6 +137,88 @@ run "routing_rejects_unknown" {
   }
 
   expect_failures = [var.routing]
+}
+
+#-------------------------------------------------------------------------------
+# Deployment cache modes
+#-------------------------------------------------------------------------------
+
+run "deployment_cache_mode_defaults_to_versioned" {
+  command = plan
+
+  assert {
+    condition     = var.deployment_cache_mode == "versioned"
+    error_message = "deployment_cache_mode should default to versioned."
+  }
+
+  assert {
+    condition     = length(aws_lambda_function.edge_router) == 0 && length(aws_cloudfront_cache_policy.swr) == 0 && length(aws_cloudfront_origin_request_policy.swr) == 0
+    error_message = "Versioned mode must not create SWR Lambda@Edge or policy resources."
+  }
+
+  assert {
+    condition     = local.effective_html_cache_control == "no-cache"
+    error_message = "Versioned mode HTML must default to browser no-cache."
+  }
+}
+
+run "deployment_cache_mode_rejects_unknown" {
+  command = plan
+
+  variables {
+    deployment_cache_mode = "immutable"
+  }
+
+  expect_failures = [var.deployment_cache_mode]
+}
+
+run "swr_mode_creates_edge_resources_and_associations" {
+  command = plan
+
+  variables {
+    deployment_cache_mode = "stale_while_revalidate"
+  }
+
+  assert {
+    condition     = length(aws_lambda_function.edge_router) == 1 && length(aws_cloudfront_cache_policy.swr) == 1 && length(aws_cloudfront_origin_request_policy.swr) == 1
+    error_message = "SWR mode must create one Lambda@Edge function and both module-managed policies."
+  }
+
+  assert {
+    condition     = length(local.lambda_edge_associations) == 2 && local.lambda_edge_associations[0].event_type == "origin-request" && local.lambda_edge_associations[1].event_type == "origin-response"
+    error_message = "SWR mode must associate the published function with origin-request and origin-response."
+  }
+
+  assert {
+    condition     = local.effective_html_cache_control == "max-age=0, stale-while-revalidate=300"
+    error_message = "SWR mode HTML must default to bounded browser stale-while-revalidate."
+  }
+
+  assert {
+    condition     = strcontains(local.cff_rewrite_code, "stale_while_revalidate") && strcontains(local.cff_rewrite_code, "x-ravion-version")
+    error_message = "The SWR viewer-request function must preserve the URI and pass the active version header."
+  }
+
+  assert {
+    condition     = strcontains(local.edge_router_code, "response.status !== '200' && response.status !== '304'")
+    error_message = "The origin-response function must apply identical header logic to 200 and 304 responses."
+  }
+
+  assert {
+    condition     = strcontains(local.edge_router_code, "x-ravion-viewer-uri")
+    error_message = "The edge function must preserve the stable viewer URI for origin-response path classification."
+  }
+}
+
+run "swr_mode_rejects_caller_cache_policy" {
+  command = plan
+
+  variables {
+    deployment_cache_mode = "stale_while_revalidate"
+    cache_policy_id       = "11111111-2222-3333-4444-555555555555"
+  }
+
+  expect_failures = [var.cache_policy_id]
 }
 
 #-------------------------------------------------------------------------------
@@ -294,8 +414,8 @@ run "cache_control_defaults" {
   }
 
   assert {
-    condition     = var.html_cache_control == "s-maxage=5, stale-while-revalidate=31536000"
-    error_message = "html_cache_control should default to short s-maxage + long stale-while-revalidate."
+    condition     = var.html_cache_control == null && local.effective_html_cache_control == "no-cache"
+    error_message = "html_cache_control should be nullable and resolve to no-cache in versioned mode."
   }
 
   assert {
@@ -332,7 +452,7 @@ run "cache_control_function_body_carries_template_values" {
   command = plan
 
   assert {
-    condition     = strcontains(local.cff_cache_control_code, "s-maxage=5, stale-while-revalidate=31536000")
+    condition     = strcontains(local.cff_cache_control_code, "no-cache")
     error_message = "html_cache_control value must be substituted into the viewer-response function body."
   }
 

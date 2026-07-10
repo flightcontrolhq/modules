@@ -11,6 +11,13 @@ locals {
 
   origin_id = "s3-hosting"
 
+  swr_enabled                  = var.deployment_cache_mode == "stale_while_revalidate"
+  effective_html_cache_control = coalesce(var.html_cache_control, local.swr_enabled ? "max-age=0, stale-while-revalidate=300" : "no-cache")
+  versioned_cache_policy_id    = coalesce(var.cache_policy_id, "658327ea-f89d-4fab-a63d-7e88639e58f6")
+  versioned_origin_policy_id   = coalesce(var.origin_request_policy_id, "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf")
+  effective_cache_policy_id    = local.swr_enabled ? aws_cloudfront_cache_policy.swr[0].id : local.versioned_cache_policy_id
+  effective_origin_policy_id   = local.swr_enabled ? aws_cloudfront_origin_request_policy.swr[0].id : local.versioned_origin_policy_id
+
   # The CF Function reads `active` from KVS unless callers seed it themselves.
   active_kvs_seed = merge(
     { active = var.default_version },
@@ -31,6 +38,17 @@ locals {
       function_arn = aws_cloudfront_function.cache_control[0].arn
     }] : [],
   )
+
+  lambda_edge_associations = local.swr_enabled ? [
+    {
+      event_type = "origin-request"
+      lambda_arn = aws_lambda_function.edge_router[0].qualified_arn
+    },
+    {
+      event_type = "origin-response"
+      lambda_arn = aws_lambda_function.edge_router[0].qualified_arn
+    },
+  ] : []
 
   managed_cache_disabled_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
 
@@ -53,10 +71,10 @@ locals {
       cached_methods               = ["GET", "HEAD"]
       compression_enabled          = true
       cache_policy_id              = local.managed_cache_disabled_id
-      origin_request_policy_id     = var.origin_request_policy_id
+      origin_request_policy_id     = local.effective_origin_policy_id
       response_headers_policy_id   = local.effective_response_headers_policy_id
       function_associations        = local.cff_associations
-      lambda_function_associations = []
+      lambda_function_associations = local.lambda_edge_associations
       realtime_log_config_arn      = null
     }
   ]
@@ -66,6 +84,9 @@ locals {
   cff_rewrite_name             = substr(replace("${var.name}-rewrite", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   cff_cache_control_name       = substr(replace("${var.name}-cache-ctl", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   response_headers_policy_name = substr(replace("${var.name}-rh", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
+  swr_cache_policy_name        = substr(replace("${var.name}-swr-cache", "/[^a-zA-Z0-9-_]/", "-"), 0, 128)
+  swr_origin_policy_name       = substr(replace("${var.name}-swr-origin", "/[^a-zA-Z0-9-_]/", "-"), 0, 128)
+  edge_router_name             = substr(replace("${var.name}-edge-router", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   kvs_name                     = substr(replace("${var.name}-kvs", "/[^a-zA-Z0-9-]/", "-"), 0, 64)
   deploy_role_name             = var.deploy_role_name != null ? var.deploy_role_name : "${var.name}-deploy"
   oac_policy_sid               = "AllowCloudFrontServicePrincipal"

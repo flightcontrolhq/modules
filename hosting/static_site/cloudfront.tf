@@ -5,15 +5,13 @@
 # and cache behaviors; per-distribution config (aliases, ACM cert, comment)
 # comes from var.distributions and is forwarded as-is.
 #
-# The viewer-request CloudFront Function rewrites every URI to /<version>/...
-# before the cache lookup, so each promoted version produces a fresh cache key
-# automatically — no CreateInvalidation, no custom_error_responses needed.
+# In versioned mode the viewer-request function rewrites before cache lookup.
+# In SWR mode it keeps the URI stable and passes the active version to the
+# origin-facing Lambda@Edge function.
 #
 # The viewer-response CloudFront Function (created when cache_control_enabled =
 # true, the default) sets Cache-Control on every response based on the
-# rewritten URI shape: HTML responses get a short s-maxage + long
-# stale-while-revalidate, hashed assets get the immutable 1-year browser
-# cache. See functions/cache_control.js for the classification rules.
+# request URI shape. CDN SWR headers are injected separately on origin response.
 ################################################################################
 
 module "cdn" {
@@ -46,11 +44,11 @@ module "cdn" {
     allowed_methods              = ["GET", "HEAD", "OPTIONS"]
     cached_methods               = ["GET", "HEAD"]
     compression_enabled          = true
-    cache_policy_id              = var.cache_policy_id
-    origin_request_policy_id     = var.origin_request_policy_id
+    cache_policy_id              = local.effective_cache_policy_id
+    origin_request_policy_id     = local.effective_origin_policy_id
     response_headers_policy_id   = local.effective_response_headers_policy_id
     function_associations        = local.cff_associations
-    lambda_function_associations = []
+    lambda_function_associations = local.lambda_edge_associations
   }
 
   ordered_cache_behaviors = local.ordered_behaviors

@@ -36,6 +36,7 @@ var KVS_ID = '${kvs_id}';
 var DEFAULT_VERSION = '${default_version}';
 var INDEX_DOCUMENT = '${index_document}';
 var ROUTING = '${routing}';
+var CACHE_MODE = '${cache_mode}';
 
 var kvs = cf.kvs(KVS_ID);
 
@@ -57,6 +58,11 @@ async function handler(event) {
     var version = (host && await lookup(host))
         || (await lookup('active'))
         || DEFAULT_VERSION;
+
+    if (CACHE_MODE === 'stale_while_revalidate') {
+        request.headers['x-ravion-version'] = { value: version };
+        return request;
+    }
 
     var lastSlash = uri.lastIndexOf('/');
     var lastDot = uri.lastIndexOf('.');

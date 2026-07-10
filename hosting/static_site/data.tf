@@ -23,6 +23,24 @@ data "aws_iam_policy_document" "hosting_bucket_policy" {
       values   = [for k, v in module.cdn.distribution_arns : v]
     }
   }
+
+  statement {
+    sid       = "${local.oac_policy_sid}ListBucket"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [local.hosting_bucket_arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [for k, v in module.cdn.distribution_arns : v]
+    }
+  }
 }
 
 # Deploy role policy: sync to the hosting bucket, update the KVS active pointer,

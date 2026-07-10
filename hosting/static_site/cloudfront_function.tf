@@ -24,12 +24,14 @@ locals {
     default_version = var.default_version
     index_document  = var.default_root_object
     routing         = var.routing
+    cache_mode      = var.deployment_cache_mode
   })
 
   cff_cache_control_code = templatefile("${path.module}/functions/cache_control.js", {
-    html_cache_control  = var.html_cache_control
+    html_cache_control  = local.effective_html_cache_control
     asset_cache_control = var.assets_cache_control
     html_overrides_json = jsonencode(var.html_path_overrides)
+    cache_mode          = var.deployment_cache_mode
   })
 }
 

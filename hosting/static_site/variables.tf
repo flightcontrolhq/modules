@@ -34,6 +34,17 @@ variable "routing" {
   }
 }
 
+variable "deployment_cache_mode" {
+  type        = string
+  description = "Deployment cache consistency model. 'versioned' rewrites the viewer URI to a version-specific cache key. 'stale_while_revalidate' keeps viewer cache keys stable and resolves the active version at the origin with bounded CDN stale serving."
+  default     = "versioned"
+
+  validation {
+    condition     = contains(["versioned", "stale_while_revalidate"], var.deployment_cache_mode)
+    error_message = "The deployment_cache_mode must be 'versioned' or 'stale_while_revalidate'."
+  }
+}
+
 variable "default_version" {
   type        = string
   description = "Version prefix used when KVS has neither a host-specific entry nor an 'active' key. Also used as the seed value for the 'active' KVS key on first apply. Pick a stable name like 'main' so the first deploy can sync to s3://<bucket>/<default_version>/ without further setup."
@@ -209,14 +220,24 @@ variable "additional_origin_headers" {
 
 variable "cache_policy_id" {
   type        = string
-  description = "CloudFront cache policy ID for the default behavior. Defaults to AWS-managed CachingOptimized (long-cache, suitable for hashed assets)."
-  default     = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  description = "Optional CloudFront cache policy ID for the default behavior in versioned mode. Defaults to AWS-managed CachingOptimized. Must be null in stale_while_revalidate mode, which requires a module-managed policy."
+  default     = null
+
+  validation {
+    condition     = var.deployment_cache_mode != "stale_while_revalidate" || var.cache_policy_id == null
+    error_message = "cache_policy_id must be null when deployment_cache_mode is 'stale_while_revalidate'."
+  }
 }
 
 variable "origin_request_policy_id" {
   type        = string
-  description = "CloudFront origin request policy ID. Defaults to AWS-managed CORS-S3Origin (forwards Origin/Access-Control-* headers, no cookies/query strings)."
-  default     = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+  description = "Optional CloudFront origin request policy ID in versioned mode. Defaults to AWS-managed CORS-S3Origin. Must be null in stale_while_revalidate mode, which forwards only the internal active-version header."
+  default     = null
+
+  validation {
+    condition     = var.deployment_cache_mode != "stale_while_revalidate" || var.origin_request_policy_id == null
+    error_message = "origin_request_policy_id must be null when deployment_cache_mode is 'stale_while_revalidate'."
+  }
 }
 
 variable "response_headers_policy_id" {
@@ -330,8 +351,8 @@ variable "cache_control_enabled" {
 
 variable "html_cache_control" {
   type        = string
-  description = "Cache-Control header value emitted by the cache-control function for HTML responses (URI has no extension, ends in .html/.htm, contains a dotted segment, or matches html_path_overrides). Defaults to a short CDN s-maxage with a long stale-while-revalidate window so version flips propagate within seconds without blocking on a cache miss, and so browsers never store HTML as immutable."
-  default     = "s-maxage=5, stale-while-revalidate=31536000"
+  description = "Optional browser-facing Cache-Control value for HTML responses. Defaults by deployment cache mode: 'no-cache' for versioned and 'max-age=0, stale-while-revalidate=300' for stale_while_revalidate."
+  default     = null
 }
 
 variable "assets_cache_control" {

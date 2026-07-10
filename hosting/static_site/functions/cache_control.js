@@ -36,12 +36,13 @@
 var HTML_CACHE_CONTROL = '${html_cache_control}';
 var ASSET_CACHE_CONTROL = '${asset_cache_control}';
 var HTML_OVERRIDES = ${html_overrides_json};
+var CACHE_MODE = '${cache_mode}';
 
 function classify(uri) {
     // Strip the version prefix so HTML_OVERRIDES matches the original
     // viewer-facing path shape (e.g. '/service-worker.js'), not the
     // rewritten one (e.g. '/v_abc/service-worker.js').
-    var withoutVersion = uri.replace(/^\/[^\/]+/, '') || '/';
+    var withoutVersion = CACHE_MODE === 'versioned' ? (uri.replace(/^\/[^\/]+/, '') || '/') : uri;
 
     if (HTML_OVERRIDES.indexOf(withoutVersion) >= 0) {
         return HTML_CACHE_CONTROL;

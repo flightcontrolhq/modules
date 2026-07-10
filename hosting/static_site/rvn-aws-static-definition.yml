@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.2.1
-  description: "Add Railpack static builds."
+  version: 0.3.0
+  description: "Add versioned and stale-while-revalidate deployment cache modes."
 module:
   build:
     builder: >-
@@ -32,6 +32,7 @@ module:
   deploy:
     definition:
       cloudfront_invalidation_paths: << module.input.cloudfront_invalidation_paths >>
+      deployment_cache_mode: << module.input.deployment_cache_mode >>
       keep_latest_successful_deploy_count: << module.input.keep_latest_successful_deploy_count >>
       s3_directory: << deploy.input.directory >>
     infrastructure:
@@ -199,6 +200,19 @@ module:
     - id: section_cache_headers
       label: Cache and headers
       type: section
+    - default: versioned
+      description: Choose strict version-specific cache keys or bounded stale-while-revalidate delivery with stable cache keys.
+      id: deployment_cache_mode
+      label: Deployment cache mode
+      required: true
+      type: string
+      values:
+        - description: Switch to a fresh cache key on promotion. HTML validates before browser reuse and Lambda@Edge is not used.
+          label: Versioned
+          value: versioned
+        - description: Keep CDN cache keys stable across promotions and serve bounded stale content while CloudFront revalidates.
+          label: Stale while revalidate
+          value: stale_while_revalidate
     - default: true
       description: Attach a CloudFront Function that sets Cache-Control headers for HTML and asset responses.
       id: cache_control_enabled
@@ -206,13 +220,14 @@ module:
       type: boolean
     - collapsible: true
       default: null
-      description: Cache-Control header for HTML responses, routes without file extensions, dotted paths, and configured HTML path overrides. Defaults to s-maxage=5, stale-while-revalidate=31536000.
+      description: Browser Cache-Control for HTML-like responses. Defaults to no-cache in Versioned mode and max-age=0, stale-while-revalidate=300 in Stale while revalidate mode.
       id: html_cache_control
       label: HTML Cache-Control
       show_when:
         cache_control_enabled: true
       type: string
     - collapsible: true
+      default: public, max-age=31536000, immutable
       description: Cache-Control header for versioned static assets such as JavaScript, CSS, images, and fonts. Defaults to public, max-age=31536000, immutable
       id: assets_cache_control
       label: Asset Cache-Control
@@ -221,6 +236,14 @@ module:
       type: string
     - add_button_label: Add path override
       collapsible: true
+      default:
+        - /service-worker.js
+        - /sw.js
+        - /manifest.json
+        - /manifest.webmanifest
+        - /favicon.ico
+        - /robots.txt
+        - /sitemap.xml
       description: Exact viewer paths that should receive the HTML Cache-Control header even when they have a file extension.
       id: html_path_overrides
       label: HTML cache path overrides
@@ -243,11 +266,15 @@ module:
       description: CloudFront cache policy ID for the default behavior. Defaults to AWS managed CachingOptimized.
       id: cache_policy_id
       label: Cache policy ID
+      show_when:
+        deployment_cache_mode: versioned
       type: string
     - collapsible: true
       description: CloudFront origin request policy ID. Defaults to AWS managed CORS-S3Origin.
       id: origin_request_policy_id
       label: Origin request policy ID
+      show_when:
+        deployment_cache_mode: versioned
       type: string
     - collapsible: true
       default: []
@@ -278,9 +305,8 @@ module:
       label: Deploy config
       type: section
     - add_button_label: Add invalidation path
-      default:
-        - /*
-      description: CloudFront paths to invalidate after promotion. Defaults to invalidating the full distribution.
+      default: []
+      description: Optional CloudFront paths to invalidate after promotion. Leave empty for normal deployments; cache mode promotion handles freshness without invalidation.
       id: cloudfront_invalidation_paths
       label: CloudFront invalidation paths
       type: string_array
@@ -305,7 +331,7 @@ module:
 
     Use it for single-page apps, generated documentation, static marketing sites, downloadable assets, or any static file tree that should be served through CloudFront. Ravion can build files from a Git repository with Railpack or a Dockerfile, or you can disable builds and promote an existing S3 directory at deploy time.
 
-    Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
+    Every deployment is stored in a versioned S3 directory and promoted by updating the CloudFront KeyValueStore active pointer. Deployment cache mode controls whether the version is part of the CDN cache key or resolved behind a stable cache key.
 
     Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/hosting/static_site)
 
@@ -366,14 +392,23 @@ module:
 
     Manage Cache-Control headers is enabled by default. When enabled, the module attaches a CloudFront Function that sets different browser cache headers for HTML-like responses and static assets.
 
+    | Deployment cache mode | CDN behavior | Browser HTML default | Lambda@Edge |
+    | --- | --- | --- | --- |
+    | Versioned | Promotion creates version-specific cache keys | no-cache | No |
+    | Stale while revalidate | Stable Host-partitioned keys use short freshness and bounded stale serving | max-age=0, stale-while-revalidate=300 | Yes, on origin request and response |
+
+    Stale while revalidate is for public content where bounded staleness is acceptable. Cacheable HTML converges per page after revalidation rather than switching atomically. Stale HTML can reference an old hashed asset that is no longer available in the active version on an edge miss, so use No-cache path patterns for transactional, account, checkout, pricing, or inventory routes and retain old deploy directories for at least the stale window.
+
+    In Stale while revalidate mode the module-managed cache and origin request policies are required. Cache policy ID and Origin request policy ID are available only in Versioned mode. The origin-response function supplies CloudFront's cache-fill headers and repairs Content-Type for both 200 and 304 responses; the viewer-response function independently controls browser-facing headers.
+
     | Setting | Default | Purpose |
     | --- | --- | --- |
-    | HTML Cache-Control | Terraform module default: s-maxage=5, stale-while-revalidate=31536000 | Keeps HTML and route responses fresh while allowing edge revalidation |
+    | HTML Cache-Control | Mode-dependent: no-cache or max-age=0, stale-while-revalidate=300 | Controls browser HTML reuse; CDN stale serving is managed separately |
     | Asset Cache-Control | Terraform module default: public, max-age=31536000, immutable | Lets versioned assets be cached by browsers for a long time |
     | HTML cache path overrides | Terraform module defaults for service workers, manifests, favicon, robots, and sitemap | Treats stable root files as HTML-like responses instead of immutable assets |
     | No-cache path patterns | [] | Bypasses CloudFront caching for selected path patterns |
-    | Cache policy ID | AWS managed CachingOptimized by default | Controls CloudFront cache behavior |
-    | Origin request policy ID | AWS managed CORS-S3Origin by default | Controls what CloudFront forwards to S3 |
+    | Cache policy ID | AWS managed CachingOptimized in Versioned mode | Optional Versioned-mode override |
+    | Origin request policy ID | AWS managed CORS-S3Origin in Versioned mode | Optional Versioned-mode override |
 
     Use Response headers policy ID to attach an existing CloudFront response headers policy. Use Managed response headers policy when this module should create one for security headers, CORS, custom headers, or removed headers. Avoid putting Cache-Control into a response headers policy unless you intentionally want to override the cache-control function.
 
@@ -387,7 +422,7 @@ module:
 
     The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Pull from S3, enter the existing S3 prefix that already contains the files to promote.
 
-    CloudFront invalidation paths defaults to /*. This invalidates the full distribution after promotion. Because deployments are versioned, invalidations are often conservative rather than strictly required, but the default favors correctness for users who are changing stable paths.
+    CloudFront invalidation paths defaults to an empty list. Both cache modes handle normal promotion freshness without invalidation; add paths only as an operational escape hatch.
 
     Successful deploys to retain defaults to 20. Older deploy directories are pruned from the hosting bucket based on this setting.
 
@@ -424,9 +459,10 @@ module:
     | CloudFront settings | Price class | No | PriceClass_All | Edge location coverage |
     | CloudFront settings | Geo restriction | No | none | Optional country allow or deny list |
     | Cache and headers | Manage Cache-Control headers | No | true | Attaches the cache-control function |
+    | Cache and headers | Deployment cache mode | Yes | Versioned | Choose strict cutover or bounded stale delivery |
     | Access logging | CloudFront access logging | No | false | Creates a logging bucket when enabled |
     | Access logging | Logging retention days | No | 90 | Visible when logging is enabled |
-    | Deploy config | CloudFront invalidation paths | No | /* | Paths invalidated after promotion |
+    | Deploy config | CloudFront invalidation paths | No | [] | Optional paths invalidated after promotion |
     | Deploy config | Successful deploys to retain | No | 20 | Old S3 deploy prefixes to retain |
     | Terraform settings | Terraform execution environment | No | unset | Override Terraform runner environment |
     | Terraform settings | OpenTofu version | No | first available version | OpenTofu version for infrastructure changes |
@@ -458,6 +494,7 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         assets_cache_control: << module.input.assets_cache_control >>
         cache_policy_id: << module.input.cache_policy_id >>
+        deployment_cache_mode: << module.input.deployment_cache_mode >>
         logging_bucket_creation_enabled: << module.input.logging_enabled >>
         default_root_object: << module.input.default_root_object >>
         default_version: << module.input.default_version >>
