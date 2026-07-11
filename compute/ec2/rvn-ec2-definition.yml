@@ -4,7 +4,7 @@ definition:
   description: Runs one supervised application on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
   version: 0.0.1
-  description: Add an EC2 service with switchable deploy modes, supervised apps, shared image builds, and deployment-scoped logs.
+  description: Add an EC2 service with switchable deploy modes, optional authenticated Git source checkout, supervised apps, shared image builds, and deployment-scoped logs.
 module:
   inputs:
     - id: network
@@ -63,6 +63,21 @@ module:
       description: Long-running foreground app command that supervisord runs as root after preparation and restarts if it exits. Use a wrapper to drop privileges when needed; the command must not daemonize.
       placeholder: cd /srv/app && ./bin/server
       required: true
+      show_when:
+        deploy_type: manual
+    - id: deploy_source_repo
+      label: Git repository
+      type: gitrepo
+      description: Optional repository to check out before manual deploy commands run. Leave blank to run the commands without a managed source checkout.
+      required: false
+      show_when:
+        deploy_type: manual
+    - id: deploy_source_base_path
+      label: Source base path
+      type: string
+      description: Repository-relative working directory for manual deploy and start commands when a Git repository is selected.
+      required: false
+      default: .
       show_when:
         deploy_type: manual
     - id: private_subnet_placement_enabled
@@ -549,6 +564,28 @@ module:
         required: true
         show_when:
           deploy_type: container
+      - id: branch
+        label: Git branch
+        type: string
+        description: Branch to deploy. Defaults to the repository's default branch.
+        required: false
+        show_when:
+          deploy_type: manual
+      - id: ref
+        label: Git ref (commit or tag)
+        type: string
+        description: Optional commit SHA, tag, or ref to deploy. Defaults to the selected branch head.
+        required: false
+        show_when:
+          deploy_type: manual
+    source: >-
+      << module.input.deploy_type == "manual" && module.input.deploy_source_repo ? {
+        "type": "git",
+        "repo": module.input.deploy_source_repo,
+        "branch": deploy.input.branch,
+        "ref": deploy.input.ref,
+        "base_path": module.input.deploy_source_base_path || "."
+      } : nil >>
     definition: >-
       << module.input.deploy_type == "container" ? {"runtime": "container", "image_ref":
       deploy.input.image_ref} : {"runtime": "manual", "commands": module.input.deploy_commands} >>
@@ -732,7 +769,7 @@ module:
       exec runuser -u app -- /srv/orders/bin/server
     ```
 
-    Every Deploy command runs on every instance, so keep commands repeatable and do not put a cluster-wide one-time migration in this list. Manual releases follow whatever source or artifact selection your commands implement. Use Container mode for digest-addressed image releases; use ECS when you need scheduler-managed rollback or traffic shifting.
+    Every Deploy command runs on every instance, so keep commands repeatable and do not put a cluster-wide one-time migration in this list. Select Git repository to have Ravion check out a clean authenticated source before running the commands, or leave it blank when the commands manage their own source or artifacts. Deploy commands and Manual start command run from Source base path when source is configured. Use Container mode for digest-addressed image releases; use ECS when you need scheduler-managed rollback or traffic shifting.
 
     ### Container that needs host customization
 
@@ -812,6 +849,8 @@ module:
     | Deploy type | Yes | container | Switchable Container or Manual in-place deployment |
     | Deploy commands | Yes* | - | Root-level, per-instance preparation commands for Manual mode |
     | Manual start command | Yes* | - | Foreground Manual-mode process managed by supervisord |
+    | Git repository | No | - | Optional authenticated source checkout for Manual mode |
+    | Source base path | No | . | Working directory within the selected repository |
     | Run in private subnets | No | true | Use private subnets without public IPs; outbound access is still required |
     | Instance type | Yes | - | EC2 type used for every instance; architecture must match the app |
     | Min instances / Max instances | Yes | 1 / 3 | Auto Scaling Group capacity bounds |

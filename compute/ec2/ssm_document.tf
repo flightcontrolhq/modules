@@ -69,6 +69,36 @@ resource "aws_ssm_document" "deploy" {
         default        = ""
         allowedPattern = "^[A-Za-z0-9._-]*$"
       }
+      sourceRepo = {
+        type           = "String"
+        description    = "Optional Git repository URL to check out before running the manual deploy commands."
+        default        = ""
+        allowedPattern = "^[A-Za-z0-9:/@._+-]*$"
+      }
+      sourceBranch = {
+        type           = "String"
+        description    = "Optional Git branch to check out."
+        default        = ""
+        allowedPattern = "^[A-Za-z0-9._/@:+-]*$"
+      }
+      sourceRef = {
+        type           = "String"
+        description    = "Optional immutable Git ref to check out."
+        default        = ""
+        allowedPattern = "^[A-Za-z0-9._/@:+-]*$"
+      }
+      sourceBasePath = {
+        type           = "String"
+        description    = "Repository-relative working directory for the deploy and start commands."
+        default        = "."
+        allowedPattern = "^[A-Za-z0-9._/-]*$"
+      }
+      gitTokenParameterName = {
+        type           = "String"
+        description    = "Optional SSM SecureString parameter containing the temporary Git credential."
+        default        = ""
+        allowedPattern = "^(|/ravion/git-tokens/ec2/[A-Za-z0-9._/-]+)$"
+      }
     }
 
     mainSteps = [

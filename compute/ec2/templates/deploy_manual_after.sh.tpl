@@ -7,6 +7,9 @@ set -euo pipefail
 set -a
 . "${env_file_path}"
 set +a
+if [ -s "${source_working_directory_path}" ]; then
+  cd "$(cat "${source_working_directory_path}")"
+fi
 START_COMMAND=$(cat "${start_command_path}")
 exec /bin/bash -lc "$START_COMMAND"
 APP_RUNNER

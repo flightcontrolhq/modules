@@ -27,13 +27,14 @@ locals {
 
   # App layout shared by both deploy modes. Each deployment gets its own
   # app log file and CloudWatch stream under the service log group.
-  env_file_path      = "/etc/ravion/${var.name}.env"
-  log_directory      = "/var/log/ravion/${var.name}"
-  supervisor_program = "ravion-${var.name}"
-  supervisor_conf    = "/etc/supervisord.d/${var.name}.ini"
-  app_runner_path    = "/usr/local/bin/ravion-${var.name}-run"
-  image_ref_path     = "/etc/ravion/${var.name}.image"
-  start_command_path = "/etc/ravion/${var.name}.start-command"
+  env_file_path                 = "/etc/ravion/${var.name}.env"
+  log_directory                 = "/var/log/ravion/${var.name}"
+  supervisor_program            = "ravion-${var.name}"
+  supervisor_conf               = "/etc/supervisord.d/${var.name}.ini"
+  app_runner_path               = "/usr/local/bin/ravion-${var.name}-run"
+  image_ref_path                = "/etc/ravion/${var.name}.image"
+  start_command_path            = "/etc/ravion/${var.name}.start-command"
+  source_working_directory_path = "/etc/ravion/${var.name}.source-working-directory"
 
   supervisor_install_script = templatefile("${path.module}/templates/install_supervisor.sh.tpl", {})
 
@@ -61,21 +62,27 @@ locals {
   })
 
   manual_deploy_prelude = templatefile("${path.module}/templates/deploy_manual_before.sh.tpl", {
-    env_file_path             = local.env_file_path
-    env_file_script           = local.env_file_script
+    env_file_path   = local.env_file_path
+    env_file_script = local.env_file_script
+    git_source_checkout_script = templatefile("${path.module}/templates/checkout_git_source.sh.tpl", {
+      name                          = var.name
+      region                        = local.region
+      source_working_directory_path = local.source_working_directory_path
+    })
     name                      = var.name
     supervisor_install_script = local.supervisor_install_script
     supervisor_program        = local.supervisor_program
   })
 
   manual_deploy_postlude = templatefile("${path.module}/templates/deploy_manual_after.sh.tpl", {
-    app_runner_path             = local.app_runner_path
-    deployment_log_script       = local.deployment_log_script
-    env_file_path               = local.env_file_path
-    manual_start_command_base64 = base64encode(var.manual_start_command != null ? var.manual_start_command : "")
-    start_command_path          = local.start_command_path
-    supervisor_program          = local.supervisor_program
-    supervisor_program_script   = local.supervisor_program_script
+    app_runner_path               = local.app_runner_path
+    deployment_log_script         = local.deployment_log_script
+    env_file_path                 = local.env_file_path
+    manual_start_command_base64   = base64encode(var.manual_start_command != null ? var.manual_start_command : "")
+    start_command_path            = local.start_command_path
+    source_working_directory_path = local.source_working_directory_path
+    supervisor_program            = local.supervisor_program
+    supervisor_program_script     = local.supervisor_program_script
   })
 
   deploy_script = local.container_runtime ? templatefile("${path.module}/templates/deploy_container.sh.tpl", {

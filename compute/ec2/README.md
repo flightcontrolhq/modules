@@ -5,7 +5,7 @@ Runs an app on a stable group of EC2 instances behind an optional Application Lo
 Two runtimes are supported:
 
 - **container** — each deploy pulls an image and runs the attached Docker process under supervisord.
-- **manual** — deploys run release preparation commands once, then supervisord runs the configured long-lived start command.
+- **manual** — deploys can check out an authenticated Git source, run release preparation commands, then start the configured long-lived command under supervisord.
 
 Instances install the prerequisites for both runtimes at launch, so `runtime` can switch between `container` and `manual` without replacing the instance group. Supervisord owns the app in both modes and restarts it after an unexpected exit.
 
@@ -26,7 +26,7 @@ An orchestrator (the Ravion deploy manager) runs this document against the Auto 
 | `imageUri` | Full image URI including tag or digest |
 | `deployId` | Optional release identifier |
 
-For the **manual** runtime the document (same `<name>-deploy` name) takes a `commands` parameter instead: it rebuilds and loads the app env file, stops the prior app, and runs the release preparation commands in order. Any failure stops the deploy. It then starts `manual_start_command` under supervisord. The start command must remain in the foreground rather than daemonizing. Draining and health checking are up to the preparation commands.
+For the **manual** runtime the document (same `<name>-deploy` name) takes a `commands` parameter and an optional Git source. When source is present, the instance fetches a temporary credential from SSM Parameter Store, performs a clean checkout under `/srv/ravion/<name>/source`, and runs both the preparation commands and `manual_start_command` from the selected base path. When source is absent, commands keep their existing working-directory behavior. Any failure stops the deploy. The start command must remain in the foreground rather than daemonizing. Draining and health checking are up to the preparation commands.
 
 App stdout and stderr are shipped to `/ravion/ec2/<name>`. Streams use `deployment/<deployId>/instance/<instance-id>`, which keeps every deployment and EC2 instance separate.
 

@@ -103,4 +103,19 @@ run "manual_start_command_is_supervised" {
     condition     = strcontains(aws_ssm_document.deploy.content, "autorestart=true")
     error_message = "Manual deploys must configure supervisord to restart the app."
   }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "sourceRepo") && strcontains(aws_ssm_document.deploy.content, "gitTokenParameterName")
+    error_message = "Manual deploys must expose the optional nested source transport parameters."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "GIT_ASKPASS") && strcontains(aws_ssm_document.deploy.content, "SOURCE_DIRECTORY=\"$SOURCE_ROOT/source\"")
+    error_message = "Manual deploys must authenticate transiently and check source out under the Ravion-managed directory."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "source-working-directory")
+    error_message = "Manual deploy and start commands must share the selected source working directory."
+  }
 }

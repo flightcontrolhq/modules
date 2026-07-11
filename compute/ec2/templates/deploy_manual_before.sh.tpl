@@ -16,3 +16,5 @@ docker rm -f ${name} >/dev/null 2>&1 || true
 set -a
 . "${env_file_path}"
 set +a
+
+${git_source_checkout_script}

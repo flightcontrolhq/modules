@@ -73,6 +73,19 @@ data "aws_iam_policy_document" "instance" {
     }
   }
 
+  # Manual deploy source checkout receives only the name of a temporary
+  # SecureString. The credential itself is fetched on the instance and is
+  # deleted by the deploy workflow after the command finishes.
+  statement {
+    sid = "GitDeployTokenRead"
+    actions = [
+      "ssm:GetParameter",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ssm:*:${data.aws_caller_identity.current.account_id}:parameter/ravion/git-tokens/ec2/*"
+    ]
+  }
+
   dynamic "statement" {
     for_each = local.container_runtime && var.ecr_repository_creation_enabled ? [1] : []
     content {
