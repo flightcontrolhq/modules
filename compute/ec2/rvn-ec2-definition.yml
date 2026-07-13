@@ -57,8 +57,8 @@ module:
       required: true
       show_when:
         deploy_type: manual
-    - id: manual_start_command
-      label: Manual start command
+    - id: start_command
+      label: Start command
       type: string
       description: Long-running foreground app command that supervisord runs as root after preparation and restarts if it exits. Use a wrapper to drop privileges when needed; the command must not daemonize.
       placeholder: cd /srv/app && ./bin/server
@@ -532,7 +532,7 @@ module:
           } : nil >>
         load_balancer_security_group_id: '<< module.input.web_service_enabled ? module.input.alb_security_group_id : nil >>'
         log_retention_in_days: << module.input.log_retention_in_days >>
-        manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.manual_start_command : nil >>'
+        manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.start_command : nil >>'
         max_size: << module.input.max_size >>
         min_size: << module.input.min_size >>
         name: << module.input.name >>
@@ -739,7 +739,7 @@ module:
     | Deploy type | Build behavior | On each instance |
     | --- | --- | --- |
     | Container | Dockerfile, Railpack, or image registry | Pull the selected image, replace the app container, and run it under supervisord |
-    | Manual | Build disabled | Run Deploy commands as root on every host, then run Manual start command under supervisord |
+    | Manual | Build disabled | Run Deploy commands as root on every host, then run Start command under supervisord |
 
     Instances are prepared for both modes at launch. Supervisord owns the long-running process and restarts it after an unexpected exit. In Container mode, Start command override replaces the image CMD but preserves its ENTRYPOINT. In Manual mode, the start command must remain in the foreground and should explicitly drop root privileges when the app should run as another user.
 
@@ -765,11 +765,11 @@ module:
       runuser -u app -- git -C /srv/orders pull --ff-only
       runuser -u app -- bash -c 'cd /srv/orders && ./bin/install-dependencies'
       runuser -u app -- bash -c 'cd /srv/orders && ./bin/build-assets'
-    Manual start command:
+    Start command:
       exec runuser -u app -- /srv/orders/bin/server
     ```
 
-    Every Deploy command runs on every instance, so keep commands repeatable and do not put a cluster-wide one-time migration in this list. Select Git repository to have Ravion check out a clean authenticated source before running the commands, or leave it blank when the commands manage their own source or artifacts. Deploy commands and Manual start command run from Source base path when source is configured. Use Container mode for digest-addressed image releases; use ECS when you need scheduler-managed rollback or traffic shifting.
+    Every Deploy command runs on every instance, so keep commands repeatable and do not put a cluster-wide one-time migration in this list. Select Git repository to have Ravion check out a clean authenticated source before running the commands, or leave it blank when the commands manage their own source or artifacts. Deploy commands and the Start command run from Source base path when source is configured. Use Container mode for digest-addressed image releases; use ECS when you need scheduler-managed rollback or traffic shifting.
 
     ### Container that needs host customization
 
@@ -802,7 +802,7 @@ module:
 
     A web service with only one registered target skips draining because there is nowhere to move traffic; replacing its process still causes an interruption. Use at least two instances when availability during container deploys matters.
 
-    Manual deploys refresh and load the app environment file, stop the prior app, and run Deploy commands as root in order on every instance. Any non-zero exit fails that instance and leaves its prior app stopped. Supervisord starts Manual start command only after all preparation commands succeed. Manual mode does not automatically drain the ALB or run a health gate; implement those behaviors in your commands if required.
+    Manual deploys refresh and load the app environment file, stop the prior app, and run Deploy commands as root in order on every instance. Any non-zero exit fails that instance and leaves its prior app stopped. Supervisord starts the Start command only after all preparation commands succeed. Manual mode does not automatically drain the ALB or run a health gate; implement those behaviors in your commands if required.
 
     The EC2 deploy manager also runs the current release document against instances launched by autoscaling or replacement so they catch up to the active release.
 
@@ -832,7 +832,7 @@ module:
 
     ## Application configuration
 
-    Runtime environment variables must be single-line values. They are rendered into the app environment file at instance boot and on every deploy. Container mode passes the file to Docker; Manual mode loads it before Deploy commands and Manual start command. A configuration change requires a stack update and then a deploy to restart the app with the new values.
+    Runtime environment variables must be single-line values. They are rendered into the app environment file at instance boot and on every deploy. Container mode passes the file to Docker; Manual mode loads it before Deploy commands and the Start command. A configuration change requires a stack update and then a deploy to restart the app with the new values.
 
     Runtime secrets use same-account Secrets Manager or SSM Parameter Store references. Each instance fetches values while rebuilding its environment file, so the values do not enter Terraform state or the SSM document. A rotated value takes effect on the next deploy without a stack change. Multi-line secret values are unsupported.
 
@@ -848,7 +848,7 @@ module:
     | Service name | Yes | {project}-{env}-{module} | Name for the instance group and related resources |
     | Deploy type | Yes | container | Switchable Container or Manual in-place deployment |
     | Deploy commands | Yes* | - | Root-level, per-instance preparation commands for Manual mode |
-    | Manual start command | Yes* | - | Foreground Manual-mode process managed by supervisord |
+    | Start command | Yes* | - | Foreground Manual-mode process managed by supervisord |
     | Git repository | No | - | Optional authenticated source checkout for Manual mode |
     | Source base path | No | . | Working directory within the selected repository |
     | Run in private subnets | No | true | Use private subnets without public IPs; outbound access is still required |

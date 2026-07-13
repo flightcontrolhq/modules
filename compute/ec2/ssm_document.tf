@@ -60,8 +60,8 @@ resource "aws_ssm_document" "deploy" {
 
     parameters = {
       commands = {
-        type        = "StringList"
-        description = "Release preparation commands to run on the instance, in order, with the app env file loaded."
+        type        = "String"
+        description = "Release preparation script to run on the instance with the app env file loaded."
       }
       deployId = {
         type           = "String"
@@ -107,11 +107,11 @@ resource "aws_ssm_document" "deploy" {
         name   = "deploy"
         inputs = {
           timeoutSeconds = tostring(var.deploy_timeout_seconds)
-          runCommand = concat(
-            [local.manual_deploy_prelude],
-            ["{{ commands }}"],
-            [local.manual_deploy_postlude],
-          )
+          runCommand = [join("\n", [
+            local.manual_deploy_prelude,
+            "{{ commands }}",
+            local.manual_deploy_postlude,
+          ])]
         }
       }
     ]

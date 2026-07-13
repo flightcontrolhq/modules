@@ -118,4 +118,14 @@ run "manual_start_command_is_supervised" {
     condition     = strcontains(aws_ssm_document.deploy.content, "source-working-directory")
     error_message = "Manual deploy and start commands must share the selected source working directory."
   }
+
+  assert {
+    condition     = yamldecode(aws_ssm_document.deploy.content).parameters.commands.type == "String"
+    error_message = "Manual deploy commands must use a String parameter so the command script can be embedded between the prelude and postlude."
+  }
+
+  assert {
+    condition     = length(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand) == 1 && strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "{{ commands }}")
+    error_message = "Manual deploy setup, commands, and teardown must be one runCommand string so SSM does not create a nested command array during parameter substitution."
+  }
 }
