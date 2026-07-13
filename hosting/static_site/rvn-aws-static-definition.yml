@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, deliver CloudFront access logs to CloudWatch by default with a Ravion logs panel, chart the default CloudFront metrics, cache 404 responses at the edge for 1 day by default, and rename the manual S3 build source to Manual upload to S3."
+  description: "Remove browser SWR caching. Add metrics, logs, custom 404.html support, response header policy, origin shield and WAF options."
 module:
   build:
     builder: >-
