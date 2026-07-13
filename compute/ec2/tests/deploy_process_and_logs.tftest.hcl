@@ -110,8 +110,18 @@ run "manual_start_command_is_supervised" {
   }
 
   assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "dnf install -y git jq unzip")
+    error_message = "Instances must install Git at bootstrap for source-backed manual deploys."
+  }
+
+  assert {
     condition     = strcontains(aws_ssm_document.deploy.content, "GIT_ASKPASS") && strcontains(aws_ssm_document.deploy.content, "SOURCE_DIRECTORY=\"$SOURCE_ROOT/source\"")
     error_message = "Manual deploys must authenticate transiently and check source out under the Ravion-managed directory."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "if ! command -v git") && strcontains(aws_ssm_document.deploy.content, "dnf install -y git")
+    error_message = "Source-backed manual deploys must install Git on existing instances before checkout."
   }
 
   assert {

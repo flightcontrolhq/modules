@@ -11,6 +11,10 @@ SOURCE_WORKING_DIRECTORY_FILE="${source_working_directory_path}"
 if [ -z "$SOURCE_REPO" ]; then
   rm -f "$SOURCE_WORKING_DIRECTORY_FILE"
 else
+  if ! command -v git >/dev/null 2>&1; then
+    dnf install -y git
+  fi
+
   if [ -z "$GIT_TOKEN_PARAMETER_NAME" ]; then
     echo "Git source requires a temporary credential parameter" >&2
     exit 1

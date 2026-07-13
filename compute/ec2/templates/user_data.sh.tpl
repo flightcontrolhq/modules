@@ -4,7 +4,7 @@
 # Command, so this script prepares the host for either deploy mode.
 set -euo pipefail
 
-dnf install -y jq unzip
+dnf install -y git jq unzip
 
 %{ if data_volume_enabled ~}
 # Format and mount the data volume on first boot. The volume is the only
