@@ -34,10 +34,10 @@ locals {
   })
 }
 
-resource "aws_cloudfront_function" "rewrite" {
+resource "aws_cloudfront_function" "request_rewrite" {
   provider = aws.us_east_1
 
-  name    = local.cff_rewrite_name
+  name    = local.cff_request_rewrite_name
   runtime = "cloudfront-js-2.0"
   comment = "${var.name} ${var.routing} viewer-request rewriter"
   publish = true
