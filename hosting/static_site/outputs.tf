@@ -79,7 +79,7 @@ output "distribution_primary_domains" {
 
 output "cloudfront_function_arn" {
   description = "ARN of the viewer-request rewriter function."
-  value       = aws_cloudfront_function.request_rewrite.arn
+  value       = aws_cloudfront_function.rewrite.arn
 }
 
 output "cache_control_function_arn" {

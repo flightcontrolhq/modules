@@ -1,10 +1,9 @@
 ################################################################################
 # State moves
 #
-# Failed upgrades may leave the original viewer-request function in AWS after
-# its Terraform state entry is gone. Forget either legacy address and create
-# the replacement under a new address and AWS name so upgrades cannot collide
-# with that orphaned function.
+# Preserve the viewer-request function through both historical resource
+# renames. The current hashed AWS name then produces a managed replacement:
+# create the new function, update the distribution, and delete the old one.
 #
 # The legacy HTML and asset Cache-Control policies cannot be deleted in the
 # same apply that detaches them from CloudFront. Forget them after detaching so
@@ -17,20 +16,14 @@
 # PutDeliverySource conflict).
 ################################################################################
 
-removed {
+moved {
   from = aws_cloudfront_function.this
-
-  lifecycle {
-    destroy = false
-  }
+  to   = aws_cloudfront_function.request_rewrite
 }
 
-removed {
-  from = aws_cloudfront_function.rewrite
-
-  lifecycle {
-    destroy = false
-  }
+moved {
+  from = aws_cloudfront_function.request_rewrite
+  to   = aws_cloudfront_function.rewrite
 }
 
 removed {

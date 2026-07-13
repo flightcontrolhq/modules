@@ -32,7 +32,7 @@ mock_provider "aws" {
   alias = "us_east_1"
 
   override_resource {
-    target = aws_cloudfront_function.request_rewrite
+    target = aws_cloudfront_function.rewrite
     values = {
       arn = "arn:aws:cloudfront::123456789012:function/test-rewrite"
     }
