@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.2.1
-  description: "Add Railpack image builds."
+  version: 0.2.2
+  description: "Accept mixed IAM policy document shapes for task role inline policies."
 module:
   inputs:
     - id: section_cluster

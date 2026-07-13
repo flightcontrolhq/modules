@@ -14,6 +14,7 @@ Creates and manages AWS CloudFront distributions with support for multiple distr
 - **Access Logging**: On by default via CloudFront standard logging v2 into a module-managed CloudWatch Logs group (us-east-1); legacy S3 delivery with lifecycle management and per-distribution log prefixes remains available
 - **Monitoring**: Optional CloudFront additional metrics subscription for cache hit rate, origin latency, and per-status error rates
 - **Edge Functions**: Support for CloudFront Functions and Lambda@Edge associations
+- **Edge Redirects**: Ordered URL-pattern redirects with named segments, catch-all paths, and optional query preservation
 - **Custom Error Pages**: Configurable error response handling with custom pages
 - **Geo Restrictions**: Whitelist or blacklist countries using ISO 3166-1-alpha-2 codes
 - **HTTP/3 Support**: HTTP/2 and HTTP/3 enabled by default
@@ -360,6 +361,92 @@ module "cdn" {
 
 CloudFront publishes default distribution metrics at no additional CloudWatch metric cost. Enabling `additional_metrics_enabled` creates a monitoring subscription for each distribution and turns on all 8 CloudFront additional metrics: `CacheHitRate`, `OriginLatency`, `401ErrorRate`, `403ErrorRate`, `404ErrorRate`, `502ErrorRate`, `503ErrorRate`, and `504ErrorRate`. CloudWatch bills these as a flat per-metric monthly charge per distribution, regardless of request volume.
 
+### Hostname Redirect with Path Preservation
+
+Redirect rules run at viewer request time before CloudFront contacts an origin. Rules are evaluated in order and the first match wins. The managed redirect function is attached to the default behavior and every ordered behavior so redirects cover every request path.
+
+```hcl
+module "cdn" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//cdn/cloudfront?ref=rvn-cloudfront@0.3.0"
+
+  name = "marketing"
+
+  distributions = {
+    main = {
+      aliases             = ["www.example.com", "docs.example.com"]
+      acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+    }
+  }
+
+  origins = [
+    {
+      origin_id              = "website"
+      domain_name            = "website-origin.example.com"
+      origin_protocol_policy = "https-only"
+    }
+  ]
+
+  default_cache_behavior = {
+    target_origin_id       = "website"
+    viewer_protocol_policy = "redirect-to-https"
+  }
+
+  redirect_rules = [
+    {
+      source                = "https://docs.example.com/:path*"
+      destination           = "https://www.example.com/docs/:path*"
+      preserve_query_string = true
+      status_code           = 308
+    }
+  ]
+}
+```
+
+This redirects `https://docs.example.com/quickstart?source=nav` to `https://www.example.com/docs/quickstart?source=nav`. A `:name` parameter captures one path segment, while a final `:name*` captures zero or more remaining segments. Parameters can be reordered, omitted, or repeated in the destination. A path-only source matches every distribution alias, and a path-only destination keeps the request host. Redirects always use HTTPS.
+
+Enabling `redirect_rules` is incompatible with caller-supplied CloudFront Function or Lambda@Edge `viewer-request` associations because CloudFront allows only one viewer-request association per behavior.
+
+The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
+
+#### Avoid Overlapping Same-Host Rules
+
+Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function skips that rule and evaluates the next rule. If no later rule matches, CloudFront sends the original request to the configured origin. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+
+This rule does not redirect because `/docs/guide` still matches the broad `/:path*` source and would become `/docs/docs/guide` on the next request:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://d111111abcdef8.cloudfront.net/:path*"
+    destination = "https://d111111abcdef8.cloudfront.net/docs/:path*"
+  }
+]
+```
+
+Use different source and destination hosts when migrating a domain:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://docs.example.com/:path*"
+    destination = "https://www.example.com/docs/:path*"
+  }
+]
+```
+
+For same-host testing, use a source namespace that does not overlap the destination:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://d111111abcdef8.cloudfront.net/old/:path*"
+    destination = "https://d111111abcdef8.cloudfront.net/docs/:path*"
+  }
+]
+```
+
+The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only the root, use the exact source `https://d111111abcdef8.cloudfront.net` without a path parameter. Redirect patterns do not currently support exclusions such as "all paths except `/docs`".
+
 ## Requirements
 
 | Name               | Version   |
@@ -430,6 +517,17 @@ CloudFront publishes default distribution metrics at no additional CloudWatch me
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | ordered_cache_behaviors | An ordered list of cache behaviors with path patterns. Same fields as default_cache_behavior plus `path_pattern`. | `list(object({...}))` | `[]` | no |
+
+### Edge Redirects
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| redirect_rules | Ordered URL-pattern redirects handled before CloudFront contacts an origin. | `list(object({...}))` | `[]` | no |
+| redirect_rules[].source | Absolute HTTPS URL or host-agnostic path containing literal segments, `:name` parameters, and optionally one final `:name*` catch-all. | `string` | n/a | yes |
+| redirect_rules[].destination | Absolute HTTPS URL or host-agnostic path using parameters captured by the source. | `string` | n/a | yes |
+| redirect_rules[].preserve_query_string | Append query parameters to the redirect location. | `bool` | `false` | no |
+| redirect_rules[].redirect_non_read_methods | Redirect methods other than GET and HEAD. | `bool` | `false` | no |
+| redirect_rules[].status_code | Redirect status: `301`, `302`, `307`, or `308`. | `number` | `308` | no |
 
 ### Distribution Settings
 
@@ -510,6 +608,8 @@ Access logging is enabled by default. The default destination is CloudWatch Logs
 | distribution_arn | The distribution ARN when exactly one distribution is created (null otherwise). |
 | distribution_domain_name | The distribution domain name when exactly one distribution is created (null otherwise). |
 | distribution_hosted_zone_id | The Route 53 hosted zone ID when exactly one distribution is created (null otherwise). |
+| redirect_function_arn | The managed redirect function ARN (null when redirects are disabled). |
+| redirect_function_name | The managed redirect function name (null when redirects are disabled). |
 | origin_access_control_ids | A map of origin_id to OAC ID for S3 origins. |
 | logging_bucket_id | The ID of the logging S3 bucket (null if not created). |
 | logging_bucket_arn | The ARN of the logging S3 bucket (null if not created). |
