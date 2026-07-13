@@ -3,6 +3,10 @@ set -euo pipefail
 
 DEPLOY_ID="{{ deployId }}"
 if [ -z "$DEPLOY_ID" ]; then DEPLOY_ID=$(date +%s); fi
+
+${deployment_log_script}
+exec > >(tee -a "$LOG_PATH") 2> >(tee -a "$LOG_PATH" >&2)
+
 echo "Preparing manual deploy $DEPLOY_ID"
 
 ${supervisor_install_script}

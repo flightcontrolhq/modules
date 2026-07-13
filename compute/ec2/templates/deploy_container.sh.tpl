@@ -6,6 +6,10 @@ set -euo pipefail
 IMAGE_URI="{{ imageUri }}"
 DEPLOY_ID="{{ deployId }}"
 if [ -z "$DEPLOY_ID" ]; then DEPLOY_ID=$(date +%s); fi
+
+${deployment_log_script}
+exec > >(tee -a "$LOG_PATH") 2> >(tee -a "$LOG_PATH" >&2)
+
 echo "Deploying image $IMAGE_URI (deploy $DEPLOY_ID)"
 
 TOKEN=$(curl -sf -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
@@ -70,7 +74,6 @@ exec docker run "$${RUN_ARGS[@]}" "$IMAGE_URI" ${start_command}
 APP_RUNNER
 chmod 755 "${app_runner_path}"
 
-${deployment_log_script}
 ${supervisor_program_script}
 
 %{ if health_check_path != "" && app_port != null ~}

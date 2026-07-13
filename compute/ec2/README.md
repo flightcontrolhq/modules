@@ -28,7 +28,7 @@ An orchestrator (the Ravion deploy manager) runs this document against the Auto 
 
 For the **manual** runtime the document (same `<name>-deploy` name) takes a `commands` parameter and an optional Git source. When source is present, the instance fetches a temporary credential from SSM Parameter Store, performs a clean checkout under `/srv/ravion/<name>/source`, and runs both the preparation commands and `manual_start_command` from the selected base path. When source is absent, commands keep their existing working-directory behavior. Any failure stops the deploy. The start command must remain in the foreground rather than daemonizing. Draining and health checking are up to the preparation commands.
 
-App stdout and stderr are shipped to `/ravion/ec2/<name>`. Streams use `deployment/<deployId>/instance/<instance-id>`, which keeps every deployment and EC2 instance separate.
+App stdout and stderr are shipped to `/ravion/ec2/<name>`. Streams use `deployment/<deployId>/instance/<instance-id>`, which keeps every deployment and EC2 instance separate. The SSM deploy script tees its stdout and stderr into the same instance stream while preserving the native SSM command output.
 
 New instances launched by the Auto Scaling Group boot from the launch template but hold no release until the orchestrator repeats the deploy against them.
 

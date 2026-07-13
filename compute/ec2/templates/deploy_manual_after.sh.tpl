@@ -15,7 +15,6 @@ exec /bin/bash -lc "$START_COMMAND"
 APP_RUNNER
 chmod 755 "${app_runner_path}"
 
-${deployment_log_script}
 ${supervisor_program_script}
 
 echo "Manual deploy $DEPLOY_ID complete; supervisord is managing ${supervisor_program}"

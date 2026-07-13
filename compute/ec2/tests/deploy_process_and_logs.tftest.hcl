@@ -70,6 +70,11 @@ run "container_is_supervised_and_logs_per_deployment" {
   }
 
   assert {
+    condition     = strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "exec > >(tee -a \"$LOG_PATH\") 2> >(tee -a \"$LOG_PATH\" >&2)")
+    error_message = "Container SSM stdout and stderr must also be copied to the deployment instance log."
+  }
+
+  assert {
     condition     = strcontains(base64decode(aws_launch_template.app.user_data), "supervisor==4.3.0")
     error_message = "Instances must install the pinned Supervisor version at bootstrap."
   }
@@ -127,6 +132,11 @@ run "manual_start_command_is_supervised" {
   assert {
     condition     = strcontains(aws_ssm_document.deploy.content, "source-working-directory")
     error_message = "Manual deploy and start commands must share the selected source working directory."
+  }
+
+  assert {
+    condition     = strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "exec > >(tee -a \"$LOG_PATH\") 2> >(tee -a \"$LOG_PATH\" >&2)")
+    error_message = "Manual SSM stdout and stderr must also be copied to the deployment instance log."
   }
 
   assert {

@@ -48,6 +48,21 @@ module:
         - label: Manual
           description: Run release preparation commands on each instance, then start a supervised foreground command on the host.
           value: manual
+    - id: deploy_source_repo
+      label: Git repository
+      type: gitrepo
+      description: Optional repository to check out before manual deploy commands run. Leave blank to run the commands without a managed source checkout.
+      required: false
+      show_when:
+        deploy_type: manual
+    - id: deploy_source_base_path
+      label: Source base path
+      type: string
+      description: Repository-relative working directory for manual deploy and start commands when a Git repository is selected.
+      required: false
+      default: .
+      show_when:
+        deploy_type: manual
     - id: deploy_commands
       label: Deploy commands
       type: string_array
@@ -63,21 +78,6 @@ module:
       description: Long-running foreground app command that supervisord runs as root after preparation and restarts if it exits. Use a wrapper to drop privileges when needed; the command must not daemonize.
       placeholder: cd /srv/app && ./bin/server
       required: true
-      show_when:
-        deploy_type: manual
-    - id: deploy_source_repo
-      label: Git repository
-      type: gitrepo
-      description: Optional repository to check out before manual deploy commands run. Leave blank to run the commands without a managed source checkout.
-      required: false
-      show_when:
-        deploy_type: manual
-    - id: deploy_source_base_path
-      label: Source base path
-      type: string
-      description: Repository-relative working directory for manual deploy and start commands when a Git repository is selected.
-      required: false
-      default: .
       show_when:
         deploy_type: manual
     - id: private_subnet_placement_enabled
@@ -808,7 +808,7 @@ module:
 
     ## Logs
 
-    App stdout and stderr from the supervised process are sent to `/ravion/ec2/<service-name>` in CloudWatch Logs. Every deployment and instance has a distinct stream named `deployment/<deployment-id>/instance/<instance-id>`. SSM preparation and deploy-script output appears with the deployment command rather than in this app stream.
+    App stdout and stderr from the supervised process are sent to `/ravion/ec2/<service-name>` in CloudWatch Logs. Every deployment and instance has a distinct stream named `deployment/<deployment-id>/instance/<instance-id>`. SSM preparation and deploy-script stdout and stderr are copied into the same instance stream while remaining available with the deployment command.
 
     ## Stable storage
 

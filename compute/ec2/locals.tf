@@ -62,8 +62,9 @@ locals {
   })
 
   manual_deploy_prelude = templatefile("${path.module}/templates/deploy_manual_before.sh.tpl", {
-    env_file_path   = local.env_file_path
-    env_file_script = local.env_file_script
+    deployment_log_script = local.deployment_log_script
+    env_file_path         = local.env_file_path
+    env_file_script       = local.env_file_script
     git_source_checkout_script = templatefile("${path.module}/templates/checkout_git_source.sh.tpl", {
       name                          = var.name
       region                        = local.region
@@ -76,7 +77,6 @@ locals {
 
   manual_deploy_postlude = templatefile("${path.module}/templates/deploy_manual_after.sh.tpl", {
     app_runner_path               = local.app_runner_path
-    deployment_log_script         = local.deployment_log_script
     env_file_path                 = local.env_file_path
     manual_start_command_base64   = base64encode(var.manual_start_command != null ? var.manual_start_command : "")
     start_command_path            = local.start_command_path
