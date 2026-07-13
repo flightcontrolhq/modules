@@ -5,6 +5,10 @@
 # function was added. Its AWS name did not change, so preserve the existing
 # function instead of attempting a conflicting create-before-destroy.
 #
+# The legacy HTML and asset Cache-Control policies cannot be deleted in the
+# same apply that detaches them from CloudFront. Forget them after detaching so
+# the distribution update is not blocked by ResponseHeadersPolicyInUse.
+#
 # The CloudWatch access-logging resources moved from this module into
 # cdn/cloudfront when logging gained the destination select. Without these
 # blocks an upgrade plans create-then-destroy on identically named resources
@@ -15,6 +19,22 @@
 moved {
   from = aws_cloudfront_function.this
   to   = aws_cloudfront_function.rewrite
+}
+
+removed {
+  from = aws_cloudfront_response_headers_policy.html
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = aws_cloudfront_response_headers_policy.assets
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 moved {
