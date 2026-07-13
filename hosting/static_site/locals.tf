@@ -154,7 +154,30 @@ locals {
     }
   ]
 
-  ordered_behaviors = local.no_cache_behaviors
+  # The custom error page lives at a stable, unversioned bucket-root key, so
+  # it must NOT inherit the default behavior's 1-year edge TTL — a changed
+  # 404 page would serve stale until invalidated. A dedicated behavior pins
+  # it to the managed CachingDisabled policy; the error *responses* viewers
+  # receive are still cached per error_caching_min_ttl, so S3 sees at most
+  # one error-page fetch per edge location per that window.
+  error_document_behaviors = var.error_document == "" ? [] : [
+    {
+      path_pattern                 = "/${var.error_document}"
+      target_origin_id             = local.origin_id
+      viewer_protocol_policy       = "redirect-to-https"
+      allowed_methods              = ["GET", "HEAD", "OPTIONS"]
+      cached_methods               = ["GET", "HEAD"]
+      compression_enabled          = true
+      cache_policy_id              = local.managed_cache_disabled_id
+      origin_request_policy_id     = var.origin_request_policy_id
+      response_headers_policy_id   = local.effective_response_headers_policy_id
+      function_associations        = local.cff_associations
+      lambda_function_associations = []
+      realtime_log_config_arn      = null
+    }
+  ]
+
+  ordered_behaviors = concat(local.no_cache_behaviors, local.error_document_behaviors)
 
   cff_rewrite_name             = substr(replace("${var.name}-rewrite", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   cff_cache_control_name       = substr(replace("${var.name}-cache-ctl", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)

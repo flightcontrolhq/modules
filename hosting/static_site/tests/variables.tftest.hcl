@@ -1017,6 +1017,33 @@ run "error_caching_min_ttl_rejects_out_of_range" {
   expect_failures = [var.error_caching_min_ttl]
 }
 
+run "error_document_gets_no_cache_behavior" {
+  command = plan
+
+  assert {
+    condition     = length([for b in local.ordered_behaviors : b if b.path_pattern == "/404.html"]) == 1
+    error_message = "A dedicated cache behavior must pin the error document to CachingDisabled so a changed 404 page is never edge-cached for the long default TTL."
+  }
+
+  assert {
+    condition     = [for b in local.ordered_behaviors : b.cache_policy_id if b.path_pattern == "/404.html"][0] == local.managed_cache_disabled_id
+    error_message = "The error-document behavior must use the managed CachingDisabled policy."
+  }
+}
+
+run "error_document_empty_adds_no_behavior" {
+  command = plan
+
+  variables {
+    error_document = ""
+  }
+
+  assert {
+    condition     = length(local.ordered_behaviors) == 0
+    error_message = "No error-document behavior should exist when the error page is disabled."
+  }
+}
+
 run "response_headers_policy_id_alone_works_without_module_policy" {
   command = apply
 

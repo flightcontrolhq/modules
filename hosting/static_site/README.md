@@ -248,7 +248,7 @@ When `error_document` is set (default `"404.html"`), a CloudFront custom error r
 aws s3 cp "s3://$BUCKET/$VERSION/404.html" "s3://$BUCKET/404.html"
 ```
 
-If the root key doesn't exist, viewers still get a correct 404 status — just with a plain body. Two caveats: hosts pinned to older versions via KVS share the most recently promoted 404 page, and a changed 404 page needs an invalidation of `/404.html` (or `/*`) to propagate through the edge cache. Set `error_document = ""` to disable the custom page entirely (null applies the default — null means "use default" in Terraform); `error_caching_min_ttl` (default 10s) controls how long the edge caches 404 responses and applies whether or not the custom page is enabled.
+If the root key doesn't exist, viewers still get a correct 404 status — just with a plain body. The error page path gets a dedicated cache behavior pinned to the managed CachingDisabled policy, so a changed 404 page propagates within `error_caching_min_ttl` (default 10s) with no invalidation — it never inherits the default behavior's long edge TTL. One caveat: hosts pinned to older versions via KVS share the most recently promoted 404 page. Set `error_document = ""` to disable the custom page entirely (null applies the default — null means "use default" in Terraform); `error_caching_min_ttl` (default 10s) controls how long the edge caches 404 responses and applies whether or not the custom page is enabled.
 
 ## Custom response headers (security, CORS, etc.)
 

@@ -322,7 +322,9 @@ module:
       label: Deploy config
       type: section
     - add_button_label: Add invalidation path
-      description: CloudFront paths to invalidate after promotion.
+      collapsible: true
+      default: []
+      description: CloudFront paths to invalidate after promotion. Normal deploys need none, every promotion switches to a fresh edge cache automatically. Add /* if you overwrite files in an already-promoted S3 directory instead of deploying a new one, such as Pull from S3 with a fixed directory.
       id: cloudfront_invalidation_paths
       label: CloudFront invalidation paths
       type: string_array
@@ -386,6 +388,8 @@ module:
     When a requested file does not exist, CloudFront serves your 404.html with a 404 status — never a 200, so search engines do not index error pages. Emit 404.html at the root of your build output (the default convention in Astro, Hugo, Eleventy, SvelteKit, and most static site generators). If no 404.html exists, viewers get a correct plain 404 response.
 
     In Single page app routing mode, paths without a file extension are rewritten to the app shell, so the 404 page only applies to missing files such as assets. Client-side routes handle their own not-found views.
+
+    The 404 page is served through a no-cache behavior, so an updated 404.html takes effect within seconds of the next deploy without any invalidation.
 
     ## Build options
 
@@ -461,11 +465,9 @@ module:
 
     The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Pull from S3, enter the existing S3 prefix that already contains the files to promote.
 
-    CloudFront invalidation paths defaults to /*, which invalidates the full distribution after each promotion. Because deployments are versioned, promotion already changes the CDN cache key for every page and asset — invalidation is not what makes a new deploy visible.
+    CloudFront invalidation paths defaults to empty, and normal deploys do not need any. Every promotion switches CloudFront to a fresh set of edge cache entries because the version prefix is part of the cache key, and the custom 404 page is served from a no-cache behavior, so new deploys are visible immediately without invalidation. Skipping invalidation also makes promotions complete faster.
 
-    Keep the default /* when files are served from stable paths that get overwritten in place: the root 404.html copy, Pull from S3 deploys that re-upload to the same S3 directory, or anything else outside the versioned prefixes. /* counts as a single path toward CloudFront's free invalidation tier (1,000 paths per month), so the default costs nothing in typical use.
-
-    Clear the invalidation paths when every deploy promotes a fresh S3 directory and you do not rely on a custom 404 page changing between deploys. Skipping invalidation makes promotions complete faster because the deploy does not wait for CloudFront to finish invalidating. If you later change 404.html, add /404.html (or /*) back for that deploy or invalidate manually.
+    Add /* when files change inside an already-promoted S3 directory instead of arriving in a new one: Pull from S3 deploys that reuse a fixed directory, re-syncing the default version prefix, or patching files inside a version you roll back to. In those cases the cache key does not change and the edge would otherwise keep serving old content. /* counts as one path toward CloudFront's free invalidation tier (1,000 paths per month).
 
     Successful deploys to retain defaults to 20. Older deploy directories are pruned from the hosting bucket based on this setting.
 
@@ -508,7 +510,7 @@ module:
     | Access logging | CloudFront access logging | No | true | Delivers logs to CloudWatch Logs or S3 |
     | Access logging | Logging destination | No | CloudWatch Logs | Visible when logging is enabled; CloudWatch shows logs in Ravion |
     | Access logging | Logging retention days | No | 90 | Visible when logging is enabled; CloudWatch retention or S3 lifecycle expiry |
-    | Deploy config | CloudFront invalidation paths | No | /* | Paths invalidated after promotion |
+    | Deploy config | CloudFront invalidation paths | No | [] | Only needed when overwriting an already-promoted S3 directory |
     | Deploy config | Successful deploys to retain | No | 20 | Old S3 deploy prefixes to retain |
     | Terraform settings | Terraform execution environment | No | unset | Override Terraform runner environment |
     | Terraform settings | OpenTofu version | No | first available version | OpenTofu version for infrastructure changes |
