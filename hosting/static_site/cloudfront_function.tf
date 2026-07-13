@@ -34,7 +34,7 @@ locals {
   })
 }
 
-resource "aws_cloudfront_function" "request_rewrite" {
+resource "aws_cloudfront_function" "rewrite" {
   provider = aws.us_east_1
 
   name    = local.cff_request_rewrite_name
@@ -44,6 +44,10 @@ resource "aws_cloudfront_function" "request_rewrite" {
   code    = local.cff_rewrite_code
 
   key_value_store_associations = [aws_cloudfront_key_value_store.this.arn]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_cloudfront_function" "cache_control" {

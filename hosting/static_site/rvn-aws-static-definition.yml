@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.2
-  description: Recover upgrades when a legacy CloudFront rewrite function exists outside Terraform state.
+  version: 0.3.3
+  description: Replace legacy CloudFront rewrite functions without leaving unmanaged resources.
 module:
   build:
     builder: >-

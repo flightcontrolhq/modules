@@ -74,7 +74,7 @@ locals {
   cff_associations = concat(
     [{
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.request_rewrite.arn
+      function_arn = aws_cloudfront_function.rewrite.arn
     }],
     var.cache_control_enabled ? [{
       event_type   = "viewer-response"
