@@ -251,6 +251,11 @@ run "request_rewrite_name_avoids_legacy_collision" {
     condition     = length(local.cff_request_rewrite_name) <= 64 && endswith(local.cff_request_rewrite_name, "-request-rewrite")
     error_message = "The replacement rewrite function name must fit CloudFront's 64-character limit and retain its collision-free suffix."
   }
+
+  assert {
+    condition     = strcontains(local.cff_request_rewrite_name, substr(sha1(var.name), 0, 8))
+    error_message = "The replacement rewrite function name must hash the full site name so names that share a truncated prefix remain unique."
+  }
 }
 
 #-------------------------------------------------------------------------------

@@ -180,8 +180,9 @@ locals {
   ordered_behaviors = concat(local.no_cache_behaviors, local.error_document_behaviors)
 
   cff_request_rewrite_name = format(
-    "%s-request-rewrite",
-    substr(replace(var.name, "/[^a-zA-Z0-9-_]/", "-"), 0, 48),
+    "%s-%s-request-rewrite",
+    substr(replace(var.name, "/[^a-zA-Z0-9-_]/", "-"), 0, 39),
+    substr(sha1(var.name), 0, 8),
   )
   cff_cache_control_name       = substr(replace("${var.name}-cache-ctl", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   cache_policy_name            = substr(replace("${var.name}-cache", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
