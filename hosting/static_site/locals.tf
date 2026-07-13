@@ -74,7 +74,7 @@ locals {
   cff_associations = concat(
     [{
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.rewrite.arn
+      function_arn = aws_cloudfront_function.request_rewrite.arn
     }],
     var.cache_control_enabled ? [{
       event_type   = "viewer-response"
@@ -179,7 +179,11 @@ locals {
 
   ordered_behaviors = concat(local.no_cache_behaviors, local.error_document_behaviors)
 
-  cff_rewrite_name             = substr(replace("${var.name}-rewrite", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
+  cff_request_rewrite_name = format(
+    "%s-%s-request-rewrite",
+    substr(replace(var.name, "/[^a-zA-Z0-9-_]/", "-"), 0, 39),
+    substr(sha1(var.name), 0, 8),
+  )
   cff_cache_control_name       = substr(replace("${var.name}-cache-ctl", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   cache_policy_name            = substr(replace("${var.name}-cache", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
   response_headers_policy_name = substr(replace("${var.name}-rh", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)

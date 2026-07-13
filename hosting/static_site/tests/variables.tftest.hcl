@@ -32,7 +32,7 @@ mock_provider "aws" {
   alias = "us_east_1"
 
   override_resource {
-    target = aws_cloudfront_function.rewrite
+    target = aws_cloudfront_function.request_rewrite
     values = {
       arn = "arn:aws:cloudfront::123456789012:function/test-rewrite"
     }
@@ -233,6 +233,29 @@ run "name_rejects_leading_hyphen" {
   }
 
   expect_failures = [var.name]
+}
+
+run "request_rewrite_name_avoids_legacy_collision" {
+  command = plan
+
+  variables {
+    name = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+
+  assert {
+    condition     = local.cff_request_rewrite_name != substr(replace("${var.name}-rewrite", "/[^a-zA-Z0-9-_]/", "-"), 0, 64)
+    error_message = "The replacement rewrite function name must differ from the legacy name for long site names."
+  }
+
+  assert {
+    condition     = length(local.cff_request_rewrite_name) <= 64 && endswith(local.cff_request_rewrite_name, "-request-rewrite")
+    error_message = "The replacement rewrite function name must fit CloudFront's 64-character limit and retain its collision-free suffix."
+  }
+
+  assert {
+    condition     = strcontains(local.cff_request_rewrite_name, substr(sha1(var.name), 0, 8))
+    error_message = "The replacement rewrite function name must hash the full site name so names that share a truncated prefix remain unique."
+  }
 }
 
 #-------------------------------------------------------------------------------

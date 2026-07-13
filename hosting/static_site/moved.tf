@@ -1,9 +1,10 @@
 ################################################################################
 # State moves
 #
-# The viewer-request function was renamed when the viewer-response cache-control
-# function was added. Its AWS name did not change, so preserve the existing
-# function instead of attempting a conflicting create-before-destroy.
+# Failed upgrades may leave the original viewer-request function in AWS after
+# its Terraform state entry is gone. Forget either legacy address and create
+# the replacement under a new address and AWS name so upgrades cannot collide
+# with that orphaned function.
 #
 # The legacy HTML and asset Cache-Control policies cannot be deleted in the
 # same apply that detaches them from CloudFront. Forget them after detaching so
@@ -16,9 +17,20 @@
 # PutDeliverySource conflict).
 ################################################################################
 
-moved {
+removed {
   from = aws_cloudfront_function.this
-  to   = aws_cloudfront_function.rewrite
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = aws_cloudfront_function.rewrite
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 removed {
