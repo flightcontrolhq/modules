@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Remove browser SWR caching. Add metrics, logs, custom 404.html support, response header policy, origin shield and WAF options."
+  description: "Remove browser SWR caching. Add metrics, logs, custom 404.html support, response header policy, origin shield and WAF options. Fix 404 serving as 403."
 module:
   build:
     builder: >-
