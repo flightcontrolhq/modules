@@ -9,13 +9,14 @@
 #                                       cache key without invalidations.
 # - cache_control  (viewer-response) : sets Cache-Control on every response
 #                                       based on the rewritten URI shape.
-#                                       HTML responses get a short s-maxage +
-#                                       long stale-while-revalidate; asset
-#                                       responses get the immutable 1-year
-#                                       browser cache. Discrimination at the
-#                                       URI level (post-rewrite) avoids the
-#                                       cache-behavior-matching pitfall that
-#                                       caused ENG-4785.
+#                                       Steers the browser only (CloudFront
+#                                       ignores viewer-response headers for
+#                                       edge TTLs): HTML revalidates on every
+#                                       navigation, assets get the immutable
+#                                       1-year browser cache. Discrimination
+#                                       at the URI level (post-rewrite) avoids
+#                                       the cache-behavior-matching pitfall
+#                                       that caused ENG-4785.
 ################################################################################
 
 locals {

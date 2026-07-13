@@ -11,7 +11,7 @@ Creates and manages AWS CloudFront distributions with support for multiple distr
 - **Signed URL Enforcement**: Trusted key group wiring for signed URLs and signed cookies
 - **SSL/TLS**: Custom ACM certificates with configurable minimum TLS version, SNI support
 - **WAF Integration**: Associate a WAFv2 Web ACL (global scope) for edge protection
-- **Access Logging**: Optional S3 logging bucket with lifecycle management, per-distribution log prefixes
+- **Access Logging**: On by default via CloudFront standard logging v2 into a module-managed CloudWatch Logs group (us-east-1); legacy S3 delivery with lifecycle management and per-distribution log prefixes remains available
 - **Monitoring**: Optional CloudFront additional metrics subscription for cache hit rate, origin latency, and per-status error rates
 - **Edge Functions**: Support for CloudFront Functions and Lambda@Edge associations
 - **Edge Redirects**: Ordered URL-pattern redirects with named segments, catch-all paths, and optional query preservation
@@ -235,10 +235,11 @@ module "cdn" {
   # WAF
   web_acl_id = "arn:aws:wafv2:us-east-1:123456789012:global/webacl/my-acl/abc-123"
 
-  # Logging
-  logging_enabled        = true
+  # Logging (CloudWatch Logs is the default; opt into legacy S3 delivery)
+  logging_enabled                 = true
+  logging_destination             = "s3"
   logging_bucket_creation_enabled = true
-  logging_prefix        = "cloudfront/"
+  logging_prefix                  = "cloudfront/"
 
   tags = {
     Environment = "production"
@@ -451,7 +452,7 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 | Name               | Version   |
 | ------------------ | --------- |
 | opentofu/terraform | >= 1.10.0 |
-| aws                | >= 5.0    |
+| aws                | >= 6.0    |
 
 ## Inputs
 
@@ -572,14 +573,17 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 
 ### Logging
 
+Access logging is enabled by default. The default destination is CloudWatch Logs: CloudFront standard logging v2 delivers access logs into a module-managed log group `/aws/cloudfront/<name>` via a per-distribution delivery source, a shared delivery destination (JSON output), and a per-distribution delivery. CloudFront is a global service, so the whole delivery chain is pinned to `us-east-1` with the per-resource `region` argument (AWS provider >= 6.0). Set `logging_destination = "s3"` for legacy standard logging to an S3 bucket, or `logging_enabled = false` to turn logging off.
+
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| logging_enabled | Enable access logging. | `bool` | `false` | no |
-| logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. | `string` | `null` | no |
-| logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. | `string` | `""` | no |
-| logging_cookies_enabled | Include cookies in access logs. | `bool` | `false` | no |
-| logging_bucket_creation_enabled | Create a new S3 bucket for logging. | `bool` | `false` | no |
-| logging_bucket_retention_days | Days to retain logs in the created bucket. | `number` | `90` | no |
+| logging_enabled | Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see `logging_destination`. | `bool` | `true` | no |
+| logging_destination | Where access logs are delivered: `cloudwatch` (standard logging v2 into a module-managed CloudWatch Logs group) or `s3` (legacy standard logging). | `string` | `"cloudwatch"` | no |
+| logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. Only applies when `logging_destination = "s3"`. | `string` | `null` | no |
+| logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. Only applies when `logging_destination = "s3"`. | `string` | `""` | no |
+| logging_cookies_enabled | Include cookies in access logs. Only applies when `logging_destination = "s3"`. | `bool` | `false` | no |
+| logging_bucket_creation_enabled | Create a new S3 bucket for logging. Only applies when `logging_destination = "s3"`. | `bool` | `false` | no |
+| logging_bucket_retention_days | Days to retain logs: CloudWatch log group retention (`cloudwatch`, must be a valid CloudWatch retention value) or S3 lifecycle expiry on the module-created bucket (`s3`). | `number` | `90` | no |
 
 ### Origin Access Control
 
@@ -610,6 +614,8 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 | logging_bucket_id | The ID of the logging S3 bucket (null if not created). |
 | logging_bucket_arn | The ARN of the logging S3 bucket (null if not created). |
 | logging_bucket_domain_name | The domain name of the logging S3 bucket (null if not created). |
+| access_log_group_name | Name of the CloudWatch Logs group receiving CloudFront access logs (null unless CloudWatch logging is active). |
+| access_log_group_arn | ARN of the CloudWatch Logs access-log group (null unless CloudWatch logging is active). |
 
 ## Architecture
 
@@ -773,7 +779,11 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 | `aws_cloudfront_distribution` | 1 per entry in `var.distributions` | CloudFront distribution per domain group |
 | `aws_cloudfront_monitoring_subscription` | 0 or 1 per distribution | CloudFront additional metrics subscription when enabled |
 | `aws_cloudfront_origin_access_control` | 0 to N | OAC per S3 origin (shared across distributions) |
-| `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if `logging_bucket_creation_enabled = true`) |
+| `aws_cloudwatch_log_group` (access logs) | 0 or 1 | CloudWatch access-log group in us-east-1 (if CloudWatch logging active) |
+| `aws_cloudwatch_log_delivery_source` | 0 or 1 per distribution | Standard logging v2 delivery source (if CloudWatch logging active) |
+| `aws_cloudwatch_log_delivery_destination` | 0 or 1 | Standard logging v2 delivery destination, JSON output (if CloudWatch logging active) |
+| `aws_cloudwatch_log_delivery` | 0 or 1 per distribution | Connects each delivery source to the destination (if CloudWatch logging active) |
+| `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if S3 logging active and `logging_bucket_creation_enabled = true`) |
 | `aws_s3_bucket_ownership_controls` | 0 or 1 | Logging bucket ownership (if logging bucket created) |
 | `aws_s3_bucket_acl` | 0 or 1 | Logging bucket ACL (if logging bucket created) |
 | `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Log retention (if logging bucket created) |

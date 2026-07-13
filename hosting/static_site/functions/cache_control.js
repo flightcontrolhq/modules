@@ -19,6 +19,16 @@
 //     by the rewriter, so bytes never collide between versions even though
 //     the original viewer-facing URL is stable across deploys.
 //
+// Scope: these headers steer the BROWSER only. CloudFront never uses
+// viewer-response headers for its own edge TTLs — edge freshness comes from
+// the versioned cache key, which changes on every promotion. The HTML value
+// therefore defaults to revalidate-always (max-age=0, must-revalidate): the
+// browser's conditional GET is answered 304 by the CloudFront edge, so a
+// fresh version is picked up on the first navigation after a flip at the
+// cost of one cheap request. Note CloudFront skips viewer-response functions
+// entirely for responses with status >= 400, so error responses are never
+// stamped by this function.
+//
 // Why this runs in viewer-response, not viewer-request:
 //   CloudFront selects the cache behavior — and therefore the static
 //   response-headers policy — from the *original* viewer URI before any

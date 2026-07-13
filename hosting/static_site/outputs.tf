@@ -51,6 +51,28 @@ output "distribution_hosted_zone_ids" {
   value       = module.cdn.distribution_hosted_zone_ids
 }
 
+output "primary_distribution_id" {
+  description = "CloudFront distribution ID of the primary distribution ('main', or the lexically first key). Used for CloudWatch metric dimensions."
+  value       = module.cdn.distribution_ids[local.primary_distribution_key]
+}
+
+output "primary_domain" {
+  description = "Primary viewer-facing domain of the primary distribution ('main', or the lexically first key): the first alias when aliases are configured, otherwise the CloudFront domain name (e.g. 'd123.cloudfront.net')."
+  value = (
+    length(var.distributions[local.primary_distribution_key].aliases) > 0
+    ? var.distributions[local.primary_distribution_key].aliases[0]
+    : module.cdn.distribution_domain_names[local.primary_distribution_key]
+  )
+}
+
+output "distribution_primary_domains" {
+  description = "Map of distribution key -> primary domain: the first alias when aliases are configured, otherwise the CloudFront domain name."
+  value = {
+    for k, d in var.distributions :
+    k => length(d.aliases) > 0 ? d.aliases[0] : module.cdn.distribution_domain_names[k]
+  }
+}
+
 ################################################################################
 # Edge / Versioning
 ################################################################################
@@ -63,6 +85,11 @@ output "cloudfront_function_arn" {
 output "cache_control_function_arn" {
   description = "ARN of the viewer-response Cache-Control writer function. Null when cache_control_enabled = false."
   value       = try(aws_cloudfront_function.cache_control[0].arn, null)
+}
+
+output "cache_policy_id" {
+  description = "ID of the cache policy attached to the default behavior. Caller-supplied `cache_policy_id` when set, otherwise the module-managed 1-year policy."
+  value       = local.effective_cache_policy_id
 }
 
 output "response_headers_policy_id" {
@@ -123,6 +150,20 @@ output "invalidation_commands" {
     for k, id in module.cdn.distribution_ids :
     k => "aws cloudfront create-invalidation --distribution-id ${id} --paths '/*'"
   }
+}
+
+################################################################################
+# Logging
+################################################################################
+
+output "access_log_group_name" {
+  description = "Name of the CloudWatch Logs group receiving CloudFront access logs. Null unless logging_enabled is true and logging_destination is 'cloudwatch'."
+  value       = module.cdn.access_log_group_name
+}
+
+output "access_log_group_arn" {
+  description = "ARN of the CloudWatch Logs access-log group. Null unless CloudWatch logging is enabled."
+  value       = module.cdn.access_log_group_arn
 }
 
 ################################################################################
