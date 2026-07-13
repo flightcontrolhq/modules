@@ -955,8 +955,8 @@ run "error_document_default_wires_custom_error_response" {
   }
 
   assert {
-    condition     = local.custom_error_responses[0].error_caching_min_ttl == 10
-    error_message = "error_caching_min_ttl should default to 10 seconds so newly deployed files become visible quickly."
+    condition     = local.custom_error_responses[0].error_caching_min_ttl == 86400
+    error_message = "error_caching_min_ttl should default to 86400 seconds (1 day) — versioned deploys make cached 404s safe."
   }
 }
 

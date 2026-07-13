@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 0.3.0
-  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, deliver CloudFront access logs to CloudWatch by default with a Ravion logs panel, and chart the default CloudFront metrics."
+  description: "Serve real 404s and the build's 404.html error page, add managed response header presets with security headers on by default and optional CORS, fix the HTML Cache-Control default so browsers pick up new deploys immediately, add WAF web ACL and Origin Shield options, link the site's primary domain from the module UI, deliver CloudFront access logs to CloudWatch by default with a Ravion logs panel, chart the default CloudFront metrics, cache 404 responses at the edge for 1 day by default, and rename the manual S3 build source to Manual upload to S3."
 module:
   build:
     builder: >-
@@ -107,7 +107,7 @@ module:
         - description: Bring your own Dockerfile
           label: Dockerfile
           value: dockerfile
-        - description: Skip the build step and promote an existing S3 directory at deploy time.
+        - description: Skip the build step and promote a directory you upload to the hosting S3 bucket yourself.
           label: Manual upload to S3
           value: s3_directory
     - $template: ../../partials/inputs/build-git-source.yml
@@ -324,7 +324,7 @@ module:
     - add_button_label: Add invalidation path
       collapsible: true
       default: []
-      description: CloudFront paths to invalidate after promotion. Normal deploys need none, every promotion switches to a fresh edge cache automatically. Add /* if you overwrite files in an already-promoted S3 directory instead of deploying a new one, such as Pull from S3 with a fixed directory.
+      description: CloudFront paths to invalidate after promotion. Normal deploys need none, every promotion switches to a fresh edge cache automatically. Add /* if you overwrite files in an already-promoted S3 directory instead of deploying a new one, such as manual S3 uploads to a fixed directory.
       id: cloudfront_invalidation_paths
       label: CloudFront invalidation paths
       type: string_array
@@ -389,7 +389,7 @@ module:
 
     In Single page app routing mode, paths without a file extension are rewritten to the app shell, so the 404 page only applies to missing files such as assets. Client-side routes handle their own not-found views.
 
-    The 404 page is served through a no-cache behavior, so an updated 404.html takes effect within seconds of the next deploy without any invalidation.
+    The 404 page is served through a no-cache behavior, so an updated 404.html is served immediately for URLs that do not yet have a cached 404 response. URLs that already have a cached 404 response refresh after the error caching TTL (default 1 day) or when that path is invalidated.
 
     ## Build options
 
@@ -397,7 +397,7 @@ module:
     | --- | --- |
     | Railpack | Let Ravion detect the static app stack and run the build with Railpack |
     | Dockerfile | Build static files with a Dockerfile in the selected repository |
-    | Pull from S3 | Build or upload files outside Ravion, then promote an existing S3 directory |
+    | Manual upload to S3 | Build or upload files outside Ravion, then promote the uploaded S3 directory |
 
     For Railpack and Dockerfile builds, select a Git repository, optional Base path, and output directory. The output directory is the folder Ravion uploads to the hosting bucket after the build.
 
@@ -463,11 +463,11 @@ module:
 
     ## Deploy behavior
 
-    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Pull from S3, enter the existing S3 prefix that already contains the files to promote.
+    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Manual upload to S3, enter the S3 prefix you uploaded that contains the files to promote.
 
     CloudFront invalidation paths defaults to empty, and normal deploys do not need any. Every promotion switches CloudFront to a fresh set of edge cache entries because the version prefix is part of the cache key, and the custom 404 page is served from a no-cache behavior, so new deploys are visible immediately without invalidation. Skipping invalidation also makes promotions complete faster.
 
-    Add /* when files change inside an already-promoted S3 directory instead of arriving in a new one: Pull from S3 deploys that reuse a fixed directory, re-syncing the default version prefix, or patching files inside a version you roll back to. In those cases the cache key does not change and the edge would otherwise keep serving old content. /* counts as one path toward CloudFront's free invalidation tier (1,000 paths per month).
+    Add /* when files change inside an already-promoted S3 directory instead of arriving in a new one: manual S3 uploads to a fixed directory, re-syncing the default version prefix, or patching files inside a version you roll back to. In those cases the cache key does not change and the edge would otherwise keep serving old content. /* counts as one path toward CloudFront's free invalidation tier (1,000 paths per month).
 
     Successful deploys to retain defaults to 20. Older deploy directories are pruned from the hosting bucket based on this setting.
 
@@ -494,7 +494,7 @@ module:
     | Static hosting | Routing mode | Yes | Single page app | Choose SPA or filesystem URL handling |
     | Static hosting | Default root object | No | index.html | Root object for distribution root requests |
     | Static hosting | Default version prefix | Yes | main | Initial and fallback version prefix |
-    | Build config | Build source | Yes | Railpack | Railpack, Dockerfile, or Pull from S3 |
+    | Build config | Build source | Yes | Railpack | Railpack, Dockerfile, or Manual upload to S3 |
     | Build config | Git repository | Required for Railpack and Dockerfile | none | Source repository for builds |
     | Build config | Source base path | No | . | Path from repository root to source code |
     | Build config | Output directory | Required for Railpack and Dockerfile | dist | Directory uploaded to S3 after build |

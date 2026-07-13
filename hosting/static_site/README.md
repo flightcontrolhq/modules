@@ -248,7 +248,7 @@ When `error_document` is set (default `"404.html"`), a CloudFront custom error r
 aws s3 cp "s3://$BUCKET/$VERSION/404.html" "s3://$BUCKET/404.html"
 ```
 
-If the root key doesn't exist, viewers still get a correct 404 status — just with a plain body. The error page path gets a dedicated cache behavior pinned to the managed CachingDisabled policy, so a changed 404 page propagates within `error_caching_min_ttl` (default 10s) with no invalidation — it never inherits the default behavior's long edge TTL. One caveat: hosts pinned to older versions via KVS share the most recently promoted 404 page. Set `error_document = ""` to disable the custom page entirely (null applies the default — null means "use default" in Terraform); `error_caching_min_ttl` (default 10s) controls how long the edge caches 404 responses and applies whether or not the custom page is enabled.
+If the root key doesn't exist, viewers still get a correct 404 status — just with a plain body. The error page path gets a dedicated cache behavior pinned to the managed CachingDisabled policy, so it never inherits the default behavior's long edge TTL: a changed 404 page is served immediately for URLs that don't yet have a cached 404 response, while URLs that already have a cached 404 response refresh after `error_caching_min_ttl` (default 1 day) or on invalidation of that path. One caveat: hosts pinned to older versions via KVS share the most recently promoted 404 page. Set `error_document = ""` to disable the custom page entirely (null applies the default — null means "use default" in Terraform); `error_caching_min_ttl` (default 86400 — 1 day) controls how long the edge caches 404 responses and applies whether or not the custom page is enabled.
 
 ## Custom response headers (security, CORS, etc.)
 
@@ -407,7 +407,7 @@ No external apply-time tools required.
 | no_cache_paths | Path patterns served with CachingDisabled. | `list(string)` | `[]` |
 | default_root_object | Object name for `/` requests. | `string` | `"index.html"` |
 | error_document | Bucket-root key served with a 404 status when an object is missing. Empty string disables the custom page. | `string` | `"404.html"` |
-| error_caching_min_ttl | Seconds CloudFront caches 404 responses at the edge. | `number` | `10` |
+| error_caching_min_ttl | Seconds CloudFront caches 404 responses at the edge. | `number` | `86400` |
 | cache_control_enabled | Attach the viewer-response Cache-Control function. | `bool` | `true` |
 | html_cache_control | Cache-Control value for HTML responses (no extension, `.html`/`.htm`, dotted segments, or `html_path_overrides`). | `string` | `"public, max-age=0, must-revalidate"` |
 | assets_cache_control | Cache-Control value for hashed asset responses (any non-html file extension not in `html_path_overrides`). | `string` | `"public, max-age=31536000, immutable"` |

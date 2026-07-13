@@ -341,8 +341,8 @@ variable "error_document" {
 
 variable "error_caching_min_ttl" {
   type        = number
-  description = "Seconds CloudFront caches 404 error responses at the edge before re-checking the origin. Applies whether or not error_document is set. Keep this short so newly deployed files become visible quickly after a promotion."
-  default     = 10
+  description = "Seconds CloudFront caches 404 error responses at the edge before re-checking the origin. Applies whether or not error_document is set. Defaults to 1 day: versioned deploys make cached 404s safe because every promotion produces fresh cache keys. Lower this if you overwrite files inside already-promoted S3 directories and need missing-then-uploaded files to appear quickly."
+  default     = 86400
 
   validation {
     condition     = var.error_caching_min_ttl >= 0 && var.error_caching_min_ttl <= 31536000
