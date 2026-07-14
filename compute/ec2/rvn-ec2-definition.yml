@@ -208,35 +208,11 @@ module:
       show_when:
         web_service_enabled: true
       default: 80
-    - id: host_header_values
-      label: Domain host rules
-      type: string_array
-      description: Hostnames that should route to this service, such as app.example.com or *.example.com. Leave empty to use path-based routing.
-      add_button_label: Add domain host
-      placeholder: app.example.com
-      required: false
-      show_when:
-        web_service_enabled: true
-      default: null
-    - id: path_pattern_values
-      label: Path rules
-      type: string_array
-      description: Path patterns that should route to this service, such as /*, /api/*, or /app/*. If both domain host rules and path rules are empty, the service routes all paths with /*.
-      add_button_label: Add path pattern
-      collapsible: true
-      required: false
-      show_when:
-        web_service_enabled: true
-      default: null
-    - id: listener_rule_priority
-      label: Listener rule priority
-      type: number
-      description: Optional ALB listener rule priority. Leave blank to let AWS assign the next available priority.
-      collapsible: true
-      max: 50000
-      min: 1
-      show_when:
-        web_service_enabled: true
+    - $template: ../../partials/templates/alb-listener-rule-inputs.yml
+      with:
+        field_overrides:
+          show_when:
+            web_service_enabled: true
     - id: section_health
       label: Health check
       show_when:
@@ -498,38 +474,29 @@ module:
         health_check_path: '<< module.input.web_service_enabled ? module.input.health_check_path : nil >>'
         instance_type: << module.input.instance_type >>
         key_name: << module.input.key_name || nil >>
-        load_balancer_attachment: >-
-          << module.input.web_service_enabled ? {
-            "enabled": true,
-            "target_group": {
-              "port": module.input.app_port,
-              "deregistration_delay": module.input.deregistration_delay,
-              "health_check": {
-                "enabled": true,
-                "path": module.input.health_check_path,
-                "matcher": module.input.health_check_matcher,
-                "interval": module.input.health_check_interval,
-                "timeout": module.input.health_check_timeout,
-                "healthy_threshold": module.input.healthy_threshold,
-                "unhealthy_threshold": module.input.unhealthy_threshold
-              },
-              "stickiness": module.input.target_group_stickiness_enabled ? {
-                "enabled": true,
-                "type": "lb_cookie",
-                "cookie_duration": module.input.target_group_stickiness_cookie_duration
-              } : nil
-            },
-            "listener_rules": [{
-              "listener_arn": module.input.alb_https_listener_arn || module.input.alb_http_listener_arn,
-              "priority": module.input.listener_rule_priority,
-              "conditions": (module.input.host_header_values != nil && module.input.host_header_values != []
-                ? [{"type": "host-header", "values": module.input.host_header_values}] : [])
-                | concat(module.input.path_pattern_values != nil && module.input.path_pattern_values != []
-                  ? [{"type": "path-pattern", "values": module.input.path_pattern_values}]
-                  : (module.input.host_header_values != nil && module.input.host_header_values != []
-                    ? [] : [{"type": "path-pattern", "values": ["/*"]}]))
-            }]
-          } : nil >>
+        load_balancer_attachment:
+          $template: ../../partials/templates/alb-load-balancer-attachment.yml
+          with:
+            additional_fields: {}
+            enabled: << module.input.web_service_enabled >>
+            listener_arn: '<< module.input.web_service_enabled ? (module.input.alb_https_listener_arn || module.input.alb_http_listener_arn) : "" >>'
+            target_group:
+              port: << module.input.app_port >>
+              deregistration_delay: << module.input.deregistration_delay >>
+              health_check:
+                enabled: true
+                path: << module.input.health_check_path >>
+                matcher: << module.input.health_check_matcher >>
+                interval: << module.input.health_check_interval >>
+                timeout: << module.input.health_check_timeout >>
+                healthy_threshold: << module.input.healthy_threshold >>
+                unhealthy_threshold: << module.input.unhealthy_threshold >>
+              stickiness: >-
+                << module.input.target_group_stickiness_enabled ? {
+                  "enabled": true,
+                  "type": "lb_cookie",
+                  "cookie_duration": module.input.target_group_stickiness_cookie_duration
+                } : nil >>
         load_balancer_security_group_id: '<< module.input.web_service_enabled ? module.input.alb_security_group_id : nil >>'
         log_retention_in_days: << module.input.log_retention_in_days >>
         manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.start_command : nil >>'

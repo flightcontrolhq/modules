@@ -172,6 +172,58 @@ describe("compiler", () => {
     assert.doesNotMatch(builder, /start_cmd/);
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
   });
+
+  it("propagates shared build input guidance to every consumer", async () => {
+    const definitionPaths = [
+      ["compute", "ec2", "rvn-ec2-definition.yml"],
+      ["compute", "ecs_service", "rvn-ecs-nlb-definition.yml"],
+      ["compute", "ecs_service", "rvn-ecs-web-definition.yml"],
+      ["compute", "ecs_service", "rvn-ecs-worker-definition.yml"],
+      ["compute", "lambda", "rvn-lambda-definition.yml"],
+      ["hosting", "static_site", "rvn-aws-static-definition.yml"],
+    ];
+    const definitions = await Promise.all(definitionPaths.map((path) => compileDefinitionFile(join(repoRoot, ...path))));
+
+    for (const definition of definitions) {
+      const inputs = getModuleInputs(definition.module);
+      assert.equal(
+        findInput(inputs, "source_repo").description,
+        "Repository containing the application source for Dockerfile or Railpack builds.",
+        `${definition.type} should include shared Git source guidance`,
+      );
+
+      const builderType = findInput(inputs, "build_infrastructure_type");
+      assert.equal(
+        builderType.description,
+        "Use on-demand EC2 for predictable availability or EC2 Spot for lower cost with possible capacity delays or interruption.",
+        `${definition.type} should include shared builder guidance`,
+      );
+      const builderOptions = builderType.values;
+      assert.ok(Array.isArray(builderOptions), `${definition.type} builder type should have values`);
+      assert.deepEqual(
+        builderOptions.map((option) => {
+          const value = assertRecord(option, `${definition.type} builder option`);
+          return [value.value, value.description];
+        }),
+        [
+          ["ec2", "Use on-demand capacity for predictable availability without Spot interruption."],
+          ["ec2-spot", "Use lower-cost Spot capacity that can wait for capacity or be interrupted by AWS."],
+        ],
+      );
+    }
+
+    for (const definition of definitions.filter((candidate) => candidate.type !== "rvn-lambda")) {
+      const inputs = getModuleInputs(definition.module);
+      assert.equal(
+        findInput(inputs, "railpack_install_cmd").description,
+        "Optional dependency installation command. Leave blank to use Railpack detection.",
+      );
+      assert.equal(
+        findInput(inputs, "railpack_build_cmd").description,
+        "Optional application build command. Leave blank to use Railpack detection.",
+      );
+    }
+  });
 });
 
 function getModuleInputs(module: Record<string, unknown>): Record<string, unknown>[] {
