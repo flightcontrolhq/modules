@@ -576,6 +576,59 @@ run "iam_role_creation" {
   }
 }
 
+run "task_role_inline_policies_allow_mixed_document_shapes" {
+  command = plan
+
+  variables {
+    task_role_inline_policies = {
+      wildcard = {
+        Version = "2012-10-17"
+        Statement = [{
+          Effect   = "Allow"
+          Action   = ["logs:CreateLogStream"]
+          Resource = "*"
+        }]
+      }
+      bucket_read = {
+        Version = "2012-10-17"
+        Statement = [{
+          Effect = "Allow"
+          Action = ["s3:GetObject"]
+          Resource = [
+            "arn:aws:s3:::bucket-one/*",
+            "arn:aws:s3:::bucket-two/*",
+          ]
+        }]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.task_inline) == 2
+    error_message = "Should create both task role inline policies"
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.task_inline["wildcard"].policy).Statement[0].Resource == "*"
+    error_message = "Should preserve a string Resource value"
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.task_inline["bucket_read"].policy).Statement[0].Resource == ["arn:aws:s3:::bucket-one/*", "arn:aws:s3:::bucket-two/*"]
+    error_message = "Should preserve a list Resource value"
+  }
+}
+
+run "task_role_inline_policies_reject_non_object_values" {
+  command = plan
+
+  variables {
+    task_role_inline_policies = ["not-an-object"]
+  }
+
+  expect_failures = [var.task_role_inline_policies]
+}
+
 ################################################################################
 # Test: ECS Exec Enabled
 ################################################################################

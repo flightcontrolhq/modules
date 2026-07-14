@@ -34,12 +34,35 @@ mock_provider "aws" {
   }
 
   override_resource {
+    target = aws_cloudfront_function.redirect
+    values = {
+      arn    = "arn:aws:cloudfront::123456789012:function/test-cf-redirect"
+      status = "DEPLOYED"
+    }
+  }
+
+  override_resource {
     target = aws_s3_bucket.logging
     values = {
-      arn         = "arn:aws:s3:::test-cf-logs-123456789012-us-east-1"
-      id          = "test-cf-logs-123456789012-us-east-1"
-      bucket      = "test-cf-logs-123456789012-us-east-1"
-      domain_name = "test-cf-logs-123456789012-us-east-1.s3.amazonaws.com"
+      arn                = "arn:aws:s3:::test-cf-logs-123456789012-us-east-1"
+      id                 = "test-cf-logs-123456789012-us-east-1"
+      bucket_domain_name = "test-cf-logs-123456789012-us-east-1.s3.amazonaws.com"
+    }
+  }
+
+  # The delivery-source and delivery-destination resources validate their ARN
+  # attributes at plan time, so mocked upstream ARNs must be well-formed.
+  override_resource {
+    target = aws_cloudwatch_log_group.access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/cloudfront/test-cf"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudwatch_log_delivery_destination.access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:test-cf-access-logs-cw"
     }
   }
 }
@@ -52,9 +75,9 @@ variables {
   }
   origins = [
     {
-      origin_id   = "s3-origin"
-      domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      origin_id         = "s3-origin"
+      domain_name       = "my-bucket.s3.us-east-1.amazonaws.com"
+      s3_origin_enabled = true
     }
   ]
   default_cache_behavior = {
@@ -630,14 +653,14 @@ run "test_origins_validation_duplicate_id" {
   variables {
     origins = [
       {
-        origin_id   = "same-id"
-        domain_name = "bucket1.s3.amazonaws.com"
-        s3_origin   = true
+        origin_id         = "same-id"
+        domain_name       = "bucket1.s3.amazonaws.com"
+        s3_origin_enabled = true
       },
       {
-        origin_id   = "same-id"
-        domain_name = "bucket2.s3.amazonaws.com"
-        s3_origin   = true
+        origin_id         = "same-id"
+        domain_name       = "bucket2.s3.amazonaws.com"
+        s3_origin_enabled = true
       }
     ]
   }
@@ -654,9 +677,9 @@ run "test_origins_validation_multiple" {
   variables {
     origins = [
       {
-        origin_id   = "s3-origin"
-        domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-        s3_origin   = true
+        origin_id         = "s3-origin"
+        domain_name       = "my-bucket.s3.us-east-1.amazonaws.com"
+        s3_origin_enabled = true
       },
       {
         origin_id   = "alb-origin"
@@ -700,6 +723,120 @@ run "test_logging_retention_invalid_zero" {
   expect_failures = [
     var.logging_bucket_retention_days,
   ]
+}
+
+# Test: Invalid logging_bucket_retention_days - not a CloudWatch retention value
+# while logging_destination is 'cloudwatch' (the default)
+run "test_logging_retention_invalid_cloudwatch_value" {
+  command = plan
+
+  variables {
+    logging_bucket_retention_days = 45
+  }
+
+  expect_failures = [
+    var.logging_bucket_retention_days,
+  ]
+}
+
+# Test: 45 days is a valid S3 lifecycle expiry when logging_destination is 's3'
+run "test_logging_retention_non_cloudwatch_value_valid_for_s3" {
+  command = plan
+
+  variables {
+    logging_destination             = "s3"
+    logging_bucket_creation_enabled = true
+    logging_bucket_retention_days   = 45
+  }
+
+  assert {
+    condition     = var.logging_bucket_retention_days == 45
+    error_message = "Any retention >= 1 should be accepted when logging_destination is 's3'."
+  }
+}
+
+# Test: Invalid logging_destination
+run "test_logging_destination_invalid" {
+  command = plan
+
+  variables {
+    logging_destination = "firehose"
+  }
+
+  expect_failures = [
+    var.logging_destination,
+  ]
+}
+
+# Test: Default logging creates the CloudWatch delivery chain (logging is on
+# by default with the 'cloudwatch' destination)
+run "test_logging_default_creates_cloudwatch_chain" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 1
+    error_message = "CloudWatch logging (the default) must create the access-log group."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_delivery_source.access_logs) == 1 && length(aws_cloudwatch_log_delivery.access_logs) == 1
+    error_message = "One delivery source and one delivery must be created per distribution."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_delivery_destination.access_logs) == 1
+    error_message = "Exactly one shared delivery destination must be created."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.access_logs[0].retention_in_days == 90
+    error_message = "The log group retention must follow logging_bucket_retention_days."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 0
+    error_message = "No S3 logging bucket should be created when the destination is 'cloudwatch'."
+  }
+}
+
+# Test: S3 destination keeps the bucket path and creates no CloudWatch resources
+run "test_logging_s3_destination_skips_cloudwatch" {
+  command = plan
+
+  variables {
+    logging_destination             = "s3"
+    logging_bucket_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0 && length(aws_cloudwatch_log_delivery_source.access_logs) == 0 && length(aws_cloudwatch_log_delivery_destination.access_logs) == 0 && length(aws_cloudwatch_log_delivery.access_logs) == 0
+    error_message = "No CloudWatch resources should be created when logging_destination is 's3'."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 1
+    error_message = "The S3 logging bucket must be created when logging_destination is 's3' and logging_bucket_creation_enabled is true."
+  }
+}
+
+# Test: logging_enabled = false creates neither destination's resources
+run "test_logging_disabled_creates_nothing" {
+  command = plan
+
+  variables {
+    logging_enabled                 = false
+    logging_bucket_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0 && length(aws_cloudwatch_log_delivery_source.access_logs) == 0 && length(aws_cloudwatch_log_delivery_destination.access_logs) == 0 && length(aws_cloudwatch_log_delivery.access_logs) == 0
+    error_message = "No CloudWatch resources should be created when logging is disabled."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 0
+    error_message = "No S3 logging bucket should be created when logging is disabled, even with logging_bucket_creation_enabled = true."
+  }
 }
 
 #-------------------------------------------------------------------------------
@@ -807,6 +944,264 @@ run "test_custom_error_responses_invalid_code" {
 }
 
 #-------------------------------------------------------------------------------
+# Edge Redirect Tests
+#-------------------------------------------------------------------------------
+
+run "test_redirect_rules_create_function" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "https://docs.example.com/:path*"
+        destination = "https://www.example.com/docs/:path*"
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_function.redirect) == 1
+    error_message = "A redirect function should be created when redirect rules are configured."
+  }
+
+  assert {
+    condition     = aws_cloudfront_function.redirect[0].publish == true
+    error_message = "The redirect function should be published."
+  }
+
+  assert {
+    condition     = strcontains(aws_cloudfront_function.redirect[0].code, "docs.example.com")
+    error_message = "The redirect function code should contain the configured rules."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.this["primary"].default_cache_behavior[0].function_association) == 1
+    error_message = "The redirect function should be associated with the default cache behavior."
+  }
+}
+
+run "test_redirect_rules_attach_to_ordered_behaviors" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "https://docs.example.com/:path*"
+        destination = "https://www.example.com/docs/:path*"
+      }
+    ]
+    ordered_cache_behaviors = [
+      {
+        path_pattern           = "/docs/*"
+        target_origin_id       = "s3-origin"
+        viewer_protocol_policy = "redirect-to-https"
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.this["primary"].ordered_cache_behavior[0].function_association) == 1
+    error_message = "The redirect function should be associated with every ordered cache behavior."
+  }
+}
+
+run "test_redirect_rules_invalid_status" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old"
+        destination = "/new"
+        status_code = 303
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_invalid_source" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "docs"
+        destination = "/new"
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_invalid_destination" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old"
+        destination = "http://www.example.com/new"
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_reject_undefined_destination_parameter" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old/:page"
+        destination = "/new/:missing"
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_reject_nonfinal_catch_all" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old/:path*/edit"
+        destination = "/new/:path*"
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_reject_reserved_parameter" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old/:__proto__"
+        destination = "/new/:__proto__"
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_reject_malformed_percent_escape" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old/%invalid"
+        destination = "/new"
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+run "test_redirect_rules_reject_function_conflict" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old/:path*"
+        destination = "/new/:path*"
+      }
+    ]
+    default_cache_behavior = {
+      target_origin_id       = "s3-origin"
+      viewer_protocol_policy = "redirect-to-https"
+      function_associations = [
+        {
+          event_type   = "viewer-request"
+          function_arn = "arn:aws:cloudfront::123456789012:function/existing"
+        }
+      ]
+    }
+  }
+
+  expect_failures = [
+    aws_cloudfront_distribution.this["primary"],
+  ]
+}
+
+run "test_redirect_rules_reject_ordered_lambda_conflict" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source      = "/old/:path*"
+        destination = "/new/:path*"
+      }
+    ]
+    ordered_cache_behaviors = [
+      {
+        path_pattern           = "/docs/*"
+        target_origin_id       = "s3-origin"
+        viewer_protocol_policy = "redirect-to-https"
+        lambda_function_associations = [
+          {
+            event_type = "viewer-request"
+            lambda_arn = "arn:aws:lambda:us-east-1:123456789012:function:existing:1"
+          }
+        ]
+      }
+    ]
+  }
+
+  expect_failures = [
+    aws_cloudfront_distribution.this["primary"],
+  ]
+}
+
+run "test_redirect_rules_reject_method_changing_non_read_redirect" {
+  command = plan
+
+  variables {
+    redirect_rules = [
+      {
+        source                    = "/submit"
+        destination               = "/new-submit"
+        redirect_non_read_methods = true
+        status_code               = 302
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.redirect_rules,
+  ]
+}
+
+#-------------------------------------------------------------------------------
 # Default Value Tests
 #-------------------------------------------------------------------------------
 
@@ -870,8 +1265,13 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.logging_enabled == false
-    error_message = "logging_enabled should default to false."
+    condition     = var.logging_enabled == true
+    error_message = "logging_enabled should default to true (CloudWatch Logs delivery)."
+  }
+
+  assert {
+    condition     = var.logging_destination == "cloudwatch"
+    error_message = "logging_destination should default to cloudwatch."
   }
 
   assert {
@@ -902,6 +1302,16 @@ run "test_defaults" {
   assert {
     condition     = length(var.custom_error_responses) == 0
     error_message = "custom_error_responses should default to empty list."
+  }
+
+  assert {
+    condition     = length(var.redirect_rules) == 0
+    error_message = "redirect_rules should default to an empty list."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_function.redirect) == 0
+    error_message = "No redirect function should be created by default."
   }
 
   assert {

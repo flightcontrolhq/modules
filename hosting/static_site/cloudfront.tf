@@ -11,9 +11,10 @@
 #
 # The viewer-response CloudFront Function (created when cache_control_enabled =
 # true, the default) sets Cache-Control on every response based on the
-# rewritten URI shape: HTML responses get a short s-maxage + long
-# stale-while-revalidate, hashed assets get the immutable 1-year browser
-# cache. See functions/cache_control.js for the classification rules.
+# rewritten URI shape. These headers only steer the BROWSER — CloudFront
+# ignores viewer-response headers for edge TTLs. HTML responses get
+# revalidate-always, hashed assets get the immutable 1-year browser cache.
+# See functions/cache_control.js for the classification rules.
 ################################################################################
 
 module "cdn" {
@@ -33,10 +34,10 @@ module "cdn" {
       domain_name       = module.hosting.bucket_regional_domain_name
       s3_origin_enabled = true
       custom_headers    = var.additional_origin_headers
-      origin_shield = var.origin_shield_region == null ? null : {
+      origin_shield = var.origin_shield_enabled ? {
         enabled              = true
-        origin_shield_region = var.origin_shield_region
-      }
+        origin_shield_region = local.origin_shield_region
+      } : null
     }
   ]
 
@@ -46,7 +47,7 @@ module "cdn" {
     allowed_methods              = ["GET", "HEAD", "OPTIONS"]
     cached_methods               = ["GET", "HEAD"]
     compression_enabled          = true
-    cache_policy_id              = var.cache_policy_id
+    cache_policy_id              = local.effective_cache_policy_id
     origin_request_policy_id     = var.origin_request_policy_id
     response_headers_policy_id   = local.effective_response_headers_policy_id
     function_associations        = local.cff_associations
@@ -54,6 +55,8 @@ module "cdn" {
   }
 
   ordered_cache_behaviors = local.ordered_behaviors
+
+  custom_error_responses = local.custom_error_responses
 
   default_root_object     = var.default_root_object
   price_class             = var.price_class
@@ -69,6 +72,7 @@ module "cdn" {
   web_acl_id = var.web_acl_id
 
   logging_enabled                 = var.logging_enabled
+  logging_destination             = var.logging_destination
   logging_bucket_creation_enabled = var.logging_bucket_creation_enabled
   logging_bucket_domain_name      = var.logging_bucket_domain_name
   logging_prefix                  = var.logging_prefix

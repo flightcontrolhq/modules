@@ -9,13 +9,14 @@
 #                                       cache key without invalidations.
 # - cache_control  (viewer-response) : sets Cache-Control on every response
 #                                       based on the rewritten URI shape.
-#                                       HTML responses get a short s-maxage +
-#                                       long stale-while-revalidate; asset
-#                                       responses get the immutable 1-year
-#                                       browser cache. Discrimination at the
-#                                       URI level (post-rewrite) avoids the
-#                                       cache-behavior-matching pitfall that
-#                                       caused ENG-4785.
+#                                       Steers the browser only (CloudFront
+#                                       ignores viewer-response headers for
+#                                       edge TTLs): HTML revalidates on every
+#                                       navigation, assets get the immutable
+#                                       1-year browser cache. Discrimination
+#                                       at the URI level (post-rewrite) avoids
+#                                       the cache-behavior-matching pitfall
+#                                       that caused ENG-4785.
 ################################################################################
 
 locals {
@@ -36,13 +37,17 @@ locals {
 resource "aws_cloudfront_function" "rewrite" {
   provider = aws.us_east_1
 
-  name    = local.cff_rewrite_name
+  name    = local.cff_request_rewrite_name
   runtime = "cloudfront-js-2.0"
   comment = "${var.name} ${var.routing} viewer-request rewriter"
   publish = true
   code    = local.cff_rewrite_code
 
   key_value_store_associations = [aws_cloudfront_key_value_store.this.arn]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_cloudfront_function" "cache_control" {

@@ -68,7 +68,7 @@ resource "aws_cloudfront_distribution" "this" {
     trusted_key_groups         = var.default_cache_behavior.trusted_key_groups
 
     dynamic "function_association" {
-      for_each = var.default_cache_behavior.function_associations
+      for_each = concat(var.default_cache_behavior.function_associations, local.redirect_function_associations)
       content {
         event_type   = function_association.value.event_type
         function_arn = function_association.value.function_arn
@@ -100,7 +100,7 @@ resource "aws_cloudfront_distribution" "this" {
       trusted_key_groups         = ordered_cache_behavior.value.trusted_key_groups
 
       dynamic "function_association" {
-        for_each = ordered_cache_behavior.value.function_associations
+        for_each = concat(ordered_cache_behavior.value.function_associations, local.redirect_function_associations)
         content {
           event_type   = function_association.value.event_type
           function_arn = function_association.value.function_arn
@@ -143,7 +143,7 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   dynamic "logging_config" {
-    for_each = var.logging_enabled ? [1] : []
+    for_each = local.s3_logging_enabled ? [1] : []
     content {
       bucket          = var.logging_bucket_creation_enabled ? aws_s3_bucket.logging[0].bucket_domain_name : var.logging_bucket_domain_name
       prefix          = "${var.logging_prefix}${each.key}/"
@@ -152,4 +152,16 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   tags = merge(local.tags, { Name = "${var.name}-${each.key}" })
+
+  lifecycle {
+    precondition {
+      condition = !local.redirects_enabled || !(
+        local.default_viewer_request_function_conflict ||
+        local.default_viewer_request_lambda_conflict ||
+        local.ordered_viewer_request_function_conflict ||
+        local.ordered_viewer_request_lambda_conflict
+      )
+      error_message = "redirect_rules cannot be enabled when a default or ordered cache behavior already has a viewer-request CloudFront Function or Lambda@Edge association."
+    }
+  }
 }

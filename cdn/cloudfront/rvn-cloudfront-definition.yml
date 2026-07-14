@@ -3,15 +3,15 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.2.0
-  description: Add private S3 bucket origins with OAC and signed URL enforcement via trusted key groups.
+  version: 0.3.1
+  description: "Deliver CloudFront access logs to CloudWatch Logs by default with a Ravion logs panel; S3 delivery remains available."
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
     - $merge:
         - ../../partials/inputs/aws-region.yml
       default: us-east-1
-      description: CloudFront is global. This region is used for the optional access logging bucket.
+      description: CloudFront is global. Access logs go to CloudWatch Logs in us-east-1 by default; this region is used for the optional S3 logging bucket.
     - id: section_distribution
       label: Distribution
       type: section
@@ -174,6 +174,59 @@ module:
               value: http-only
             - label: Match viewer
               value: match-viewer
+      default: []
+    - id: section_edge_redirects
+      label: Edge redirects
+      type: section
+      description: Return redirects from CloudFront before contacting an origin. Rules are evaluated in order and the first match wins.
+    - id: redirect_rules
+      label: Redirect rules
+      type: object_array
+      description: Optional URL-pattern redirects handled by a CloudFront Function at viewer request time.
+      collapsible: true
+      required: false
+      item_label: Redirect rule
+      item_title:
+        template: "{source}"
+      item_description: "Redirect to {destination}"
+      item_inputs:
+        - id: source
+          label: Source
+          type: string
+          description: Absolute HTTPS URL or host-agnostic path to match. Use :name for one segment and a final :name* to capture the remaining path.
+          placeholder: https://docs.example.com/:path*
+          required: true
+        - id: destination
+          label: Destination
+          type: string
+          description: Absolute HTTPS URL or host-agnostic path. Named parameters are replaced with values captured by the source.
+          placeholder: https://www.example.com/docs/:path*
+          required: true
+        - id: preserve_query_string
+          label: Preserve query string
+          type: boolean
+          description: Append the request query parameters to the redirect location.
+          default: false
+        - id: redirect_non_read_methods
+          label: Redirect non-read methods
+          type: boolean
+          description: Redirect methods other than GET and HEAD. Requires status 307 or 308 so clients preserve the request method and body.
+          default: false
+        - id: status_code
+          label: Status code
+          type: number
+          description: HTTP redirect status. Use 308 for permanent redirects that preserve the request method.
+          required: true
+          default: 308
+          values:
+            - label: 308 Permanent redirect
+              value: 308
+            - label: 307 Temporary redirect
+              value: 307
+            - label: 301 Moved permanently
+              value: 301
+            - label: 302 Found
+              value: 302
       default: []
     - id: section_default_behavior
       label: Default cache behavior
@@ -515,12 +568,26 @@ module:
     - id: logging_enabled
       label: CloudFront access logging
       type: boolean
-      description: Enable CloudFront access logging. When enabled, the module automatically creates a logging bucket.
-      default: false
+      description: Enable CloudFront access logging. Logs are delivered to CloudWatch Logs by default and can be viewed in Ravion.
+      default: true
+    - id: logging_destination
+      label: Logging destination
+      type: string
+      description: Where CloudFront delivers access logs.
+      default: cloudwatch
+      show_when:
+        logging_enabled: true
+      values:
+        - description: View access logs directly in Ravion. Ingestion costs more at very high traffic.
+          label: CloudWatch Logs
+          value: cloudwatch
+        - description: Deliver compressed log files to an automatically created S3 bucket. Cheapest for high traffic.
+          label: S3 bucket
+          value: s3
     - id: logging_bucket_retention_days
       label: Logging retention days
       type: number
-      description: Days to retain CloudFront access logs in the automatically created logging bucket.
+      description: Days to retain CloudFront access logs in CloudWatch Logs or the automatically created S3 logging bucket.
       min: 1
       show_when:
         logging_enabled: true
@@ -566,12 +633,14 @@ module:
         geo_restriction_type: << module.input.geo_restriction_type >>
         additional_metrics_enabled: << module.input.additional_metrics_enabled >>
         http_version: << module.input.http_version >>
-        logging_bucket_creation_enabled: << module.input.logging_enabled >>
+        logging_bucket_creation_enabled: << module.input.logging_enabled && module.input.logging_destination == "s3" >>
         logging_bucket_domain_name: null
         logging_bucket_retention_days: << module.input.logging_bucket_retention_days >>
+        logging_destination: << module.input.logging_destination >>
         logging_enabled: << module.input.logging_enabled >>
         logging_prefix: ""
         name: << module.input.name >>
+        redirect_rules: << module.input.redirect_rules || [] >>
         ordered_cache_behaviors: >-
           << module.input.cache_behaviors != nil ? map(module.input.cache_behaviors, {"path_pattern":
           #.path_pattern, "target_origin_id": #.target_origin_id, "viewer_protocol_policy":
@@ -594,6 +663,12 @@ module:
           $include: ../stack/ravion-tags.yml
         web_acl_id: << module.input.web_acl_id || nil >>
   ui:
+    logs: |-
+      <<
+      module.input.logging_enabled && module.input.logging_destination == "cloudwatch" ?
+      [{"id": "cloudfront_access_logs", "name": "CloudFront access logs", "source": {"type": "cloudwatch", "aws_account_id": module.input.aws_account_id, "region": "us-east-1", "log_group": stack.output.access_log_group_name}}] :
+      []
+      >>
     links: |-
       <<
       (stack.output.distribution_domain_name ? [{"name": "CloudFront domain", "href": "https://" + stack.output.distribution_domain_name}] : []) +
@@ -642,8 +717,9 @@ module:
     | Speeding up global users | Terminating TLS and HTTP/3 at the nearest edge location |
     | Caching static assets | Adding a cache behavior such as /assets/* with the CachingOptimized policy |
     | Splitting traffic by path | Routing paths like /api/* to additional origins |
+    | Redirecting legacy routes | Matching named path segments and returning redirects at the edge |
     | Protecting an app | Associating a global WAFv2 web ACL and geo restrictions |
-    | Auditing traffic | Enabling access logs with an automatically created S3 bucket |
+    | Auditing traffic | Viewing CloudFront access logs in Ravion or delivering them to S3 |
 
     ## How the ECS connection works
 
@@ -685,6 +761,24 @@ module:
     ### Signed URLs
 
     Enable Require signed URLs to set trusted key groups on the default cache behavior. Each custom cache behavior can also require signed URLs for only that path and must provide its own trusted key group IDs. Ravion does not create key groups in this module; provide existing CloudFront key group IDs and keep the private signing key in your application.
+
+    ## Edge redirects
+
+    Redirect rules run at viewer request time before CloudFront checks its cache or contacts an origin. Rules are evaluated in order and the first match wins. Sources and destinations accept absolute HTTPS URLs or host-agnostic paths. Use `:name` to capture one path segment and a final `:name*` to capture the remaining path, then place those named values anywhere in the destination. Query preservation is optional and disabled by default.
+
+    The managed redirect function is attached to the default cache behavior and every custom cache behavior so redirects cover every request path. CloudFront allows only one viewer-request edge association per behavior, so redirect rules cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
+
+    The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
+
+    ### Avoid overlapping same-host rules
+
+    Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function skips that rule and evaluates the next rule. If no later rule matches, CloudFront sends the original request to the configured origin. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+
+    For example, a source of `https://example.cloudfront.net/:path*` and destination of `https://example.cloudfront.net/docs/:path*` does not redirect. The destination `/docs/guide` still matches the broad source and would otherwise become `/docs/docs/guide` on the next request.
+
+    Use different hosts for a domain migration, such as `https://docs.example.com/:path*` to `https://www.example.com/docs/:path*`. For same-host testing, use non-overlapping namespaces such as `https://example.cloudfront.net/old/:path*` to `https://example.cloudfront.net/docs/:path*`. To redirect only the root, use the exact source `https://example.cloudfront.net` without a path parameter.
+
+    Redirect patterns do not currently support exclusions such as "all paths except `/docs`".
 
     ## Certificates
 
@@ -736,14 +830,21 @@ module:
 
     ## Access logging
 
-    CloudFront access logging is off by default. When enabled, the module creates an S3 logging bucket automatically and expires log objects after the configured retention days (default 90).
+    CloudFront access logging is on by default, delivered to CloudWatch Logs and viewable in Ravion. Choose where logs are delivered:
+
+    | Destination | How it works |
+    | --- | --- |
+    | CloudWatch Logs (default) | CloudFront standard logging v2 delivers access logs to a module-managed CloudWatch Logs group, and the module UI shows them in the Logs panel. Log ingestion costs more than S3 at very high traffic. |
+    | S3 bucket | Legacy standard logging delivers compressed log files to an automatically created S3 bucket. Cheapest for high-traffic sites; not viewable in Ravion. |
+
+    Logging retention days defaults to 90 and controls the CloudWatch log group retention or the S3 bucket lifecycle expiry, depending on the destination. CloudWatch retention must be one of the standard CloudWatch Logs retention values (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, and larger).
 
     ## Configuration
 
     | Field | Required | Default | Notes |
     | --- | --- | --- | --- |
     | AWS account | Yes | None | Account for the distribution and logging bucket |
-    | Region | Yes | us-east-1 | Used for the optional logging bucket; CloudFront is global |
+    | Region | Yes | us-east-1 | Used for the optional S3 logging bucket; CloudFront is global and access logs go to CloudWatch Logs in us-east-1 by default |
     | Name slug | Yes | Generated from project, environment, and module IDs | Prefix for distribution comment, OAC, and logging bucket |
     | Domain aliases | No | [] | Custom domains; empty uses the cloudfront.net domain |
     | ACM certificate | When aliases are set | None | rvn-acm-certificate instance issued in us-east-1 |
@@ -754,6 +855,7 @@ module:
     | Origin domain name | When origin source is custom | None | Any reachable origin domain |
     | Origin protocol policy | Yes | HTTPS only | Origin needs a certificate valid for the forwarded host |
     | Additional origins | No | [] | Extra origins for path-based cache behaviors |
+    | Redirect rules | No | [] | Ordered URL-pattern redirects returned before contacting an origin |
     | Viewer protocol policy | Yes | Redirect to HTTPS | How viewers connect to CloudFront |
     | Allowed methods | Yes | All methods | Read-only options available for cache-friendly apps |
     | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
@@ -764,7 +866,8 @@ module:
     | Custom cache behaviors | No | [] | Path-based caching and routing before the default behavior |
     | Price class | No | All edge locations | Edge location coverage |
     | Additional metrics | No | false | Enables all 8 CloudFront additional metrics and their flat CloudWatch cost |
-    | CloudFront access logging | No | false | Creates a logging bucket when enabled |
+    | CloudFront access logging | No | true | Delivers logs to CloudWatch Logs or S3 |
+    | Logging destination | No | CloudWatch Logs | Visible when logging is enabled; CloudWatch shows logs in Ravion |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership tags |
     | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
 
@@ -773,6 +876,7 @@ module:
     - The primary origin is always the load balancer or domain you select, with the fixed origin ID primary. ECS references exist to discover the load balancer DNS name, not to create per-service origins, because listener rules already fan traffic out behind one origin.
     - Caching is disabled by default. A wrong edge cache on dynamic responses is worse than no cache, so caching is an explicit per-path opt-in.
     - The AllViewer origin request policy is the default so Host-based listener rules, cookies, and query strings keep working unchanged behind CloudFront.
+    - Redirects use one managed CloudFront Function shared by the module's distributions and attached to every cache behavior.
     - One module instance manages one distribution. Create additional instances when domains need different edge configuration; they can share the same origin.
     - The certificate is referenced from an ACM Certificate module instance so the us-east-1 requirement is explicit and reusable.
 

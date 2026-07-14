@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.8.1
-  description: "Add Railpack image builds."
+  version: 0.8.2
+  description: "Accept mixed IAM policy document shapes for task role inline policies."
 module:
   inputs:
     - id: section_cluster

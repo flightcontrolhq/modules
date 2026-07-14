@@ -16,11 +16,11 @@ This repository contains reusable infrastructure modules designed for enterprise
 | Category      | Module            | Description                                                            | Status  |
 | ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
-| `cdn/`        | `cloudfront`      | AWS CloudFront distributions (includes `rvn-cloudfront` module definition) | v1.0.0  |
+| `cdn/`        | `cloudfront`      | AWS CloudFront distributions with origins, cache behaviors, and edge redirects (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
 | `compute/`    | `ec2`             | Supervised EC2 app group with optional shared ALB, authenticated Git source checkout, switchable deploy modes, and deployment-scoped CloudWatch logs | v1.0.0  |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
-| `compute/`    | `ecs_service`     | AWS ECS services with task definitions, load balancing, and auto scaling | v1.0.0  |
+| `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
 | `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.0.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
@@ -43,10 +43,10 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `security/`   | `iam`             | AWS IAM roles and policies                                             | v1.0.0  |
 | `security/`   | `kms`             | AWS KMS keys (symmetric or asymmetric: signing, encryption, MAC, key agreement) | v1.0.0  |
 | `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
-| `stack/`      | `terraform`       | Ravion Terraform/OpenTofu stack workflows with git triggers and managed state (includes `rvn-stack` module definition) | v1.2.1  |
+| `stack/`      | `terraform`       | Ravion Terraform/OpenTofu stack workflows with git triggers and managed state (includes `rvn-stack` module definition) | v1.2.3  |
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
 | `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
-| `storage/`    | `s3`              | AWS S3 buckets with encryption, lifecycle rules, CORS, and bucket policies | v1.0.0  |
+| `storage/`    | `s3`              | AWS S3 buckets with encryption, SSE-C blocking, lifecycle rules, CORS, and bucket policies | v1.0.0  |
 
 ## Usage
 
