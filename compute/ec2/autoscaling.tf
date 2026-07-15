@@ -27,6 +27,26 @@ module "autoscaling" {
   # Register instances with the service target group
   target_group_arns = local.enable_load_balancer ? [aws_lb_target_group.app[0].arn] : []
 
+  # Visibility-only lifecycle hooks: they emit "EC2 Instance-launch/-terminate
+  # Lifecycle Action" EventBridge events that Ravion ingests to show instances
+  # while they are still Pending/Terminating. Nothing completes the action, so
+  # the minimum 30s heartbeat with CONTINUE keeps the added launch/terminate
+  # delay as small as possible.
+  lifecycle_hooks = [
+    {
+      name                 = "ravion-launch-visibility"
+      lifecycle_transition = "autoscaling:EC2_INSTANCE_LAUNCHING"
+      default_result       = "CONTINUE"
+      heartbeat_timeout    = 30
+    },
+    {
+      name                 = "ravion-terminate-visibility"
+      lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
+      default_result       = "CONTINUE"
+      heartbeat_timeout    = 30
+    },
+  ]
+
   scaling_policies = var.cpu_target_tracking_enabled ? [
     {
       name        = "${var.name}-cpu-target-tracking"
