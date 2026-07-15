@@ -119,6 +119,7 @@ module:
       id: use_ravion_state_backend
       label: Use Ravion for your Terraform state
       type: boolean
+      immutable: true
     - collapsible: true
       description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
       id: ravion_state_backend_workspace
@@ -126,6 +127,7 @@ module:
       show_when:
         use_ravion_state_backend: true
       type: string
+      immutable: true
   stack:
     pipelines:
       change:
