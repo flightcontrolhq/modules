@@ -180,15 +180,15 @@ module:
       show_when:
         web_service_enabled: true
       values:
-        - label: Application Load Balancer
+        - label: Standalone ALB module
           description: Attach to a standalone Ravion Application Load Balancer.
           value: standalone_alb
-        - label: ECS cluster
+        - label: ALB from ECS Cluster module
           description: Attach to the public or private ALB created by a Ravion ECS cluster.
           value: ecs_cluster
     - id: alb
       immutable: true
-      label: Application Load Balancer
+      label: Standalone ALB module
       type: $ref:rvn-aws-alb
       description: Standalone shared load balancer this service attaches its listener rules to. It must use the same AWS account, region, and VPC as the selected VPC network.
       mapped_inputs:
@@ -216,7 +216,7 @@ module:
         load_balancer_source: standalone_alb
     - id: ecs_cluster
       immutable: true
-      label: ECS cluster
+      label: ALB from ECS Cluster module
       type: $ref:rvn-ecs-cluster
       description: ECS cluster whose public or private Application Load Balancer receives this service's listener rule. The cluster must use the same AWS account, region, and VPC as the selected VPC network.
       mapped_inputs:
@@ -226,7 +226,7 @@ module:
         web_service_enabled: true
         load_balancer_source: ecs_cluster
     - id: ecs_cluster_alb_visibility
-      label: ECS cluster load balancer
+      label: ALB to use from ECS Cluster module
       type: string
       description: Choose the public or private Application Load Balancer from the selected ECS cluster. The selected load balancer and at least one HTTP or HTTPS listener must be enabled on the cluster.
       required: true
@@ -608,13 +608,16 @@ module:
         "base_path": module.input.deploy_source_base_path || "."
       } : nil >>
     definition: >-
-      << module.input.deploy_type == "container" ? {"runtime": "container", "image_ref":
-      deploy.input.image_ref} : {"runtime": "manual", "commands": module.input.deploy_commands} >>
+      << module.input.deploy_type == "container" ? {"runtime": "container", "image_uri":
+      (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains "sha256:" ?
+      module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
+      ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
+      stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url
+      + ":" + deploy.input.image_ref))} : {"runtime": "manual", "commands":
+      module.input.deploy_commands} >>
     infrastructure:
       autoscaling_group_name: << stack.output.autoscaling_group_name >>
       aws_account_id: << module.input.aws_account_id >>
-      ecr_repository_url: << stack.output.ecr_repository_url >>
-      image_repository: << module.input.image_repository || nil >>
       log_group_name: << stack.output.log_group_name >>
       region: << stack.output.region >>
       target_group_arn: << stack.output.target_group_arn >>
@@ -908,10 +911,10 @@ module:
     | Field | Required | Default | Description |
     | --- | --- | --- | --- |
     | Web service | No | true | Attach HTTP routing to a shared ALB; disable for workers |
-    | Load balancer source | Yes* | Application Load Balancer | Use a standalone ALB or an ALB from an ECS cluster |
-    | Application Load Balancer | Yes* | - | Standalone Ravion ALB receiving this service's listener rule |
-    | ECS cluster | Yes* | - | Cluster that supplies a public or private ALB |
-    | ECS cluster load balancer | Yes* | Public | Select the cluster's public or private ALB |
+    | Load balancer source | Yes* | Standalone ALB module | Use a standalone ALB or an ALB from an ECS cluster |
+    | Standalone ALB module | Yes* | - | Standalone Ravion ALB receiving this service's listener rule |
+    | ALB from ECS Cluster module | Yes* | - | Cluster that supplies a public or private ALB |
+    | ALB to use from ECS Cluster module | Yes* | Public | Select the cluster's public or private ALB |
     | App port | Yes* | 80 | Host app port; Container mode maps the same container port and sets PORT |
     | Domain host rules / Path rules | No | empty / empty | Listener conditions; both empty produces `/*` |
     | Listener rule priority | No | AWS assigned | Optional explicit ALB rule order |
