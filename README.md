@@ -18,7 +18,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
 | `cdn/`        | `cloudfront`      | AWS CloudFront distributions with origins, cache behaviors, and edge redirects (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
-| `compute/`    | `ec2`             | Supervised EC2 app group with optional shared ALB, authenticated Git source checkout, switchable deploy modes, and deployment-scoped CloudWatch logs | v1.0.0  |
+| `compute/`    | `ec2_service`     | Supervised EC2 workloads with standalone or ECS-cluster ALB routing, authenticated Git source checkout, switchable deploy modes, and deployment-scoped CloudWatch logs | v1.0.0  |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |

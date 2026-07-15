@@ -173,9 +173,82 @@ describe("compiler", () => {
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
   });
 
+  it("compiles EC2 service load balancer source choices", async () => {
+    const compiled = await compileDefinitionFile(
+      join(repoRoot, "compute", "ec2_service", "rvn-ec2-service-definition.yml"),
+    );
+    const inputs = getModuleInputs(compiled.module);
+
+    assert.equal(compiled.type, "rvn-ec2-service");
+
+    const loadBalancerSource = findInput(inputs, "load_balancer_source");
+    assert.equal(loadBalancerSource.default, "standalone_alb");
+    assert.equal(loadBalancerSource.immutable, true);
+    assert.deepEqual(getValueOptions(loadBalancerSource), ["standalone_alb", "ecs_cluster"]);
+    assert.deepEqual(loadBalancerSource.show_when, { web_service_enabled: true });
+
+    const standaloneAlb = findInput(inputs, "alb");
+    assert.equal(standaloneAlb.required, true);
+    assert.deepEqual(standaloneAlb.show_when, {
+      web_service_enabled: true,
+      load_balancer_source: "standalone_alb",
+    });
+
+    const ecsCluster = findInput(inputs, "ecs_cluster");
+    assert.equal(ecsCluster.required, true);
+    assert.equal(ecsCluster.immutable, true);
+    assert.deepEqual(ecsCluster.show_when, {
+      web_service_enabled: true,
+      load_balancer_source: "ecs_cluster",
+    });
+    const clusterMappedInputs = ecsCluster.mapped_inputs;
+    assert.ok(Array.isArray(clusterMappedInputs), "ecs_cluster.mapped_inputs should be an array");
+    const clusterMappedInputIds = clusterMappedInputs.map((input) => assertRecord(input, "ECS cluster mapped input").id);
+    for (const inputId of [
+      "public_alb_http_listener_arn",
+      "public_alb_https_listener_arn",
+      "public_alb_security_group_id",
+      "private_alb_http_listener_arn",
+      "private_alb_https_listener_arn",
+      "private_alb_security_group_id",
+    ]) {
+      assert.ok(clusterMappedInputIds.includes(inputId), `expected ECS cluster mapping ${inputId}`);
+    }
+
+    const clusterAlbVisibility = findInput(inputs, "ecs_cluster_alb_visibility");
+    assert.equal(clusterAlbVisibility.default, "public");
+    assert.equal(clusterAlbVisibility.immutable, undefined);
+    assert.deepEqual(getValueOptions(clusterAlbVisibility), ["public", "private"]);
+    assert.deepEqual(clusterAlbVisibility.show_when, {
+      web_service_enabled: true,
+      load_balancer_source: "ecs_cluster",
+    });
+
+    const loadBalancerAttachment = assertRecord(
+      getEcsTerraformVariable(compiled.module, "load_balancer_attachment"),
+      "load_balancer_attachment",
+    );
+    const listenerRules = loadBalancerAttachment.listener_rules;
+    assert.ok(Array.isArray(listenerRules) && listenerRules.length === 1, "load balancer attachment should have one listener rule");
+    const listenerArn = assertString(assertRecord(listenerRules[0], "listener rule").listener_arn);
+    assert.match(listenerArn, /load_balancer_source == "standalone_alb"/);
+    assert.match(listenerArn, /alb_https_listener_arn \|\| module\.input\.alb_http_listener_arn/);
+    assert.match(listenerArn, /ecs_cluster_alb_visibility == "public"/);
+    assert.match(listenerArn, /public_alb_https_listener_arn \|\| module\.input\.public_alb_http_listener_arn/);
+    assert.match(listenerArn, /private_alb_https_listener_arn \|\| module\.input\.private_alb_http_listener_arn/);
+
+    const loadBalancerSecurityGroupId = assertString(
+      getEcsTerraformVariable(compiled.module, "load_balancer_security_group_id"),
+    );
+    assert.match(loadBalancerSecurityGroupId, /load_balancer_source == "standalone_alb"/);
+    assert.match(loadBalancerSecurityGroupId, /alb_security_group_id/);
+    assert.match(loadBalancerSecurityGroupId, /public_alb_security_group_id/);
+    assert.match(loadBalancerSecurityGroupId, /private_alb_security_group_id/);
+  });
+
   it("propagates shared build input guidance to every consumer", async () => {
     const definitionPaths = [
-      ["compute", "ec2", "rvn-ec2-definition.yml"],
+      ["compute", "ec2_service", "rvn-ec2-service-definition.yml"],
       ["compute", "ecs_service", "rvn-ecs-nlb-definition.yml"],
       ["compute", "ecs_service", "rvn-ecs-web-definition.yml"],
       ["compute", "ecs_service", "rvn-ecs-worker-definition.yml"],

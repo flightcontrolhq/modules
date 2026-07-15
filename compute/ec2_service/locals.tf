@@ -6,7 +6,7 @@ locals {
   # Default tags for all resources
   default_tags = {
     ManagedBy = "terraform"
-    Module    = "compute/ec2"
+    Module    = "compute/ec2_service"
   }
 
   tags = merge(local.default_tags, var.tags)

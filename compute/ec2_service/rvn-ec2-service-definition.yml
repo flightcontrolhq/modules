@@ -1,10 +1,10 @@
 definition:
-  type: rvn-ec2
+  type: rvn-ec2-service
   name: EC2 Service
-  description: Runs one supervised application on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
+  description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
   version: 0.0.1
-  description: Add an EC2 service with switchable deploy modes, optional authenticated Git source checkout, supervised apps, shared image builds, and deployment-scoped logs.
+  description: Add an EC2 service with standalone or ECS-cluster ALB routing, switchable deploy modes, authenticated Git checkout, shared image builds, and deployment-scoped logs.
 module:
   inputs:
     - id: network
@@ -170,11 +170,27 @@ module:
       type: boolean
       description: Serve HTTP traffic through a shared Application Load Balancer. Turn off to run a worker group with no load balancer.
       default: true
+    - id: load_balancer_source
+      immutable: true
+      label: Load balancer source
+      type: string
+      description: Select a standalone Application Load Balancer or reuse a public or private ALB from an ECS cluster. The selected load balancer must use the same AWS account, region, and VPC as the VPC network.
+      required: true
+      default: standalone_alb
+      show_when:
+        web_service_enabled: true
+      values:
+        - label: Application Load Balancer
+          description: Attach to a standalone Ravion Application Load Balancer.
+          value: standalone_alb
+        - label: ECS cluster
+          description: Attach to the public or private ALB created by a Ravion ECS cluster.
+          value: ecs_cluster
     - id: alb
       immutable: true
       label: Application Load Balancer
       type: $ref:rvn-aws-alb
-      description: Shared load balancer this service attaches its listener rules to.
+      description: Standalone shared load balancer this service attaches its listener rules to. It must use the same AWS account, region, and VPC as the selected VPC network.
       mapped_inputs:
         - default: <<ref.stack.output.http_listener_arn>>
           id: alb_http_listener_arn
@@ -197,6 +213,34 @@ module:
       required: true
       show_when:
         web_service_enabled: true
+        load_balancer_source: standalone_alb
+    - id: ecs_cluster
+      immutable: true
+      label: ECS cluster
+      type: $ref:rvn-ecs-cluster
+      description: ECS cluster whose public or private Application Load Balancer receives this service's listener rule. The cluster must use the same AWS account, region, and VPC as the selected VPC network.
+      mapped_inputs:
+        - $include: ../../partials/inputs/ecs-service-cluster-alb-mapped-inputs.yml
+      required: true
+      show_when:
+        web_service_enabled: true
+        load_balancer_source: ecs_cluster
+    - id: ecs_cluster_alb_visibility
+      label: ECS cluster load balancer
+      type: string
+      description: Choose the public or private Application Load Balancer from the selected ECS cluster. The selected load balancer and at least one HTTP or HTTPS listener must be enabled on the cluster.
+      required: true
+      default: public
+      show_when:
+        web_service_enabled: true
+        load_balancer_source: ecs_cluster
+      values:
+        - label: Public
+          description: Route through the cluster's internet-facing Application Load Balancer.
+          value: public
+        - label: Private
+          description: Route through the cluster's internal Application Load Balancer.
+          value: private
     - id: app_port
       immutable: true
       label: App port
@@ -449,7 +493,7 @@ module:
   stack:
     $template: ../../partials/templates/opentofu-stack.yml
     with:
-      base_path: compute/ec2
+      base_path: compute/ec2_service
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
         additional_security_group_ids: << module.input.additional_security_group_ids || [] >>
@@ -479,7 +523,13 @@ module:
           with:
             additional_fields: {}
             enabled: << module.input.web_service_enabled >>
-            listener_arn: '<< module.input.web_service_enabled ? (module.input.alb_https_listener_arn || module.input.alb_http_listener_arn) : "" >>'
+            listener_arn: >-
+              << !module.input.web_service_enabled ? "" :
+              module.input.load_balancer_source == "standalone_alb" ?
+              (module.input.alb_https_listener_arn || module.input.alb_http_listener_arn) :
+              module.input.ecs_cluster_alb_visibility == "public" ?
+              (module.input.public_alb_https_listener_arn || module.input.public_alb_http_listener_arn) :
+              (module.input.private_alb_https_listener_arn || module.input.private_alb_http_listener_arn) >>
             target_group:
               port: << module.input.app_port >>
               deregistration_delay: << module.input.deregistration_delay >>
@@ -497,7 +547,11 @@ module:
                   "type": "lb_cookie",
                   "cookie_duration": module.input.target_group_stickiness_cookie_duration
                 } : nil >>
-        load_balancer_security_group_id: '<< module.input.web_service_enabled ? module.input.alb_security_group_id : nil >>'
+        load_balancer_security_group_id: >-
+          << !module.input.web_service_enabled ? nil :
+          module.input.load_balancer_source == "standalone_alb" ? module.input.alb_security_group_id :
+          module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_security_group_id :
+          module.input.private_alb_security_group_id >>
         log_retention_in_days: << module.input.log_retention_in_days >>
         manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.start_command : nil >>'
         max_size: << module.input.max_size >>
@@ -660,15 +714,15 @@ module:
           region: << stack.output.region >>
           statistic: Average
   readme: |
-    Runs one supervised application on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
+    Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 
     ## Overview
 
-    The EC2 Service module runs one supervisord-managed application on an EC2 Auto Scaling Group. Deploys update the existing hosts in place instead of creating a new task or instance for every release. Container mode replaces a Docker container on each host; Manual mode runs host-level preparation commands and then starts a foreground command. You can switch modes without replacing the group.
+    The EC2 Service module deploys supervisord-managed workloads across an EC2 Auto Scaling Group. Deploys update the existing hosts in place instead of creating a new task or instance for every release. Container mode replaces a Docker container on each host; Manual mode runs host-level preparation commands and then starts a foreground command. You can switch modes without replacing the group.
 
-    Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule on a shared Application Load Balancer. The Auto Scaling Group can still terminate instances because of scaling, health failures, or operator action. Root and data EBS volumes survive releases, but not instance termination.
+    Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule. Web services can attach to a standalone Application Load Balancer or reuse the public or private ALB from an ECS cluster. The selected network and load balancer must use the same AWS account, region, and VPC. The Auto Scaling Group can still terminate instances because of scaling, health failures, or operator action. Root and data EBS volumes survive releases, but not instance termination.
 
-    Terraform source: [flightcontrolhq/modules/compute/ec2](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ec2)
+    Terraform source: [flightcontrolhq/modules/compute/ec2_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ec2_service)
 
     ## Use cases
 
@@ -677,7 +731,7 @@ module:
     | Existing host-installed application | Manual deploys can update files and dependencies directly on every host | A legacy Node, Ruby, or JVM service that is not packaged as a container |
     | Host customization is part of the workload | A custom AMI and Additional user data can install agents, libraries, or host services | A vendor runtime that needs an OS package or host monitoring agent |
     | Disposable per-host state should survive releases | In-place deploys retain each instance's encrypted root and optional data volume | Model files, build artifacts, or a rebuildable local cache |
-    | One container needs a stable host | Container mode replaces the app container without replacing the EC2 instance | A licensed service tied to host identity, when its license permits scaling |
+    | A container workload needs stable hosts | Container mode replaces the app container without replacing the EC2 instance | A licensed service tied to host identity, when its license permits scaling |
     | Background processing without HTTP routing | Web service can be disabled, leaving a supervised worker group | A queue consumer that specifically needs host access or local cache |
     | Several services share one ALB | Each service owns a target group and host/path listener rule | `api.example.com` and `admin.example.com` on one shared ALB |
 
@@ -849,10 +903,15 @@ module:
 
     ### Web routing and health
 
+    A web service can use a standalone Application Load Balancer or the public or private ALB from an ECS cluster. The selected load balancer must belong to the same AWS account, region, and VPC as the selected VPC network. When both HTTPS and HTTP listeners exist, the service attaches its listener rule to HTTPS.
+
     | Field | Required | Default | Description |
     | --- | --- | --- | --- |
     | Web service | No | true | Attach HTTP routing to a shared ALB; disable for workers |
-    | Application Load Balancer | Yes* | - | Existing Ravion ALB receiving this service's listener rule |
+    | Load balancer source | Yes* | Application Load Balancer | Use a standalone ALB or an ALB from an ECS cluster |
+    | Application Load Balancer | Yes* | - | Standalone Ravion ALB receiving this service's listener rule |
+    | ECS cluster | Yes* | - | Cluster that supplies a public or private ALB |
+    | ECS cluster load balancer | Yes* | Public | Select the cluster's public or private ALB |
     | App port | Yes* | 80 | Host app port; Container mode maps the same container port and sets PORT |
     | Domain host rules / Path rules | No | empty / empty | Listener conditions; both empty produces `/*` |
     | Listener rule priority | No | AWS assigned | Optional explicit ALB rule order |
@@ -882,7 +941,7 @@ module:
     | OpenTofu version override | No | Ravion default | Stack OpenTofu version override |
     | Ravion Terraform workspace name | No | {project}-{env}-{module}-{stack} | State backend workspace override |
 
-    *Conditionally required or visible based on Deploy type, Build source, Web service, CPU autoscaling, Data volume, or EFS file system.
+    *Conditionally required or visible based on Deploy type, Build source, Web service, Load balancer source, CPU autoscaling, Data volume, or EFS file system.
 
     ## Design decisions
 
@@ -892,7 +951,7 @@ module:
     - Supervisord manages one app process per instance. A one-instance service is interrupted while that process is replaced.
     - Supervisor 4.3.0 is installed from PyPI. Instances need outbound access to PyPI or an equivalent package source during bootstrap and when deploys ensure the pinned version.
     - One app per instance group. Sharing instances between apps is intentionally out of scope; share the load balancer instead.
-    - The load balancer is a separate shared module so several services can route through one ALB and its rules stay service-owned.
+    - Load balancing stays shared: use either a standalone ALB module or a public/private ALB from an ECS cluster while this service owns its target group and listener rule.
     - The ASG health check type defaults to EC2 because in-place deploys briefly deregister instances from the target group.
     - Launch template changes do not trigger an instance refresh, preserving per-host state until you choose to recycle instances.
     - Web metrics panels are empty for worker groups; they apply only when a load balancer is attached.
