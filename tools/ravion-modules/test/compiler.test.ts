@@ -86,6 +86,15 @@ describe("compiler", () => {
     );
   });
 
+  it("compiles the Aurora memory alarm threshold with a fallback when the input is hidden", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "database", "aurora", "rvn-aurora-definition.yml"));
+
+    assert.equal(
+      getTerraformVariable(compiled.module, "cloudwatch_alarm_memory_threshold"),
+      "<< module.input.cloudwatch_alarm_memory_threshold_mib != null ? int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) : 268435456 >>",
+    );
+  });
+
   it("fails when a local token remains after compilation", async () => {
     await assert.rejects(
       compileDefinitionFile(join(fixturesDir, "invalid-local-token.yml")),
