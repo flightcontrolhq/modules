@@ -33,8 +33,8 @@ mock_provider "aws" {
 }
 
 variables {
-  name        = "test-cert"
-  domain_name = "api.example.com"
+  name    = "test-cert"
+  domains = ["api.example.com"]
 }
 
 ################################################################################
@@ -107,18 +107,27 @@ run "route53_and_wait" {
 }
 
 ################################################################################
-# Subject alternative names (still one validation block per domain in mock)
+# Ordered domains (still one validation block per domain in mock)
 ################################################################################
 
-run "with_sans_plan" {
+run "with_multiple_domains" {
   command = plan
 
   variables {
-    subject_alternative_names = ["www.example.com"]
+    domains = ["app.example.com", "www.example.com", "*.example.com"]
   }
 
   assert {
-    condition     = length(aws_acm_certificate.this.subject_alternative_names) == 1
-    error_message = "SANs should be passed to the certificate"
+    condition     = aws_acm_certificate.this.domain_name == "app.example.com"
+    error_message = "The first domain should be the certificate's primary domain"
+  }
+
+  assert {
+    condition = (
+      length(aws_acm_certificate.this.subject_alternative_names) == 2 &&
+      contains(aws_acm_certificate.this.subject_alternative_names, "www.example.com") &&
+      contains(aws_acm_certificate.this.subject_alternative_names, "*.example.com")
+    )
+    error_message = "Domains after the first should be passed as subject alternative names"
   }
 }

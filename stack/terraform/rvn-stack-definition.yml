@@ -3,8 +3,8 @@ definition:
   name: Terraform Stack
   description: Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
 release:
-  version: 1.2.3
-  description: Clarify the cloud block required for Ravion-managed state.
+  version: 1.2.4
+  description: Make the stack backend settings immutable
 module:
   inputs:
     - id: section_aws
@@ -119,6 +119,7 @@ module:
       id: use_ravion_state_backend
       label: Use Ravion for your Terraform state
       type: boolean
+      immutable: true
     - collapsible: true
       description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
       id: ravion_state_backend_workspace
@@ -126,6 +127,7 @@ module:
       show_when:
         use_ravion_state_backend: true
       type: string
+      immutable: true
   stack:
     pipelines:
       change:
