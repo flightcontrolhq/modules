@@ -28,15 +28,18 @@ variable "tags" {
 # Certificate
 ################################################################################
 
-variable "domain_name" {
-  type        = string
-  description = "Primary domain name (FQDN) for the ACM certificate."
-}
-
-variable "subject_alternative_names" {
+variable "domains" {
   type        = list(string)
-  description = "Additional FQDNs to include as Subject Alternative Names."
-  default     = []
+  description = "Ordered FQDNs for the ACM certificate. The first domain is primary and the remaining domains are Subject Alternative Names."
+
+  validation {
+    condition = (
+      length(var.domains) > 0 &&
+      alltrue([for domain in var.domains : length(trimspace(domain)) > 0]) &&
+      length(distinct([for domain in var.domains : lower(domain)])) == length(var.domains)
+    )
+    error_message = "The domains list must contain at least one non-empty, unique domain name."
+  }
 }
 
 ################################################################################

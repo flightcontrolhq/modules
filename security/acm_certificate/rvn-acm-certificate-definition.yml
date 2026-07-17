@@ -1,10 +1,10 @@
 definition:
   type: rvn-acm-certificate
   name: ACM Certificate
-  description: ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
+  description: Requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.3.1
-  description: Use non-deprecated AWS region lookup.
+  version: 0.4.0
+  description: "BREAKING: Replace `domain_name` and `subject_alternative_names` with `domains`. Put the primary domain first and all subject alternative names after it."
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -23,19 +23,13 @@ module:
           pattern: ^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$
       required: true
       type: string
-    - description: Primary fully qualified domain name for the ACM certificate.
-      id: domain_name
+    - add_button_label: Add domain
+      description: Fully qualified domain names for the certificate. The first domain is primary and the remaining domains are subject alternative names.
+      id: domains
       immutable: true
-      label: Domain name
+      label: Domains
       placeholder: api.example.com
       required: true
-      type: string
-    - add_button_label: Add secondary domain
-      description: Additional fully qualified domain names to include on the certificate.
-      id: subject_alternative_names
-      immutable: true
-      label: Subject alternative names
-      placeholder: www.example.com
       type: string_array
     - id: section_validation
       label: DNS validation
@@ -69,8 +63,22 @@ module:
     - $merge:
         - ../../partials/inputs/execution-environment.yml
       description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: security/acm_certificate
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        certificate_validation_wait_enabled: << module.input.certificate_validation_wait_enabled >>
+        domains: << module.input.domains >>
+        name: << module.input.name >>
+        region: << module.input.aws_region >>
+        route53_validation_records_creation_enabled: << module.input.route53_validation_records_creation_enabled >>
+        route53_zone_id: << module.input.route53_zone_id >>
+        tags:
+          $include: ../stack/ravion-tags.yml
   readme: |
-    ACM certificate requests an AWS Certificate Manager public certificate with DNS validation.
+    Requests an AWS Certificate Manager public certificate with DNS validation.
 
     ## Overview
 
@@ -89,9 +97,7 @@ module:
 
     ## Certificate domains
 
-    The required Domain name field is the primary fully qualified domain name for the certificate, such as api.example.com.
-
-    Subject alternative names add more FQDNs to the same certificate. Do not repeat the primary domain name in this list. ACM rejects invalid duplicate domain combinations.
+    Add every fully qualified domain name to the required Domains list. The first domain, such as api.example.com, is the certificate's primary domain. Every remaining domain becomes a subject alternative name. Domain names must be unique.
 
     ## DNS validation
 
@@ -118,8 +124,7 @@ module:
     | Region | Yes | None | AWS Region for ACM. Use us-east-1 for CloudFront. |
     | Terraform execution environment | No | None | Optional runner environment override for the stack pipeline. |
     | Name slug | Yes | Project, environment, and module given IDs | Name prefix used for certificate tags. |
-    | Domain name | Yes | None | Primary FQDN for the certificate. |
-    | Subject alternative names | No | Empty list | Additional FQDNs on the certificate. |
+    | Domains | Yes | None | Ordered FQDNs. The first is primary and the remainder are subject alternative names. |
     | Create Route53 validation records | No | false | Creates validation CNAMEs in Route53. |
     | Route53 hosted zone ID | When Route53 records are enabled | None | Public hosted zone used for validation records. |
     | Wait for certificate issuance | No | false | Waits until ACM issues the certificate during apply. |
@@ -140,18 +145,3 @@ module:
     - [AWS Certificate Manager DNS validation](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html)
     - [AWS Certificate Manager certificates for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html)
     - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/acm_certificate)
-  stack:
-    $template: ../../partials/templates/opentofu-stack.yml
-    with:
-      base_path: security/acm_certificate
-      terraform_variables:
-        ...overrides: << module.input.advanced_terraform_variables >>
-        domain_name: << module.input.domain_name >>
-        name: << module.input.name >>
-        region: << module.input.aws_region >>
-        route53_validation_records_creation_enabled: << module.input.route53_validation_records_creation_enabled >>
-        route53_zone_id: << module.input.route53_zone_id >>
-        subject_alternative_names: << module.input.subject_alternative_names || [] >>
-        tags:
-          $include: ../stack/ravion-tags.yml
-        certificate_validation_wait_enabled: << module.input.certificate_validation_wait_enabled >>
