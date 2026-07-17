@@ -582,6 +582,9 @@ module:
         type: string
         description: Image tag or digest to deploy. For Dockerfile or Railpack builds, this is resolved in the Ravion-created ECR repository. For Pull from image registry mode, this is resolved in the repository configured on the module.
         placeholder: sha256:... or latest or <run-id>-railpack
+        patterns:
+          - message: Image tags and digests must not contain whitespace.
+            pattern: ^\S+$
         required: true
         show_when:
           deploy_type: container

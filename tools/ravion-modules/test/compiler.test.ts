@@ -181,6 +181,14 @@ describe("compiler", () => {
 
     assert.equal(compiled.type, "rvn-ec2-service");
 
+    const imageRef = findInput(getDeployInputs(compiled.module), "image_ref");
+    assert.deepEqual(imageRef.patterns, [
+      {
+        message: "Image tags and digests must not contain whitespace.",
+        pattern: "^\\S+$",
+      },
+    ]);
+
     const loadBalancerSource = findInput(inputs, "load_balancer_source");
     assert.equal(loadBalancerSource.default, "standalone_alb");
     assert.equal(loadBalancerSource.immutable, true);
@@ -311,6 +319,13 @@ function getModuleInputs(module: Record<string, unknown>): Record<string, unknow
 function getModuleBuild(module: Record<string, unknown>): Record<string, unknown> {
   assert.ok(isRecord(module.build), "module.build should be an object");
   return module.build;
+}
+
+function getDeployInputs(module: Record<string, unknown>): Record<string, unknown>[] {
+  const deploy = assertRecord(module.deploy, "module.deploy");
+  const inputs = deploy.inputs;
+  assert.ok(Array.isArray(inputs), "module.deploy.inputs should be an array");
+  return inputs.map((input) => assertRecord(input, "deploy input"));
 }
 
 function findInput(inputs: Record<string, unknown>[], id: string): Record<string, unknown> {
