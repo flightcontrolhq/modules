@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.3.1
-  description: "Deliver CloudFront access logs to CloudWatch Logs by default with a Ravion logs panel; S3 delivery remains available."
+  version: 0.3.2
+  description: Clarify how to order domains when requesting the selected ACM certificate.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -782,7 +782,7 @@ module:
 
     ## Certificates
 
-    Domain aliases require a certificate issued in us-east-1, because CloudFront is a global service. Select an ACM Certificate module instance in the ACM certificate field; its certificate ARN is mapped automatically. Request the certificate with the primary domain and any additional aliases as subject alternative names.
+    Domain aliases require a certificate issued in us-east-1, because CloudFront is a global service. Select an ACM Certificate module instance in the ACM certificate field; its certificate ARN is mapped automatically. In that certificate's Domains list, put the primary domain first and add any other aliases after it.
 
     This certificate is for viewers connecting to CloudFront. The load balancer keeps its own regional certificate for the origin leg.
 
