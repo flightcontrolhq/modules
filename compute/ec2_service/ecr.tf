@@ -13,7 +13,8 @@ module "ecr" {
   name = var.name
   tags = var.tags
 
-  force_delete_enabled = var.ecr_force_deletion_enabled
+  image_scan_on_push_enabled = var.ecr_scan_on_push_enabled
+  force_delete_enabled       = var.ecr_force_deletion_enabled
 
   default_lifecycle_policy_enabled = true
 }

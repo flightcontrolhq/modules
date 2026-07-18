@@ -180,6 +180,43 @@ describe("compiler", () => {
     const inputs = getModuleInputs(compiled.module);
 
     assert.equal(compiled.type, "rvn-ec2-service");
+    assert.deepEqual(
+      inputs.filter((input) => input.type === "section").map((input) => input.id),
+      [
+        "section_service",
+        "section_build",
+        "section_dockerfile",
+        "section_railpack",
+        "section_deployment",
+        "section_web",
+        "section_health",
+        "section_routing",
+        "section_instances",
+        "section_scaling",
+        "section_app_config",
+        "section_networking",
+        "section_storage",
+        "section_builder_config",
+        "section_ecr",
+        "section_logging",
+        "section_advanced",
+      ],
+    );
+
+    for (const inputId of [
+      "deployment_concurrency_max",
+      "deployment_errors_max",
+      "target_group_slow_start",
+      "target_group_stickiness_type",
+      "target_group_stickiness_cookie_name",
+      "health_check_grace_period",
+      "allowed_cidr_blocks",
+      "ecr_scan_on_push_enabled",
+    ]) {
+      assert.ok(findInput(inputs, inputId), `expected EC2 service input ${inputId}`);
+    }
+
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack"]);
 
     const loadBalancerSource = findInput(inputs, "load_balancer_source");
     assert.equal(loadBalancerSource.default, "standalone_alb");
@@ -193,6 +230,12 @@ describe("compiler", () => {
       web_service_enabled: true,
       load_balancer_source: "standalone_alb",
     });
+    const standaloneMappedInputs = standaloneAlb.mapped_inputs;
+    assert.ok(Array.isArray(standaloneMappedInputs), "alb.mapped_inputs should be an array");
+    assert.ok(
+      standaloneMappedInputs.some((input) => assertRecord(input, "ALB mapped input").id === "alb_arn_suffix"),
+      "expected standalone ALB ARN suffix mapping",
+    );
 
     const ecsCluster = findInput(inputs, "ecs_cluster");
     assert.equal(ecsCluster.required, true);
@@ -208,9 +251,11 @@ describe("compiler", () => {
       "public_alb_http_listener_arn",
       "public_alb_https_listener_arn",
       "public_alb_security_group_id",
+      "public_alb_arn_suffix",
       "private_alb_http_listener_arn",
       "private_alb_https_listener_arn",
       "private_alb_security_group_id",
+      "private_alb_arn_suffix",
     ]) {
       assert.ok(clusterMappedInputIds.includes(inputId), `expected ECS cluster mapping ${inputId}`);
     }
@@ -237,6 +282,12 @@ describe("compiler", () => {
     assert.match(listenerArn, /public_alb_https_listener_arn \|\| module\.input\.public_alb_http_listener_arn/);
     assert.match(listenerArn, /private_alb_https_listener_arn \|\| module\.input\.private_alb_http_listener_arn/);
 
+    const targetGroup = assertRecord(loadBalancerAttachment.target_group, "load_balancer_attachment.target_group");
+    assert.equal(targetGroup.slow_start, "<< module.input.target_group_slow_start >>");
+    const stickiness = assertString(targetGroup.stickiness);
+    assert.match(stickiness, /module\.input\.target_group_stickiness_type/);
+    assert.match(stickiness, /module\.input\.target_group_stickiness_cookie_name/);
+
     const loadBalancerSecurityGroupId = assertString(
       getEcsTerraformVariable(compiled.module, "load_balancer_security_group_id"),
     );
@@ -244,6 +295,43 @@ describe("compiler", () => {
     assert.match(loadBalancerSecurityGroupId, /alb_security_group_id/);
     assert.match(loadBalancerSecurityGroupId, /public_alb_security_group_id/);
     assert.match(loadBalancerSecurityGroupId, /private_alb_security_group_id/);
+
+    const ecrRepositoryCreationEnabled = assertString(
+      getEcsTerraformVariable(compiled.module, "ecr_repository_creation_enabled"),
+    );
+    assert.match(ecrRepositoryCreationEnabled, /module\.input\.deploy_type == "container"/);
+    assert.equal(
+      getEcsTerraformVariable(compiled.module, "ecr_scan_on_push_enabled"),
+      "<< module.input.ecr_scan_on_push_enabled >>",
+    );
+    assert.equal(
+      getEcsTerraformVariable(compiled.module, "health_check_grace_period"),
+      "<< module.input.health_check_grace_period >>",
+    );
+    assert.match(
+      assertString(getEcsTerraformVariable(compiled.module, "allowed_cidr_blocks")),
+      /module\.input\.web_service_enabled/,
+    );
+
+    const deploy = assertRecord(compiled.module.deploy, "module.deploy");
+    assert.equal(deploy.timeout, 86400);
+    assert.deepEqual(deploy.concurrency, { queue_overflow: "oldest", queue_size: 1 });
+    assert.deepEqual(deploy.strategy, {
+      type: "rolling",
+      concurrency_max: "<< module.input.deployment_concurrency_max >>",
+      errors_max: "<< module.input.deployment_errors_max >>",
+    });
+
+    const ui = assertRecord(compiled.module.ui, "module.ui");
+    const metrics = assertString(ui.metrics);
+    assert.match(metrics, /module\.input\.web_service_enabled/);
+    assert.match(metrics, /GroupDesiredCapacity/);
+    assert.match(metrics, /GroupInServiceInstances/);
+    assert.match(metrics, /LoadBalancer:/);
+    assert.match(metrics, /TargetGroup:/);
+    assert.match(metrics, /HTTPCode_Target_4XX_Count/);
+    assert.match(metrics, /UnHealthyHostCount/);
+    assert.doesNotMatch(metrics, /namespace:"AWS\/EC2"/);
   });
 
   it("propagates shared build input guidance to every consumer", async () => {

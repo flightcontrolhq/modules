@@ -41,6 +41,13 @@ mock_provider "aws" {
       id = "lt-12345678"
     }
   }
+
+  override_resource {
+    target = aws_lb_target_group.app
+    values = {
+      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/supervised-app/1234567890abcdef"
+    }
+  }
 }
 
 variables {
@@ -148,4 +155,62 @@ run "manual_start_command_is_supervised" {
     condition     = length(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand) == 1 && strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "{{ commands }}")
     error_message = "Manual deploy setup, commands, and teardown must be one runCommand string so SSM does not create a nested command array during parameter substitution."
   }
+}
+
+run "web_target_group_supports_slow_start_stickiness_and_direct_access" {
+  command = plan
+
+  variables {
+    runtime                         = "container"
+    app_port                        = 3000
+    health_check_path               = "/health"
+    health_check_grace_period       = 450
+    load_balancer_security_group_id = "sg-87654321"
+    allowed_cidr_blocks             = ["10.0.0.0/8"]
+    load_balancer_attachment = {
+      enabled = true
+      target_group = {
+        port       = 3000
+        slow_start = 60
+        stickiness = {
+          enabled         = true
+          type            = "app_cookie"
+          cookie_duration = 3600
+          cookie_name     = "SESSION_ID"
+        }
+      }
+      listener_rules = []
+    }
+  }
+
+  assert {
+    condition     = aws_lb_target_group.app[0].slow_start == 60
+    error_message = "The target group must receive the configured slow start duration."
+  }
+
+  assert {
+    condition     = aws_lb_target_group.app[0].stickiness[0].type == "app_cookie" && aws_lb_target_group.app[0].stickiness[0].cookie_name == "SESSION_ID" && aws_lb_target_group.app[0].stickiness[0].cookie_duration == 3600
+    error_message = "The target group must receive application-cookie stickiness settings."
+  }
+
+}
+
+run "slow_start_rejects_values_below_30_seconds" {
+  command = plan
+
+  variables {
+    runtime           = "container"
+    app_port          = 3000
+    health_check_path = "/health"
+    load_balancer_attachment = {
+      enabled = true
+      target_group = {
+        port       = 3000
+        slow_start = 29
+      }
+      listener_rules = []
+    }
+  }
+
+  expect_failures = [var.load_balancer_attachment]
 }

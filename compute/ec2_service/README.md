@@ -26,6 +26,8 @@ An orchestrator (the Ravion deploy manager) runs this document against the Auto 
 | `imageUri` | Full image URI including tag or digest |
 | `deployId` | Optional release identifier |
 
+The module definition exposes the rolling deployment batch and failure limits. It defaults to one instance at a time and stops after the first failure. The SSM script timeout applies per instance; the module deployment has a separate 24-hour overall safety limit.
+
 For the **manual** runtime the document (same `<name>-deploy` name) takes a `commands` parameter and an optional Git source. When source is present, the instance fetches a temporary credential from SSM Parameter Store, performs a clean checkout under `/srv/ravion/<name>/source`, and runs both the preparation commands and `manual_start_command` from the selected base path. When source is absent, commands keep their existing working-directory behavior. Any failure stops the deploy. The start command must remain in the foreground rather than daemonizing. Draining and health checking are up to the preparation commands.
 
 App stdout and stderr are shipped to `/ravion/ec2/<name>`. Streams use `deployment/<deployId>/instance/<instance-id>`, which keeps every deployment and EC2 instance separate. The SSM deploy script tees its stdout and stderr into the same instance stream while preserving the native SSM command output.
@@ -171,6 +173,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | efs_mount_path | Host mount path for EFS | `string` | `"/mnt/efs"` | no |
 | ecr_repository_creation_enabled | Create an ECR repository for built images | `bool` | `false` | no |
 | ecr_force_deletion_enabled | Delete the ECR repository even with images | `bool` | `false` | no |
+| ecr_scan_on_push_enabled | Scan images for vulnerabilities after push | `bool` | `true` | no |
 | log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
 
 ## Outputs

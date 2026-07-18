@@ -27,6 +27,11 @@ module "autoscaling" {
   # Register instances with the service target group
   target_group_arns = local.enable_load_balancer ? [aws_lb_target_group.app[0].arn] : []
 
+  enabled_metrics = [
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+  ]
+
   # Visibility-only lifecycle hooks: they emit "EC2 Instance-launch/-terminate
   # Lifecycle Action" EventBridge events that Ravion ingests to show instances
   # while they are still Pending/Terminating. Nothing completes the action, so

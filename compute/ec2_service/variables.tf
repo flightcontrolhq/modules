@@ -308,6 +308,11 @@ variable "health_check_grace_period" {
   type        = number
   description = "Seconds after launch before ASG health checks apply."
   default     = 300
+
+  validation {
+    condition     = var.health_check_grace_period >= 0
+    error_message = "The health_check_grace_period must be 0 or greater."
+  }
 }
 
 variable "cpu_target_tracking_enabled" {
@@ -371,6 +376,48 @@ variable "load_balancer_attachment" {
   })
   description = "Application Load Balancer attachment: an instance target group plus listener rules on an existing ALB listener. Null runs the group without a load balancer (worker mode)."
   default     = null
+
+  validation {
+    condition = try(
+      var.load_balancer_attachment.target_group.slow_start == 0 || (
+        var.load_balancer_attachment.target_group.slow_start >= 30 &&
+        var.load_balancer_attachment.target_group.slow_start <= 900
+      ),
+      true
+    )
+    error_message = "The target group slow_start must be 0 or between 30 and 900 seconds."
+  }
+
+  validation {
+    condition = try(
+      var.load_balancer_attachment.target_group.stickiness == null ||
+      contains(["lb_cookie", "app_cookie"], var.load_balancer_attachment.target_group.stickiness.type),
+      true
+    )
+    error_message = "The target group stickiness type must be 'lb_cookie' or 'app_cookie'."
+  }
+
+  validation {
+    condition = try(
+      var.load_balancer_attachment.target_group.stickiness == null ||
+      !var.load_balancer_attachment.target_group.stickiness.enabled ||
+      var.load_balancer_attachment.target_group.stickiness.type != "app_cookie" ||
+      length(trimspace(coalesce(var.load_balancer_attachment.target_group.stickiness.cookie_name, ""))) > 0,
+      true
+    )
+    error_message = "The target group stickiness cookie_name is required for app_cookie stickiness."
+  }
+
+  validation {
+    condition = try(
+      var.load_balancer_attachment.target_group.stickiness == null || (
+        var.load_balancer_attachment.target_group.stickiness.cookie_duration >= 1 &&
+        var.load_balancer_attachment.target_group.stickiness.cookie_duration <= 604800
+      ),
+      true
+    )
+    error_message = "The target group stickiness cookie_duration must be between 1 and 604800 seconds."
+  }
 }
 
 variable "load_balancer_security_group_id" {
@@ -442,6 +489,12 @@ variable "ecr_force_deletion_enabled" {
   type        = bool
   description = "Allow deleting the ECR repository even when it contains images."
   default     = false
+}
+
+variable "ecr_scan_on_push_enabled" {
+  type        = bool
+  description = "Scan images for vulnerabilities after they are pushed to the ECR repository."
+  default     = true
 }
 
 ################################################################################
