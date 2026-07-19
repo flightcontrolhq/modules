@@ -101,7 +101,7 @@ data "aws_iam_policy_document" "instance" {
 
   # Connection draining around in-place deploys
   dynamic "statement" {
-    for_each = local.enable_load_balancer ? [1] : []
+    for_each = local.load_balancer_creation_enabled ? [1] : []
     content {
       sid = "TargetGroupDrain"
       actions = [
@@ -113,7 +113,7 @@ data "aws_iam_policy_document" "instance" {
   }
 
   dynamic "statement" {
-    for_each = local.enable_load_balancer ? [1] : []
+    for_each = local.load_balancer_creation_enabled ? [1] : []
     content {
       sid       = "TargetGroupDescribe"
       actions   = ["elasticloadbalancing:DescribeTargetHealth"]

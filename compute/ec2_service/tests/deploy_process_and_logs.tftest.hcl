@@ -163,12 +163,12 @@ run "web_target_group_supports_slow_start_stickiness_and_direct_access" {
   variables {
     runtime                         = "container"
     app_port                        = 3000
-    health_check_path               = "/health"
+    deploy_health_check_path        = "/health"
     health_check_grace_period       = 450
     load_balancer_security_group_id = "sg-87654321"
-    allowed_cidr_blocks             = ["10.0.0.0/8"]
+    direct_access_cidr_blocks       = ["10.0.0.0/8"]
     load_balancer_attachment = {
-      enabled = true
+      creation_enabled = true
       target_group = {
         port       = 3000
         slow_start = 60
@@ -199,11 +199,11 @@ run "slow_start_rejects_values_below_30_seconds" {
   command = plan
 
   variables {
-    runtime           = "container"
-    app_port          = 3000
-    health_check_path = "/health"
+    runtime                  = "container"
+    app_port                 = 3000
+    deploy_health_check_path = "/health"
     load_balancer_attachment = {
-      enabled = true
+      creation_enabled = true
       target_group = {
         port       = 3000
         slow_start = 29

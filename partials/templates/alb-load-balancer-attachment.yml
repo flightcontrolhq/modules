@@ -1,5 +1,6 @@
-$merge: $with.additional_fields
-enabled: $with.enabled
+$merge:
+  - $with.additional_fields
+  - $with.attachment_control
 listener_rules:
   - conditions:
       - >-

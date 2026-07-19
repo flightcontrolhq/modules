@@ -53,7 +53,7 @@ variable "subnet_ids" {
   }
 }
 
-variable "associate_public_ip_address" {
+variable "public_ip_assignment_enabled" {
   type        = bool
   description = "Assign public IPs to instances. Use when instances run in public subnets without NAT egress."
   default     = false
@@ -70,14 +70,14 @@ variable "additional_security_group_ids" {
   }
 }
 
-variable "allowed_cidr_blocks" {
+variable "direct_access_cidr_blocks" {
   type        = list(string)
   description = "IPv4 CIDR blocks allowed to reach the app port directly, in addition to the load balancer."
   default     = []
 
   validation {
-    condition     = alltrue([for cidr in var.allowed_cidr_blocks : can(cidrhost(cidr, 0))])
-    error_message = "All allowed_cidr_blocks must be valid IPv4 CIDR blocks."
+    condition     = alltrue([for cidr in var.direct_access_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All direct_access_cidr_blocks must be valid IPv4 CIDR blocks."
   }
 }
 
@@ -106,7 +106,7 @@ variable "app_port" {
   }
 }
 
-variable "start_command" {
+variable "container_start_command" {
   type        = string
   description = "Optional command for the container runtime that overrides the image default command."
   default     = null
@@ -146,14 +146,14 @@ variable "secrets" {
   }
 }
 
-variable "health_check_path" {
+variable "deploy_health_check_path" {
   type        = string
   description = "Local HTTP path polled on the instance after each deploy to gate success, such as /health. Requires app_port. Null disables the local health gate."
   default     = null
 
   validation {
-    condition     = var.health_check_path == null || can(regex("^/", var.health_check_path))
-    error_message = "The health_check_path must be an absolute path starting with '/'."
+    condition     = var.deploy_health_check_path == null || can(regex("^/", var.deploy_health_check_path))
+    error_message = "The deploy_health_check_path must be an absolute path starting with '/'."
   }
 }
 
@@ -216,7 +216,7 @@ variable "root_volume_type" {
   }
 }
 
-variable "data_volume_enabled" {
+variable "data_volume_creation_enabled" {
   type        = bool
   description = "Attach a dedicated data EBS volume to each instance, formatted and mounted on first boot. Data survives in-place deploys but not instance termination."
   default     = false
@@ -338,7 +338,7 @@ variable "cpu_target_value" {
 
 variable "load_balancer_attachment" {
   type = object({
-    enabled = optional(bool, true)
+    creation_enabled = optional(bool, true)
 
     target_group = object({
       port                 = number

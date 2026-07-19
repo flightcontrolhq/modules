@@ -191,11 +191,10 @@ describe("compiler", () => {
         "section_web",
         "section_health",
         "section_routing",
-        "section_instances",
+        "section_storage",
         "section_scaling",
         "section_app_config",
         "section_networking",
-        "section_storage",
         "section_builder_config",
         "section_ecr",
         "section_logging",
@@ -210,7 +209,8 @@ describe("compiler", () => {
       "target_group_stickiness_type",
       "target_group_stickiness_cookie_name",
       "health_check_grace_period",
-      "allowed_cidr_blocks",
+      "direct_access_cidr_blocks",
+      "data_volume_creation_enabled",
       "ecr_scan_on_push_enabled",
     ]) {
       assert.ok(findInput(inputs, inputId), `expected EC2 service input ${inputId}`);
@@ -278,6 +278,7 @@ describe("compiler", () => {
       "load_balancer_attachment",
     );
     const listenerRules = loadBalancerAttachment.listener_rules;
+    assert.equal(loadBalancerAttachment.creation_enabled, "<< module.input.web_service_enabled >>");
     assert.ok(Array.isArray(listenerRules) && listenerRules.length === 1, "load balancer attachment should have one listener rule");
     const listenerArn = assertString(assertRecord(listenerRules[0], "listener rule").listener_arn);
     assert.match(listenerArn, /load_balancer_source == "standalone_alb"/);
@@ -313,8 +314,24 @@ describe("compiler", () => {
       "<< module.input.health_check_grace_period >>",
     );
     assert.match(
-      assertString(getEcsTerraformVariable(compiled.module, "allowed_cidr_blocks")),
+      assertString(getEcsTerraformVariable(compiled.module, "direct_access_cidr_blocks")),
       /module\.input\.web_service_enabled/,
+    );
+    assert.equal(
+      getEcsTerraformVariable(compiled.module, "public_ip_assignment_enabled"),
+      "<< module.input.private_subnet_placement_enabled ? false : true >>",
+    );
+    assert.equal(
+      getEcsTerraformVariable(compiled.module, "data_volume_creation_enabled"),
+      "<< module.input.data_volume_creation_enabled >>",
+    );
+    assert.match(
+      assertString(getEcsTerraformVariable(compiled.module, "deploy_health_check_path")),
+      /module\.input\.health_check_path/,
+    );
+    assert.match(
+      assertString(getEcsTerraformVariable(compiled.module, "container_start_command")),
+      /module\.input\.container_start_command/,
     );
 
     const deploy = assertRecord(compiled.module.deploy, "module.deploy");

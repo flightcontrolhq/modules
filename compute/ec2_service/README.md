@@ -16,7 +16,7 @@ For the **container** runtime the module creates an SSM Command document (`<name
 1. Rebuild the app env file: Terraform-rendered plain values, plus secret values fetched on the instance from Secrets Manager / SSM Parameter Store.
 2. Drain: deregister the instance from the target group and wait (skipped in worker mode, and when the instance is the only registered target — with nothing to shift traffic to, draining only lengthens the outage).
 3. Swap the release: `docker pull`, then update the supervisord-managed container process.
-4. Health gate: poll `http://localhost:<app_port><health_check_path>` until healthy, or fail the command.
+4. Health gate: poll `http://localhost:<app_port><deploy_health_check_path>` until healthy, or fail the command.
 5. Re-register the instance with the target group and wait until in service.
 
 An orchestrator (the Ravion deploy manager) runs this document against the Auto Scaling Group's instances with its own batching and failure policy, passing:
@@ -51,8 +51,8 @@ module "web" {
   min_size      = 2
   max_size      = 4
 
-  app_port          = 3000
-  health_check_path = "/health"
+  app_port                = 3000
+  deploy_health_check_path = "/health"
 
   ecr_repository_creation_enabled = true
 
@@ -98,8 +98,8 @@ module "worker" {
 
   manual_start_command = "cd /srv/app && ./bin/worker"
 
-  data_volume_enabled = true
-  data_volume_size    = 50
+  data_volume_creation_enabled = true
+  data_volume_size             = 50
 }
 ```
 
@@ -136,23 +136,23 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | region | AWS region (null = provider region) | `string` | `null` | no |
 | vpc_id | VPC for the instances | `string` | n/a | yes |
 | subnet_ids | Subnets for the Auto Scaling Group | `list(string)` | n/a | yes |
-| associate_public_ip_address | Assign public IPs to instances | `bool` | `false` | no |
+| public_ip_assignment_enabled | Assign public IPs to instances | `bool` | `false` | no |
 | additional_security_group_ids | Extra security groups on the instances | `list(string)` | `[]` | no |
-| allowed_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
+| direct_access_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
 | runtime | `container` or `manual` | `string` | n/a | yes |
 | app_port | Port the app listens on | `number` | `null` | no |
-| start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
+| container_start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
 | manual_start_command | Long-running foreground manual app command managed by supervisord | `string` | `null` | yes for manual |
 | environment_variables | Plain env vars written to the app env file | `list(object)` | `[]` | no |
 | secrets | Secret env vars fetched on-instance from Secrets Manager / SSM Parameter Store (`{name, value_from}`) | `list(object)` | `[]` | no |
-| health_check_path | Local HTTP path gating deploy success | `string` | `null` | no |
+| deploy_health_check_path | Local HTTP path gating deploy success | `string` | `null` | no |
 | deploy_timeout_seconds | Per-instance deploy script timeout | `number` | `1200` | no |
 | instance_type | EC2 instance type | `string` | n/a | yes |
 | ami_id | Custom AMI (null = latest AL2023) | `string` | `null` | no |
 | key_name | SSH key pair name | `string` | `null` | no |
 | root_volume_size | Root EBS volume size (GB) | `number` | `30` | no |
 | root_volume_type | Root EBS volume type | `string` | `"gp3"` | no |
-| data_volume_enabled | Attach a formatted per-instance data volume | `bool` | `false` | no |
+| data_volume_creation_enabled | Attach a formatted per-instance data volume | `bool` | `false` | no |
 | data_volume_size | Data volume size (GB) | `number` | `20` | no |
 | data_volume_type | Data volume type | `string` | `"gp3"` | no |
 | data_volume_mount_path | Host mount path for the data volume | `string` | `"/data"` | no |

@@ -317,7 +317,8 @@ module:
                   with:
                     additional_fields:
                       container_port: << module.input.container_port >>
-                    enabled: true
+                    attachment_control:
+                      enabled: true
                     listener_arn: >-
                       << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
                       module.input.public_alb_http_listener_arn) :

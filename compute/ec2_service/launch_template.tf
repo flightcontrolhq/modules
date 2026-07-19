@@ -21,7 +21,7 @@ resource "aws_launch_template" "app" {
   }
 
   network_interfaces {
-    associate_public_ip_address = var.associate_public_ip_address
+    associate_public_ip_address = var.public_ip_assignment_enabled
     security_groups = concat(
       [module.instance_security_group.security_group_id],
       var.efs_client_security_group_id != null ? [var.efs_client_security_group_id] : [],
@@ -41,7 +41,7 @@ resource "aws_launch_template" "app" {
   }
 
   dynamic "block_device_mappings" {
-    for_each = var.data_volume_enabled ? [1] : []
+    for_each = var.data_volume_creation_enabled ? [1] : []
     content {
       device_name = "/dev/xvdf"
 
@@ -86,13 +86,13 @@ resource "aws_launch_template" "app" {
     create_before_destroy = true
 
     precondition {
-      condition     = !local.enable_load_balancer || var.app_port != null
+      condition     = !local.load_balancer_creation_enabled || var.app_port != null
       error_message = "The app_port is required when a load balancer is attached."
     }
 
     precondition {
-      condition     = var.health_check_path == null || var.app_port != null
-      error_message = "The app_port is required when health_check_path is set."
+      condition     = var.deploy_health_check_path == null || var.app_port != null
+      error_message = "The app_port is required when deploy_health_check_path is set."
     }
 
     precondition {

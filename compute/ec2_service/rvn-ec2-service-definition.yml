@@ -36,19 +36,6 @@ module:
       patterns:
         - message: 1-28 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
           pattern: ^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$
-    - id: deploy_type
-      label: Deploy type
-      type: string
-      description: Choose in-place container image deploys or host-level shell commands.
-      required: true
-      default: container
-      values:
-        - label: Container
-          description: Pull an image and replace the supervised Docker container on each existing instance.
-          value: container
-        - label: Manual
-          description: Run release preparation commands on each instance, then start a supervised foreground command on the host.
-          value: manual
     - id: instance_type
       label: Instance type
       type: string
@@ -74,6 +61,24 @@ module:
       description: Shell script run as root after Ravion's bootstrap on every newly launched instance.
       collapsible: true
       required: false
+    - id: web_service_enabled
+      label: Web service
+      type: boolean
+      description: Serve HTTP traffic through a shared Application Load Balancer. Turn off to run a worker group with no load balancer.
+      default: true
+    - id: deploy_type
+      label: Deploy type
+      type: string
+      description: Choose in-place container image deploys or host-level shell commands.
+      required: true
+      default: container
+      values:
+        - label: Container
+          description: Pull an image and replace the supervised Docker container on each existing instance.
+          value: container
+        - label: Manual
+          description: Run release preparation commands on each instance, then start a supervised foreground command on the host.
+          value: manual
     - id: section_build
       label: Build config
       show_when:
@@ -207,11 +212,6 @@ module:
     - id: section_web
       label: Web service
       type: section
-    - id: web_service_enabled
-      label: Web service
-      type: boolean
-      description: Serve HTTP traffic through a shared Application Load Balancer. Turn off to run a worker group with no load balancer.
-      default: true
     - id: load_balancer_source
       immutable: true
       label: Load balancer source
@@ -456,7 +456,7 @@ module:
       max: 16384
       min: 8
       default: 30
-    - id: data_volume_enabled
+    - id: data_volume_creation_enabled
       label: Data volume
       type: boolean
       description: Attach an independent encrypted EBS volume to each instance.
@@ -468,7 +468,7 @@ module:
       max: 16384
       min: 1
       show_when:
-        data_volume_enabled: true
+        data_volume_creation_enabled: true
       default: 20
     - id: data_volume_mount_path
       label: Data volume mount path
@@ -476,7 +476,7 @@ module:
       description: Absolute host path for the data volume.
       required: true
       show_when:
-        data_volume_enabled: true
+        data_volume_creation_enabled: true
       default: /data
       patterns:
         - message: Use an absolute path.
@@ -587,7 +587,7 @@ module:
       add_button_label: Add security group ID
       collapsible: true
       required: false
-    - id: allowed_cidr_blocks
+    - id: direct_access_cidr_blocks
       label: Allowed CIDR blocks
       type: string_array
       description: IPv4 CIDR blocks allowed to reach the app port directly, bypassing the load balancer.
@@ -654,13 +654,13 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         additional_security_group_ids: << module.input.additional_security_group_ids || [] >>
         additional_user_data: << module.input.additional_user_data || "" >>
-        allowed_cidr_blocks: "<< module.input.web_service_enabled ? (module.input.allowed_cidr_blocks || []) : [] >>"
+        direct_access_cidr_blocks: "<< module.input.web_service_enabled ? (module.input.direct_access_cidr_blocks || []) : [] >>"
         ami_id: << module.input.ami_id || nil >>
         app_port: "<< module.input.web_service_enabled ? module.input.app_port : nil >>"
-        associate_public_ip_address: "<< module.input.private_subnet_placement_enabled ? false : true >>"
+        public_ip_assignment_enabled: "<< module.input.private_subnet_placement_enabled ? false : true >>"
         cpu_target_tracking_enabled: << module.input.cpu_target_tracking_enabled >>
         cpu_target_value: << module.input.cpu_target_value >>
-        data_volume_enabled: << module.input.data_volume_enabled >>
+        data_volume_creation_enabled: << module.input.data_volume_creation_enabled >>
         data_volume_mount_path: << module.input.data_volume_mount_path >>
         data_volume_size: << module.input.data_volume_size >>
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
@@ -675,14 +675,15 @@ module:
         efs_mount_path: << module.input.efs_mount_path >>
         environment_variables: << module.input.environment_variables || [] >>
         health_check_grace_period: << module.input.health_check_grace_period >>
-        health_check_path: "<< module.input.web_service_enabled ? module.input.health_check_path : nil >>"
+        deploy_health_check_path: "<< module.input.web_service_enabled ? module.input.health_check_path : nil >>"
         instance_type: << module.input.instance_type >>
         key_name: << module.input.key_name || nil >>
         load_balancer_attachment:
           $template: ../../partials/templates/alb-load-balancer-attachment.yml
           with:
             additional_fields: {}
-            enabled: << module.input.web_service_enabled >>
+            attachment_control:
+              creation_enabled: << module.input.web_service_enabled >>
             listener_arn: >-
               << !module.input.web_service_enabled ? "" :
               module.input.load_balancer_source == "standalone_alb" ?
@@ -723,7 +724,7 @@ module:
         root_volume_size: << module.input.root_volume_size >>
         runtime: << module.input.deploy_type >>
         secrets: << module.input.secrets || [] >>
-        start_command: '<< module.input.deploy_type == "container" ? (module.input.container_start_command || nil) : nil >>'
+        container_start_command: '<< module.input.deploy_type == "container" ? (module.input.container_start_command || nil) : nil >>'
         subnet_ids: "<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
         tags:
           $include: ../../partials/stack/ravion-tags.yml

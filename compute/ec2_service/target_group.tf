@@ -6,7 +6,7 @@
 ################################################################################
 
 resource "aws_lb_target_group" "app" {
-  count = local.enable_load_balancer ? 1 : 0
+  count = local.load_balancer_creation_enabled ? 1 : 0
 
   name        = "${substr(var.name, 0, min(length(var.name), 28))}-tg"
   port        = var.load_balancer_attachment.target_group.port
@@ -49,7 +49,7 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_listener_rule" "app" {
-  for_each = local.enable_load_balancer ? {
+  for_each = local.load_balancer_creation_enabled ? {
     for idx, rule in var.load_balancer_attachment.listener_rules : idx => rule
   } : {}
 

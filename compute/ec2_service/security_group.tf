@@ -15,7 +15,7 @@ module "instance_security_group" {
 
   ingress_rules = concat(
     # Allow the load balancer to reach the app port
-    local.enable_load_balancer && var.load_balancer_security_group_id != null && var.app_port != null ? [
+    local.load_balancer_creation_enabled && var.load_balancer_security_group_id != null && var.app_port != null ? [
       {
         description                  = "Allow inbound from load balancer"
         from_port                    = var.app_port
@@ -26,7 +26,7 @@ module "instance_security_group" {
     ] : [],
     # Additional direct sources
     var.app_port != null ? [
-      for cidr in var.allowed_cidr_blocks : {
+      for cidr in var.direct_access_cidr_blocks : {
         description = "Allow inbound from ${cidr}"
         from_port   = var.app_port
         to_port     = var.app_port

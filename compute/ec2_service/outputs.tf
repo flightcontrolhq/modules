@@ -46,12 +46,12 @@ output "ecr_repository_url" {
 
 output "target_group_arn" {
   description = "The ARN of the service target group, when a load balancer is attached."
-  value       = local.enable_load_balancer ? aws_lb_target_group.app[0].arn : null
+  value       = local.load_balancer_creation_enabled ? aws_lb_target_group.app[0].arn : null
 }
 
 output "target_group_arn_suffix" {
   description = "The ARN suffix of the service target group for CloudWatch dimensions."
-  value       = local.enable_load_balancer ? aws_lb_target_group.app[0].arn_suffix : null
+  value       = local.load_balancer_creation_enabled ? aws_lb_target_group.app[0].arn_suffix : null
 }
 
 ################################################################################

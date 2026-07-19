@@ -76,18 +76,18 @@ chmod 755 "${app_runner_path}"
 
 ${supervisor_program_script}
 
-%{ if health_check_path != "" && app_port != null ~}
+%{ if deploy_health_check_path != "" && app_port != null ~}
 # Gate deploy success on the local health check
 HEALTHY=0
 for _ in $(seq 1 60); do
-  if curl -fsS -o /dev/null "http://localhost:${app_port}${health_check_path}"; then
+  if curl -fsS -o /dev/null "http://localhost:${app_port}${deploy_health_check_path}"; then
     HEALTHY=1
     break
   fi
   sleep 5
 done
 if [ "$HEALTHY" -ne 1 ]; then
-  echo "App failed the local health check on port ${app_port}${health_check_path}" >&2
+  echo "App failed the local health check on port ${app_port}${deploy_health_check_path}" >&2
   tail -n 100 "$LOG_PATH" >&2 || true
   exit 1
 fi
