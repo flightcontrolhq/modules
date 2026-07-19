@@ -36,11 +36,7 @@ module:
       type: boolean
       description: Expose this service through the public ALB. Turn off to use the private ALB.
       default: true
-    - id: private_subnet_placement_enabled
-      label: Run in private subnets
-      type: boolean
-      description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
-      default: true
+    - $include: ../../partials/inputs/private-subnet-placement.yml
     - $include: ../../partials/inputs/ecs-service-build-inputs.yml
     - id: section_deployment
       label: Deployment

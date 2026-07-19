@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 0.1.0
-  description: Add structured service configuration, rolling deploy controls, ALB target tuning, ECR scanning, direct CIDR access, and working conditional metrics.
+  version: 0.1.1
+  description: Reorganize EC2 service configuration inputs for clearer setup.
 module:
   inputs:
     - id: network
@@ -22,6 +22,7 @@ module:
             public_subnet_ids_default: <<ref.stack.output.public_subnet_ids>>
             vpc_id_default: <<ref.stack.output.vpc_id>>
       required: true
+    - $include: ../../partials/inputs/private-subnet-placement.yml
     - id: section_service
       label: EC2 service
       type: section
@@ -38,7 +39,7 @@ module:
     - id: deploy_type
       label: Deploy type
       type: string
-      description: Choose in-place container image deploys or host-level shell commands. Instances support both modes, so this can change after creation.
+      description: Choose in-place container image deploys or host-level shell commands.
       required: true
       default: container
       values:
@@ -48,11 +49,31 @@ module:
         - label: Manual
           description: Run release preparation commands on each instance, then start a supervised foreground command on the host.
           value: manual
-    - id: private_subnet_placement_enabled
-      label: Run in private subnets
-      type: boolean
-      description: Recommended for production. Private instances need NAT or equivalent outbound access for bootstrap, SSM, logs, and image pulls. Turn off to use public subnets and public IPs.
-      default: true
+    - id: instance_type
+      label: Instance type
+      type: string
+      required: true
+      no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
+      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
+    - id: ami_id
+      label: Custom AMI ID
+      type: string
+      description: Custom AMI for new instances. Leave blank for the latest architecture-matched Amazon Linux 2023 AMI.
+      collapsible: true
+      placeholder: ami-...
+      required: false
+    - id: key_name
+      label: SSH key pair name
+      type: string
+      description: Optional EC2 key pair for SSH access.
+      collapsible: true
+      required: false
+    - id: additional_user_data
+      label: Additional user data
+      type: text
+      description: Shell script run as root after Ravion's bootstrap on every newly launched instance.
+      collapsible: true
+      required: false
     - id: section_build
       label: Build config
       show_when:
@@ -136,6 +157,8 @@ module:
       default: .
       show_when:
         deploy_type: manual
+        deploy_source_repo:
+          not: ""
     - id: deploy_commands
       label: Deploy commands
       type: string_array
@@ -193,7 +216,7 @@ module:
       immutable: true
       label: Load balancer source
       type: string
-      description: Select a standalone Application Load Balancer or reuse a public or private ALB from an ECS cluster. The selected load balancer must use the same AWS account, region, and VPC as the VPC network.
+      description: Must use the same AWS account, region, and VPC as the VPC network.
       required: true
       default: standalone_alb
       show_when:
@@ -209,7 +232,7 @@ module:
       immutable: true
       label: Standalone ALB module
       type: $ref:rvn-aws-alb
-      description: Standalone shared load balancer this service attaches its listener rules to. It must use the same AWS account, region, and VPC as the selected VPC network.
+      description: Attach listener rules to this.
       mapped_inputs:
         - default: <<ref.stack.output.http_listener_arn>>
           id: alb_http_listener_arn
@@ -241,9 +264,9 @@ module:
         load_balancer_source: standalone_alb
     - id: ecs_cluster
       immutable: true
-      label: ALB from ECS Cluster module
+      label: ECS Cluster
       type: $ref:rvn-ecs-cluster
-      description: ECS cluster whose public or private Application Load Balancer receives this service's listener rule. The cluster must use the same AWS account, region, and VPC as the selected VPC network.
+      description: Attach listener rules to the ALB in this cluster.
       mapped_inputs:
         - $include: ../../partials/inputs/ecs-service-cluster-alb-mapped-inputs.yml
         - default: <<ref.stack.output.public_alb_arn_suffix>>
@@ -263,7 +286,7 @@ module:
     - id: ecs_cluster_alb_visibility
       label: ALB to use from ECS Cluster module
       type: string
-      description: Choose the public or private Application Load Balancer from the selected ECS cluster. The selected load balancer and at least one HTTP or HTTPS listener must be enabled on the cluster.
+      description: The selected load balancer must be enabled on the cluster.
       required: true
       default: public
       show_when:
@@ -289,8 +312,6 @@ module:
       default: 80
     - id: section_health
       label: Health check
-      show_when:
-        web_service_enabled: true
       type: section
     - id: health_check_path
       label: Health check path
@@ -349,6 +370,13 @@ module:
       show_when:
         web_service_enabled: true
       default: 2
+    - id: health_check_grace_period
+      label: Instance health check grace period (secs)
+      type: number
+      description: Seconds after launch before Auto Scaling health checks apply.
+      collapsible: true
+      min: 0
+      default: 300
     - id: target_group_slow_start
       label: Slow start duration (secs)
       type: number
@@ -416,124 +444,6 @@ module:
         field_overrides:
           show_when:
             web_service_enabled: true
-    - id: section_instances
-      label: Instances
-      type: section
-      description: Instances are stable. Deploys update them in place and never replace them, so instance storage survives releases.
-    - id: instance_type
-      label: Instance type
-      type: string
-      description: EC2 instance type for every host in the group.
-      required: true
-      no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
-      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
-    - id: key_name
-      label: SSH key pair name
-      type: string
-      description: Optional EC2 key pair for SSH access.
-      collapsible: true
-      required: false
-    - id: ami_id
-      label: Custom AMI ID
-      type: string
-      description: Custom AMI for new instances. Leave blank for the latest architecture-matched Amazon Linux 2023 AMI.
-      collapsible: true
-      placeholder: ami-...
-      required: false
-    - id: additional_user_data
-      label: Additional user data
-      type: text
-      description: Shell script run as root after Ravion's bootstrap on every newly launched instance.
-      collapsible: true
-      required: false
-    - id: section_scaling
-      label: Scaling
-      type: section
-    - id: min_size
-      label: Minimum instances
-      type: number
-      description: Minimum instances in the group.
-      min: 0
-      required: true
-      default: 1
-    - id: max_size
-      label: Maximum instances
-      type: number
-      description: Maximum instances in the group.
-      min: 1
-      required: true
-      default: 3
-    - id: cpu_target_tracking_enabled
-      label: CPU autoscaling
-      type: boolean
-      description: Scale the group between minimum and maximum instances to maintain average CPU utilization.
-      default: false
-    - id: cpu_target_value
-      label: CPU target (%)
-      type: number
-      description: Average EC2 CPU utilization that target-tracking autoscaling tries to maintain.
-      max: 100
-      min: 1
-      show_when:
-        cpu_target_tracking_enabled: true
-      default: 70
-    - id: desired_capacity
-      label: Desired instances
-      type: number
-      description: Initial group size when CPU autoscaling is off. Leave blank to start at the minimum.
-      min: 0
-      required: false
-      show_when:
-        cpu_target_tracking_enabled: false
-    - id: health_check_grace_period
-      label: Instance health check grace period (secs)
-      type: number
-      description: Seconds after launch before Auto Scaling health checks apply.
-      collapsible: true
-      min: 0
-      default: 300
-    - id: section_app_config
-      label: Environment variables
-      type: section
-    - $merge:
-        - ../../partials/inputs/build-environment-variables.yml
-      show_when:
-        deploy_type: container
-        build_source:
-          - dockerfile
-          - railpack
-    - $merge:
-        - ../../partials/inputs/dockerfile-env-injection.yml
-      show_when:
-        deploy_type: container
-        build_source: dockerfile
-    - id: environment_variables
-      label: Runtime environment variables
-      type: array
-      description: Plain, single-line environment variables written to each instance at boot and refreshed on every deploy.
-    - id: secrets
-      label: Runtime secrets
-      type: array
-      description: Secret environment variables as {name, value_from} objects fetched on each instance.
-    - id: section_networking
-      label: Networking
-      type: section
-    - id: additional_security_group_ids
-      label: Additional security groups
-      type: string_array
-      description: Additional security groups attached to the instances.
-      add_button_label: Add security group ID
-      collapsible: true
-      required: false
-    - id: allowed_cidr_blocks
-      label: Allowed CIDR blocks
-      type: string_array
-      description: IPv4 CIDR blocks allowed to reach the app port directly, bypassing the load balancer.
-      add_button_label: Add CIDR block
-      collapsible: true
-      required: false
-      show_when:
-        web_service_enabled: true
     - id: section_storage
       label: Storage
       type: section
@@ -608,6 +518,84 @@ module:
       patterns:
         - message: Use an absolute path.
           pattern: ^/
+    - id: section_scaling
+      label: Scaling
+      type: section
+    - id: min_size
+      label: Minimum instances
+      type: number
+      min: 0
+      required: true
+      default: 1
+    - id: max_size
+      label: Maximum instances
+      type: number
+      min: 1
+      required: true
+      default: 3
+    - id: cpu_target_tracking_enabled
+      label: CPU autoscaling
+      type: boolean
+      default: false
+    - id: cpu_target_value
+      label: CPU target (%)
+      type: number
+      description: Average EC2 CPU utilization that target-tracking autoscaling tries to maintain.
+      max: 100
+      min: 1
+      show_when:
+        cpu_target_tracking_enabled: true
+      default: 70
+    - id: desired_capacity
+      label: Desired instances
+      type: number
+      description: Initial group size when CPU autoscaling is off. Leave blank to start at the minimum.
+      min: 0
+      required: false
+      show_when:
+        cpu_target_tracking_enabled: false
+    - id: section_app_config
+      label: Environment variables
+      type: section
+    - $merge:
+        - ../../partials/inputs/build-environment-variables.yml
+      show_when:
+        deploy_type: container
+        build_source:
+          - dockerfile
+          - railpack
+    - $merge:
+        - ../../partials/inputs/dockerfile-env-injection.yml
+      show_when:
+        deploy_type: container
+        build_source: dockerfile
+    - id: environment_variables
+      label: Runtime environment variables
+      type: array
+      description: Plain, single-line environment variables written to each instance at boot and refreshed on every deploy.
+    - id: secrets
+      label: Runtime secrets
+      type: array
+      description: Secret environment variables as {name, value_from} objects fetched on each instance.
+    - id: section_networking
+      label: Networking
+      type: section
+    - id: additional_security_group_ids
+      label: Additional security groups
+      type: string_array
+      description: Additional security groups attached to the instances.
+      add_button_label: Add security group ID
+      collapsible: true
+      required: false
+    - id: allowed_cidr_blocks
+      label: Allowed CIDR blocks
+      type: string_array
+      description: IPv4 CIDR blocks allowed to reach the app port directly, bypassing the load balancer.
+      add_button_label: Add CIDR block
+      collapsible: true
+      required: false
+      show_when:
+        web_service_enabled: true
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.

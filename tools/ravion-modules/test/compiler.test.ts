@@ -217,6 +217,10 @@ describe("compiler", () => {
     }
 
     assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack"]);
+    assert.deepEqual(findInput(inputs, "deploy_source_base_path").show_when, {
+      deploy_type: "manual",
+      deploy_source_repo: { not: "" },
+    });
 
     const loadBalancerSource = findInput(inputs, "load_balancer_source");
     assert.equal(loadBalancerSource.default, "standalone_alb");
