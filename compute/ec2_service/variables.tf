@@ -315,7 +315,7 @@ variable "health_check_grace_period" {
   }
 }
 
-variable "cpu_target_tracking_enabled" {
+variable "cpu_autoscaling_enabled" {
   type        = bool
   description = "Scale the group to maintain the target average CPU utilization."
   default     = false

@@ -162,7 +162,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | desired_capacity | Desired instances (null = group-managed) | `number` | `null` | no |
 | health_check_type | ASG health check: `EC2` or `ELB` | `string` | `"EC2"` | no |
 | health_check_grace_period | Seconds before ASG health checks apply | `number` | `300` | no |
-| cpu_target_tracking_enabled | Scale on average CPU utilization | `bool` | `false` | no |
+| cpu_autoscaling_enabled | Scale on average CPU utilization | `bool` | `false` | no |
 | cpu_target_value | CPU utilization target (%) | `number` | `70` | no |
 | load_balancer_attachment | Target group + listener rules (null = worker mode) | `object` | `null` | no |
 | load_balancer_security_group_id | ALB security group allowed to reach the app port | `string` | `null` | no |

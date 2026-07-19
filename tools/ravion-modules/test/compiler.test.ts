@@ -125,6 +125,8 @@ describe("compiler", () => {
 
     assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack", "nixpacks"]);
     assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_ecr")), ["dockerfile", "railpack", "nixpacks"]);
+    assert.equal(findInput(inputs, "min_capacity").label, "Minimum tasks");
+    assert.equal(findInput(inputs, "max_capacity").label, "Maximum tasks");
 
     const build = getModuleBuild(compiled.module);
     const builder = assertString(build.builder);
@@ -211,6 +213,9 @@ describe("compiler", () => {
       "health_check_grace_period",
       "direct_access_cidr_blocks",
       "data_volume_creation_enabled",
+      "min_capacity",
+      "max_capacity",
+      "cpu_autoscaling_enabled",
       "ecr_scan_on_push_enabled",
     ]) {
       assert.ok(findInput(inputs, inputId), `expected EC2 service input ${inputId}`);
@@ -221,17 +226,22 @@ describe("compiler", () => {
       deploy_type: "manual",
       deploy_source_repo: { not: "" },
     });
+    assert.equal(inputs.some((input) => input.id === "min_size" || input.id === "max_size"), false);
+    assert.equal(findInput(inputs, "min_capacity").label, "Minimum instances");
+    assert.equal(findInput(inputs, "max_capacity").label, "Maximum instances");
+    assert.equal(getEcsTerraformVariable(compiled.module, "min_size"), "<< module.input.min_capacity >>");
+    assert.equal(getEcsTerraformVariable(compiled.module, "max_size"), "<< module.input.max_capacity >>");
 
     const loadBalancerSource = findInput(inputs, "load_balancer_source");
     assert.equal(loadBalancerSource.default, "standalone_alb");
     assert.equal(loadBalancerSource.immutable, true);
     assert.deepEqual(getValueOptions(loadBalancerSource), ["standalone_alb", "ecs_cluster"]);
-    assert.deepEqual(loadBalancerSource.show_when, { web_service_enabled: true });
+      assert.deepEqual(loadBalancerSource.show_when, { http_traffic_enabled: true });
 
     const standaloneAlb = findInput(inputs, "alb");
     assert.equal(standaloneAlb.required, true);
     assert.deepEqual(standaloneAlb.show_when, {
-      web_service_enabled: true,
+      http_traffic_enabled: true,
       load_balancer_source: "standalone_alb",
     });
     const standaloneMappedInputs = standaloneAlb.mapped_inputs;
@@ -245,7 +255,7 @@ describe("compiler", () => {
     assert.equal(ecsCluster.required, true);
     assert.equal(ecsCluster.immutable, true);
     assert.deepEqual(ecsCluster.show_when, {
-      web_service_enabled: true,
+      http_traffic_enabled: true,
       load_balancer_source: "ecs_cluster",
     });
     const clusterMappedInputs = ecsCluster.mapped_inputs;
@@ -269,7 +279,7 @@ describe("compiler", () => {
     assert.equal(clusterAlbVisibility.immutable, undefined);
     assert.deepEqual(getValueOptions(clusterAlbVisibility), ["public", "private"]);
     assert.deepEqual(clusterAlbVisibility.show_when, {
-      web_service_enabled: true,
+      http_traffic_enabled: true,
       load_balancer_source: "ecs_cluster",
     });
 
@@ -278,7 +288,7 @@ describe("compiler", () => {
       "load_balancer_attachment",
     );
     const listenerRules = loadBalancerAttachment.listener_rules;
-    assert.equal(loadBalancerAttachment.creation_enabled, "<< module.input.web_service_enabled >>");
+    assert.equal(loadBalancerAttachment.creation_enabled, "<< module.input.http_traffic_enabled >>");
     assert.ok(Array.isArray(listenerRules) && listenerRules.length === 1, "load balancer attachment should have one listener rule");
     const listenerArn = assertString(assertRecord(listenerRules[0], "listener rule").listener_arn);
     assert.match(listenerArn, /load_balancer_source == "standalone_alb"/);
@@ -315,7 +325,7 @@ describe("compiler", () => {
     );
     assert.match(
       assertString(getEcsTerraformVariable(compiled.module, "direct_access_cidr_blocks")),
-      /module\.input\.web_service_enabled/,
+      /module\.input\.http_traffic_enabled/,
     );
     assert.equal(
       getEcsTerraformVariable(compiled.module, "public_ip_assignment_enabled"),
@@ -345,7 +355,7 @@ describe("compiler", () => {
 
     const ui = assertRecord(compiled.module.ui, "module.ui");
     const metrics = assertString(ui.metrics);
-    assert.match(metrics, /module\.input\.web_service_enabled/);
+    assert.match(metrics, /module\.input\.http_traffic_enabled/);
     assert.match(metrics, /GroupDesiredCapacity/);
     assert.match(metrics, /GroupInServiceInstances/);
     assert.match(metrics, /LoadBalancer:/);

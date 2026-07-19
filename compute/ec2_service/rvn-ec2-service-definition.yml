@@ -4,7 +4,7 @@ definition:
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
   version: 0.1.1
-  description: Reorganize EC2 service configuration inputs for clearer setup.
+  description: Reorganize EC2 service inputs and clarify web and storage configuration.
 module:
   inputs:
     - id: network
@@ -61,10 +61,10 @@ module:
       description: Shell script run as root after Ravion's bootstrap on every newly launched instance.
       collapsible: true
       required: false
-    - id: web_service_enabled
-      label: Web service
+    - id: http_traffic_enabled
+      label: Serve HTTP traffic
       type: boolean
-      description: Serve HTTP traffic through a shared Application Load Balancer. Turn off to run a worker group with no load balancer.
+      description: Off for a worker. On to serve HTTP traffic through a load balancer.
       default: true
     - id: deploy_type
       label: Deploy type
@@ -210,7 +210,9 @@ module:
       min: 60
       default: 1200
     - id: section_web
-      label: Web service
+      label: HTTP routing
+      show_when:
+        http_traffic_enabled: true
       type: section
     - id: load_balancer_source
       immutable: true
@@ -220,7 +222,7 @@ module:
       required: true
       default: standalone_alb
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       values:
         - label: Standalone ALB module
           description: Attach to a standalone Ravion Application Load Balancer.
@@ -260,7 +262,7 @@ module:
           type: string
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
         load_balancer_source: standalone_alb
     - id: ecs_cluster
       immutable: true
@@ -281,7 +283,7 @@ module:
           type: string
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
         load_balancer_source: ecs_cluster
     - id: ecs_cluster_alb_visibility
       label: ALB to use from ECS Cluster module
@@ -290,7 +292,7 @@ module:
       required: true
       default: public
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
         load_balancer_source: ecs_cluster
       values:
         - label: Public
@@ -308,8 +310,13 @@ module:
       min: 1
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 80
+    - $template: ../../partials/templates/alb-listener-rule-inputs.yml
+      with:
+        field_overrides:
+          show_when:
+            http_traffic_enabled: true
     - id: section_health
       label: Health check
       type: section
@@ -319,7 +326,7 @@ module:
       description: HTTP path used by the load balancer health check and by the Container-mode deploy gate on each instance.
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: /
     - id: health_check_matcher
       label: Success codes
@@ -328,7 +335,7 @@ module:
       collapsible: true
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 200-399
     - id: health_check_interval
       label: Interval (secs)
@@ -338,7 +345,7 @@ module:
       max: 300
       min: 5
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 10
     - id: health_check_timeout
       label: Timeout (secs)
@@ -348,7 +355,7 @@ module:
       max: 120
       min: 2
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 5
     - id: healthy_threshold
       label: Healthy threshold
@@ -358,7 +365,7 @@ module:
       max: 10
       min: 2
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 2
     - id: unhealthy_threshold
       label: Unhealthy threshold
@@ -368,7 +375,7 @@ module:
       max: 10
       min: 2
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 2
     - id: health_check_grace_period
       label: Instance health check grace period (secs)
@@ -385,7 +392,7 @@ module:
       max: 900
       min: 0
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 0
     - id: deregistration_delay
       label: Deregistration delay (secs)
@@ -395,7 +402,7 @@ module:
       max: 3600
       min: 0
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: 30
     - id: target_group_stickiness_enabled
       label: Sticky sessions
@@ -403,7 +410,7 @@ module:
       description: Keep repeat requests on the same instance using a load balancer or application cookie.
       collapsible: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
       default: false
     - id: target_group_stickiness_type
       label: Stickiness type
@@ -411,7 +418,7 @@ module:
       description: Use a load-balancer-generated cookie or an application cookie.
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
         target_group_stickiness_enabled: true
       default: lb_cookie
       values:
@@ -425,7 +432,7 @@ module:
       description: Application cookie name used for target stickiness.
       required: true
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
         target_group_stickiness_enabled: true
         target_group_stickiness_type: app_cookie
     - id: target_group_stickiness_cookie_duration
@@ -436,22 +443,17 @@ module:
       max: 604800
       min: 1
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
         target_group_stickiness_enabled: true
       default: 86400
-    - $template: ../../partials/templates/alb-listener-rule-inputs.yml
-      with:
-        field_overrides:
-          show_when:
-            web_service_enabled: true
     - id: section_storage
       label: Storage
       type: section
-      description: Instance volumes survive in-place deploys but not instance termination.
+      description: The root volume is the required boot disk, the data volume adds per-instance storage, and EFS provides shared storage that survives instance replacement.
     - id: root_volume_size
       label: Root volume size (GB)
       type: number
-      description: Encrypted root volume size for each instance.
+      description: Required encrypted boot disk for the operating system, Docker, and local files. It is deleted when the instance is terminated.
       collapsible: true
       max: 16384
       min: 8
@@ -459,7 +461,7 @@ module:
     - id: data_volume_creation_enabled
       label: Data volume
       type: boolean
-      description: Attach an independent encrypted EBS volume to each instance.
+      description: Attach a second encrypted EBS disk for per-instance files such as caches or generated artifacts. Each instance gets its own disk, which is deleted with that instance.
       default: false
     - id: data_volume_size
       label: Data volume size (GB)
@@ -484,12 +486,11 @@ module:
     - id: efs_enabled
       label: EFS file system
       type: boolean
-      description: Mount an EFS file system on every instance.
+      description: Mount a shared network filesystem that every instance can access. Files survive instance replacement and remain available at the configured mount path.
       default: false
     - id: efs
       label: EFS file system
       type: $ref:rvn-efs
-      description: Existing Ravion EFS module to mount on every instance.
       mapped_inputs:
         - default: <<ref.stack.output.file_system_id>>
           id: efs_file_system_id
@@ -521,19 +522,15 @@ module:
     - id: section_scaling
       label: Scaling
       type: section
-    - id: min_size
-      label: Minimum instances
-      type: number
-      min: 0
-      required: true
-      default: 1
-    - id: max_size
-      label: Maximum instances
-      type: number
-      min: 1
-      required: true
-      default: 3
-    - id: cpu_target_tracking_enabled
+    - $template: ../../partials/templates/autoscaling-capacity-inputs.yml
+      with:
+        min_capacity_overrides:
+          label: Minimum instances
+          required: true
+        max_capacity_overrides:
+          label: Maximum instances
+          required: true
+    - id: cpu_autoscaling_enabled
       label: CPU autoscaling
       type: boolean
       default: false
@@ -544,16 +541,17 @@ module:
       max: 100
       min: 1
       show_when:
-        cpu_target_tracking_enabled: true
+        cpu_autoscaling_enabled: true
       default: 70
     - id: desired_capacity
       label: Desired instances
+      placeholder: Defaults to minimum instances
       type: number
       description: Initial group size when CPU autoscaling is off. Leave blank to start at the minimum.
       min: 0
       required: false
       show_when:
-        cpu_target_tracking_enabled: false
+        cpu_autoscaling_enabled: false
     - id: section_app_config
       label: Environment variables
       type: section
@@ -595,7 +593,7 @@ module:
       collapsible: true
       required: false
       show_when:
-        web_service_enabled: true
+        http_traffic_enabled: true
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
@@ -654,17 +652,17 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         additional_security_group_ids: << module.input.additional_security_group_ids || [] >>
         additional_user_data: << module.input.additional_user_data || "" >>
-        direct_access_cidr_blocks: "<< module.input.web_service_enabled ? (module.input.direct_access_cidr_blocks || []) : [] >>"
+        direct_access_cidr_blocks: "<< module.input.http_traffic_enabled ? (module.input.direct_access_cidr_blocks || []) : [] >>"
         ami_id: << module.input.ami_id || nil >>
-        app_port: "<< module.input.web_service_enabled ? module.input.app_port : nil >>"
+        app_port: "<< module.input.http_traffic_enabled ? module.input.app_port : nil >>"
         public_ip_assignment_enabled: "<< module.input.private_subnet_placement_enabled ? false : true >>"
-        cpu_target_tracking_enabled: << module.input.cpu_target_tracking_enabled >>
+        cpu_autoscaling_enabled: << module.input.cpu_autoscaling_enabled >>
         cpu_target_value: << module.input.cpu_target_value >>
         data_volume_creation_enabled: << module.input.data_volume_creation_enabled >>
         data_volume_mount_path: << module.input.data_volume_mount_path >>
         data_volume_size: << module.input.data_volume_size >>
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
-        desired_capacity: "<< module.input.cpu_target_tracking_enabled ? nil : (module.input.desired_capacity || nil) >>"
+        desired_capacity: "<< module.input.cpu_autoscaling_enabled ? nil : (module.input.desired_capacity || nil) >>"
         ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
         ecr_repository_creation_enabled: '<< module.input.deploy_type == "container" && (module.input.build_source == "dockerfile" || module.input.build_source == "railpack") >>'
         ecr_scan_on_push_enabled: << module.input.ecr_scan_on_push_enabled >>
@@ -675,7 +673,7 @@ module:
         efs_mount_path: << module.input.efs_mount_path >>
         environment_variables: << module.input.environment_variables || [] >>
         health_check_grace_period: << module.input.health_check_grace_period >>
-        deploy_health_check_path: "<< module.input.web_service_enabled ? module.input.health_check_path : nil >>"
+        deploy_health_check_path: "<< module.input.http_traffic_enabled ? module.input.health_check_path : nil >>"
         instance_type: << module.input.instance_type >>
         key_name: << module.input.key_name || nil >>
         load_balancer_attachment:
@@ -683,9 +681,9 @@ module:
           with:
             additional_fields: {}
             attachment_control:
-              creation_enabled: << module.input.web_service_enabled >>
+              creation_enabled: << module.input.http_traffic_enabled >>
             listener_arn: >-
-              << !module.input.web_service_enabled ? "" :
+              << !module.input.http_traffic_enabled ? "" :
               module.input.load_balancer_source == "standalone_alb" ?
               (module.input.alb_https_listener_arn || module.input.alb_http_listener_arn) :
               module.input.ecs_cluster_alb_visibility == "public" ?
@@ -711,14 +709,14 @@ module:
                   "cookie_name": module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil
                 } : nil >>
         load_balancer_security_group_id: >-
-          << !module.input.web_service_enabled ? nil :
+          << !module.input.http_traffic_enabled ? nil :
           module.input.load_balancer_source == "standalone_alb" ? module.input.alb_security_group_id :
           module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_security_group_id :
           module.input.private_alb_security_group_id >>
         log_retention_in_days: << module.input.log_retention_in_days >>
         manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.start_command : nil >>'
-        max_size: << module.input.max_size >>
-        min_size: << module.input.min_size >>
+        max_size: << module.input.max_capacity >>
+        min_size: << module.input.min_capacity >>
         name: << module.input.name >>
         region: << module.input.aws_region >>
         root_volume_size: << module.input.root_volume_size >>
@@ -798,7 +796,7 @@ module:
           log_stream_prefix: << stack.output.log_stream_prefix >>
     metrics: >-
       << /* ALB metrics use LoadBalancer: and TargetGroup: dimensions. */ [{"id":"desired_instances","name":"Desired instances","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"AutoScalingGroupName":stack.output.autoscaling_group_name},"name":"GroupDesiredCapacity","namespace":"AWS/AutoScaling","region":stack.output.region,"statistic":"Average"}},{"id":"in_service_instances","name":"In-service instances","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"AutoScalingGroupName":stack.output.autoscaling_group_name},"name":"GroupInServiceInstances","namespace":"AWS/AutoScaling","region":stack.output.region,"statistic":"Average"}}] |
-      concat(module.input.web_service_enabled ? [{"id":"request_count","name":"Request count","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"RequestCount","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Sum"}},{"id":"target_response_time","name":"Target response time","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"TargetResponseTime","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Average"}},{"id":"target_4xx_errors","name":"4xx errors","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"HTTPCode_Target_4XX_Count","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Sum"}},{"id":"target_5xx_errors","name":"5xx errors","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"HTTPCode_Target_5XX_Count","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Sum"}},{"id":"healthy_hosts","name":"Healthy hosts","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"HealthyHostCount","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Average"}},{"id":"unhealthy_hosts","name":"Unhealthy hosts","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"UnHealthyHostCount","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Average"}}] : []) >>
+      concat(module.input.http_traffic_enabled ? [{"id":"request_count","name":"Request count","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"RequestCount","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Sum"}},{"id":"target_response_time","name":"Target response time","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"TargetResponseTime","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Average"}},{"id":"target_4xx_errors","name":"4xx errors","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"HTTPCode_Target_4XX_Count","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Sum"}},{"id":"target_5xx_errors","name":"5xx errors","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"HTTPCode_Target_5XX_Count","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Sum"}},{"id":"healthy_hosts","name":"Healthy hosts","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"HealthyHostCount","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Average"}},{"id":"unhealthy_hosts","name":"Unhealthy hosts","type":"line","source":{"type":"cloudwatch","aws_account_id":module.input.aws_account_id,"dimensions":{"LoadBalancer":(module.input.load_balancer_source == "standalone_alb" ? module.input.alb_arn_suffix : module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_arn_suffix : module.input.private_alb_arn_suffix),"TargetGroup":stack.output.target_group_arn_suffix},"name":"UnHealthyHostCount","namespace":"AWS/ApplicationELB","region":stack.output.region,"statistic":"Average"}}] : []) >>
   readme: |
     Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 

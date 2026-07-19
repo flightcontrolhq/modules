@@ -52,7 +52,7 @@ module "autoscaling" {
     },
   ]
 
-  scaling_policies = var.cpu_target_tracking_enabled ? [
+  scaling_policies = var.cpu_autoscaling_enabled ? [
     {
       name        = "${var.name}-cpu-target-tracking"
       policy_type = "TargetTrackingScaling"
