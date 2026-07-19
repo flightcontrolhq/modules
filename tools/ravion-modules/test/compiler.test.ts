@@ -77,6 +77,24 @@ describe("compiler", () => {
     assert.deepEqual(compiled.map((definition) => definition.type), ["ravion-aws-cluster", "ravion-aws-vpc"]);
   });
 
+  it("compiles the RDS storage alarm threshold with a fallback when the input is hidden", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "database", "rds", "rvn-rds-definition.yml"));
+
+    assert.equal(
+      getTerraformVariable(compiled.module, "cloudwatch_alarm_storage_threshold"),
+      "<< module.input.cloudwatch_alarm_storage_threshold_gib != null ? int(module.input.cloudwatch_alarm_storage_threshold_gib * 1073741824) : 5368709120 >>",
+    );
+  });
+
+  it("compiles the Aurora memory alarm threshold with a fallback when the input is hidden", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "database", "aurora", "rvn-aurora-definition.yml"));
+
+    assert.equal(
+      getTerraformVariable(compiled.module, "cloudwatch_alarm_memory_threshold"),
+      "<< module.input.cloudwatch_alarm_memory_threshold_mib != null ? int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) : 268435456 >>",
+    );
+  });
+
   it("fails when a local token remains after compilation", async () => {
     await assert.rejects(
       compileDefinitionFile(join(fixturesDir, "invalid-local-token.yml")),
@@ -142,7 +160,7 @@ describe("compiler", () => {
     assert.doesNotMatch(railpackBranch, /nixpacks_/);
     assert.doesNotMatch(railpackBranch, /build_path/);
 
-    const ecrRepositoryCreationEnabled = getEcsTerraformVariable(compiled.module, "ecr_repository_creation_enabled");
+    const ecrRepositoryCreationEnabled = getTerraformVariable(compiled.module, "ecr_repository_creation_enabled");
     assert.equal(
       ecrRepositoryCreationEnabled,
       '<< module.input.build_source == "dockerfile" || module.input.build_source == "railpack" || module.input.build_source == "nixpacks" >>',
@@ -231,6 +249,14 @@ describe("compiler", () => {
     assert.equal(findInput(inputs, "max_capacity").label, "Maximum instances");
     assert.equal(getEcsTerraformVariable(compiled.module, "min_size"), "<< module.input.min_capacity >>");
     assert.equal(getEcsTerraformVariable(compiled.module, "max_size"), "<< module.input.max_capacity >>");
+
+    const imageRef = findInput(getDeployInputs(compiled.module), "image_ref");
+    assert.deepEqual(imageRef.patterns, [
+      {
+        message: "Image tags and digests must not contain whitespace.",
+        pattern: "^\\S+$",
+      },
+    ]);
 
     const loadBalancerSource = findInput(inputs, "load_balancer_source");
     assert.equal(loadBalancerSource.default, "standalone_alb");
@@ -432,6 +458,13 @@ function getModuleBuild(module: Record<string, unknown>): Record<string, unknown
   return module.build;
 }
 
+function getDeployInputs(module: Record<string, unknown>): Record<string, unknown>[] {
+  const deploy = assertRecord(module.deploy, "module.deploy");
+  const inputs = deploy.inputs;
+  assert.ok(Array.isArray(inputs), "module.deploy.inputs should be an array");
+  return inputs.map((input) => assertRecord(input, "deploy input"));
+}
+
 function findInput(inputs: Record<string, unknown>[], id: string): Record<string, unknown> {
   const input = inputs.find((candidate) => candidate.id === id);
   assert.ok(input, `expected input ${id}`);
@@ -452,7 +485,7 @@ function getBuildSourceShowWhen(input: Record<string, unknown>): unknown {
   return showWhen.build_source;
 }
 
-function getEcsTerraformVariable(module: Record<string, unknown>, key: string): unknown {
+function getTerraformVariable(module: Record<string, unknown>, key: string): unknown {
   const stack = assertRecord(module.stack, "module.stack");
   const pipelines = assertRecord(stack.pipelines, "module.stack.pipelines");
   const defaults = assertRecord(pipelines.defaults, "module.stack.pipelines.defaults");

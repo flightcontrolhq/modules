@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.4.1
-  description: Use non-deprecated AWS region lookup.
+  version: 0.4.2
+  description: Handle disabled CloudWatch alarm inputs safely.
 module:
   inputs:
     - id: network
@@ -932,7 +932,7 @@ module:
         cloudwatch_alarm_cpu_threshold: << module.input.cloudwatch_alarm_cpu_threshold >>
         cloudwatch_alarm_evaluation_periods: << module.input.cloudwatch_alarm_evaluation_periods >>
         cloudwatch_alarm_period: << module.input.cloudwatch_alarm_period >>
-        cloudwatch_alarm_storage_threshold: << int(module.input.cloudwatch_alarm_storage_threshold_gib * 1073741824) >>
+        cloudwatch_alarm_storage_threshold: '<< module.input.cloudwatch_alarm_storage_threshold_gib != null ? int(module.input.cloudwatch_alarm_storage_threshold_gib * 1073741824) : 5368709120 >>'
         cloudwatch_ok_actions: << module.input.cloudwatch_ok_actions >>
         snapshot_tag_copying_enabled: << module.input.snapshot_tag_copying_enabled >>
         cloudwatch_alarms_creation_enabled: << module.input.cloudwatch_alarms_creation_enabled >>

@@ -745,6 +745,10 @@ module:
         label: Image tag or digest
         type: string
         description: Image tag or digest to deploy.
+        placeholder: sha256:... or latest or <run-id>-railpack
+        patterns:
+          - message: Image tags and digests must not contain whitespace.
+            pattern: ^\S+$
         required: true
         show_when:
           deploy_type: container
