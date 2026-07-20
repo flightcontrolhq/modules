@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.8.2
-  description: "Accept mixed IAM policy document shapes for task role inline policies."
+  version: 1.0.0
+  description: "Enable high-resolution ECS autoscaling metrics by default."
 module:
   inputs:
     - id: section_cluster
@@ -663,7 +663,7 @@ module:
 
     ## Autoscaling
 
-    Autoscaling is enabled by default with one minimum task and three maximum tasks. For production, start with at least two minimum tasks when availability matters. When autoscaling is disabled, Desired tasks controls how many web tasks the ECS service keeps running.
+    Autoscaling is enabled by default with one minimum task and three maximum tasks. High-resolution scaling metrics are also enabled by default, publishing the built-in CPU and configured memory metrics every 20 seconds so target tracking can react faster; this adds CloudWatch charges. Turn off High-resolution scaling metrics to use the standard 60-second policies. For production, start with at least two minimum tasks when availability matters. When autoscaling is disabled, Desired tasks controls how many web tasks the ECS service keeps running.
 
     | Field                    | Default | Description                                    |
     | ------------------------ | ------- | ---------------------------------------------- |
@@ -671,6 +671,7 @@ module:
     | Minimum tasks            | 1       | Lower bound for running tasks                  |
     | Maximum tasks            | 3       | Upper bound for running tasks                  |
     | Desired tasks            | 1       | Running tasks when autoscaling is disabled     |
+    | High-resolution scaling metrics | true | Uses 20-second CPU and memory scaling metrics |
     | CPU target (%)           | 70      | Average CPU utilization target                 |
     | Memory target (%)        | 80      | Average memory utilization target              |
     | Scale-in cooldown (secs) | 300     | Delay before another scale-in action           |
@@ -813,6 +814,7 @@ module:
     | Post-deploy ephemeral storage   | No       | Task definition default    | Ephemeral storage override for the post-deploy task |
     | Post-deploy timeout (secs)      | No       | 1800                       | Maximum post-deploy task wait time                 |
     | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
+    | High-resolution scaling metrics | No       | true                       | Use 20-second CPU and memory scaling metrics       |
     | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
     | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
     | EFS file system                 | No       | false                      | Mount an EFS file system into the app container   |

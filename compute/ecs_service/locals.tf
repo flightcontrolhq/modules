@@ -178,6 +178,13 @@ locals {
 
   # Auto scaling settings
   auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled
+  high_resolution_metric_names = local.auto_scaling_enabled ? distinct(compact([
+    for policy in var.auto_scaling.target_tracking :
+    policy.predefined_metric == "ECSServiceAverageCPUUtilizationHighResolution" ? "CPUUtilization" :
+    policy.predefined_metric == "ECSServiceAverageMemoryUtilizationHighResolution" ? "MemoryUtilization" :
+    null
+  ])) : []
+  high_resolution_metrics_enabled = length(local.high_resolution_metric_names) > 0
 
   # Service discovery settings
   enable_service_discovery = var.service_discovery != null

@@ -664,7 +664,7 @@ variable "auto_scaling" {
       end_time     = optional(string, null)
     })), [])
   })
-  description = "Auto scaling configuration for the service."
+  description = "Auto scaling configuration for the service. ECSServiceAverageCPUUtilizationHighResolution and ECSServiceAverageMemoryUtilizationHighResolution automatically enable 20-second ECS service monitoring for their corresponding built-in metrics."
   default     = null
 }
 

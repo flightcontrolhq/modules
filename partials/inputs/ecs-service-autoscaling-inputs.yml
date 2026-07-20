@@ -20,6 +20,14 @@
   show_when:
     auto_scaling_enabled: true
   default: 3
+- id: high_resolution_metrics_enabled
+  label: High-resolution scaling metrics
+  type: boolean
+  description: Publish CPU and enabled memory metrics every 20 seconds so target tracking can respond faster. High-resolution metrics add CloudWatch charges.
+  collapsible: true
+  show_when:
+    auto_scaling_enabled: true
+  default: true
 - id: desired_count
   label: Desired tasks
   type: number

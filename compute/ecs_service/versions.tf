@@ -12,9 +12,10 @@ terraform {
       source = "hashicorp/aws"
       # 6.21 adds linear_configuration / canary_configuration on the
       # aws_ecs_service deployment_configuration block.
+      # TODO(ENG-4941): Raise this minimum to the first release containing
+      # https://github.com/hashicorp/terraform-provider-aws/pull/48792.
       version = ">= 6.21"
     }
   }
 }
-
 

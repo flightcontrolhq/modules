@@ -515,6 +515,133 @@ run "service_with_auto_scaling" {
     condition     = aws_appautoscaling_target.this[0].max_capacity == 10
     error_message = "Auto scaling max capacity should be 10"
   }
+
+  assert {
+    condition     = length(aws_ecs_service.this.monitoring) == 0
+    error_message = "Standard-resolution policies should omit ECS service monitoring"
+  }
+}
+
+run "service_with_high_resolution_cpu_auto_scaling" {
+  command = plan
+
+  variables {
+    steady_state_wait_enabled = false
+    auto_scaling = {
+      min_capacity = 1
+      max_capacity = 10
+      target_tracking = [{
+        policy_name       = "cpu-scaling"
+        target_value      = 70
+        predefined_metric = "ECSServiceAverageCPUUtilizationHighResolution"
+      }]
+    }
+  }
+
+  assert {
+    condition     = aws_ecs_service.this.wait_for_steady_state
+    error_message = "High-resolution monitoring should force steady-state waiting"
+  }
+
+  assert {
+    condition     = length(aws_ecs_service.this.monitoring) == 1
+    error_message = "High-resolution CPU scaling should enable ECS service monitoring"
+  }
+
+  assert {
+    condition     = aws_ecs_service.this.monitoring[0].metric_configuration[0].resolution_seconds == 20
+    error_message = "High-resolution ECS service monitoring should use 20-second metrics"
+  }
+
+  assert {
+    condition     = toset(aws_ecs_service.this.monitoring[0].metric_configuration[0].metric_names) == toset(["CPUUtilization"])
+    error_message = "High-resolution CPU scaling should publish CPUUtilization"
+  }
+}
+
+run "service_with_high_resolution_cpu_and_memory_auto_scaling" {
+  command = plan
+
+  variables {
+    auto_scaling = {
+      min_capacity = 1
+      max_capacity = 10
+      target_tracking = [
+        {
+          policy_name       = "cpu-scaling"
+          target_value      = 70
+          predefined_metric = "ECSServiceAverageCPUUtilizationHighResolution"
+        },
+        {
+          policy_name       = "memory-scaling"
+          target_value      = 80
+          predefined_metric = "ECSServiceAverageMemoryUtilizationHighResolution"
+        }
+      ]
+    }
+  }
+
+  assert {
+    condition = toset(aws_ecs_service.this.monitoring[0].metric_configuration[0].metric_names) == toset([
+      "CPUUtilization",
+      "MemoryUtilization",
+    ])
+    error_message = "High-resolution CPU and memory scaling should publish both ECS metrics"
+  }
+}
+
+run "service_with_custom_metric_auto_scaling" {
+  command = plan
+
+  variables {
+    steady_state_wait_enabled = false
+    auto_scaling = {
+      min_capacity = 1
+      max_capacity = 10
+      target_tracking = [{
+        policy_name  = "queue-depth"
+        target_value = 100
+        custom_metric = {
+          metric_name = "ApproximateNumberOfMessagesVisible"
+          namespace   = "AWS/SQS"
+          statistic   = "Average"
+        }
+      }]
+    }
+  }
+
+  assert {
+    condition     = length(aws_ecs_service.this.monitoring) == 0 && !aws_ecs_service.this.wait_for_steady_state
+    error_message = "Custom metrics should not enable ECS monitoring or force steady-state waiting"
+  }
+}
+
+run "disabled_auto_scaling_ignores_high_resolution_policies" {
+  command = plan
+
+  variables {
+    steady_state_wait_enabled = false
+    auto_scaling = {
+      enabled      = false
+      min_capacity = 1
+      max_capacity = 10
+      target_tracking = [{
+        policy_name       = "cpu-scaling"
+        target_value      = 70
+        predefined_metric = "ECSServiceAverageCPUUtilizationHighResolution"
+      }]
+    }
+  }
+
+  assert {
+    condition     = length(aws_appautoscaling_target.this) == 0
+    error_message = "Disabled auto scaling should omit the scalable target"
+  }
+
+  assert {
+    condition     = length(aws_ecs_service.this.monitoring) == 0 && !aws_ecs_service.this.wait_for_steady_state
+    error_message = "Disabled auto scaling should omit ECS monitoring and not force steady-state waiting"
+  }
 }
 
 ################################################################################
