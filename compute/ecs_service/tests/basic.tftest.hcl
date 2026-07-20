@@ -599,11 +599,11 @@ run "service_with_custom_metric_auto_scaling" {
       min_capacity = 1
       max_capacity = 10
       target_tracking = [{
-        policy_name  = "queue-depth"
+        policy_name  = "custom-scaling"
         target_value = 100
         custom_metric = {
-          metric_name = "ApproximateNumberOfMessagesVisible"
-          namespace   = "AWS/SQS"
+          metric_name = "WorkItemsPerTask"
+          namespace   = "Custom/ECSScaling"
           statistic   = "Average"
         }
       }]
