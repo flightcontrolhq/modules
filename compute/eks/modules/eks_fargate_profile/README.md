@@ -31,6 +31,7 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | selectors | List of `{ namespace, labels }`. | `list(object)` | n/a | yes |
 | pod_execution_role_arn | BYO pod execution role. When null, module creates one. | `string` | `null` | no |
 | tags | Tags applied to all resources. | `map(string)` | `{}` | no |
+| partition | AWS partition used to build managed policy ARNs. Pass from the caller when instantiating with `depends_on` so ARNs are known at plan time; resolved via data source when null. | `string` | `null` | no |
 
 ## Outputs
 

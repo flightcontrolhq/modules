@@ -60,6 +60,7 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | interruption_queue_name | Override the default queue name (`karpenter-<cluster>`). | `string` | `null` | no |
 | interruption_queue_message_retention_seconds | SQS retention. AWS-recommended default 300s. | `number` | `300` | no |
 | tags | Tags applied to all resources. | `map(string)` | `{}` | no |
+| partition | AWS partition used to build managed policy ARNs. Pass from the caller when instantiating with `depends_on` so ARNs are known at plan time; resolved via data source when null. | `string` | `null` | no |
 
 ## Outputs
 

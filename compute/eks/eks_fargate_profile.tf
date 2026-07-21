@@ -8,6 +8,10 @@ module "fargate_profiles" {
 
   depends_on = [module.addons]
 
+  # Resolved at the root so managed policy ARNs stay known at plan time; the
+  # module-level depends_on above defers the submodule's own data sources.
+  partition = data.aws_partition.current.partition
+
   cluster_name = module.cluster.cluster_name
   name         = each.key
   subnet_ids   = coalesce(each.value.subnet_ids, local.node_subnet_ids)

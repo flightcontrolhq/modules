@@ -1,5 +1,5 @@
 locals {
-  partition = data.aws_partition.current.partition
+  partition = var.partition != null ? var.partition : data.aws_partition.current.partition
 }
 
 ################################################################################

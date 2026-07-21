@@ -7,6 +7,10 @@ module "system_node_group" {
 
   depends_on = [module.cluster]
 
+  # Resolved at the root so managed policy ARNs stay known at plan time; the
+  # module-level depends_on above defers the submodule's own data sources.
+  partition = data.aws_partition.current.partition
+
   cluster_name = module.cluster.cluster_name
   name         = var.system_node_group.name
   subnet_ids   = local.node_subnet_ids
@@ -55,6 +59,8 @@ module "node_groups" {
   for_each = var.additional_node_groups
 
   depends_on = [module.cluster]
+
+  partition = data.aws_partition.current.partition
 
   cluster_name = module.cluster.cluster_name
   name         = each.key

@@ -51,6 +51,7 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | additional_node_role_managed_policy_arns | Extra managed policies on the module-created role. | `list(string)` | `[]` | no |
 | additional_node_role_inline_policy_statements | Extra inline statements on the module-created role. | `list(object)` | `[]` | no |
 | tags | Tags applied to all resources. | `map(string)` | `{}` | no |
+| partition | AWS partition used to build managed policy ARNs. Pass from the caller when instantiating with `depends_on` so ARNs are known at plan time; resolved via data source when null. | `string` | `null` | no |
 
 ## Outputs
 
