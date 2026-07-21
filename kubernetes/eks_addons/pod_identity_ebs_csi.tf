@@ -10,8 +10,8 @@ module "ebs_csi_role" {
 
   source = "../../security/iam"
 
-  name        = "${var.name}-ebs-csi"
-  description = "EBS CSI driver Pod Identity role for ${var.name}"
+  name        = "${var.cluster_name}-ebs-csi"
+  description = "EBS CSI driver Pod Identity role for ${var.cluster_name}"
 
   custom_assume_role_policy = local.pod_identity_trust_policy
 
@@ -25,7 +25,7 @@ module "ebs_csi_role" {
 resource "aws_eks_pod_identity_association" "ebs_csi" {
   count = var.ebs_csi_driver_enabled ? 1 : 0
 
-  cluster_name    = aws_eks_cluster.this.name
+  cluster_name    = var.cluster_name
   namespace       = "kube-system"
   service_account = "ebs-csi-controller-sa"
   role_arn        = module.ebs_csi_role[0].role_arn

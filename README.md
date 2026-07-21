@@ -27,10 +27,11 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `database/`   | `rds`             | AWS RDS instances                                                      | v1.1.0  |
 | `database/`   | `rds-proxy`       | AWS RDS Proxy for connection pooling in front of RDS instances or Aurora clusters (standalone or via the `rds`/`aurora` modules) (includes `rvn-rds-proxy` module definition) | v1.0.0  |
 | `hosting/`    | `static_site`     | Composite static site hosting (S3 + CloudFront + OAC, optional CloudFront Function / Lambda@Edge) | v1.0.0  |
-| `kubernetes/` | `eks_cluster`     | AWS EKS clusters with OIDC, KMS-encrypted secrets, control plane logging, core add-ons, EBS CSI / Pod Identity Agent, LB Controller Pod Identity role, and access entries | v1.0.0  |
-| `kubernetes/` | `eks_node_group`  | AWS EKS managed node groups (one per module) with IAM, optional launch template, taints, labels, and SPOT/ON_DEMAND capacity | v1.0.0  |
+| `kubernetes/` | `eks_addons`      | Post-compute EKS add-ons: coredns and aws-ebs-csi-driver with EBS CSI Pod Identity role; apply only after node groups exist | v1.0.0  |
+| `kubernetes/` | `eks_cluster`     | AWS EKS clusters with OIDC, KMS-encrypted secrets, control plane logging, vpc-cni + kube-proxy + Pod Identity Agent add-ons, LB Controller Pod Identity role, and access entries | v2.0.0  |
 | `kubernetes/` | `eks_fargate_profile` | AWS EKS Fargate profiles (one per module) with pod execution role | v1.0.0  |
 | `kubernetes/` | `eks_karpenter`   | Karpenter on AWS: controller Pod Identity role, node role + instance profile, EC2_LINUX access entry, SQS interruption queue, and EventBridge rules | v1.0.0  |
+| `kubernetes/` | `eks_node_group`  | AWS EKS managed node groups (one per module) with IAM, optional launch template, taints, labels, and SPOT/ON_DEMAND capacity | v1.0.0  |
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |

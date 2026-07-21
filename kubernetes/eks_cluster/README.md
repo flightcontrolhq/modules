@@ -8,21 +8,26 @@ actually needs:
 - An OIDC identity provider for IRSA-based workloads.
 - Optional KMS envelope encryption for Kubernetes secrets (default on).
 - Optional CloudWatch control-plane logging with a managed log group (default on).
-- Core add-ons: `vpc-cni`, `coredns`, `kube-proxy`.
-- Optional add-ons: `eks-pod-identity-agent` (default on), `aws-ebs-csi-driver`.
+- Core add-ons: `vpc-cni`, `kube-proxy`.
+- Optional add-on: `eks-pod-identity-agent` (default on).
 - A Pod Identity role + association for the AWS Load Balancer Controller (consumer Helm-installs the controller).
-- A Pod Identity role + association for the EBS CSI driver (when enabled).
 - Caller-driven access entries (`var.access_entries`) and pod identity associations (`var.pod_identity_associations`).
 
-Node groups, Fargate profiles, and Karpenter are separate modules
-(`kubernetes/eks_node_group`, `kubernetes/eks_fargate_profile`,
-`kubernetes/eks_karpenter`).
+> **Breaking change (v2.0.0):** Deployment-kind add-ons (`coredns`,
+> `aws-ebs-csi-driver` + its Pod Identity role) moved to
+> `kubernetes/eks_addons`, which must be applied **after** compute exists.
+> Keeping them in the cluster module caused create-time deadlocks on clusters
+> with no node groups (add-ons hang `DEGRADED` for ~20 minutes then fail).
+
+Node groups, Fargate profiles, Karpenter, and post-compute add-ons are
+separate modules (`kubernetes/eks_node_group`, `kubernetes/eks_fargate_profile`,
+`kubernetes/eks_karpenter`, `kubernetes/eks_addons`).
 
 ## Usage
 
 ```hcl
 module "eks" {
-  source = "git::https://github.com/ravionhq/modules.git//kubernetes/eks_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//kubernetes/eks_cluster?ref=v2.0.0"
 
   name               = "platform"
   kubernetes_version = "1.31"
@@ -33,8 +38,7 @@ module "eks" {
   public_endpoint_access_enabled  = true
   private_endpoint_access_enabled = true
 
-  ebs_csi_driver_enabled         = true
-  pod_identity_agent_enabled     = true
+  pod_identity_agent_enabled         = true
   lb_controller_pod_identity_enabled = true
 
   access_entries = {
@@ -82,10 +86,8 @@ module "eks" {
 | cluster_log_retention_in_days | Retention for the control plane log group. | `number` | `30` | no |
 | secrets_encryption_enabled | Envelope-encrypt Kubernetes secrets with KMS. | `bool` | `true` | no |
 | secrets_kms_key_arn | Existing KMS key ARN; null = create one. | `string` | `null` | no |
-| vpc_cni_addon_version / coredns_addon_version / kube_proxy_addon_version | Pinned add-on versions. | `string` | `null` | no |
-| vpc_cni_addon_configuration_values / coredns_addon_configuration_values / kube_proxy_addon_configuration_values | JSON config overrides. | `string` | `null` | no |
-| ebs_csi_driver_enabled | Install aws-ebs-csi-driver + Pod Identity role. | `bool` | `false` | no |
-| ebs_csi_addon_version | Pin EBS CSI add-on version. | `string` | `null` | no |
+| vpc_cni_addon_version / kube_proxy_addon_version | Pinned add-on versions. | `string` | `null` | no |
+| vpc_cni_addon_configuration_values / kube_proxy_addon_configuration_values | JSON config overrides. | `string` | `null` | no |
 | pod_identity_agent_enabled | Install eks-pod-identity-agent. | `bool` | `true` | no |
 | pod_identity_agent_addon_version | Pin pod identity agent add-on version. | `string` | `null` | no |
 | lb_controller_pod_identity_enabled | Create LB Controller Pod Identity role/association. | `bool` | `true` | no |
@@ -110,7 +112,6 @@ module "eks" {
 | secrets_kms_key_arn | Secrets KMS key (null if disabled). |
 | cloudwatch_log_group_name / cloudwatch_log_group_arn | Control plane log group. |
 | lb_controller_role_arn / lb_controller_role_name | LB Controller Pod Identity role. |
-| ebs_csi_role_arn / ebs_csi_role_name | EBS CSI Pod Identity role. |
 | aws_account_id / region | Account & region info. |
 
 ## Notes
@@ -118,3 +119,4 @@ module "eks" {
 - The OIDC provider's thumbprint is taken from the cluster's TLS chain at apply time; AWS recommends this approach over hardcoding the well-known thumbprint.
 - The LB Controller's IAM policy is vendored from `kubernetes-sigs/aws-load-balancer-controller` upstream (`docs/install/iam_policy.json`) at `policies/lb_controller.json`. Refresh that file when you upgrade the controller version.
 - Pod Identity needs the `eks-pod-identity-agent` add-on. Disabling it (`pod_identity_agent_enabled = false`) without disabling the helper roles will leave their associations created but non-functional at runtime.
+- For CoreDNS and the EBS CSI driver, use `kubernetes/eks_addons` after node groups (or Fargate) exist.
