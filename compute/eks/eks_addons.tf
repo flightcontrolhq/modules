@@ -10,6 +10,10 @@ module "addons" {
 
   depends_on = [module.system_node_group]
 
+  # Resolved at the root so managed policy ARNs stay known at plan time; the
+  # module-level depends_on above defers the submodule's own data sources.
+  partition = data.aws_partition.current.partition
+
   cluster_name = module.cluster.cluster_name
 
   coredns_addon_version              = var.coredns_addon_version

@@ -34,6 +34,7 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 |------|-------------|------|---------|----------|
 | cluster_name | Name of the EKS cluster to install add-ons on. | `string` | n/a | yes |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
+| partition | AWS partition used to build managed policy ARNs. Pass from the caller when instantiating with `depends_on` so ARNs are known at plan time; resolved via data source when null. | `string` | `null` | no |
 | coredns_addon_version | Pinned version for the coredns add-on. When null, AWS resolves the most recent compatible version. | `string` | `null` | no |
 | coredns_addon_configuration_values | JSON string of add-on configuration overrides for coredns. | `string` | `null` | no |
 | ebs_csi_driver_enabled | Install the aws-ebs-csi-driver add-on and create its Pod Identity role. | `bool` | `false` | no |

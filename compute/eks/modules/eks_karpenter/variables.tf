@@ -18,6 +18,17 @@ variable "tags" {
   default     = {}
 }
 
+variable "partition" {
+  type        = string
+  description = "AWS partition (e.g. 'aws', 'aws-us-gov') used to build managed policy ARNs. Pass this from the calling module when this module is instantiated with depends_on, so policy ARNs are known at plan time; when null, it is resolved via a data source."
+  default     = null
+
+  validation {
+    condition     = var.partition == null || can(regex("^aws", var.partition))
+    error_message = "The partition must be a valid AWS partition name (e.g. 'aws', 'aws-us-gov', 'aws-cn')."
+  }
+}
+
 ################################################################################
 # Controller (Pod Identity)
 ################################################################################
