@@ -71,7 +71,7 @@ module:
       label: Kubernetes version
       required: true
       type: string
-      values: $values:aws/eks_versions
+      values: $values:aws/eks_versions?region=<<module.input.aws_region>>&currentVersion=<<instance.input.kubernetes_version>>
     - default: true
       description: Prevent the cluster from being deleted via the AWS API. Must be turned off before this module can be destroyed.
       id: deletion_protection_enabled
@@ -169,7 +169,7 @@ module:
       id: ebs_csi_driver_enabled
       label: EBS CSI driver
       type: boolean
-    - description: Provisions the AWS-side Karpenter resources - controller and node IAM roles, instance profile, interruption queue, and EventBridge rules. Installing the Karpenter Helm chart into the cluster remains a separate step.
+    - description: Provisions Karpenter end to end - controller and node IAM roles, instance profile, interruption queue, EventBridge rules, the Karpenter controller Helm chart, and a default NodePool so autoscaling works out of the box.
       id: section_karpenter
       label: Karpenter
       type: section
@@ -178,7 +178,7 @@ module:
       label: Karpenter
       type: boolean
     - collapsible: true
-      description: Namespace where the Karpenter controller will be installed. Must match your Helm install.
+      description: Namespace where the Karpenter controller is installed.
       id: karpenter_controller_namespace
       label: Controller namespace
       placeholder: kube-system
@@ -186,7 +186,7 @@ module:
         karpenter_enabled: true
       type: string
     - collapsible: true
-      description: Service account name used by the Karpenter controller. Must match your Helm install.
+      description: Service account name used by the Karpenter controller.
       id: karpenter_controller_service_account
       label: Controller service account
       placeholder: karpenter
@@ -304,7 +304,7 @@ module:
     1. **Cluster** - control plane, OIDC provider, secrets encryption, VPC CNI, kube-proxy, Pod Identity Agent, and the AWS Load Balancer Controller IAM role
     2. **System node group** - a small managed node group that gives system workloads somewhere to run
     3. **Add-ons** - CoreDNS and the optional EBS CSI driver, installed only after compute exists so they start healthy
-    4. **Optional compute** - Karpenter AWS resources and Fargate profiles
+    4. **Optional compute** - Karpenter (IAM resources, controller, and a default NodePool) and Fargate profiles
 
     Terraform source: [flightcontrolhq/modules/compute/eks](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks)
 
@@ -313,7 +313,7 @@ module:
     | Scenario                          | EKS cluster helps by...                                          |
     | --------------------------------- | ---------------------------------------------------------------- |
     | Running Kubernetes workloads      | Providing a managed control plane and ready-to-use node group    |
-    | Autoscaling compute               | Provisioning Karpenter IAM roles, interruption queue, and events |
+    | Autoscaling compute               | Installing Karpenter with IAM roles, interruption handling, and a default NodePool |
     | Running serverless pods           | Creating Fargate profiles for selected namespaces                |
     | Using persistent volumes          | Installing the EBS CSI driver with its Pod Identity role         |
     | Exposing services                 | Creating the AWS Load Balancer Controller IAM role automatically |
@@ -331,7 +331,7 @@ module:
 
     ### Karpenter
 
-    Enabling Karpenter provisions the AWS-side resources it needs: controller and node IAM roles, an instance profile, an SQS interruption queue, and EventBridge rules. Installing the Karpenter Helm chart into the cluster remains a separate step; use the controller namespace and service account settings to match your install.
+    Enabling Karpenter provisions everything it needs: controller and node IAM roles, an instance profile, an SQS interruption queue, EventBridge rules, the Karpenter controller (installed via Helm), and a default NodePool/EC2NodeClass so autoscaling works out of the box.
 
     ### Fargate
 
@@ -363,7 +363,7 @@ module:
     | System node group      | No       | 2-4 `t3.medium`      | Instance types, capacity type, size bounds, disk size  |
     | Additional node groups | No       | -                    | Extra managed node groups keyed by name                |
     | EBS CSI driver         | No       | `false`              | Install the EBS CSI add-on and Pod Identity role       |
-    | Karpenter              | No       | `false`              | Provision Karpenter AWS resources                      |
+    | Karpenter              | No       | `false`              | Install Karpenter with IAM resources and a default NodePool |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
     | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
     | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |
