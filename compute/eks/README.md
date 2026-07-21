@@ -11,6 +11,9 @@ into a single hosting unit with enforced provisioning order:
    EBS CSI (deadlock without step 2)
 4. **Optional Karpenter / Fargate** (`modules/eks_karpenter`,
    `modules/eks_fargate_profile`) — after add-ons are healthy
+5. **Karpenter controller install** (Helm) — when `karpenter_enabled` is on,
+   the stack installs the `karpenter-crd` and `karpenter` charts plus a
+   default NodePool/EC2NodeClass, so autoscaling works out of the box
 
 Child modules live in `compute/eks/modules/` and are **not** independently
 published root stacks — they have no `provider` / `cloud {}` blocks. Callers
@@ -45,6 +48,7 @@ module "eks" {
 | opentofu/terraform | >= 1.10.0 |
 | aws                | >= 6.0    |
 | tls                | >= 4.0    |
+| helm               | >= 3.0    |
 
 ## Inputs
 
@@ -88,6 +92,11 @@ module "eks" {
 | karpenter_node_role_additional_managed_policy_arns | Extra policies on Karpenter node role. | `list(string)` | `[]` | no |
 | karpenter_interruption_queue_name | Override interruption queue name. | `string` | `null` | no |
 | karpenter_interruption_queue_message_retention_seconds | Interruption queue retention. | `number` | `300` | no |
+| karpenter_chart_enabled | Install the Karpenter controller Helm chart in-stack. | `bool` | `true` | no |
+| karpenter_chart_version | Karpenter (and karpenter-crd) chart version. | `string` | `"1.14.0"` | no |
+| karpenter_helm_values | Extra YAML docs merged into the Karpenter chart values. | `list(string)` | `[]` | no |
+| karpenter_default_node_pool_enabled | Create the default NodePool + EC2NodeClass. | `bool` | `true` | no |
+| karpenter_default_node_pool | Default NodePool settings (capacity types, categories, arch, CPU limit, expiry). | `object` | `{}` | no |
 | fargate_profiles | Fargate profiles keyed by name (`selectors` required). | `map(object)` | `{}` | no |
 
 ## Outputs
@@ -114,7 +123,18 @@ module "eks" {
 - Ordering is intentional: CoreDNS and the EBS CSI controller are Deployments and
   hang `DEGRADED` for ~20 minutes when no compute exists. The composite
   `depends_on` chain prevents that deadlock.
-- Karpenter Helm install remains the consumer's job; use the Karpenter outputs
-  for `settings.interruptionQueue` and `EC2NodeClass.spec.instanceProfile`.
+- When `karpenter_enabled` is on, the stack installs the Karpenter controller
+  via Helm (`karpenter-crd` + `karpenter`, same pinned version) and a default
+  NodePool/EC2NodeClass from the local `charts/karpenter-resources` chart. Set
+  `karpenter_chart_enabled = false` to manage the controller out-of-band (e.g.
+  GitOps) while keeping the AWS-side resources, or
+  `karpenter_default_node_pool_enabled = false` to bring your own NodePools.
+- The Helm provider authenticates with a token minted per apply via
+  `aws eks get-token`, so the runner needs the AWS CLI on PATH and network
+  reachability to the cluster API endpoint. No cluster credentials are stored
+  in state.
+- On destroy, the NodePool release is removed first, which lets Karpenter drain
+  and terminate the nodes it launched before the controller itself is
+  uninstalled.
 - Nested modules under `modules/` are internal implementation details of this
   composite — do not instantiate them as separate root stacks.

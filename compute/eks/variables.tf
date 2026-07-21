@@ -441,6 +441,57 @@ variable "karpenter_interruption_queue_message_retention_seconds" {
   default     = 300
 }
 
+variable "karpenter_chart_enabled" {
+  type        = bool
+  description = "Install the Karpenter controller Helm chart into the cluster. Disable to manage the controller out-of-band (e.g. GitOps) while keeping the AWS-side resources from karpenter_enabled."
+  default     = true
+}
+
+variable "karpenter_chart_version" {
+  type        = string
+  description = "Version of the Karpenter Helm chart (and karpenter-crd chart) to install."
+  default     = "1.14.0"
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.karpenter_chart_version))
+    error_message = "The karpenter_chart_version must be a semantic version like '1.14.0' (no leading 'v')."
+  }
+}
+
+variable "karpenter_helm_values" {
+  type        = list(string)
+  description = "Additional YAML documents merged into the Karpenter Helm chart values, after the values this module derives (cluster name, interruption queue, service account). Later entries win."
+  default     = []
+}
+
+variable "karpenter_default_node_pool_enabled" {
+  type        = bool
+  description = "Create a general-purpose default NodePool and EC2NodeClass so Karpenter can provision nodes out of the box. Disable to manage NodePools yourself."
+  default     = true
+}
+
+variable "karpenter_default_node_pool" {
+  type = object({
+    capacity_types      = optional(list(string), ["on-demand", "spot"])
+    instance_categories = optional(list(string), ["c", "m", "r"])
+    architectures       = optional(list(string), ["amd64"])
+    cpu_limit           = optional(number, 100)
+    expire_after        = optional(string, "720h")
+  })
+  description = "Settings for the default NodePool: allowed capacity types (on-demand/spot), EC2 instance categories, CPU architectures, total vCPU limit, and node expiry."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for t in var.karpenter_default_node_pool.capacity_types : contains(["on-demand", "spot"], t)])
+    error_message = "The karpenter_default_node_pool.capacity_types entries must be 'on-demand' or 'spot'."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.karpenter_default_node_pool.architectures : contains(["amd64", "arm64"], a)])
+    error_message = "The karpenter_default_node_pool.architectures entries must be 'amd64' or 'arm64'."
+  }
+}
+
 ################################################################################
 # Fargate
 ################################################################################
