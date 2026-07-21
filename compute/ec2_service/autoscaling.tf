@@ -25,7 +25,12 @@ module "autoscaling" {
   launch_template_version          = "$Latest"
 
   # Register instances with the service target group
-  target_group_arns = local.enable_load_balancer ? [aws_lb_target_group.app[0].arn] : []
+  target_group_arns = local.load_balancer_creation_enabled ? [aws_lb_target_group.app[0].arn] : []
+
+  enabled_metrics = [
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+  ]
 
   # Visibility-only lifecycle hooks: they emit "EC2 Instance-launch/-terminate
   # Lifecycle Action" EventBridge events that Ravion ingests to show instances
@@ -47,7 +52,7 @@ module "autoscaling" {
     },
   ]
 
-  scaling_policies = var.cpu_target_tracking_enabled ? [
+  scaling_policies = var.cpu_autoscaling_enabled ? [
     {
       name        = "${var.name}-cpu-target-tracking"
       policy_type = "TargetTrackingScaling"

@@ -16,7 +16,7 @@ For the **container** runtime the module creates an SSM Command document (`<name
 1. Rebuild the app env file: Terraform-rendered plain values, plus secret values fetched on the instance from Secrets Manager / SSM Parameter Store.
 2. Drain: deregister the instance from the target group and wait (skipped in worker mode, and when the instance is the only registered target — with nothing to shift traffic to, draining only lengthens the outage).
 3. Swap the release: `docker pull`, then update the supervisord-managed container process.
-4. Health gate: poll `http://localhost:<app_port><health_check_path>` until healthy, or fail the command.
+4. Health gate: poll `http://localhost:<app_port><deploy_health_check_path>` until healthy, or fail the command.
 5. Re-register the instance with the target group and wait until in service.
 
 An orchestrator (the Ravion deploy manager) runs this document against the Auto Scaling Group's instances with its own batching and failure policy, passing:
@@ -25,6 +25,8 @@ An orchestrator (the Ravion deploy manager) runs this document against the Auto 
 |-----------|-------|
 | `imageUri` | Full image URI including tag or digest |
 | `deployId` | Optional release identifier |
+
+The module definition exposes the rolling deployment batch and failure limits. It defaults to one instance at a time and stops after the first failure. The SSM script timeout applies per instance; the module deployment has a separate 24-hour overall safety limit.
 
 For the **manual** runtime the document (same `<name>-deploy` name) takes a `commands` parameter and an optional Git source. When source is present, the instance fetches a temporary credential from SSM Parameter Store, performs a clean checkout under `/srv/ravion/<name>/source`, and runs both the preparation commands and `manual_start_command` from the selected base path. When source is absent, commands keep their existing working-directory behavior. Any failure stops the deploy. The start command must remain in the foreground rather than daemonizing. Draining and health checking are up to the preparation commands.
 
@@ -49,8 +51,8 @@ module "web" {
   min_size      = 2
   max_size      = 4
 
-  app_port          = 3000
-  health_check_path = "/health"
+  app_port                = 3000
+  deploy_health_check_path = "/health"
 
   ecr_repository_creation_enabled = true
 
@@ -96,8 +98,8 @@ module "worker" {
 
   manual_start_command = "cd /srv/app && ./bin/worker"
 
-  data_volume_enabled = true
-  data_volume_size    = 50
+  data_volume_creation_enabled = true
+  data_volume_size             = 50
 }
 ```
 
@@ -134,23 +136,23 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | region | AWS region (null = provider region) | `string` | `null` | no |
 | vpc_id | VPC for the instances | `string` | n/a | yes |
 | subnet_ids | Subnets for the Auto Scaling Group | `list(string)` | n/a | yes |
-| associate_public_ip_address | Assign public IPs to instances | `bool` | `false` | no |
+| public_ip_assignment_enabled | Assign public IPs to instances | `bool` | `false` | no |
 | additional_security_group_ids | Extra security groups on the instances | `list(string)` | `[]` | no |
-| allowed_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
+| direct_access_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
 | runtime | `container` or `manual` | `string` | n/a | yes |
 | app_port | Port the app listens on | `number` | `null` | no |
-| start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
+| container_start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
 | manual_start_command | Long-running foreground manual app command managed by supervisord | `string` | `null` | yes for manual |
 | environment_variables | Plain env vars written to the app env file | `list(object)` | `[]` | no |
 | secrets | Secret env vars fetched on-instance from Secrets Manager / SSM Parameter Store (`{name, value_from}`) | `list(object)` | `[]` | no |
-| health_check_path | Local HTTP path gating deploy success | `string` | `null` | no |
+| deploy_health_check_path | Local HTTP path gating deploy success | `string` | `null` | no |
 | deploy_timeout_seconds | Per-instance deploy script timeout | `number` | `1200` | no |
 | instance_type | EC2 instance type | `string` | n/a | yes |
 | ami_id | Custom AMI (null = latest AL2023) | `string` | `null` | no |
 | key_name | SSH key pair name | `string` | `null` | no |
 | root_volume_size | Root EBS volume size (GB) | `number` | `30` | no |
 | root_volume_type | Root EBS volume type | `string` | `"gp3"` | no |
-| data_volume_enabled | Attach a formatted per-instance data volume | `bool` | `false` | no |
+| data_volume_creation_enabled | Attach a formatted per-instance data volume | `bool` | `false` | no |
 | data_volume_size | Data volume size (GB) | `number` | `20` | no |
 | data_volume_type | Data volume type | `string` | `"gp3"` | no |
 | data_volume_mount_path | Host mount path for the data volume | `string` | `"/data"` | no |
@@ -160,7 +162,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | desired_capacity | Desired instances (null = group-managed) | `number` | `null` | no |
 | health_check_type | ASG health check: `EC2` or `ELB` | `string` | `"EC2"` | no |
 | health_check_grace_period | Seconds before ASG health checks apply | `number` | `300` | no |
-| cpu_target_tracking_enabled | Scale on average CPU utilization | `bool` | `false` | no |
+| cpu_autoscaling_enabled | Scale on average CPU utilization | `bool` | `false` | no |
 | cpu_target_value | CPU utilization target (%) | `number` | `70` | no |
 | load_balancer_attachment | Target group + listener rules (null = worker mode) | `object` | `null` | no |
 | load_balancer_security_group_id | ALB security group allowed to reach the app port | `string` | `null` | no |
@@ -171,6 +173,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | efs_mount_path | Host mount path for EFS | `string` | `"/mnt/efs"` | no |
 | ecr_repository_creation_enabled | Create an ECR repository for built images | `bool` | `false` | no |
 | ecr_force_deletion_enabled | Delete the ECR repository even with images | `bool` | `false` | no |
+| ecr_scan_on_push_enabled | Scan images for vulnerabilities after push | `bool` | `true` | no |
 | log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
 
 ## Outputs

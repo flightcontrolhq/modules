@@ -6,7 +6,7 @@ set -euo pipefail
 
 dnf install -y git jq unzip
 
-%{ if data_volume_enabled ~}
+%{ if data_volume_creation_enabled ~}
 # Format and mount the data volume on first boot. The volume is the only
 # attached disk without a filesystem; on later boots fstab mounts it.
 DATA_DEVICE=""

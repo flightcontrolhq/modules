@@ -15,7 +15,7 @@ locals {
 
   container_runtime = var.runtime == "container"
 
-  enable_load_balancer = var.load_balancer_attachment != null ? var.load_balancer_attachment.enabled : false
+  load_balancer_creation_enabled = var.load_balancer_attachment != null ? var.load_balancer_attachment.creation_enabled : false
 
   cpu_architecture = var.ami_id == null ? (
     contains(data.aws_ec2_instance_type.selected[0].supported_architectures, "arm64") ? "arm64" : "x86_64"
@@ -89,8 +89,8 @@ locals {
     name                      = var.name
     region                    = local.region
     app_port                  = var.app_port
-    start_command             = var.start_command != null ? var.start_command : ""
-    health_check_path         = var.health_check_path != null ? var.health_check_path : ""
+    start_command             = var.container_start_command != null ? var.container_start_command : ""
+    deploy_health_check_path  = var.deploy_health_check_path != null ? var.deploy_health_check_path : ""
     env_file_script           = local.env_file_script
     env_file_path             = local.env_file_path
     app_runner_path           = local.app_runner_path
@@ -100,23 +100,23 @@ locals {
     supervisor_install_script = local.supervisor_install_script
     supervisor_program        = local.supervisor_program
     supervisor_program_script = local.supervisor_program_script
-    target_group_arn          = local.enable_load_balancer ? aws_lb_target_group.app[0].arn : ""
-    data_volume_mount_path    = var.data_volume_enabled ? var.data_volume_mount_path : ""
+    target_group_arn          = local.load_balancer_creation_enabled ? aws_lb_target_group.app[0].arn : ""
+    data_volume_mount_path    = var.data_volume_creation_enabled ? var.data_volume_mount_path : ""
     efs_mount_path            = var.efs_enabled ? var.efs_mount_path : ""
   }) : null
 
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
-    name                      = var.name
-    region                    = local.region
-    env_file_script           = local.env_file_script
-    env_file_path             = local.env_file_path
-    supervisor_install_script = local.supervisor_install_script
-    data_volume_enabled       = var.data_volume_enabled
-    data_volume_mount_path    = var.data_volume_mount_path
-    efs_enabled               = var.efs_enabled
-    efs_file_system_id        = var.efs_file_system_id != null ? var.efs_file_system_id : ""
-    efs_access_point_id       = var.efs_access_point_id != null ? var.efs_access_point_id : ""
-    efs_mount_path            = var.efs_mount_path
-    additional_user_data      = var.additional_user_data
+    name                         = var.name
+    region                       = local.region
+    env_file_script              = local.env_file_script
+    env_file_path                = local.env_file_path
+    supervisor_install_script    = local.supervisor_install_script
+    data_volume_creation_enabled = var.data_volume_creation_enabled
+    data_volume_mount_path       = var.data_volume_mount_path
+    efs_enabled                  = var.efs_enabled
+    efs_file_system_id           = var.efs_file_system_id != null ? var.efs_file_system_id : ""
+    efs_access_point_id          = var.efs_access_point_id != null ? var.efs_access_point_id : ""
+    efs_mount_path               = var.efs_mount_path
+    additional_user_data         = var.additional_user_data
   }))
 }
