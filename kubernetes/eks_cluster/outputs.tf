@@ -118,16 +118,6 @@ output "lb_controller_role_name" {
   value       = var.lb_controller_pod_identity_enabled ? module.lb_controller_role[0].role_name : null
 }
 
-output "ebs_csi_role_arn" {
-  description = "ARN of the EBS CSI driver Pod Identity role (null if EBS CSI not enabled)."
-  value       = var.ebs_csi_driver_enabled ? module.ebs_csi_role[0].role_arn : null
-}
-
-output "ebs_csi_role_name" {
-  description = "Name of the EBS CSI driver Pod Identity role (null if EBS CSI not enabled)."
-  value       = var.ebs_csi_driver_enabled ? module.ebs_csi_role[0].role_name : null
-}
-
 ################################################################################
 # Account & Region
 ################################################################################

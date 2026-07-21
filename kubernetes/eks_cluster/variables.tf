@@ -258,18 +258,6 @@ variable "vpc_cni_addon_configuration_values" {
   default     = null
 }
 
-variable "coredns_addon_version" {
-  type        = string
-  description = "Pinned version for the coredns add-on. When null, AWS resolves the most recent compatible version."
-  default     = null
-}
-
-variable "coredns_addon_configuration_values" {
-  type        = string
-  description = "JSON string of add-on configuration overrides for coredns."
-  default     = null
-}
-
 variable "kube_proxy_addon_version" {
   type        = string
   description = "Pinned version for the kube-proxy add-on. When null, AWS resolves the most recent compatible version."
@@ -279,24 +267,6 @@ variable "kube_proxy_addon_version" {
 variable "kube_proxy_addon_configuration_values" {
   type        = string
   description = "JSON string of add-on configuration overrides for kube-proxy."
-  default     = null
-}
-
-variable "ebs_csi_driver_enabled" {
-  type        = bool
-  description = "Install the aws-ebs-csi-driver add-on and create its Pod Identity role."
-  default     = false
-}
-
-variable "ebs_csi_addon_version" {
-  type        = string
-  description = "Pinned version for the aws-ebs-csi-driver add-on. When null, AWS resolves the most recent compatible version."
-  default     = null
-}
-
-variable "ebs_csi_addon_configuration_values" {
-  type        = string
-  description = "JSON string of add-on configuration overrides for aws-ebs-csi-driver."
   default     = null
 }
 

@@ -1,9 +1,14 @@
 ################################################################################
-# Core EKS Add-ons
+# DaemonSet-kind EKS Add-ons
 #
-# vpc-cni, coredns, and kube-proxy are required for any functioning EKS cluster.
-# Managing them as add-ons lets EKS handle compatibility with the control plane
-# version. Versions default to AWS-resolved most-recent-compatible.
+# Only DaemonSet-kind add-ons live here (vpc-cni, kube-proxy, and optionally
+# eks-pod-identity-agent). They schedule on nodes as they join and do not block
+# cluster create when no compute exists yet.
+#
+# Deployment-kind add-ons (coredns, aws-ebs-csi-driver) live in
+# kubernetes/eks_addons and MUST be applied after at least one node group or
+# Fargate profile exists — otherwise their pods never schedule and the add-ons
+# time out DEGRADED.
 ################################################################################
 
 resource "aws_eks_addon" "vpc_cni" {
@@ -11,17 +16,6 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_name                  = "vpc-cni"
   addon_version               = var.vpc_cni_addon_version
   configuration_values        = var.vpc_cni_addon_configuration_values
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
-
-  tags = local.tags
-}
-
-resource "aws_eks_addon" "coredns" {
-  cluster_name                = aws_eks_cluster.this.name
-  addon_name                  = "coredns"
-  addon_version               = var.coredns_addon_version
-  configuration_values        = var.coredns_addon_configuration_values
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
@@ -43,8 +37,8 @@ resource "aws_eks_addon" "kube_proxy" {
 # Pod Identity Agent
 #
 # Required on the data plane for any aws_eks_pod_identity_association to take
-# effect. Defaults on because the helpers this module ships (LB Controller,
-# EBS CSI) use Pod Identity.
+# effect. Defaults on because the helpers this module ships (LB Controller)
+# use Pod Identity.
 ################################################################################
 
 resource "aws_eks_addon" "pod_identity_agent" {
@@ -57,26 +51,4 @@ resource "aws_eks_addon" "pod_identity_agent" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = local.tags
-}
-
-################################################################################
-# EBS CSI Driver
-#
-# Wired with a Pod Identity association in pod_identity_ebs_csi.tf rather than
-# IRSA — the role is bound at runtime via the Pod Identity Agent.
-################################################################################
-
-resource "aws_eks_addon" "ebs_csi" {
-  count = var.ebs_csi_driver_enabled ? 1 : 0
-
-  cluster_name                = aws_eks_cluster.this.name
-  addon_name                  = "aws-ebs-csi-driver"
-  addon_version               = var.ebs_csi_addon_version
-  configuration_values        = var.ebs_csi_addon_configuration_values
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
-
-  tags = local.tags
-
-  depends_on = [aws_eks_pod_identity_association.ebs_csi]
 }
