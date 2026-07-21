@@ -1,0 +1,395 @@
+definition:
+  type: rvn-eks
+  name: EKS Cluster
+  description: Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Karpenter and Fargate compute.
+release:
+  version: 0.1.0
+  description: Initial EKS module definition for the compute/eks composite stack.
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - id: section_aws
+          label: AWS account & region
+          type: section
+        - default: << ref.input.aws_account_id >>
+          id: aws_account_id
+          immutable: true
+          label: AWS account
+          type: string
+          values: $values:ravion/aws_accounts
+        - default: << ref.input.aws_region >>
+          id: aws_region
+          immutable: true
+          label: Region
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          default: << ref.input.execution_environment_id >>
+          description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
+          id: execution_environment_id
+          label: Terraform execution environment
+          type: string
+          values: $values:ravion/execution_environments
+        - id: section_vpc
+          label: VPC
+          type: section
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          required: true
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Subnets for the EKS control plane and default node placement. Use private subnets in at least two availability zones.
+          id: subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          required: true
+          type: string_array
+      required: true
+      type: $ref:rvn-aws-network
+    - id: section_cluster
+      label: EKS cluster
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>
+      description: Name of the EKS cluster and prefix for related resources.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: 1-100 letters, numbers, hyphens, and underscores. Start with a letter or number.
+          pattern: ^[0-9A-Za-z][A-Za-z0-9-_]{0,99}$
+      required: true
+      type: string
+    - default: $values:first
+      description: Kubernetes version for the EKS cluster.
+      id: kubernetes_version
+      label: Kubernetes version
+      required: true
+      type: string
+      values: $values:aws/eks_versions
+    - default: true
+      description: Prevent the cluster from being deleted via the AWS API. Must be turned off before this module can be destroyed.
+      id: deletion_protection_enabled
+      label: Deletion protection
+      type: boolean
+    - collapsible: true
+      default: true
+      description: Envelope-encrypt Kubernetes secrets with a KMS key. A key is created automatically unless an existing key ARN is provided below.
+      id: secrets_encryption_enabled
+      label: Secrets encryption
+      type: boolean
+    - collapsible: true
+      description: Existing KMS key for Kubernetes secrets encryption. Leave blank to create a dedicated key.
+      id: secrets_kms_key_arn
+      label: Secrets KMS key ARN
+      placeholder: arn:aws:kms:...
+      show_when:
+        secrets_encryption_enabled: true
+      type: string
+    - description: Controls how the Kubernetes API server endpoint can be reached. Private access keeps traffic inside the VPC; public access exposes the endpoint to the internet.
+      id: section_endpoint
+      label: API endpoint access
+      type: section
+    - default: true
+      description: Allow access to the Kubernetes API server from inside the VPC.
+      id: private_endpoint_access_enabled
+      label: Private endpoint access
+      type: boolean
+    - default: false
+      description: Allow access to the Kubernetes API server from the public internet.
+      id: public_endpoint_access_enabled
+      label: Public endpoint access
+      type: boolean
+    - add_button_label: Add CIDR block
+      description: IPv4 CIDR blocks allowed to reach the public API server endpoint. Terraform defaults to 0.0.0.0/0.
+      id: public_access_cidrs
+      label: Public access CIDRs
+      placeholder: 0.0.0.0/0
+      show_when:
+        public_endpoint_access_enabled: true
+      type: string_array
+    - description: Required managed node group that runs system workloads such as CoreDNS. Sized small by default; add more compute with additional node groups, Karpenter, or Fargate.
+      id: section_system_nodes
+      label: System node group
+      type: section
+    - add_button_label: Add instance type
+      default:
+        - t3.medium
+      description: EC2 instance types for system nodes.
+      id: system_node_instance_types
+      label: Instance types
+      placeholder: t3.medium
+      type: string_array
+    - default: ON_DEMAND
+      description: Spot is cheaper but nodes can be interrupted. Use On-demand for system workloads unless cost is critical.
+      id: system_node_capacity_type
+      label: Capacity type
+      type: string
+      values:
+        - label: On-demand
+          value: ON_DEMAND
+        - label: Spot
+          value: SPOT
+    - default: 2
+      description: Minimum system nodes. Also used as the initial node count; after creation, node count is managed outside Terraform.
+      id: system_node_min_size
+      label: Min nodes
+      min: 1
+      type: number
+    - default: 4
+      description: Maximum system nodes.
+      id: system_node_max_size
+      label: Max nodes
+      min: 1
+      type: number
+    - collapsible: true
+      description: Root EBS volume size for system nodes. Leave blank for the AMI default.
+      id: system_node_disk_size
+      label: Disk size (GB)
+      min: 20
+      placeholder: "20"
+      type: number
+    - collapsible: true
+      default: {}
+      description: Optional additional managed node groups keyed by name. Each value follows the composite module's additional_node_groups object shape (instance_types, capacity_type, min_size, max_size, labels, taints, and more).
+      id: additional_node_groups
+      label: Additional node groups
+      type: object
+    - description: Cluster add-ons installed after the system node group is ready. Core networking add-ons (VPC CNI, kube-proxy, CoreDNS, Pod Identity Agent) and the AWS Load Balancer Controller IAM role are always managed.
+      id: section_addons
+      label: Add-ons
+      type: section
+    - default: false
+      description: Install the EBS CSI driver add-on and its Pod Identity role so workloads can use EBS-backed persistent volumes.
+      id: ebs_csi_driver_enabled
+      label: EBS CSI driver
+      type: boolean
+    - description: Provisions the AWS-side Karpenter resources - controller and node IAM roles, instance profile, interruption queue, and EventBridge rules. Installing the Karpenter Helm chart into the cluster remains a separate step.
+      id: section_karpenter
+      label: Karpenter
+      type: section
+    - default: false
+      id: karpenter_enabled
+      label: Karpenter
+      type: boolean
+    - collapsible: true
+      description: Namespace where the Karpenter controller will be installed. Must match your Helm install.
+      id: karpenter_controller_namespace
+      label: Controller namespace
+      placeholder: kube-system
+      show_when:
+        karpenter_enabled: true
+      type: string
+    - collapsible: true
+      description: Service account name used by the Karpenter controller. Must match your Helm install.
+      id: karpenter_controller_service_account
+      label: Controller service account
+      placeholder: karpenter
+      show_when:
+        karpenter_enabled: true
+      type: string
+    - description: Run selected namespaces on AWS Fargate instead of EC2 nodes.
+      id: section_fargate
+      label: Fargate
+      type: section
+    - collapsible: true
+      default: {}
+      description: 'Optional Fargate profiles keyed by name. Each value follows the composite module''s fargate_profiles object shape, for example {"selectors": [{"namespace": "my-namespace"}]}.'
+      id: fargate_profiles
+      label: Fargate profiles
+      type: object
+    - description: Additional EKS access entries for IAM principals that need cluster access. The IAM principal that creates the cluster is granted admin access automatically. Automatic access for Ravion deploys will be wired here in a future release.
+      id: section_access
+      label: Cluster access
+      type: section
+    - collapsible: true
+      default: {}
+      description: Map of access entries keyed by a stable identifier. Each value follows the composite module's access_entries object shape (principal_arn, type, kubernetes_groups, policy_associations).
+      id: access_entries
+      label: Access entries
+      type: object
+    - id: section_observability
+      label: Observability
+      type: section
+    - add_button_label: Add log type
+      default:
+        - api
+        - audit
+        - authenticator
+      description: Control plane log types shipped to CloudWatch Logs. Remove all entries to disable control plane logging.
+      id: enabled_cluster_log_types
+      label: Control plane log types
+      type: string_array
+      values:
+        - label: API server
+          value: api
+        - label: Audit
+          value: audit
+        - label: Authenticator
+          value: authenticator
+        - label: Controller manager
+          value: controllerManager
+        - label: Scheduler
+          value: scheduler
+    - collapsible: true
+      default: 30
+      description: Retention in days for the control plane CloudWatch log group.
+      id: cluster_log_retention_in_days
+      label: Log retention (days)
+      min: 1
+      type: number
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/eks
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        name: << module.input.name >>
+        region: << module.input.aws_region >>
+        vpc_id: << module.input.vpc_id >>
+        subnet_ids: << module.input.subnet_ids >>
+        kubernetes_version: << module.input.kubernetes_version >>
+        deletion_protection_enabled: << module.input.deletion_protection_enabled >>
+        secrets_encryption_enabled: << module.input.secrets_encryption_enabled >>
+        secrets_kms_key_arn: << module.input.secrets_kms_key_arn >>
+        private_endpoint_access_enabled: << module.input.private_endpoint_access_enabled >>
+        public_endpoint_access_enabled: << module.input.public_endpoint_access_enabled >>
+        public_access_cidrs: << module.input.public_access_cidrs >>
+        system_node_group:
+          instance_types: << module.input.system_node_instance_types >>
+          capacity_type: << module.input.system_node_capacity_type >>
+          min_size: << module.input.system_node_min_size >>
+          desired_size: << module.input.system_node_min_size >>
+          max_size: << module.input.system_node_max_size >>
+          disk_size: << module.input.system_node_disk_size >>
+        additional_node_groups: << module.input.additional_node_groups || {} >>
+        ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
+        karpenter_enabled: << module.input.karpenter_enabled >>
+        karpenter_controller_namespace: << module.input.karpenter_controller_namespace >>
+        karpenter_controller_service_account: << module.input.karpenter_controller_service_account >>
+        fargate_profiles: << module.input.fargate_profiles || {} >>
+        access_entries: << module.input.access_entries || {} >>
+        enabled_cluster_log_types: << module.input.enabled_cluster_log_types >>
+        cluster_log_retention_in_days: << module.input.cluster_log_retention_in_days >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+  ui:
+    links: |-
+      <<
+      (stack.output.cluster_name ? [{"name":"EKS console","href":"https://" + stack.output.region + ".console.aws.amazon.com/eks/home?region=" + stack.output.region + "#/clusters/" + stack.output.cluster_name}] : [])
+      >>
+    logs:
+      - id: control_plane
+        name: Control plane logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: /aws/eks/<< stack.output.cluster_name >>/cluster
+  readme: |-
+    Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Karpenter and Fargate compute.
+
+    ## Overview
+
+    Amazon EKS (Elastic Kubernetes Service) runs managed Kubernetes control planes on AWS. This module creates an EKS cluster inside your selected VPC and provisions everything a working cluster needs, in the correct order:
+
+    1. **Cluster** - control plane, OIDC provider, secrets encryption, VPC CNI, kube-proxy, Pod Identity Agent, and the AWS Load Balancer Controller IAM role
+    2. **System node group** - a small managed node group that gives system workloads somewhere to run
+    3. **Add-ons** - CoreDNS and the optional EBS CSI driver, installed only after compute exists so they start healthy
+    4. **Optional compute** - Karpenter AWS resources and Fargate profiles
+
+    Terraform source: [flightcontrolhq/modules/compute/eks](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks)
+
+    ## Use cases
+
+    | Scenario                          | EKS cluster helps by...                                          |
+    | --------------------------------- | ---------------------------------------------------------------- |
+    | Running Kubernetes workloads      | Providing a managed control plane and ready-to-use node group    |
+    | Autoscaling compute               | Provisioning Karpenter IAM roles, interruption queue, and events |
+    | Running serverless pods           | Creating Fargate profiles for selected namespaces                |
+    | Using persistent volumes          | Installing the EBS CSI driver with its Pod Identity role         |
+    | Exposing services                 | Creating the AWS Load Balancer Controller IAM role automatically |
+    | Meeting security requirements     | Encrypting secrets with KMS and keeping the API endpoint private |
+
+    ## Compute
+
+    ### System node group
+
+    Every cluster gets a required managed node group for system workloads such as CoreDNS. It defaults to 2-4 On-demand `t3.medium` nodes. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds.
+
+    ### Additional node groups
+
+    Add more managed node groups for application workloads using the **Additional node groups** map. Each entry supports the same options as the system node group plus labels and taints.
+
+    ### Karpenter
+
+    Enabling Karpenter provisions the AWS-side resources it needs: controller and node IAM roles, an instance profile, an SQS interruption queue, and EventBridge rules. Installing the Karpenter Helm chart into the cluster remains a separate step; use the controller namespace and service account settings to match your install.
+
+    ### Fargate
+
+    Fargate profiles run pods from selected namespaces on serverless compute instead of EC2 nodes. Each profile matches one or more namespace selectors, optionally narrowed by pod labels.
+
+    ## API endpoint access
+
+    By default the Kubernetes API server is reachable only from inside the VPC. Enable **Public endpoint access** to reach it from the internet, and restrict the allowed source ranges with **Public access CIDRs**.
+
+    ## Cluster access
+
+    EKS access entries control which IAM principals can access the cluster. The IAM principal that creates the cluster is granted admin access automatically. Additional principals can be granted access through the **Access entries** map. Automatic access for Ravion deploys will be wired here in a future release.
+
+    ## Observability
+
+    Control plane logs (API server, audit, and authenticator by default) are shipped to CloudWatch Logs and shown on the module's Logs tab. Adjust the log types and retention in the Observability section.
+
+    ## Configuration
+
+    | Field                  | Required | Default              | Description                                            |
+    | ---------------------- | -------- | -------------------- | ------------------------------------------------------ |
+    | VPC network            | Yes      | -                    | Existing VPC, subnets, AWS account, and region         |
+    | Name slug              | Yes      | `{project}-{env}`    | Name of the EKS cluster                                |
+    | Kubernetes version     | No       | Latest               | Cluster version in MAJOR.MINOR form                    |
+    | Deletion protection    | No       | `true`               | Blocks cluster deletion until turned off               |
+    | Secrets encryption     | No       | `true`               | Envelope-encrypt Kubernetes secrets with KMS           |
+    | Private endpoint access| No       | `true`               | Reach the API server from inside the VPC               |
+    | Public endpoint access | No       | `false`              | Expose the API server to the internet                  |
+    | System node group      | No       | 2-4 `t3.medium`      | Instance types, capacity type, size bounds, disk size  |
+    | Additional node groups | No       | -                    | Extra managed node groups keyed by name                |
+    | EBS CSI driver         | No       | `false`              | Install the EBS CSI add-on and Pod Identity role       |
+    | Karpenter              | No       | `false`              | Provision Karpenter AWS resources                      |
+    | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
+    | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
+    | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |
+    | Tags                   | No       | Ravion defaults      | Custom tags applied to all resources                   |
+
+    ## Design decisions
+
+    This module follows AWS EKS production patterns:
+
+    - **Ordered provisioning:** CoreDNS and the EBS CSI driver are installed only after the system node group exists, avoiding the add-on deadlock that occurs on clusters without compute
+    - **Private by default:** the API endpoint is private unless public access is explicitly enabled
+    - **Encrypted secrets:** Kubernetes secrets are envelope-encrypted with KMS by default
+    - **Deletion protection on:** the cluster cannot be deleted until protection is turned off, preventing accidental destroys
+    - **Autoscaler-friendly sizing:** Terraform sets the initial node count but never fights an autoscaler over the running count
+    - **Pod Identity over IRSA:** add-on IAM roles use EKS Pod Identity associations; the OIDC provider is still created for workloads that need IRSA
+
+    ## Learn more
+
+    **Amazon EKS**
+
+    - [Amazon EKS User Guide](https://docs.aws.amazon.com/eks/latest/userguide/) - Official documentation
+    - [EKS access entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html) - IAM principal access management
+    - [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) - IAM roles for workloads
+
+    **Compute**
+
+    - [Managed node groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) - EC2 node lifecycle management
+    - [Karpenter](https://karpenter.sh/docs/) - Just-in-time node autoscaling
+    - [Fargate for EKS](https://docs.aws.amazon.com/eks/latest/userguide/fargate.html) - Serverless pods
