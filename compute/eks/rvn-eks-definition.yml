@@ -113,6 +113,11 @@ module:
       show_when:
         public_endpoint_access_enabled: true
       type: string_array
+    - default: true
+      description: Create a security group allowed to reach the Kubernetes API endpoint. Attach it to the Ravion execution environment used by modules that talk to the cluster (such as EKS Cluster Components) so their pipeline runs can reach a private endpoint.
+      id: ravion_runner_security_group_creation_enabled
+      label: Ravion Runner security group
+      type: boolean
     - description: Required managed node group that runs system workloads such as CoreDNS. Sized small by default; add more compute with additional node groups, Karpenter, or Fargate.
       id: section_system_nodes
       label: System node group
@@ -169,7 +174,7 @@ module:
       id: ebs_csi_driver_enabled
       label: EBS CSI driver
       type: boolean
-    - description: Provisions Karpenter end to end - controller and node IAM roles, instance profile, interruption queue, EventBridge rules, the Karpenter controller Helm chart, and a default NodePool so autoscaling works out of the box.
+    - description: Provisions the AWS-side Karpenter resources - controller and node IAM roles, Pod Identity association, instance profile, interruption queue, and EventBridge rules. Install the controller itself with the EKS Cluster Components module.
       id: section_karpenter
       label: Karpenter
       type: section
@@ -268,6 +273,7 @@ module:
         private_endpoint_access_enabled: << module.input.private_endpoint_access_enabled >>
         public_endpoint_access_enabled: << module.input.public_endpoint_access_enabled >>
         public_access_cidrs: << module.input.public_access_cidrs >>
+        ravion_runner_security_group_creation_enabled: << module.input.ravion_runner_security_group_creation_enabled >>
         system_node_group:
           instance_types: << module.input.system_node_instance_types >>
           capacity_type: << module.input.system_node_capacity_type >>
@@ -445,7 +451,9 @@ module:
     1. **Cluster** - control plane, OIDC provider, secrets encryption, VPC CNI, kube-proxy, Pod Identity Agent, and the AWS Load Balancer Controller IAM role
     2. **System node group** - a small managed node group that gives system workloads somewhere to run
     3. **Add-ons** - CoreDNS and the optional EBS CSI driver, installed only after compute exists so they start healthy
-    4. **Optional compute** - Karpenter (IAM resources, controller, and a default NodePool) and Fargate profiles
+    4. **Optional compute** - Karpenter AWS-side resources and Fargate profiles
+
+    This module talks only to the AWS API, so it provisions in a single apply. In-cluster installs (the Karpenter controller and default NodePool) are handled by the separate **EKS Cluster Components** module.
 
     Terraform source: [flightcontrolhq/modules/compute/eks](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks)
 
@@ -454,7 +462,7 @@ module:
     | Scenario                          | EKS cluster helps by...                                          |
     | --------------------------------- | ---------------------------------------------------------------- |
     | Running Kubernetes workloads      | Providing a managed control plane and ready-to-use node group    |
-    | Autoscaling compute               | Installing Karpenter with IAM roles, interruption handling, and a default NodePool |
+    | Autoscaling compute               | Provisioning Karpenter's IAM roles and interruption handling (pair with EKS Cluster Components) |
     | Running serverless pods           | Creating Fargate profiles for selected namespaces                |
     | Using persistent volumes          | Installing the EBS CSI driver with its Pod Identity role         |
     | Exposing services                 | Creating the AWS Load Balancer Controller IAM role automatically |
@@ -472,7 +480,7 @@ module:
 
     ### Karpenter
 
-    Enabling Karpenter provisions everything it needs: controller and node IAM roles, an instance profile, an SQS interruption queue, EventBridge rules, the Karpenter controller (installed via Helm), and a default NodePool/EC2NodeClass so autoscaling works out of the box.
+    Enabling Karpenter provisions the AWS-side resources it needs: controller and node IAM roles, a Pod Identity association, an instance profile, an SQS interruption queue, and EventBridge rules. The Karpenter controller itself runs inside the cluster and is installed by the **EKS Cluster Components** module, which references this cluster and adds a default NodePool/EC2NodeClass so autoscaling works out of the box.
 
     ### Fargate
 
@@ -481,6 +489,8 @@ module:
     ## API endpoint access
 
     By default the Kubernetes API server is reachable only from inside the VPC. Enable **Public endpoint access** to reach it from the internet, and restrict the allowed source ranges with **Public access CIDRs**.
+
+    A **Ravion Runner security group** is created by default and allowed to reach the API endpoint on port 443. Attach it to the Ravion execution environment used by modules that talk to the Kubernetes API (such as **EKS Cluster Components**) so their pipeline runs can reach a private endpoint. Its ID is available as the `ravion_runner_security_group_id` stack output.
 
     ## Cluster access
 
@@ -503,10 +513,11 @@ module:
     | Secrets encryption     | No       | `true`               | Envelope-encrypt Kubernetes secrets with KMS           |
     | Private endpoint access| No       | `true`               | Reach the API server from inside the VPC               |
     | Public endpoint access | No       | `false`              | Expose the API server to the internet                  |
+    | Ravion Runner security group | No | `true`               | Security group allowed to reach the API endpoint       |
     | System node group      | No       | 2-4 `t3.medium`      | Instance types, capacity type, size bounds, disk size  |
     | Additional node groups | No       | -                    | Extra managed node groups keyed by name                |
     | EBS CSI driver         | No       | `false`              | Install the EBS CSI add-on and Pod Identity role       |
-    | Karpenter              | No       | `false`              | Install Karpenter with IAM resources and a default NodePool |
+    | Karpenter              | No       | `false`              | Provision Karpenter's AWS-side IAM and interruption resources |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
     | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
     | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |

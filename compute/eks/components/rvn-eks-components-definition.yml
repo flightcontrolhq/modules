@@ -1,0 +1,162 @@
+definition:
+  type: rvn-eks-components
+  name: EKS Cluster Components
+  description: Installs in-cluster components onto an existing EKS cluster via Helm - the Karpenter controller and a default NodePool.
+release:
+  version: 0.1.0
+  description: Initial EKS cluster components definition installing the Karpenter controller and default NodePool via Helm.
+module:
+  inputs:
+    - id: cluster
+      immutable: true
+      label: EKS cluster
+      mapped_inputs:
+        - id: section_aws
+          label: AWS account & region
+          type: section
+        - default: << ref.input.aws_account_id >>
+          id: aws_account_id
+          immutable: true
+          label: AWS account
+          type: string
+          values: $values:ravion/aws_accounts
+        - default: << ref.input.aws_region >>
+          id: aws_region
+          immutable: true
+          label: Region
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          description: Execution environment for Pipeline Terraform runners. Must run inside the cluster VPC with the cluster's Ravion Runner security group attached so Helm can reach the private Kubernetes API endpoint.
+          id: execution_environment_id
+          label: Terraform execution environment
+          type: string
+          values: $values:ravion/execution_environments
+        - id: section_cluster
+          label: EKS cluster
+          type: section
+        - default: <<ref.stack.output.cluster_name>>
+          id: cluster_name
+          immutable: true
+          label: Cluster name
+          required: true
+          type: string
+        - collapsible: true
+          default: <<ref.input.karpenter_controller_namespace>>
+          description: Namespace where the Karpenter controller is installed. Must match the cluster's Karpenter Pod Identity association.
+          id: karpenter_controller_namespace
+          label: Karpenter namespace
+          placeholder: kube-system
+          type: string
+        - collapsible: true
+          default: <<ref.input.karpenter_controller_service_account>>
+          description: Service account used by the Karpenter controller. Must match the cluster's Karpenter Pod Identity association.
+          id: karpenter_controller_service_account
+          label: Karpenter service account
+          placeholder: karpenter
+          type: string
+        - collapsible: true
+          default: <<ref.stack.output.karpenter_interruption_queue_name>>
+          description: SQS interruption queue created by the EKS cluster module.
+          id: karpenter_interruption_queue_name
+          label: Interruption queue name
+          required: true
+          type: string
+        - collapsible: true
+          default: <<ref.stack.output.karpenter_node_instance_profile_name>>
+          description: IAM instance profile for Karpenter-launched nodes, created by the EKS cluster module.
+          id: karpenter_node_instance_profile_name
+          label: Node instance profile
+          required: true
+          type: string
+        - collapsible: true
+          default: <<ref.stack.output.cluster_security_group_id>>
+          description: EKS-managed cluster security group attached to Karpenter-launched nodes.
+          id: cluster_security_group_id
+          label: Cluster security group ID
+          required: true
+          type: string
+        - add_button_label: Add subnet ID
+          collapsible: true
+          default: <<ref.stack.output.node_subnet_ids>>
+          description: Subnets the default NodePool launches nodes into.
+          id: node_subnet_ids
+          label: Node subnet IDs
+          required: true
+          type: string_array
+      required: true
+      type: $ref:rvn-eks
+    - description: Installs the Karpenter controller and CRDs via Helm. The cluster must be created with Karpenter enabled so the controller's IAM role, Pod Identity association, instance profile, and interruption queue exist.
+      id: section_karpenter
+      label: Karpenter
+      type: section
+    - collapsible: true
+      description: Version of the Karpenter Helm chart (and karpenter-crd chart) to install.
+      id: karpenter_chart_version
+      label: Chart version
+      placeholder: 1.14.0
+      type: string
+    - default: true
+      description: Create a general-purpose default NodePool and EC2NodeClass so Karpenter can provision nodes out of the box. Disable to manage NodePools yourself.
+      id: karpenter_default_node_pool_enabled
+      label: Default NodePool
+      type: boolean
+    - $include: ../../../partials/inputs/misc-section.yml
+    - $include: ../../../partials/inputs/tags.yml
+    - $include: ../../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/eks/components
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        cluster_name: << module.input.cluster_name >>
+        region: << module.input.aws_region >>
+        karpenter_controller_namespace: << module.input.karpenter_controller_namespace >>
+        karpenter_controller_service_account: << module.input.karpenter_controller_service_account >>
+        karpenter_chart_version: << module.input.karpenter_chart_version >>
+        karpenter_interruption_queue_name: << module.input.karpenter_interruption_queue_name >>
+        karpenter_helm_values: []
+        karpenter_default_node_pool_enabled: << module.input.karpenter_default_node_pool_enabled >>
+        karpenter_node_instance_profile_name: << module.input.karpenter_node_instance_profile_name >>
+        node_subnet_ids: << module.input.node_subnet_ids >>
+        cluster_security_group_id: << module.input.cluster_security_group_id >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+  readme: |-
+    Installs in-cluster components onto an existing EKS cluster via Helm - the Karpenter controller, its CRDs, and a default NodePool.
+
+    ## Overview
+
+    The EKS Cluster module provisions everything through the AWS API in a single apply, but the Karpenter controller itself runs inside the cluster and must be installed through the Kubernetes API. This module owns that last step:
+
+    1. **karpenter-crd chart** - Karpenter's CRDs, managed as a separate chart so upgrades work
+    2. **karpenter chart** - the controller, wired to the cluster's interruption queue and Pod Identity service account
+    3. **Default NodePool** - an optional general-purpose NodePool and EC2NodeClass so autoscaling works out of the box
+
+    Splitting these from the cluster stack keeps cluster provisioning free of Kubernetes API connectivity, and makes Karpenter chart upgrades small, low-blast-radius applies.
+
+    Terraform source: [flightcontrolhq/modules/compute/eks/components](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks/components)
+
+    ## Prerequisites
+
+    - An **EKS Cluster** module with **Karpenter** enabled. That creates the AWS-side resources this module depends on: controller and node IAM roles, the Pod Identity association, the node instance profile, and the SQS interruption queue.
+    - A **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached.
+
+    ## Configuration
+
+    | Field                  | Required | Default              | Description                                            |
+    | ---------------------- | -------- | -------------------- | ------------------------------------------------------ |
+    | EKS cluster            | Yes      | -                    | Existing EKS Cluster module with Karpenter enabled     |
+    | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
+    | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
+    | Tags                   | No       | Ravion defaults      | Tags applied to EC2 instances launched by the default NodePool |
+
+    ## Default NodePool
+
+    The default NodePool provisions Linux nodes from current-generation `c`, `m`, and `r` instance families, using On-demand and Spot capacity, up to a total limit of 100 vCPUs. Nodes expire after 30 days so they are regularly replaced with patched AMIs. Disable it and bring your own NodePool manifests for full control.
+
+    ## Learn more
+
+    - [Karpenter](https://karpenter.sh/docs/) - Just-in-time node autoscaling
+    - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/) - Customizing provisioning behavior

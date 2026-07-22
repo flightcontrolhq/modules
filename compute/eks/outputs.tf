@@ -56,6 +56,16 @@ output "cluster_security_group_id" {
   value       = module.cluster.cluster_security_group_id
 }
 
+output "node_subnet_ids" {
+  description = "Subnet IDs used for node placement (node_subnet_ids, falling back to subnet_ids). Consumed by compute/eks/components for the default Karpenter NodePool."
+  value       = local.node_subnet_ids
+}
+
+output "ravion_runner_security_group_id" {
+  description = "ID of the Ravion Runner security group allowed to reach the cluster API endpoint (null if disabled)."
+  value       = var.ravion_runner_security_group_creation_enabled ? aws_security_group.ravion_runner[0].id : null
+}
+
 output "secrets_kms_key_arn" {
   description = "ARN of the KMS key used for Kubernetes secrets envelope encryption (null if disabled)."
   value       = module.cluster.secrets_kms_key_arn

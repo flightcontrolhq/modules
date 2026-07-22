@@ -21,7 +21,8 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
-| `compute/`    | `eks`             | Composite EKS stack: cluster, system node group, post-compute add-ons, optional Karpenter and Fargate profiles, provisioned in dependency order (includes `rvn-eks` module definition) | v1.0.0  |
+| `compute/`    | `eks`             | Composite EKS stack: cluster, system node group, post-compute add-ons, optional Karpenter AWS-side resources and Fargate profiles, provisioned in dependency order via the AWS API only (includes `rvn-eks` module definition) | v1.0.0  |
+| `compute/`    | `eks/components`  | In-cluster EKS components installed via Helm: Karpenter controller, CRDs, and a default NodePool (includes `rvn-eks-components` module definition) | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
 | `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.0.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
