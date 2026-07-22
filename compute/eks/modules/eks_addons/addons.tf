@@ -38,3 +38,29 @@ resource "aws_eks_addon" "ebs_csi" {
 
   depends_on = [aws_eks_pod_identity_association.ebs_csi]
 }
+
+################################################################################
+# CloudWatch Observability (Container Insights)
+#
+# Installs the CloudWatch agent and Fluent Bit as DaemonSets. Both service
+# accounts are bound to the same Pod Identity role in
+# pod_identity_cloudwatch_observability.tf.
+################################################################################
+
+resource "aws_eks_addon" "cloudwatch_observability" {
+  count = var.cloudwatch_observability_enabled ? 1 : 0
+
+  cluster_name                = var.cluster_name
+  addon_name                  = "amazon-cloudwatch-observability"
+  addon_version               = var.cloudwatch_observability_addon_version
+  configuration_values        = var.cloudwatch_observability_addon_configuration_values
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = local.tags
+
+  depends_on = [
+    aws_eks_pod_identity_association.cloudwatch_agent,
+    aws_eks_pod_identity_association.fluent_bit,
+  ]
+}

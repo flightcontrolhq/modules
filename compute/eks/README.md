@@ -87,6 +87,8 @@ module "eks" {
 | coredns_addon_version / coredns_addon_configuration_values | CoreDNS pin / JSON overrides. | `string` | `null` | no |
 | ebs_csi_driver_enabled | Install aws-ebs-csi-driver + Pod Identity. | `bool` | `false` | no |
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
+| cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity. | `bool` | `true` | no |
+| cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
 | karpenter_enabled | Provision Karpenter AWS-side resources. | `bool` | `false` | no |
 | karpenter_controller_namespace / karpenter_controller_service_account | Karpenter SA location. | `string` | `"kube-system"` / `"karpenter"` | no |
 | karpenter_node_role_additional_managed_policy_arns | Extra policies on Karpenter node role. | `list(string)` | `[]` | no |
@@ -113,6 +115,7 @@ module "eks" {
 | secrets_kms_key_arn | Secrets KMS key (null if disabled). |
 | lb_controller_role_arn | LB Controller Pod Identity role. |
 | ebs_csi_role_arn | EBS CSI Pod Identity role (null if disabled). |
+| cloudwatch_observability_role_arn | CloudWatch Observability Pod Identity role (null if disabled). |
 | system_node_group_name / system_node_group_arn | System node group identifiers. |
 | additional_node_group_names | Map of additional node group key -> name. |
 | karpenter_controller_role_arn / karpenter_node_role_arn / karpenter_node_instance_profile_name / karpenter_interruption_queue_name | Karpenter outputs (null when disabled). |

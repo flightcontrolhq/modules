@@ -23,5 +23,9 @@ module "addons" {
   ebs_csi_addon_version              = var.ebs_csi_addon_version
   ebs_csi_addon_configuration_values = var.ebs_csi_addon_configuration_values
 
+  cloudwatch_observability_enabled                    = var.cloudwatch_observability_enabled
+  cloudwatch_observability_addon_version              = var.cloudwatch_observability_addon_version
+  cloudwatch_observability_addon_configuration_values = var.cloudwatch_observability_addon_configuration_values
+
   tags = local.tags
 }
