@@ -62,3 +62,21 @@ variable "ebs_csi_addon_configuration_values" {
   description = "JSON string of add-on configuration overrides for aws-ebs-csi-driver."
   default     = null
 }
+
+variable "cloudwatch_observability_enabled" {
+  type        = bool
+  description = "Install the amazon-cloudwatch-observability add-on (Container Insights) and create its Pod Identity role. Collects node, pod, and container metrics and ships container logs to CloudWatch."
+  default     = true
+}
+
+variable "cloudwatch_observability_addon_version" {
+  type        = string
+  description = "Pinned version for the amazon-cloudwatch-observability add-on. When null, AWS resolves the most recent compatible version."
+  default     = null
+}
+
+variable "cloudwatch_observability_addon_configuration_values" {
+  type        = string
+  description = "JSON string of add-on configuration overrides for amazon-cloudwatch-observability."
+  default     = null
+}

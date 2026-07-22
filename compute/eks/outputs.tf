@@ -71,6 +71,11 @@ output "ebs_csi_role_arn" {
   value       = module.addons.ebs_csi_role_arn
 }
 
+output "cloudwatch_observability_role_arn" {
+  description = "ARN of the CloudWatch Observability add-on Pod Identity role (null if disabled)."
+  value       = module.addons.cloudwatch_observability_role_arn
+}
+
 ################################################################################
 # Node Groups
 ################################################################################

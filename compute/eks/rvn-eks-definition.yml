@@ -243,6 +243,11 @@ module:
       label: Log retention (days)
       min: 1
       type: number
+    - default: true
+      description: Install the CloudWatch Observability add-on for Container Insights. Collects node, pod, and container metrics and ships container logs to CloudWatch, which may increase CloudWatch costs.
+      id: cloudwatch_observability_enabled
+      label: Container Insights
+      type: boolean
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
@@ -279,6 +284,7 @@ module:
         access_entries: << module.input.access_entries || {} >>
         enabled_cluster_log_types: << module.input.enabled_cluster_log_types >>
         cluster_log_retention_in_days: << module.input.cluster_log_retention_in_days >>
+        cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
         tags:
           $include: ../stack/ravion-tags.yml
   ui:
@@ -286,6 +292,127 @@ module:
       <<
       (stack.output.cluster_name ? [{"name":"EKS console","href":"https://" + stack.output.region + ".console.aws.amazon.com/eks/home?region=" + stack.output.region + "#/clusters/" + stack.output.cluster_name}] : [])
       >>
+    metrics:
+      - id: node_cpu_utilization
+        name: Node CPU used
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: node_cpu_utilization
+          namespace: ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: node_memory_utilization
+        name: Node memory used
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: node_memory_utilization
+          namespace: ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: running_pods
+        name: Running pods
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: cluster_number_of_running_pods
+          namespace: ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: node_count
+        name: Nodes
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: cluster_node_count
+          namespace: ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: failed_node_count
+        name: Failed nodes
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: cluster_failed_node_count
+          namespace: ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: apiserver_requests
+        name: API server requests
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: apiserver_request_total
+          namespace: AWS/EKS
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: apiserver_requests_5xx
+        name: API server 5XX errors
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: apiserver_request_total_5XX
+          namespace: AWS/EKS
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: apiserver_requests_429
+        name: API server throttled requests
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: apiserver_request_total_429
+          namespace: AWS/EKS
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: scheduler_pending_pods
+        name: Pending pods
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: scheduler_pending_pods
+          namespace: AWS/EKS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: etcd_storage_size
+        name: etcd database size
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: apiserver_storage_size_bytes
+          namespace: AWS/EKS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
     logs:
       - id: control_plane
         name: Control plane logs
@@ -294,6 +421,20 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           region: << stack.output.region >>
           log_group: /aws/eks/<< stack.output.cluster_name >>/cluster
+      - id: application
+        name: Application logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: /aws/containerinsights/<< stack.output.cluster_name >>/application
+      - id: dataplane
+        name: Data plane logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: /aws/containerinsights/<< stack.output.cluster_name >>/dataplane
   readme: |-
     Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Karpenter and Fargate compute.
 
@@ -349,6 +490,8 @@ module:
 
     Control plane logs (API server, audit, and authenticator by default) are shipped to CloudWatch Logs and shown on the module's Logs tab. Adjust the log types and retention in the Observability section.
 
+    The CloudWatch Observability add-on (Container Insights) is installed by default. It collects node, pod, and container metrics into CloudWatch and ships container logs (application and data plane) to CloudWatch Logs; both are shown on the module's Metrics and Logs tabs. Control plane health metrics (API server requests and errors, pending pods, etcd database size) are published by EKS automatically at no cost and appear on the Metrics tab regardless of this setting. Disabling Container Insights reduces CloudWatch costs but empties the node and pod charts and the container log tabs.
+
     ## Configuration
 
     | Field                  | Required | Default              | Description                                            |
@@ -367,6 +510,7 @@ module:
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
     | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
     | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |
+    | Container Insights     | No       | `true`               | CloudWatch Observability add-on for metrics and container logs |
     | Tags                   | No       | Ravion defaults      | Custom tags applied to all resources                   |
 
     ## Design decisions
