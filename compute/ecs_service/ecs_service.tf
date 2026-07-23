@@ -95,18 +95,30 @@ resource "aws_ecs_service" "this" {
     content {
       target_group_arn = aws_lb_target_group.tg_1[0].arn
       container_name   = local.lb_container_name
-      container_port   = local.lb_container_port
+      container_port   = local.primary_load_balancer_container_port
 
-      advanced_configuration {
-        alternate_target_group_arn = aws_lb_target_group.tg_2[0].arn
-        production_listener_rule = (
-          local.enable_nlb_listener
-          ? aws_lb_listener.nlb[0].arn
-          : aws_lb_listener_rule.alb["0"].arn
-        )
-        test_listener_rule = local.test_listener_rule_arn
-        role_arn           = aws_iam_role.ecs_infrastructure[0].arn
+      dynamic "advanced_configuration" {
+        for_each = local.traffic_shift_infrastructure_enabled ? [1] : []
+        content {
+          alternate_target_group_arn = aws_lb_target_group.tg_2[0].arn
+          production_listener_rule = (
+            local.enable_nlb_listener
+            ? aws_lb_listener.nlb[0].arn
+            : aws_lb_listener_rule.alb["0"].arn
+          )
+          test_listener_rule = local.test_listener_rule_arn
+          role_arn           = aws_iam_role.ecs_infrastructure[0].arn
+        }
       }
+    }
+  }
+
+  dynamic "load_balancer" {
+    for_each = local.additional_nlb_listeners
+    content {
+      target_group_arn = aws_lb_target_group.nlb_additional[load_balancer.key].arn
+      container_name   = local.lb_container_name
+      container_port   = load_balancer.value.container_port
     }
   }
 
@@ -119,7 +131,7 @@ resource "aws_ecs_service" "this" {
     content {
       registry_arn   = aws_service_discovery_service.this[0].arn
       container_name = local.lb_container_name
-      container_port = local.lb_container_port
+      container_port = local.primary_load_balancer_container_port
     }
   }
 
@@ -146,6 +158,7 @@ resource "aws_ecs_service" "this" {
     aws_iam_role_policy_attachment.ecs_infrastructure_elb,
     aws_lb_listener_rule.alb,
     aws_lb_listener_rule.test,
+    aws_lb_listener.nlb_additional,
   ]
 
   # Lifecycle: desired_count is managed by autoscaling, task_definition /
@@ -168,7 +181,7 @@ resource "aws_ecs_service" "this" {
         || local.enable_nlb_listener
         || length(var.load_balancer_attachment.listener_rules) > 0
       )
-      error_message = "load_balancer_attachment requires either listener_rules (ALB) or nlb_listener so the production listener rule can be wired into advanced_configuration."
+      error_message = "load_balancer_attachment requires either listener_rules for ALB or nlb_listeners for NLB."
     }
 
     # The ECS advanced_configuration API accepts a single production
@@ -182,6 +195,14 @@ resource "aws_ecs_service" "this" {
         || length(try(var.load_balancer_attachment.listener_rules, [])) <= 1
       )
       error_message = "Native traffic-shift strategies (blue_green/linear/canary) rewrite a single production listener rule; additional listener rules would keep serving the old revision throughout the deployment. Use at most one listener rule with these strategies."
+    }
+
+    precondition {
+      condition = (
+        !local.rolling_nlb_listeners_enabled
+        || var.deployment_type == "rolling"
+      )
+      error_message = "nlb_listeners requires rolling deployments because traffic-shift infrastructure is not created for this shape."
     }
   }
 }
