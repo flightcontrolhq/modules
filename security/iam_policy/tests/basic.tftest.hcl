@@ -161,11 +161,9 @@ run "not_action_and_not_resource_supported" {
 
   variables {
     policy_statements = [{
-      effect              = "Deny"
-      action_match_mode   = "NotAction"
-      not_actions         = ["iam:GetUser"]
-      resource_match_mode = "NotResource"
-      not_resources       = ["arn:aws:iam::123456789012:user/break-glass"]
+      effect        = "Deny"
+      not_actions   = ["iam:GetUser"]
+      not_resources = ["arn:aws:iam::123456789012:user/break-glass"]
     }]
   }
 

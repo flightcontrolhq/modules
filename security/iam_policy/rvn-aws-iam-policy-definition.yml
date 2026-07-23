@@ -4,7 +4,7 @@ definition:
   description: Creates one reusable customer-managed AWS IAM policy from structured statements or a complete JSON policy document.
 release:
   version: 0.1.0
-  description: Initial module definition with reliable structured policy statement titles and detailed guidance.
+  description: Initial module definition with immutable policy identity fields and structured statement support.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -24,6 +24,7 @@ module:
       type: string
     - description: Optional description stored on the IAM policy. AWS does not allow this value to be changed after creation.
       id: description
+      immutable: true
       label: Description
       patterns:
         - message: 1000 characters or fewer.
@@ -266,7 +267,7 @@ module:
 
     Structured statements require an explicit Action or NotAction choice and an explicit Resource or NotResource choice. The module does not add wildcard permissions automatically.
 
-    Policy name and path are immutable in Ravion because they define the managed policy's identity. Description remains editable, but AWS may replace the policy when it changes.
+    Policy name, description, and path are immutable in Ravion because AWS replaces the managed policy when any of these values change. Replacement would sever attachments managed outside this module.
 
     Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
 

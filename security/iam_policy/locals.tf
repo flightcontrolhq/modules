@@ -8,10 +8,5 @@ locals {
 
   tags = merge(local.default_tags, var.tags)
 
-  policy_document = var.policy_json != null ? var.policy_json : (
-    length(var.policy_statements) > 0 ? data.aws_iam_policy_document.structured[0].json : jsonencode({
-      Version   = "2012-10-17"
-      Statement = []
-    })
-  )
+  policy_document = var.policy_json != null ? var.policy_json : one(data.aws_iam_policy_document.structured[*].json)
 }
