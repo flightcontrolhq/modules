@@ -75,7 +75,7 @@ policy_statements = [{
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | name | Customer-managed IAM policy name. | `string` | n/a | yes |
-| description | Policy description. AWS does not allow updates after creation. | `string` | `"Managed by Terraform"` | no |
+| description | Policy description. AWS does not allow updates after creation. | `string` | `null` | no |
 | path | IAM path for the policy. | `string` | `"/"` | no |
 | policy_statements | Structured IAM statements. Ignored when `policy_json` is set. | `list(object)` | `[]` | no |
 | policy_json | Complete IAM policy JSON document. | `string` | `null` | no |

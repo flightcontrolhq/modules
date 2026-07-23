@@ -15,10 +15,10 @@ variable "name" {
 variable "description" {
   type        = string
   description = "The description of the customer-managed IAM policy. AWS does not allow this description to be changed after creation."
-  default     = "Managed by Terraform"
+  default     = null
 
   validation {
-    condition     = length(var.description) <= 1000
+    condition     = var.description == null || length(var.description) <= 1000
     error_message = "The description must be 1000 characters or fewer."
   }
 }

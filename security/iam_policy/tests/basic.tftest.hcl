@@ -58,6 +58,11 @@ run "structured_policy_defaults" {
   }
 
   assert {
+    condition     = aws_iam_policy.this.description == null
+    error_message = "The policy description should default to null."
+  }
+
+  assert {
     condition     = aws_iam_policy.this.tags["ManagedBy"] == "terraform"
     error_message = "The ManagedBy tag should be present."
   }
@@ -157,9 +162,9 @@ run "not_action_and_not_resource_supported" {
   variables {
     policy_statements = [{
       effect              = "Deny"
-      action_match_mode   = "not_actions"
+      action_match_mode   = "NotAction"
       not_actions         = ["iam:GetUser"]
-      resource_match_mode = "not_resources"
+      resource_match_mode = "NotResource"
       not_resources       = ["arn:aws:iam::123456789012:user/break-glass"]
     }]
   }

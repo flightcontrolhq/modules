@@ -4,7 +4,7 @@ definition:
   description: Creates one reusable customer-managed AWS IAM policy from structured statements or a complete JSON policy document.
 release:
   version: 0.1.0
-  description: Initial module definition with structured Action, NotAction, Resource, and NotResource statements.
+  description: Initial module definition with reliable structured policy statement titles and detailed guidance.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -12,7 +12,7 @@ module:
     - id: section_policy
       label: IAM policy
       type: section
-    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+    - default: <<module.given_id>>
       description: Name of the customer-managed IAM policy. Policy names must be unique within their path in the AWS account.
       id: name
       immutable: true
@@ -22,8 +22,7 @@ module:
           pattern: ^[A-Za-z0-9+=,.@_-]{1,128}$
       required: true
       type: string
-    - default: Managed by Terraform
-      description: Description stored on the IAM policy. AWS does not allow this value to be changed after creation.
+    - description: Optional description stored on the IAM policy. AWS does not allow this value to be changed after creation.
       id: description
       label: Description
       patterns:
@@ -60,7 +59,7 @@ module:
         - label: JSON document
           value: json
     - default: []
-      description: IAM permission statements included in the customer-managed policy.
+      description: Define permissions this policy grants or denies. Each statement matches Action or NotAction values against Resource or NotResource ARNs and can add conditions to narrow access. Prefer explicit actions and resource ARNs over wildcards.
       id: policy_statements
       item_inputs:
         - description: Optional IAM statement ID.
@@ -79,7 +78,7 @@ module:
               value: Allow
             - label: Deny
               value: Deny
-        - default: actions
+        - default: Action
           description: Match the listed actions or every applicable action except those listed.
           id: action_match_mode
           label: Action matching
@@ -87,9 +86,9 @@ module:
           type: string
           values:
             - label: Listed actions
-              value: actions
+              value: Action
             - label: All except listed actions
-              value: not_actions
+              value: NotAction
         - add_button_label: Add action
           description: IAM actions granted or denied by this statement.
           id: actions
@@ -97,7 +96,7 @@ module:
           placeholder: s3:GetObject
           required: true
           show_when:
-            action_match_mode: actions
+            action_match_mode: Action
           type: string_array
         - add_button_label: Add excluded action
           description: IAM actions excluded from this statement's match. NotAction can create broad permissions and should be used carefully.
@@ -106,9 +105,9 @@ module:
           placeholder: iam:*
           required: true
           show_when:
-            action_match_mode: not_actions
+            action_match_mode: NotAction
           type: string_array
-        - default: resources
+        - default: Resource
           description: Match the listed resources or every applicable resource except those listed.
           id: resource_match_mode
           label: Resource matching
@@ -116,9 +115,9 @@ module:
           type: string
           values:
             - label: Listed resources
-              value: resources
+              value: Resource
             - label: All except listed resources
-              value: not_resources
+              value: NotResource
         - add_button_label: Add resource
           description: Resource ARNs covered by this statement. Use wildcards only when the AWS service requires them.
           id: resources
@@ -126,7 +125,7 @@ module:
           placeholder: arn:aws:s3:::my-bucket/*
           required: true
           show_when:
-            resource_match_mode: resources
+            resource_match_mode: Resource
           type: string_array
         - add_button_label: Add excluded resource
           description: Resource ARNs excluded from this statement's match. NotResource can create broad permissions and should be used carefully.
@@ -135,7 +134,7 @@ module:
           placeholder: arn:aws:s3:::my-bucket/protected/*
           required: true
           show_when:
-            resource_match_mode: not_resources
+            resource_match_mode: NotResource
           type: string_array
         - default: []
           description: Optional IAM conditions that further restrict this statement.
@@ -162,13 +161,15 @@ module:
           required: false
           type: object_array
       item_label: Policy statement
+      item_title:
+        template: "{effect}: {action_match_mode} on {resource_match_mode}"
+        fallback: Policy statement
       label: Policy statements
       required: true
       show_when:
         policy_document_mode: structured
       type: object_array
-    - collapsible: true
-      description: Complete IAM policy JSON document. This is used instead of structured statements.
+    - description: Complete IAM policy JSON document. This is used instead of structured statements.
       id: policy_json
       label: Policy JSON
       patterns:
@@ -249,8 +250,8 @@ module:
     | --- | --- | --- | --- |
     | AWS account | Yes | None | AWS account where the customer-managed policy is created. |
     | Region | Yes | None | Runner region for the stack. IAM resources are global, but Terraform still runs with an AWS region. |
-    | Policy name | Yes | Project, environment, and module given IDs | Must be unique within the selected path in the AWS account. |
-    | Description | No | Managed by Terraform | AWS does not allow a managed policy description to be edited after creation. |
+    | Policy name | Yes | Module given ID | Must be unique within the selected path in the AWS account. |
+    | Description | No | None | AWS does not allow a managed policy description to be edited after creation. |
     | Path | No | / | IAM path used to organize the policy. |
     | Policy document format | Yes | Structured statements | Chooses between the statement editor and complete JSON. |
     | Policy statements | In structured mode | Empty list | At least one statement is required when structured mode is selected. |
