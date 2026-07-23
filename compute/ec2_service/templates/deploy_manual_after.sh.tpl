@@ -4,6 +4,9 @@ chmod 600 "${start_command_path}"
 cat > "${app_runner_path}" <<'APP_RUNNER'
 #!/bin/bash
 set -euo pipefail
+# Supervisord starts the app without a login environment; give the start
+# command the same root-shell semantics as the deploy commands.
+export HOME="$${HOME:-/root}"
 set -a
 . "${env_file_path}"
 set +a

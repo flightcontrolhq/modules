@@ -4,6 +4,12 @@ set -euo pipefail
 DEPLOY_ID="{{ deployId }}"
 if [ -z "$DEPLOY_ID" ]; then DEPLOY_ID=$(date +%s); fi
 
+# SSM runs this script as root but with the agent's bare environment (no
+# HOME, TERM=dumb). Restore normal root-shell semantics so release tooling
+# that resolves `~` or queries terminal capabilities does not abort.
+export HOME="$${HOME:-/root}"
+if [ "$${TERM:-dumb}" = "dumb" ]; then export TERM=xterm; fi
+
 ${deployment_log_script}
 exec > >(tee -a "$LOG_PATH") 2> >(tee -a "$LOG_PATH" >&2)
 

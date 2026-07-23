@@ -87,6 +87,11 @@ run "container_is_supervised_and_logs_per_deployment" {
   }
 
   assert {
+    condition     = strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "export HOME=\"$${HOME:-/root}\"")
+    error_message = "Container deploys must restore root-shell HOME for the release and runner scripts."
+  }
+
+  assert {
     condition     = output.log_stream_prefix == "deployment"
     error_message = "The log stream output must select all deployment-scoped streams."
   }
@@ -139,6 +144,16 @@ run "manual_start_command_is_supervised" {
   assert {
     condition     = strcontains(aws_ssm_document.deploy.content, "source-working-directory")
     error_message = "Manual deploy and start commands must share the selected source working directory."
+  }
+
+  assert {
+    condition     = strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "export HOME=\"$${HOME:-/root}\"")
+    error_message = "Manual deploy commands and the supervised start command must run with root-shell HOME."
+  }
+
+  assert {
+    condition     = strcontains(yamldecode(aws_ssm_document.deploy.content).mainSteps[0].inputs.runCommand[0], "then export TERM=xterm; fi")
+    error_message = "Manual deploy commands must run with a usable TERM instead of the SSM agent's dumb terminal."
   }
 
   assert {

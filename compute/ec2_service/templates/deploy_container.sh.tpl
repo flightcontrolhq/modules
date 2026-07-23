@@ -7,6 +7,12 @@ IMAGE_URI="{{ imageUri }}"
 DEPLOY_ID="{{ deployId }}"
 if [ -z "$DEPLOY_ID" ]; then DEPLOY_ID=$(date +%s); fi
 
+# SSM runs this script as root but with the agent's bare environment (no
+# HOME, TERM=dumb). Restore normal root-shell semantics so release tooling
+# that resolves `~` or queries terminal capabilities does not abort.
+export HOME="$${HOME:-/root}"
+if [ "$${TERM:-dumb}" = "dumb" ]; then export TERM=xterm; fi
+
 ${deployment_log_script}
 exec > >(tee -a "$LOG_PATH") 2> >(tee -a "$LOG_PATH" >&2)
 
@@ -57,6 +63,9 @@ printf '%s\n' "$IMAGE_URI" > "${image_ref_path}"
 cat > "${app_runner_path}" <<'APP_RUNNER'
 #!/bin/bash
 set -euo pipefail
+# Supervisord starts the runner without a login environment; docker reads
+# credential config from $HOME.
+export HOME="$${HOME:-/root}"
 IMAGE_URI=$(cat "${image_ref_path}")
 docker rm -f ${name} >/dev/null 2>&1 || true
 
