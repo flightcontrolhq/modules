@@ -4,7 +4,7 @@ This module creates an Amazon ECS service with a placeholder task definition, lo
 
 **Note:** This module provisions infrastructure with a placeholder container (hello-world). The Flightcontrol deploy manager deploys the actual application by registering task definitions and calling UpdateService with the authoritative `deploymentConfiguration` (strategy, bake times, pause lifecycle hooks) on every deploy.
 
-When a load balancer is attached, the module always provisions the production + alternate target-group pair, the ECS infrastructure role, and the service's `load_balancer.advanced_configuration` — so the deployment strategy is a **per-deployment decision**: eligible services can switch between rolling / blue_green / linear / canary on a single deploy with no Terraform changes. ALB traffic-shift deployments require a single production listener rule. `deployment_type` only seeds the strategy at create time.
+For ALB and legacy single-NLB attachments, the module provisions the production + alternate target-group pair, ECS infrastructure role, and `load_balancer.advanced_configuration`, so deployment strategy remains a per-deployment decision. The rolling-only `nlb_listeners` shape instead creates one target group per listener and omits traffic-shift infrastructure. ALB traffic-shift deployments require a single production listener rule. `deployment_type` only seeds the strategy at create time.
 
 ## Features
 
@@ -14,10 +14,10 @@ When a load balancer is attached, the module always provisions the production + 
 - Security group for ECS tasks with configurable ingress rules
 - Target group creation for ALB/NLB integration
 - Listener rule configuration for path-based and host-based routing
-- NLB listener creation with TLS support
+- Single or multiple NLB listener creation with per-listener container ports and TLS support for rolling deployments
 - Application Auto Scaling with target tracking and scheduled scaling
 - AWS Cloud Map service discovery integration
-- Native traffic-shift deployment infrastructure (production/alternate target groups, ECS infrastructure role, advanced_configuration) provisioned for every load-balanced service so the strategy can change per deployment
+- Native traffic-shift deployment infrastructure for ALB and legacy single-NLB attachments
 - Support for EFS and Docker volume configurations
 - Capacity provider strategy support for mixed Fargate/EC2 deployments
 
@@ -355,6 +355,7 @@ The `load_balancer_attachment` object includes:
 - `target_group` - Target group configuration (port, protocol, health_check, stickiness)
 - `listener_rules` - ALB listener rules with conditions. Each rule accepts an optional `priority` (1-50000); when omitted, AWS automatically assigns the next available priority after the current highest rule on the listener.
 - `nlb_listener` - NLB listener configuration (port, protocol, certificate_arn for TLS)
+- `nlb_listeners` - Rolling-only NLB listener configurations. Each item defines an NLB ARN, listener port and protocol, container port, target protocol, and optional TLS settings. Listener and container ports must be unique, and ECS supports at most five listeners per service. Configure the complete list when creating the service; changing it later requires replacing the ECS service because its load balancer attachments are deployment-managed.
 - `container_name` / `container_port` - Override container to attach
 
 ### Auto Scaling
@@ -419,7 +420,7 @@ The `service_discovery` object includes:
 
 ### Target Groups
 
-A production (tg-1) + alternate (tg-2) pair always exists when a load balancer is attached. Rolling deployments only ever serve from the production target group; native traffic-shift deployments alternate between the two.
+A production (tg-1) + alternate (tg-2) pair exists for ALB and legacy single-NLB attachments. Rolling-only multi-listener NLB attachments create one production target group per listener and no alternate.
 
 | Name | Description |
 |------|-------------|
@@ -429,14 +430,16 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 | alternate_target_group_name | Alternate target group name |
 | target_group_arn | Alias of production_target_group_arn |
 | target_group_arn_suffix | Production target group ARN suffix for CloudWatch metrics |
-| target_group_arns | Map of all target group ARNs (production + alternate) |
+| target_group_arns | Map of all target group ARNs, including additional NLB listener target groups |
 | ecs_infrastructure_role_arn | IAM role ECS assumes to manage listener wiring during native traffic-shift deployments |
 
 ### NLB Listener
 
 | Name | Description |
 |------|-------------|
-| nlb_listener_arn | NLB listener ARN (null if not using NLB) |
+| nlb_listener_arn | Primary NLB listener ARN (null if not using NLB) |
+| nlb_listener_arns | Map of NLB listener ports to listener ARNs |
+| nlb_target_group_arns | Map of NLB listener ports to production target group ARNs |
 
 ### Load Balancer
 
@@ -547,7 +550,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled     │   │  ║
-║  │  │ • enable_nlb_listener = enable_load_balancer && var.load_balancer_attachment.nlb_listener != null         │   │  ║
+║  │  │ • enable_nlb_listener = enable_load_balancer && either NLB listener shape is configured                    │   │  ║
 ║  │  │ • auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
 ║  │  │ • enable_service_discovery = var.service_discovery != null                                                │   │  ║
 ║  │  │ • create_execution_role = var.execution_role_arn == null                                                  │   │  ║
@@ -584,7 +587,7 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║  │   - enabled                     │ - target_group: port, protocol, target_type, deregistration_delay,             │  ║
 ║  │   - container_name/port         │               health_check{}, stickiness{}                                     │  ║
 ║  │   - listener_rules[]: listener_arn, priority (optional), conditions[], weight                                     │  ║
-║  │   - nlb_listener: nlb_arn, port, protocol, certificate_arn, ssl_policy, alpn_policy                              │  ║
+║  │   - nlb_listener or nlb_listeners[]: NLB, listener, container port, target protocol, and TLS settings            │  ║
 ║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐                                                ║
@@ -790,11 +793,11 @@ A production (tg-1) + alternate (tg-2) pair always exists when a load balancer i
 ║           ▼                     ▼                     ▼                    ▼                  ▼                  ▼     ║
 ║  var.load_balancer_     var.load_balancer_    var.load_balancer_   var.auto_scaling   var.service_   (ECS Tasks)     ║
 ║    attachment           attachment            attachment                               discovery                      ║
-║    .target_group        .listener_rules       .nlb_listener                                                           ║
+║    .target_group        .listener_rules       .nlb_listener(s)                                                        ║
 ║           │                     │                     │                    │                  │                       ║
 ║           ▼                     ▼                     ▼                    ▼                  ▼                       ║
 ║  aws_lb_target_group    aws_lb_listener_rule  aws_lb_listener     aws_appautoscaling_  aws_service_discovery_        ║
-║  .tg_1[0] + .tg_2[0]    .alb (for_each)       .nlb[0]             target.this[0]       service.this[0]               ║
+║  .tg_1/.tg_2 + extras    .alb (for_each)       .nlb + extras       target.this[0]       service.this[0]               ║
 ║                                                                          │                                            ║
 ║                                                                          │                                            ║
 ║                              ┌───────────────────────────────────────────┴───────────────────────────┐                 ║
@@ -909,7 +912,7 @@ The ALB rule can use one selector type per service: either `query-string` or `he
 
 ### How do I use this module with an NLB instead of an ALB?
 
-For NLB, configure the `nlb_listener` instead of `listener_rules`:
+For one NLB listener, configure `nlb_listener` instead of `listener_rules`:
 
 ```hcl
 load_balancer_attachment = {
@@ -929,11 +932,41 @@ load_balancer_attachment = {
 }
 ```
 
+For multiple NLB listeners, use `nlb_listeners`. Multiple listeners support rolling deployments only:
+
+```hcl
+deployment_type = "rolling"
+
+load_balancer_attachment = {
+  target_group = {
+    port     = 5000
+    protocol = "TCP"
+  }
+  nlb_listeners = [
+    {
+      nlb_arn         = aws_lb.nlb.arn
+      port            = 5000
+      protocol        = "TCP"
+      container_port  = 5000
+      target_protocol = "TCP"
+    },
+    {
+      nlb_arn         = aws_lb.nlb.arn
+      port            = 5443
+      protocol        = "TLS"
+      container_port  = 5443
+      target_protocol = "TLS"
+      certificate_arn = aws_acm_certificate.service.arn
+    },
+  ]
+}
+```
+
 ### Can I use both ALB listener rules and NLB listener?
 
 No, each ECS service can only be attached to one load balancer. Use either:
 - `listener_rules` for ALB (path/host-based routing)
-- `nlb_listener` for NLB (TCP/TLS/UDP)
+- `nlb_listener` or `nlb_listeners` for NLB (TCP/TLS/UDP)
 
 ### How does auto scaling work with the predefined metrics?
 

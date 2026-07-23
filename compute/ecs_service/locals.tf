@@ -39,8 +39,16 @@ locals {
   # Determine if load balancer is configured
   enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled
 
-  # Determine if NLB listener should be created (vs ALB listener rules)
-  enable_nlb_listener = local.enable_load_balancer && var.load_balancer_attachment.nlb_listener != null
+  # Determine if NLB listeners should be created (vs ALB listener rules).
+  # nlb_listener remains supported for existing callers; nlb_listeners is the
+  # rolling-only multi-listener shape.
+  enable_nlb_listener = local.enable_load_balancer && (
+    try(var.load_balancer_attachment.nlb_listener != null, false)
+    || length(try(var.load_balancer_attachment.nlb_listeners, [])) > 0
+  )
+
+  rolling_nlb_listeners_enabled        = local.enable_load_balancer && length(try(var.load_balancer_attachment.nlb_listeners, [])) > 0
+  traffic_shift_infrastructure_enabled = local.enable_load_balancer && !local.rolling_nlb_listeners_enabled
 
   # Determine if a dedicated test (green) ALB listener rule should be
   # created. Drives the advanced_configuration.test_listener_rule wiring
@@ -111,6 +119,60 @@ locals {
     local.placeholder_container_port
   ) : null
 
+  nlb_listeners = local.enable_nlb_listener ? (
+    length(var.load_balancer_attachment.nlb_listeners) > 0
+    ? var.load_balancer_attachment.nlb_listeners
+    : [merge(var.load_balancer_attachment.nlb_listener, {
+      container_port  = local.lb_container_port
+      target_protocol = var.load_balancer_attachment.target_group.protocol
+    })]
+  ) : []
+
+  primary_nlb_listener = local.enable_nlb_listener ? local.nlb_listeners[0] : null
+  primary_target_group_port = local.enable_nlb_listener ? (
+    local.primary_nlb_listener.container_port
+  ) : try(var.load_balancer_attachment.target_group.port, null)
+  primary_target_group_protocol = local.enable_nlb_listener ? (
+    local.primary_nlb_listener.target_protocol
+  ) : try(var.load_balancer_attachment.target_group.protocol, null)
+  primary_health_check_protocol = local.enable_load_balancer ? coalesce(
+    try(var.load_balancer_attachment.target_group.health_check.protocol, null),
+    contains(["TLS", "UDP"], local.primary_target_group_protocol) ? "TCP" : local.primary_target_group_protocol,
+  ) : null
+  primary_load_balancer_container_port = local.enable_nlb_listener ? (
+    local.primary_nlb_listener.container_port
+  ) : local.lb_container_port
+  additional_nlb_listeners = {
+    for index, listener in local.nlb_listeners : tostring(listener.port) => listener
+    if index > 0
+  }
+  additional_nlb_health_check_protocols = {
+    for port, listener in local.additional_nlb_listeners : port => coalesce(
+      try(var.load_balancer_attachment.target_group.health_check.protocol, null),
+      contains(["TLS", "UDP"], listener.target_protocol) ? "TCP" : listener.target_protocol,
+    )
+  }
+  nlb_listeners_by_port = {
+    for listener in local.nlb_listeners : tostring(listener.port) => listener
+  }
+
+  load_balancer_port_mappings = local.enable_nlb_listener ? [
+    for listener in local.nlb_listeners : {
+      container_port = listener.container_port
+      protocol       = listener.protocol == "UDP" ? "udp" : "tcp"
+    }
+    ] : local.enable_load_balancer ? [
+    {
+      container_port = local.lb_container_port
+      protocol       = "tcp"
+    }
+    ] : [
+    {
+      container_port = local.placeholder_container_port
+      protocol       = "tcp"
+    }
+  ]
+
   # Determine if we need to create IAM roles
   create_execution_role = var.execution_role_arn == null
   create_task_role      = var.task_role_arn == null
@@ -128,10 +190,10 @@ locals {
       stopTimeout = 30
 
       portMappings = [
-        {
-          containerPort = local.placeholder_container_port
-          hostPort      = var.network_mode == "awsvpc" ? local.placeholder_container_port : null
-          protocol      = "tcp"
+        for mapping in local.load_balancer_port_mappings : {
+          containerPort = tonumber(mapping.container_port)
+          hostPort      = var.network_mode == "awsvpc" ? tonumber(mapping.container_port) : null
+          protocol      = mapping.protocol
           name          = null
           appProtocol   = null
         }
