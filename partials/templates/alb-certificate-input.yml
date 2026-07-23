@@ -14,3 +14,12 @@
   required: true
   show_when: $with.show_when
   type: $ref:rvn-acm-certificate
+- add_button_label: Add certificate ARN
+  collapsible: true
+  default: []
+  description: $with.additional_certificate_arns_description
+  id: $with.additional_certificate_arns_input_id
+  label: Additional certificate ARNs
+  placeholder: arn:aws:acm:...
+  show_when: $with.show_when
+  type: string_array

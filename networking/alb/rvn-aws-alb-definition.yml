@@ -85,9 +85,11 @@ module:
       default: 443
     - $template: ../../partials/templates/alb-certificate-input.yml
       with:
-        certificate_arns_description: ACM certificate ARNs for HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the HTTPS listener for SNI.
+        additional_certificate_arns_input_id: additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
         certificate_arns_input_id: certificate_arns
-        certificate_description: ACM certificate module for HTTPS. The certificate must use the same AWS account and region as the load balancer.
+        certificate_description: Primary ACM certificate module for HTTPS. The certificate must use the same AWS account and region as the load balancer.
         certificate_input_id: certificate
         show_when:
           https_listener_enabled: true
@@ -167,7 +169,10 @@ module:
         access_logs_bucket_arn: << module.input.access_logs_bucket_arn || nil >>
         access_logs_enabled: << module.input.access_logs_enabled >>
         access_logs_retention_days: << module.input.access_logs_retention_days >>
-        certificate_arns: "<< module.input.https_listener_enabled ? module.input.certificate_arns : [] >>"
+        certificate_arns: >-
+          << module.input.https_listener_enabled ?
+          ((module.input.certificate_arns != nil ? module.input.certificate_arns : []) |
+          concat(module.input.additional_certificate_arns != nil ? module.input.additional_certificate_arns : [])) : [] >>
         deletion_protection_enabled: << module.input.deletion_protection_enabled >>
         http_listener_enabled: << module.input.http_listener_enabled >>
         http_listener_port: << module.input.http_listener_port >>
@@ -287,7 +292,7 @@ module:
 
     ## Listeners and TLS
 
-    HTTP is enabled on port 80 by default. Enable HTTPS, select an ACM Certificate module in the same AWS account and region, and optionally add certificate ARNs for SNI. The first ARN is the default certificate. When both listeners are enabled, HTTP traffic redirects to HTTPS by default. The HTTP and HTTPS listener ports remain configurable for workloads that cannot use ports 80 and 443.
+    HTTP is enabled on port 80 by default. Enable HTTPS and select a primary ACM Certificate module in the same AWS account and region. Add Additional certificate ARNs when the listener should serve more certificates through SNI. When both listeners are enabled, HTTP traffic redirects to HTTPS by default. The HTTP and HTTPS listener ports remain configurable for workloads that cannot use ports 80 and 443.
 
     Requests that match no service listener rule receive a fixed 503 response, so an unmatched host or path never reaches a service by accident.
 
@@ -308,7 +313,8 @@ module:
     | HTTP port | No | 80 | HTTP listener port |
     | HTTPS | No | false | Create an HTTPS listener |
     | HTTPS port | No | 443 | HTTPS listener port |
-    | Certificate | Yes* | - | ACM certificate module and optional additional SNI certificate ARNs |
+    | Certificate | Yes* | - | Primary ACM certificate module for HTTPS |
+    | Additional certificate ARNs | No | [] | Additional ACM certificates attached for SNI |
     | SSL policy | No | TLS 1.3 policy | SSL policy for HTTPS |
     | Redirect HTTP to HTTPS | No | true | Applies when both listeners are enabled |
     | Ingress IPv4/IPv6 CIDRs | No | Visibility-dependent | Sources allowed to reach the load balancer; empty lists create no ingress rules |
