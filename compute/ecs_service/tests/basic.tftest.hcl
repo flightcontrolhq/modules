@@ -180,8 +180,10 @@ run "rolling_service_with_multiple_nlb_listeners" {
   command = plan
 
   variables {
-    deployment_type = "rolling"
-    container_port  = 5000
+    deployment_type                   = "rolling"
+    container_port                    = 5000
+    load_balancer_security_group_id   = "sg-12345678"
+    load_balancer_ingress_cidr_blocks = ["0.0.0.0/0"]
     load_balancer_attachment = {
       target_group = {
         port     = 5000
@@ -230,6 +232,16 @@ run "rolling_service_with_multiple_nlb_listeners" {
   assert {
     condition     = toset(keys(output.nlb_listener_arns)) == toset(["5000", "5443"]) && toset(keys(output.nlb_target_group_arns)) == toset(["5000", "5443"])
     error_message = "Should export listener and target group ARNs keyed by listener port"
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.nlb_listener_ipv4["0.0.0.0/0"].from_port == 5000
+    error_message = "Primary listener ingress should preserve the legacy CIDR-only state key during upgrades"
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.nlb_additional_listener_ipv4["5443|0.0.0.0/0"].from_port == 5443
+    error_message = "Additional listener ingress should use a listener-port and CIDR state key"
   }
 }
 
