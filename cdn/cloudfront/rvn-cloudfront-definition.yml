@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.3.2
-  description: Clarify how to order domains when requesting the selected ACM certificate.
+  version: 0.4.0
+  description: Add configurable custom headers for primary and additional origins.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -135,6 +135,31 @@ module:
           value: http-only
         - label: Match viewer
           value: match-viewer
+    - id: origin_custom_headers
+      label: Origin custom headers
+      type: object_array
+      description: Headers CloudFront adds to every request sent to the primary origin. Use them for origin authentication or routing.
+      collapsible: true
+      required: false
+      show_when:
+        origin_source:
+          - ecs_web_service
+          - ecs_cluster
+          - custom
+      item_label: Custom header
+      item_title:
+        template: "{name}"
+      item_inputs:
+        - id: name
+          label: Header name
+          type: string
+          placeholder: X-Origin-Auth
+          required: true
+        - id: value
+          label: Header value
+          type: string
+          required: true
+      default: []
     - id: additional_origins
       label: Additional origins
       type: object_array
@@ -174,6 +199,26 @@ module:
               value: http-only
             - label: Match viewer
               value: match-viewer
+        - id: custom_headers
+          label: Custom headers
+          type: object_array
+          description: Headers CloudFront adds to every request sent to this origin.
+          collapsible: true
+          required: false
+          item_label: Custom header
+          item_title:
+            template: "{name}"
+          item_inputs:
+            - id: name
+              label: Header name
+              type: string
+              placeholder: X-Origin-Auth
+              required: true
+            - id: value
+              label: Header value
+              type: string
+              required: true
+          default: []
       default: []
     - id: section_edge_redirects
       label: Edge redirects
@@ -655,7 +700,8 @@ module:
           module.input.ecs_cluster_alb_dns_name : module.input.origin_source == "s3_bucket" ?
           module.input.s3_bucket_regional_domain_name : module.input.origin_domain_name),
           "origin_protocol_policy": module.input.origin_protocol_policy, "s3_origin_enabled":
-          module.input.origin_source == "s3_bucket"}] |
+          module.input.origin_source == "s3_bucket", "custom_headers":
+          (module.input.origin_custom_headers != nil ? module.input.origin_custom_headers : [])}] |
           concat(module.input.additional_origins != nil ? module.input.additional_origins : []) >>
         price_class: << module.input.price_class >>
         region: << module.input.aws_region >>
@@ -713,6 +759,7 @@ module:
     | --- | --- |
     | Fronting one ECS web service | Using the service's load balancer as the origin with one click |
     | Fronting a whole ECS cluster | Serving every service behind the cluster's public ALB through one distribution |
+    | Restricting direct origin access | Adding a custom header that the load balancer requires before routing requests |
     | Serving private attachments | Using an S3 origin with Origin Access Control and optional signed URLs |
     | Speeding up global users | Terminating TLS and HTTP/3 at the nearest edge location |
     | Caching static assets | Adding a cache behavior such as /assets/* with the CachingOptimized policy |
@@ -747,6 +794,12 @@ module:
     Without aliases, CloudFront forwards its default cloudfront.net domain as the Host header. That only works when services route by path rules (or a /* rule), not by host.
 
     Cache behaviors are path-based only. If different domains need different edge settings, such as caching, WAF, or geo restrictions, create one CloudFront module instance per domain group. All of them can share the same load balancer origin.
+
+    ### Origin custom headers
+
+    Origin custom headers are added to every request CloudFront sends to the configured origin. The primary custom or load balancer origin and each additional origin can have their own headers. They can provide a shared value for an ALB listener rule, allowing the origin to route requests only when they came through this distribution. Configure the matching header name and value on the ALB rule separately.
+
+    Do not use the viewer `Host` header as the shared value. Choose a dedicated header name, use a different value for each protected service or distribution, and rotate the value if it is exposed. The configured value is part of the module configuration, so do not treat it as a general-purpose application secret.
 
     ### TLS between CloudFront and the origin
 
@@ -854,7 +907,8 @@ module:
     | S3 bucket | When origin source is S3 bucket | None | Private bucket served through OAC |
     | Origin domain name | When origin source is custom | None | Any reachable origin domain |
     | Origin protocol policy | Yes | HTTPS only | Origin needs a certificate valid for the forwarded host |
-    | Additional origins | No | [] | Extra origins for path-based cache behaviors |
+    | Origin custom headers | No | [] | Headers added to every request sent to the primary custom or load balancer origin |
+    | Additional origins | No | [] | Extra origins with optional custom headers for path-based cache behaviors |
     | Redirect rules | No | [] | Ordered URL-pattern redirects returned before contacting an origin |
     | Viewer protocol policy | Yes | Redirect to HTTPS | How viewers connect to CloudFront |
     | Allowed methods | Yes | All methods | Read-only options available for cache-friendly apps |
