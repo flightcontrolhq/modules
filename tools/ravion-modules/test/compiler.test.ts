@@ -209,8 +209,8 @@ describe("compiler", () => {
         "section_railpack",
         "section_deployment",
         "section_web",
-        "section_health",
         "section_routing",
+        "section_health",
         "section_storage",
         "section_scaling",
         "section_app_config",
@@ -247,8 +247,8 @@ describe("compiler", () => {
     assert.equal(inputs.some((input) => input.id === "min_size" || input.id === "max_size"), false);
     assert.equal(findInput(inputs, "min_capacity").label, "Minimum instances");
     assert.equal(findInput(inputs, "max_capacity").label, "Maximum instances");
-    assert.equal(getEcsTerraformVariable(compiled.module, "min_size"), "<< module.input.min_capacity >>");
-    assert.equal(getEcsTerraformVariable(compiled.module, "max_size"), "<< module.input.max_capacity >>");
+    assert.equal(getTerraformVariable(compiled.module, "min_size"), "<< module.input.min_capacity >>");
+    assert.equal(getTerraformVariable(compiled.module, "max_size"), "<< module.input.max_capacity >>");
 
     const imageRef = findInput(getDeployInputs(compiled.module), "image_ref");
     assert.deepEqual(imageRef.patterns, [
@@ -310,7 +310,7 @@ describe("compiler", () => {
     });
 
     const loadBalancerAttachment = assertRecord(
-      getEcsTerraformVariable(compiled.module, "load_balancer_attachment"),
+      getTerraformVariable(compiled.module, "load_balancer_attachment"),
       "load_balancer_attachment",
     );
     const listenerRules = loadBalancerAttachment.listener_rules;
@@ -330,7 +330,7 @@ describe("compiler", () => {
     assert.match(stickiness, /module\.input\.target_group_stickiness_cookie_name/);
 
     const loadBalancerSecurityGroupId = assertString(
-      getEcsTerraformVariable(compiled.module, "load_balancer_security_group_id"),
+      getTerraformVariable(compiled.module, "load_balancer_security_group_id"),
     );
     assert.match(loadBalancerSecurityGroupId, /load_balancer_source == "standalone_alb"/);
     assert.match(loadBalancerSecurityGroupId, /alb_security_group_id/);
@@ -338,35 +338,35 @@ describe("compiler", () => {
     assert.match(loadBalancerSecurityGroupId, /private_alb_security_group_id/);
 
     const ecrRepositoryCreationEnabled = assertString(
-      getEcsTerraformVariable(compiled.module, "ecr_repository_creation_enabled"),
+      getTerraformVariable(compiled.module, "ecr_repository_creation_enabled"),
     );
     assert.match(ecrRepositoryCreationEnabled, /module\.input\.deploy_type == "container"/);
     assert.equal(
-      getEcsTerraformVariable(compiled.module, "ecr_scan_on_push_enabled"),
+      getTerraformVariable(compiled.module, "ecr_scan_on_push_enabled"),
       "<< module.input.ecr_scan_on_push_enabled >>",
     );
     assert.equal(
-      getEcsTerraformVariable(compiled.module, "health_check_grace_period"),
+      getTerraformVariable(compiled.module, "health_check_grace_period"),
       "<< module.input.health_check_grace_period >>",
     );
     assert.match(
-      assertString(getEcsTerraformVariable(compiled.module, "direct_access_cidr_blocks")),
+      assertString(getTerraformVariable(compiled.module, "direct_access_cidr_blocks")),
       /module\.input\.http_traffic_enabled/,
     );
     assert.equal(
-      getEcsTerraformVariable(compiled.module, "public_ip_assignment_enabled"),
+      getTerraformVariable(compiled.module, "public_ip_assignment_enabled"),
       "<< module.input.private_subnet_placement_enabled ? false : true >>",
     );
     assert.equal(
-      getEcsTerraformVariable(compiled.module, "data_volume_creation_enabled"),
+      getTerraformVariable(compiled.module, "data_volume_creation_enabled"),
       "<< module.input.data_volume_creation_enabled >>",
     );
     assert.match(
-      assertString(getEcsTerraformVariable(compiled.module, "deploy_health_check_path")),
+      assertString(getTerraformVariable(compiled.module, "deploy_health_check_path")),
       /module\.input\.health_check_path/,
     );
     assert.match(
-      assertString(getEcsTerraformVariable(compiled.module, "container_start_command")),
+      assertString(getTerraformVariable(compiled.module, "container_start_command")),
       /module\.input\.container_start_command/,
     );
 
