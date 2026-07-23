@@ -165,6 +165,31 @@ describe("compiler", () => {
     );
   });
 
+  it("compiles defaulted high-resolution ECS scaling metrics", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "ecs_service", "rvn-ecs-web-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
+
+    const highResolutionMetrics = findInput(inputs, "high_resolution_metrics_enabled");
+    assert.equal(highResolutionMetrics.label, "High-resolution scaling metrics");
+    assert.equal(highResolutionMetrics.default, true);
+    assert.equal(highResolutionMetrics.collapsible, true);
+    assert.equal(assertRecord(highResolutionMetrics.show_when, "high_resolution_metrics_enabled.show_when").auto_scaling_enabled, true);
+
+    const autoScaling = assertRecord(getTerraformVariable(compiled.module, "auto_scaling"), "auto_scaling");
+    assert.ok(Array.isArray(autoScaling.target_tracking), "auto_scaling.target_tracking should be an array");
+
+    const cpuPolicy = assertRecord(autoScaling.target_tracking[0], "auto_scaling.target_tracking[0]");
+    assert.equal(
+      cpuPolicy.predefined_metric,
+      '<< module.input.high_resolution_metrics_enabled ? "ECSServiceAverageCPUUtilizationHighResolution" : "ECSServiceAverageCPUUtilization" >>',
+    );
+
+    const memoryPolicy = assertString(autoScaling.target_tracking[1]);
+    assert.match(memoryPolicy, /module\.input\.high_resolution_metrics_enabled/);
+    assert.match(memoryPolicy, /ECSServiceAverageMemoryUtilizationHighResolution/);
+    assert.match(memoryPolicy, /ECSServiceAverageMemoryUtilization/);
+  });
+
   it("compiles Railpack inputs and builder object for static builds", async () => {
     const compiled = await compileDefinitionFile(join(repoRoot, "hosting", "static_site", "rvn-aws-static-definition.yml"));
     const inputs = getModuleInputs(compiled.module);

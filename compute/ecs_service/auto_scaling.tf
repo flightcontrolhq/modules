@@ -29,6 +29,10 @@ resource "aws_appautoscaling_policy" "target_tracking" {
   scalable_dimension = aws_appautoscaling_target.this[0].scalable_dimension
   service_namespace  = aws_appautoscaling_target.this[0].service_namespace
 
+  # When high-resolution monitoring changes, wait_for_steady_state keeps this
+  # policy update behind the completed ECS monitoring deployment.
+  depends_on = [aws_ecs_service.this]
+
   target_tracking_scaling_policy_configuration {
     target_value       = each.value.target_value
     scale_in_cooldown  = each.value.scale_in_cooldown
@@ -98,4 +102,3 @@ resource "aws_appautoscaling_scheduled_action" "this" {
 locals {
   primary_target_group_arn_suffix = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn_suffix : ""
 }
-

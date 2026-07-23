@@ -9,13 +9,14 @@ auto_scaling:
   target_tracking:
     - scale_in_enabled: << module.input.scale_in_enabled >>
       policy_name: cpu
-      predefined_metric: ECSServiceAverageCPUUtilization
+      predefined_metric: '<< module.input.high_resolution_metrics_enabled ? "ECSServiceAverageCPUUtilizationHighResolution" : "ECSServiceAverageCPUUtilization" >>'
       scale_in_cooldown: << module.input.scale_in_cooldown >>
       scale_out_cooldown: << module.input.scale_out_cooldown >>
       target_value: << module.input.cpu_target_value >>
     - >-
       ...<< module.input.memory_target_value ? [{policy_name: "memory", predefined_metric:
-      "ECSServiceAverageMemoryUtilization", target_value: module.input.memory_target_value,
+      (module.input.high_resolution_metrics_enabled ? "ECSServiceAverageMemoryUtilizationHighResolution" :
+      "ECSServiceAverageMemoryUtilization"), target_value: module.input.memory_target_value,
       scale_in_cooldown: module.input.scale_in_cooldown, scale_out_cooldown:
       module.input.scale_out_cooldown, scale_in_enabled: module.input.scale_in_enabled}] : []
       >>

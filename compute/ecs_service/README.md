@@ -16,6 +16,7 @@ When a load balancer is attached, the module always provisions the production + 
 - Listener rule configuration for path-based and host-based routing
 - NLB listener creation with TLS support
 - Application Auto Scaling with target tracking and scheduled scaling
+- Optional 20-second CPU and memory metrics for faster target-tracking response
 - AWS Cloud Map service discovery integration
 - Native traffic-shift deployment infrastructure (production/alternate target groups, ECS infrastructure role, advanced_configuration) provisioned for every load-balanced service so the strategy can change per deployment
 - Support for EFS and Docker volume configurations
@@ -253,10 +254,12 @@ module "worker_service" {
 
 ## Requirements
 
+High-resolution ECS service monitoring requires the first AWS provider release containing [hashicorp/terraform-provider-aws#48792](https://github.com/hashicorp/terraform-provider-aws/pull/48792). Until that release is available, this implementation is intended for development review only. The Terraform runner role must also allow `ecs:DescribeServiceRevisions`, which the provider uses to read the service monitoring configuration.
+
 | Name | Version |
 |------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 6.21 |
+| aws | >= 6.21; high-resolution monitoring requires the first compatible release |
 
 ## Inputs
 
@@ -366,7 +369,7 @@ The `load_balancer_attachment` object includes:
 The `auto_scaling` object includes:
 - `enabled` - Enable auto scaling (default: true)
 - `min_capacity` / `max_capacity` - Capacity limits
-- `target_tracking` - List of target tracking policies (predefined or custom metrics)
+- `target_tracking` - List of target tracking policies (predefined or custom metrics). The high-resolution CPU and memory predefined metrics enable 20-second ECS service monitoring and force Terraform to wait for the monitoring deployment to reach steady state before updating scaling policies.
 - `scheduled` - List of scheduled scaling actions with cron expressions
 
 ### Service Discovery
@@ -942,8 +945,12 @@ The module supports these predefined ECS metrics:
 | Metric | Description |
 |--------|-------------|
 | `ECSServiceAverageCPUUtilization` | Average CPU utilization across all tasks |
+| `ECSServiceAverageCPUUtilizationHighResolution` | Average CPU utilization published every 20 seconds; adds CloudWatch charges |
 | `ECSServiceAverageMemoryUtilization` | Average memory utilization across all tasks |
+| `ECSServiceAverageMemoryUtilizationHighResolution` | Average memory utilization published every 20 seconds; adds CloudWatch charges |
 | `ALBRequestCountPerTarget` | Average request count per target (requires load balancer) |
+
+Selecting either high-resolution metric automatically configures ECS service monitoring for the corresponding `CPUUtilization` or `MemoryUtilization` metric. Selecting both publishes both metrics in one 20-second monitoring configuration. Standard predefined metrics and custom metrics omit ECS monitoring and retain their existing behavior.
 
 Example with multiple target tracking policies:
 

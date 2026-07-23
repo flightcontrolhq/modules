@@ -25,6 +25,18 @@ resource "aws_ecs_service" "this" {
   # Platform version for Fargate
   platform_version = var.launch_type == "FARGATE" ? var.platform_version : null
 
+  # Publish 20-second ECS service metrics only when an active target-tracking
+  # policy uses one of the high-resolution predefined metric variants.
+  dynamic "monitoring" {
+    for_each = local.high_resolution_metrics_enabled ? [1] : []
+    content {
+      metric_configuration {
+        metric_names       = local.high_resolution_metric_names
+        resolution_seconds = 20
+      }
+    }
+  }
+
   # Network configuration (required for awsvpc network mode)
   dynamic "network_configuration" {
     for_each = var.network_mode == "awsvpc" ? [1] : []
@@ -130,7 +142,7 @@ resource "aws_ecs_service" "this" {
   force_new_deployment = var.new_deployment_forcing_enabled
 
   # Wait for steady state
-  wait_for_steady_state = var.steady_state_wait_enabled
+  wait_for_steady_state = var.steady_state_wait_enabled || local.high_resolution_metrics_enabled
 
   # Tags
   enable_ecs_managed_tags = var.ecs_managed_tags_enabled
