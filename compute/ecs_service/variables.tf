@@ -505,7 +505,7 @@ variable "load_balancer_security_group_id" {
 
 variable "load_balancer_ingress_cidr_blocks" {
   type        = list(string)
-  description = "IPv4 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listener or load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
+  description = "IPv4 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
   default     = []
 
   validation {
@@ -516,7 +516,7 @@ variable "load_balancer_ingress_cidr_blocks" {
 
 variable "load_balancer_ingress_ipv6_cidr_blocks" {
   type        = list(string)
-  description = "IPv6 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listener or load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
+  description = "IPv6 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
   default     = []
 
   validation {
@@ -595,17 +595,7 @@ variable "load_balancer_attachment" {
       weight = optional(number, 100)
     })), [])
 
-    # NLB: Listener configuration (creates a new NLB listener)
-    nlb_listener = optional(object({
-      nlb_arn         = string           # ARN of the NLB to attach to
-      port            = number           # Listener port
-      protocol        = string           # TCP, TLS, UDP, TCP_UDP
-      certificate_arn = optional(string) # Required for TLS protocol
-      ssl_policy      = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
-      alpn_policy     = optional(string) # For TLS: HTTP1Only, HTTP2Only, etc.
-    }), null)
-
-    # NLB: Rolling-only multi-listener configuration. The first listener uses
+    # NLB: Rolling-only listener configuration. The first listener uses
     # the production target group above; each later listener gets its own
     # target group and ECS load-balancer attachment.
     nlb_listeners = optional(list(object({
@@ -622,7 +612,7 @@ variable "load_balancer_attachment" {
     container_name = optional(string, null)
     container_port = optional(number, null)
   })
-  description = "Load balancer configuration including target groups, ALB listener rules, and single or multiple NLB listeners."
+  description = "Load balancer configuration including target groups, ALB listener rules, and NLB listeners."
   default     = null
 
   validation {
@@ -635,18 +625,16 @@ variable "load_balancer_attachment" {
 
   validation {
     condition = var.load_balancer_attachment == null || (
-      var.load_balancer_attachment.nlb_listener == null
-      || length(var.load_balancer_attachment.nlb_listeners) == 0
+      !var.load_balancer_attachment.enabled
+      || length(var.load_balancer_attachment.listener_rules) > 0
+      || length(var.load_balancer_attachment.nlb_listeners) > 0
     )
-    error_message = "Set either nlb_listener or nlb_listeners, not both."
+    error_message = "An enabled load_balancer_attachment requires listener_rules for ALB or nlb_listeners for NLB."
   }
 
   validation {
-    condition = var.load_balancer_attachment == null || length(var.load_balancer_attachment.listener_rules) == 0 || (
-      var.load_balancer_attachment.nlb_listener == null
-      && length(var.load_balancer_attachment.nlb_listeners) == 0
-    )
-    error_message = "Set listener_rules for ALB or nlb_listener/nlb_listeners for NLB, not both."
+    condition     = var.load_balancer_attachment == null || length(var.load_balancer_attachment.listener_rules) == 0 || length(var.load_balancer_attachment.nlb_listeners) == 0
+    error_message = "Set listener_rules for ALB or nlb_listeners for NLB, not both."
   }
 
   validation {

@@ -271,6 +271,26 @@ run "traffic_shift_rejects_nlb_listeners" {
   expect_failures = [aws_ecs_service.this]
 }
 
+run "service_rejects_legacy_nlb_listener" {
+  command = plan
+
+  variables {
+    load_balancer_attachment = {
+      target_group = {
+        port     = 5000
+        protocol = "TCP"
+      }
+      nlb_listener = {
+        nlb_arn  = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+        port     = 5000
+        protocol = "TCP"
+      }
+    }
+  }
+
+  expect_failures = [var.load_balancer_attachment]
+}
+
 run "service_rejects_more_than_five_nlb_listeners" {
   command = plan
 

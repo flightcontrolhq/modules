@@ -7,9 +7,9 @@
 # test listener rules while it shifts traffic between the production and
 # alternate target groups.
 #
-# Created for ALB and legacy single-NLB attachments so the deploy manager
-# can switch those services to a traffic-shift strategy without a Terraform
-# apply. Rolling-only multi-listener NLB services do not need this role.
+# Created for ALB attachments so the deploy manager can switch those services
+# to a traffic-shift strategy without a Terraform apply. Rolling-only NLB
+# services do not need this role.
 ################################################################################
 
 data "aws_iam_policy_document" "ecs_infrastructure_assume" {

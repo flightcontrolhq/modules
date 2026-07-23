@@ -1,10 +1,9 @@
 ################################################################################
 # Target Groups
 #
-# A production (tg-1) + alternate (tg-2) pair is created for ALB and
-# legacy single-NLB attachments so deployment strategy remains a
-# per-deployment decision. The rolling-only nlb_listeners shape creates
-# one target group per listener and omits the unused alternate.
+# A production (tg-1) + alternate (tg-2) pair is created for ALB so deployment
+# strategy remains a per-deployment decision. The rolling-only nlb_listeners
+# shape creates one target group per listener and omits the unused alternate.
 ################################################################################
 
 resource "aws_lb_target_group" "tg_1" {

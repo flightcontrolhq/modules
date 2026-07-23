@@ -181,7 +181,7 @@ resource "aws_ecs_service" "this" {
         || local.enable_nlb_listener
         || length(var.load_balancer_attachment.listener_rules) > 0
       )
-      error_message = "load_balancer_attachment requires either listener_rules (ALB), nlb_listener, or nlb_listeners so the production listener rule can be wired into advanced_configuration."
+      error_message = "load_balancer_attachment requires either listener_rules for ALB or nlb_listeners for NLB."
     }
 
     # The ECS advanced_configuration API accepts a single production

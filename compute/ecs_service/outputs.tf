@@ -178,7 +178,7 @@ output "nlb_target_group_arns" {
 }
 
 output "production_listener_rule_arn" {
-  description = "ARN of the production listener rule (ALB) or listener (NLB) the ECS deployment controller rewrites during native traffic-shift deployments. This is the value the deploy manager passes as advanced_configuration.production_listener_rule on UpdateService (null if load balancer disabled)."
+  description = "ARN of the production ALB listener rule or primary NLB listener. The ECS deployment controller rewrites this value only for ALB traffic-shift deployments (null if load balancer disabled)."
   value = local.enable_load_balancer ? (
     local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : aws_lb_listener_rule.alb["0"].arn
   ) : null

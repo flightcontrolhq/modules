@@ -40,12 +40,7 @@ locals {
   enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled
 
   # Determine if NLB listeners should be created (vs ALB listener rules).
-  # nlb_listener remains supported for existing callers; nlb_listeners is the
-  # rolling-only multi-listener shape.
-  enable_nlb_listener = local.enable_load_balancer && (
-    try(var.load_balancer_attachment.nlb_listener != null, false)
-    || length(try(var.load_balancer_attachment.nlb_listeners, [])) > 0
-  )
+  enable_nlb_listener = local.enable_load_balancer && length(try(var.load_balancer_attachment.nlb_listeners, [])) > 0
 
   rolling_nlb_listeners_enabled        = local.enable_load_balancer && length(try(var.load_balancer_attachment.nlb_listeners, [])) > 0
   traffic_shift_infrastructure_enabled = local.enable_load_balancer && !local.rolling_nlb_listeners_enabled
@@ -119,14 +114,7 @@ locals {
     local.placeholder_container_port
   ) : null
 
-  nlb_listeners = local.enable_nlb_listener ? (
-    length(var.load_balancer_attachment.nlb_listeners) > 0
-    ? var.load_balancer_attachment.nlb_listeners
-    : [merge(var.load_balancer_attachment.nlb_listener, {
-      container_port  = local.lb_container_port
-      target_protocol = var.load_balancer_attachment.target_group.protocol
-    })]
-  ) : []
+  nlb_listeners = local.enable_nlb_listener ? var.load_balancer_attachment.nlb_listeners : []
 
   primary_nlb_listener = local.enable_nlb_listener ? local.nlb_listeners[0] : null
   primary_target_group_port = local.enable_nlb_listener ? (

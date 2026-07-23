@@ -4,7 +4,7 @@ This module creates an Amazon ECS service with a placeholder task definition, lo
 
 **Note:** This module provisions infrastructure with a placeholder container (hello-world). The Flightcontrol deploy manager deploys the actual application by registering task definitions and calling UpdateService with the authoritative `deploymentConfiguration` (strategy, bake times, pause lifecycle hooks) on every deploy.
 
-For ALB and legacy single-NLB attachments, the module provisions the production + alternate target-group pair, ECS infrastructure role, and `load_balancer.advanced_configuration`, so deployment strategy remains a per-deployment decision. The rolling-only `nlb_listeners` shape instead creates one target group per listener and omits traffic-shift infrastructure. ALB traffic-shift deployments require a single production listener rule. `deployment_type` only seeds the strategy at create time.
+For ALB attachments, the module provisions the production + alternate target-group pair, ECS infrastructure role, and `load_balancer.advanced_configuration`, so deployment strategy remains a per-deployment decision. The rolling-only `nlb_listeners` shape instead creates one target group per listener and omits traffic-shift infrastructure. ALB traffic-shift deployments require a single production listener rule. `deployment_type` only seeds the strategy at create time.
 
 ## Features
 
@@ -14,10 +14,10 @@ For ALB and legacy single-NLB attachments, the module provisions the production 
 - Security group for ECS tasks with configurable ingress rules
 - Target group creation for ALB/NLB integration
 - Listener rule configuration for path-based and host-based routing
-- Single or multiple NLB listener creation with per-listener container ports and TLS support for rolling deployments
+- One or more NLB listeners with per-listener container ports and TLS support for rolling deployments
 - Application Auto Scaling with target tracking and scheduled scaling
 - AWS Cloud Map service discovery integration
-- Native traffic-shift deployment infrastructure for ALB and legacy single-NLB attachments
+- Native traffic-shift deployment infrastructure for ALB attachments
 - Support for EFS and Docker volume configurations
 - Capacity provider strategy support for mixed Fargate/EC2 deployments
 
@@ -173,11 +173,13 @@ module "tcp_service" {
       port     = 5000
       protocol = "TCP"
     }
-    nlb_listener = {
-      nlb_arn  = aws_lb.nlb.arn
-      port     = 5000
-      protocol = "TCP"
-    }
+    nlb_listeners = [{
+      nlb_arn         = aws_lb.nlb.arn
+      port            = 5000
+      protocol        = "TCP"
+      container_port  = 5000
+      target_protocol = "TCP"
+    }]
   }
 }
 ```
@@ -348,13 +350,12 @@ module "worker_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| load_balancer_attachment | Load balancer configuration including target group, listener rules, and NLB listener | `object` | `null` | no |
+| load_balancer_attachment | Load balancer configuration including target group, listener rules, and NLB listeners | `object` | `null` | no |
 
 The `load_balancer_attachment` object includes:
 - `enabled` - Enable load balancer attachment (default: true)
 - `target_group` - Target group configuration (port, protocol, health_check, stickiness)
 - `listener_rules` - ALB listener rules with conditions. Each rule accepts an optional `priority` (1-50000); when omitted, AWS automatically assigns the next available priority after the current highest rule on the listener.
-- `nlb_listener` - NLB listener configuration (port, protocol, certificate_arn for TLS)
 - `nlb_listeners` - Rolling-only NLB listener configurations. Each item defines an NLB ARN, listener port and protocol, container port, target protocol, and optional TLS settings. Listener and container ports must be unique, and ECS supports at most five listeners per service. Configure the complete list when creating the service; changing it later requires replacing the ECS service because its load balancer attachments are deployment-managed.
 - `container_name` / `container_port` - Override container to attach
 
@@ -420,7 +421,7 @@ The `service_discovery` object includes:
 
 ### Target Groups
 
-A production (tg-1) + alternate (tg-2) pair exists for ALB and legacy single-NLB attachments. Rolling-only multi-listener NLB attachments create one production target group per listener and no alternate.
+A production (tg-1) + alternate (tg-2) pair exists for ALB attachments. Rolling-only NLB attachments create one production target group per listener and no alternate.
 
 | Name | Description |
 |------|-------------|
@@ -550,7 +551,7 @@ A production (tg-1) + alternate (tg-2) pair exists for ALB and legacy single-NLB
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled     │   │  ║
-║  │  │ • enable_nlb_listener = enable_load_balancer && either NLB listener shape is configured                    │   │  ║
+║  │  │ • enable_nlb_listener = enable_load_balancer && nlb_listeners is configured                                │   │  ║
 ║  │  │ • auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
 ║  │  │ • enable_service_discovery = var.service_discovery != null                                                │   │  ║
 ║  │  │ • create_execution_role = var.execution_role_arn == null                                                  │   │  ║
@@ -793,7 +794,7 @@ A production (tg-1) + alternate (tg-2) pair exists for ALB and legacy single-NLB
 ║           ▼                     ▼                     ▼                    ▼                  ▼                  ▼     ║
 ║  var.load_balancer_     var.load_balancer_    var.load_balancer_   var.auto_scaling   var.service_   (ECS Tasks)     ║
 ║    attachment           attachment            attachment                               discovery                      ║
-║    .target_group        .listener_rules       .nlb_listener(s)                                                        ║
+║    .target_group        .listener_rules       .nlb_listeners                                                          ║
 ║           │                     │                     │                    │                  │                       ║
 ║           ▼                     ▼                     ▼                    ▼                  ▼                       ║
 ║  aws_lb_target_group    aws_lb_listener_rule  aws_lb_listener     aws_appautoscaling_  aws_service_discovery_        ║
@@ -912,7 +913,7 @@ The ALB rule can use one selector type per service: either `query-string` or `he
 
 ### How do I use this module with an NLB instead of an ALB?
 
-For one NLB listener, configure `nlb_listener` instead of `listener_rules`:
+For one or more NLB listeners, configure `nlb_listeners` instead of `listener_rules`:
 
 ```hcl
 load_balancer_attachment = {
@@ -921,18 +922,20 @@ load_balancer_attachment = {
     protocol = "TCP"  # or "TLS", "UDP", "TCP_UDP"
   }
   # No listener_rules for NLB
-  nlb_listener = {
+  nlb_listeners = [{
     nlb_arn         = aws_lb.nlb.arn
     port            = 5000
     protocol        = "TCP"
+    container_port  = 5000
+    target_protocol = "TCP"
     # For TLS:
     # certificate_arn = "arn:aws:acm:..."
     # ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  }
+  }]
 }
 ```
 
-For multiple NLB listeners, use `nlb_listeners`. Multiple listeners support rolling deployments only:
+NLB listeners support rolling deployments only. To expose multiple ports, add more items:
 
 ```hcl
 deployment_type = "rolling"
@@ -962,11 +965,11 @@ load_balancer_attachment = {
 }
 ```
 
-### Can I use both ALB listener rules and NLB listener?
+### Can I use both ALB listener rules and NLB listeners?
 
 No, each ECS service can only be attached to one load balancer. Use either:
 - `listener_rules` for ALB (path/host-based routing)
-- `nlb_listener` or `nlb_listeners` for NLB (TCP/TLS/UDP)
+- `nlb_listeners` for NLB (TCP/TLS/UDP)
 
 ### How does auto scaling work with the predefined metrics?
 
