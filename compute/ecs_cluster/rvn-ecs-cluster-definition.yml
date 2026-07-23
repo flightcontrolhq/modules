@@ -232,11 +232,9 @@ module:
       type: boolean
     - $template: ../../partials/templates/alb-certificate-input.yml
       with:
-        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the public ALB HTTPS listener for SNI.
-        additional_certificate_arns_input_id: public_alb_additional_certificate_arns
-        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
         certificate_arns_input_id: public_alb_certificate_arns
-        certificate_description: Primary ACM certificate module for public ALB HTTPS.
+        certificate_description: ACM certificate module for public ALB HTTPS.
         certificate_input_id: public_alb_certificate
         show_when:
           public_alb_enabled: true
@@ -302,11 +300,9 @@ module:
       type: boolean
     - $template: ../../partials/templates/alb-certificate-input.yml
       with:
-        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the private ALB HTTPS listener for SNI.
-        additional_certificate_arns_input_id: private_alb_additional_certificate_arns
-        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
         certificate_arns_input_id: private_alb_certificate_arns
-        certificate_description: Primary ACM certificate module for private ALB HTTPS.
+        certificate_description: ACM certificate module for private ALB HTTPS.
         certificate_input_id: private_alb_certificate
         show_when:
           private_alb_enabled: true
@@ -545,7 +541,7 @@ module:
     - Backend services
     - Private HTTP/HTTPS routing
 
-    For either ALB, the selected Certificate is the default HTTPS certificate. Use Additional certificate ARNs to attach more ACM certificates to the same listener through SNI.
+    For either ALB, the selected Certificate supplies the first and default Certificate ARN. Add more Certificate ARNs to attach additional ACM certificates to the same listener through SNI.
 
     ### Network load balancers
 
@@ -648,9 +644,7 @@ module:
         public_nlb_enabled: << module.input.public_nlb_enabled >>
         name: << module.input.name >>
         private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
-        private_alb_certificate_arns: >-
-          << (module.input.private_alb_certificate_arns != nil ? module.input.private_alb_certificate_arns : []) |
-          concat(module.input.private_alb_additional_certificate_arns != nil ? module.input.private_alb_additional_certificate_arns : []) >>
+        private_alb_certificate_arns: << module.input.private_alb_certificate_arns >>
         private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
         private_alb_https_enabled: << module.input.private_alb_https_enabled >>
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
@@ -664,9 +658,7 @@ module:
         private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
         private_subnet_ids: << module.input.private_subnet_ids >>
         public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
-        public_alb_certificate_arns: >-
-          << (module.input.public_alb_certificate_arns != nil ? module.input.public_alb_certificate_arns : []) |
-          concat(module.input.public_alb_additional_certificate_arns != nil ? module.input.public_alb_additional_certificate_arns : []) >>
+        public_alb_certificate_arns: << module.input.public_alb_certificate_arns >>
         public_alb_access_logs_enabled: << module.input.public_alb_access_logs_enabled >>
         public_alb_https_enabled: << module.input.public_alb_https_enabled >>
         public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>

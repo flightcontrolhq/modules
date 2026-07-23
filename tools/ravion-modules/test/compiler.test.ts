@@ -193,7 +193,7 @@ describe("compiler", () => {
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
   });
 
-  it("compiles shared ALB certificate inputs, additional SNI certificates, and visibility-aware ingress defaults", async () => {
+  it("compiles shared ALB certificate inputs and visibility-aware ingress defaults", async () => {
     const [alb, cluster] = await Promise.all([
       compileDefinitionFile(join(repoRoot, "networking", "alb", "rvn-aws-alb-definition.yml")),
       compileDefinitionFile(join(repoRoot, "compute", "ecs_cluster", "rvn-ecs-cluster-definition.yml")),
@@ -214,35 +214,35 @@ describe("compiler", () => {
     assert.ok(Array.isArray(certificateMappedInputs), "certificate.mapped_inputs should be an array");
     const certificateArns = assertRecord(certificateMappedInputs[0], "certificate ARN mapped input");
     assert.equal(certificateArns.id, "certificate_arns");
+    assert.equal(certificateArns.type, "string_array");
     assert.deepEqual(certificateArns.default, ["<<ref.stack.output.certificate_arn>>"]);
-    const additionalCertificateArns = findInput(albInputs, "additional_certificate_arns");
-    assert.equal(additionalCertificateArns.type, "string_array");
-    assert.deepEqual(additionalCertificateArns.default, []);
-    assert.deepEqual(additionalCertificateArns.show_when, { https_listener_enabled: true });
+    assert.equal(albInputs.some((input) => input.id === "additional_certificate_arns"), false);
 
     const clusterInputs = getModuleInputs(cluster.module);
-    for (const [inputId, mappedInputId, additionalInputId] of [
-      ["public_alb_certificate", "public_alb_certificate_arns", "public_alb_additional_certificate_arns"],
-      ["private_alb_certificate", "private_alb_certificate_arns", "private_alb_additional_certificate_arns"],
+    for (const [inputId, mappedInputId] of [
+      ["public_alb_certificate", "public_alb_certificate_arns"],
+      ["private_alb_certificate", "private_alb_certificate_arns"],
     ]) {
       const clusterCertificate = findInput(clusterInputs, inputId);
       assert.equal(clusterCertificate.type, "$ref:rvn-acm-certificate");
       const mappedInputs = clusterCertificate.mapped_inputs;
       assert.ok(Array.isArray(mappedInputs), `${inputId}.mapped_inputs should be an array`);
-      assert.equal(assertRecord(mappedInputs[0], `${inputId} ARN mapped input`).id, mappedInputId);
-      assert.deepEqual(findInput(clusterInputs, additionalInputId).default, []);
+      const mappedInput = assertRecord(mappedInputs[0], `${inputId} ARN mapped input`);
+      assert.equal(mappedInput.id, mappedInputId);
+      assert.equal(mappedInput.type, "string_array");
     }
 
-    const standaloneCertificateArns = assertString(getTerraformVariable(alb.module, "certificate_arns"));
-    assert.match(standaloneCertificateArns, /certificate_arns != nil/);
-    assert.match(standaloneCertificateArns, /concat\(module\.input\.additional_certificate_arns/);
-    assert.match(
-      assertString(getTerraformVariable(cluster.module, "public_alb_certificate_arns")),
-      /concat\(module\.input\.public_alb_additional_certificate_arns/,
+    assert.equal(
+      getTerraformVariable(alb.module, "certificate_arns"),
+      "<< module.input.https_listener_enabled ? module.input.certificate_arns : [] >>",
     );
-    assert.match(
-      assertString(getTerraformVariable(cluster.module, "private_alb_certificate_arns")),
-      /concat\(module\.input\.private_alb_additional_certificate_arns/,
+    assert.equal(
+      getTerraformVariable(cluster.module, "public_alb_certificate_arns"),
+      "<< module.input.public_alb_certificate_arns >>",
+    );
+    assert.equal(
+      getTerraformVariable(cluster.module, "private_alb_certificate_arns"),
+      "<< module.input.private_alb_certificate_arns >>",
     );
 
     const ipv4Ingress = assertString(getTerraformVariable(alb.module, "ingress_cidr_blocks"));
