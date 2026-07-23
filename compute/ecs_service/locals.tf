@@ -152,9 +152,6 @@ locals {
       contains(["TLS", "UDP"], listener.target_protocol) ? "TCP" : listener.target_protocol,
     )
   }
-  nlb_listeners_by_port = {
-    for listener in local.nlb_listeners : tostring(listener.port) => listener
-  }
 
   load_balancer_port_mappings = local.enable_nlb_listener ? [
     for listener in local.nlb_listeners : {
