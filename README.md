@@ -33,7 +33,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
-| `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
+| `networking/` | `alb`             | Standalone AWS Application Load Balancer with shared HTTP/HTTPS listeners | v1.0.0  |
 | `networking/` | `eips`            | AWS Elastic IP pool with deterministic Name tags and `/32` CIDR outputs | v1.0.0  |
 | `networking/` | `nlb`             | AWS Network Load Balancers                                             | v1.0.0  |
 | `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | v1.0.0  |

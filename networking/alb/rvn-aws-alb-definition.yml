@@ -1,9 +1,9 @@
 definition:
   type: rvn-aws-alb
-  name: Application Load Balancer
-  description: Standalone Application Load Balancer with HTTP/HTTPS listeners that multiple services can attach listener rules to.
+  name: AWS Application Load Balancer
+  description: Standalone Application Load Balancer (ALB) with HTTP/HTTPS listeners that multiple services can attach listener rules to.
 release:
-  version: 0.0.1
+  version: 0.1.0
   description: Initial module definition.
 module:
   inputs:
@@ -45,7 +45,7 @@ module:
       description: Prevent accidental deletion of the load balancer via the AWS API.
       default: true
     - id: idle_timeout
-      label: Idle timeout (secs)
+      label: Idle timeout (seconds)
       type: number
       description: Seconds a connection is allowed to be idle before the load balancer closes it.
       collapsible: true
@@ -56,7 +56,7 @@ module:
       label: Listeners
       type: section
     - id: http_listener_enabled
-      label: HTTP listener
+      label: HTTP
       type: boolean
       description: Create an HTTP listener.
       default: true
@@ -70,9 +70,9 @@ module:
         http_listener_enabled: true
       default: 80
     - id: https_listener_enabled
-      label: HTTPS listener
+      label: HTTPS
       type: boolean
-      description: Create an HTTPS listener. Requires at least one ACM certificate ARN.
+      description: Create an HTTPS listener. Select an ACM certificate when enabled.
       default: false
     - id: https_listener_port
       label: HTTPS port
@@ -83,15 +83,16 @@ module:
       show_when:
         https_listener_enabled: true
       default: 443
-    - id: certificate_arns
-      label: Certificate ARNs
-      type: string_array
-      description: ACM certificate ARNs for the HTTPS listener. The first ARN is the default certificate; additional ARNs are attached for SNI.
-      add_button_label: Add certificate ARN
-      placeholder: arn:aws:acm:...
-      required: true
-      show_when:
-        https_listener_enabled: true
+    - $template: ../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the HTTPS listener for SNI.
+        additional_certificate_arns_input_id: additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_input_id: certificate_arns
+        certificate_description: Primary ACM certificate module for HTTPS. The certificate must use the same AWS account and region as the load balancer.
+        certificate_input_id: certificate
+        show_when:
+          https_listener_enabled: true
     - id: ssl_policy
       label: SSL policy
       type: string
@@ -114,14 +115,14 @@ module:
     - id: ingress_cidr_blocks
       label: Ingress IPv4 CIDRs
       type: string_array
-      description: IPv4 CIDR blocks allowed to reach the load balancer. Terraform defaults to 0.0.0.0/0.
+      description: IPv4 CIDR blocks allowed to reach the load balancer. Defaults to public internet access for an internet-facing load balancer and RFC1918 private ranges for an internal load balancer. Use an empty list to allow no IPv4 ingress.
       add_button_label: Add CIDR block
       collapsible: true
       placeholder: 0.0.0.0/0
     - id: ingress_ipv6_cidr_blocks
       label: Ingress IPv6 CIDRs
       type: string_array
-      description: IPv6 CIDR blocks allowed to reach the load balancer. Terraform defaults to ::/0.
+      description: IPv6 CIDR blocks allowed to reach the load balancer. Defaults to public internet access for an internet-facing load balancer and no IPv6 ingress for an internal load balancer. Use an empty list to allow no IPv6 ingress.
       add_button_label: Add IPv6 CIDR block
       collapsible: true
       placeholder: "::/0"
@@ -168,7 +169,10 @@ module:
         access_logs_bucket_arn: << module.input.access_logs_bucket_arn || nil >>
         access_logs_enabled: << module.input.access_logs_enabled >>
         access_logs_retention_days: << module.input.access_logs_retention_days >>
-        certificate_arns: '<< module.input.https_listener_enabled ? module.input.certificate_arns : [] >>'
+        certificate_arns: >-
+          << module.input.https_listener_enabled ?
+          ((module.input.certificate_arns != nil ? module.input.certificate_arns : []) |
+          concat(module.input.additional_certificate_arns != nil ? module.input.additional_certificate_arns : [])) : [] >>
         deletion_protection_enabled: << module.input.deletion_protection_enabled >>
         http_listener_enabled: << module.input.http_listener_enabled >>
         http_listener_port: << module.input.http_listener_port >>
@@ -176,19 +180,29 @@ module:
         https_listener_enabled: << module.input.https_listener_enabled >>
         https_listener_port: << module.input.https_listener_port >>
         idle_timeout: << module.input.idle_timeout >>
-        ingress_cidr_blocks: '<< module.input.ingress_cidr_blocks != nil && module.input.ingress_cidr_blocks != [] ? module.input.ingress_cidr_blocks : nil >>'
-        ingress_ipv6_cidr_blocks: '<< module.input.ingress_ipv6_cidr_blocks != nil && module.input.ingress_ipv6_cidr_blocks != [] ? module.input.ingress_ipv6_cidr_blocks : nil >>'
+        ingress_cidr_blocks: >-
+          << module.input.ingress_cidr_blocks != nil ? module.input.ingress_cidr_blocks :
+          (module.input.internal_load_balancer_enabled ? ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"] : ["0.0.0.0/0"]) >>
+        ingress_ipv6_cidr_blocks: >-
+          << module.input.ingress_ipv6_cidr_blocks != nil ? module.input.ingress_ipv6_cidr_blocks :
+          (module.input.internal_load_balancer_enabled ? [] : ["::/0"]) >>
         internal_load_balancer_enabled: << module.input.internal_load_balancer_enabled >>
         name: << module.input.name >>
         region: << module.input.aws_region >>
         ssl_policy: << module.input.ssl_policy || nil >>
-        subnet_ids: '<< module.input.internal_load_balancer_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>'
+        subnet_ids: "<< module.input.internal_load_balancer_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
         tags:
           $include: ../../partials/stack/ravion-tags.yml
         vpc_id: << module.input.vpc_id >>
         waf_association_enabled: '<< module.input.web_acl_arn != nil && module.input.web_acl_arn != "" >>'
         web_acl_arn: << module.input.web_acl_arn || nil >>
   ui:
+    links: |-
+      <<
+      (module.input.https_listener_enabled || module.input.http_listener_enabled) && stack.output.alb_dns_name ?
+      [{"name":"Load balancer","href":(module.input.https_listener_enabled ? "https://" : "http://") + stack.output.alb_dns_name}] :
+      []
+      >>
     metrics:
       - id: request_count
         name: Request count
@@ -251,7 +265,7 @@ module:
           region: << stack.output.region >>
           statistic: Sum
   readme: |
-    Standalone Application Load Balancer with HTTP/HTTPS listeners that multiple services can attach listener rules to.
+    Standalone Application Load Balancer (ALB) with HTTP/HTTPS listeners that multiple services can attach listener rules to.
 
     ## Overview
 
@@ -274,11 +288,11 @@ module:
 
     The load balancer is internet-facing in the public subnets by default. Enable Internal load balancer to place it in the private subnets, reachable only inside the VPC.
 
-    The module creates a dedicated security group. Ingress defaults to 0.0.0.0/0 and ::/0 on the listener ports; restrict it with the Ingress IPv4 CIDRs and Ingress IPv6 CIDRs settings. Services that attach to the load balancer allow traffic from this security group on their app ports.
+    The module creates a dedicated security group. Internet-facing load balancers allow 0.0.0.0/0 and ::/0 on the listener ports by default. Internal load balancers allow the RFC1918 IPv4 ranges and no IPv6 ingress by default. Restrict or remove access with Ingress IPv4 CIDRs and Ingress IPv6 CIDRs; an explicitly empty list creates no rules for that IP version. Services that attach to the load balancer allow traffic from this security group on their app ports.
 
     ## Listeners and TLS
 
-    The HTTP listener is enabled by default. Enable the HTTPS listener and provide at least one ACM Certificate ARN for TLS; the first ARN is the default certificate and additional ARNs are served through SNI. When both listeners are enabled, HTTP traffic redirects to HTTPS by default.
+    HTTP is enabled on port 80 by default. Enable HTTPS and select a primary ACM Certificate module in the same AWS account and region. Add Additional certificate ARNs when the listener should serve more certificates through SNI. When both listeners are enabled, HTTP traffic redirects to HTTPS by default. The HTTP and HTTPS listener ports remain configurable for workloads that cannot use ports 80 and 443.
 
     Requests that match no service listener rule receive a fixed 503 response, so an unmatched host or path never reaches a service by accident.
 
@@ -294,15 +308,16 @@ module:
     | Name slug | Yes | {project}-{env}-{module} | Name for the load balancer, 32 characters max |
     | Internal load balancer | No | false | Place the load balancer in private subnets |
     | Deletion protection | No | true | Prevent accidental deletion |
-    | Idle timeout (secs) | No | 60 | Connection idle timeout |
-    | HTTP listener | No | true | Create an HTTP listener |
+    | Idle timeout (seconds) | No | 60 | Connection idle timeout |
+    | HTTP | No | true | Create an HTTP listener |
     | HTTP port | No | 80 | HTTP listener port |
-    | HTTPS listener | No | false | Create an HTTPS listener |
+    | HTTPS | No | false | Create an HTTPS listener |
     | HTTPS port | No | 443 | HTTPS listener port |
-    | Certificate ARNs | Yes* | - | ACM certificates for HTTPS |
+    | Certificate | Yes* | - | Primary ACM certificate module for HTTPS |
+    | Additional certificate ARNs | No | [] | Additional ACM certificates attached for SNI |
     | SSL policy | No | TLS 1.3 policy | SSL policy for HTTPS |
     | Redirect HTTP to HTTPS | No | true | Applies when both listeners are enabled |
-    | Ingress IPv4/IPv6 CIDRs | No | 0.0.0.0/0, ::/0 | Sources allowed to reach the load balancer |
+    | Ingress IPv4/IPv6 CIDRs | No | Visibility-dependent | Sources allowed to reach the load balancer; empty lists create no ingress rules |
     | WAF web ACL ARN | No | - | WAFv2 Web ACL to associate |
     | Access logs | No | false | Write access logs to S3 |
     | Access logs bucket ARN | No | Created bucket | Existing bucket for access logs |
@@ -312,12 +327,13 @@ module:
     | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
     | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
 
-    *Required when the HTTPS listener is enabled.
+    *Required when HTTPS is enabled.
 
     ## Design decisions
 
     - The default listener action is a fixed 503 response. Routing is owned by the services that attach listener rules, so the load balancer stays service-agnostic.
     - Internal placement uses the network's private subnets and internet-facing placement uses the public subnets; subnet selection is not exposed separately.
+    - Internal ingress defaults to RFC1918 IPv4 ranges with no IPv6 ingress, while internet-facing ingress defaults to all IPv4 and IPv6 sources.
     - HTTP-only is allowed for development, but production load balancers should enable HTTPS with an ACM certificate.
     - Advanced ALB behaviors such as desync mitigation, header handling, and HTTP/2 keep their safe Terraform defaults and are available through Advanced Terraform variables.
 

@@ -193,6 +193,76 @@ describe("compiler", () => {
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
   });
 
+  it("compiles shared ALB certificate inputs, additional SNI certificates, and visibility-aware ingress defaults", async () => {
+    const [alb, cluster] = await Promise.all([
+      compileDefinitionFile(join(repoRoot, "networking", "alb", "rvn-aws-alb-definition.yml")),
+      compileDefinitionFile(join(repoRoot, "compute", "ecs_cluster", "rvn-ecs-cluster-definition.yml")),
+    ]);
+    const albInputs = getModuleInputs(alb.module);
+
+    assert.equal(findInput(albInputs, "internal_load_balancer_enabled").label, "Internal load balancer");
+    assert.equal(findInput(albInputs, "http_listener_enabled").label, "HTTP");
+    assert.equal(findInput(albInputs, "https_listener_enabled").label, "HTTPS");
+    assert.ok(findInput(albInputs, "http_listener_port"));
+    assert.ok(findInput(albInputs, "https_listener_port"));
+
+    const certificate = findInput(albInputs, "certificate");
+    assert.equal(certificate.type, "$ref:rvn-acm-certificate");
+    assert.equal(certificate.required, true);
+    assert.deepEqual(certificate.show_when, { https_listener_enabled: true });
+    const certificateMappedInputs = certificate.mapped_inputs;
+    assert.ok(Array.isArray(certificateMappedInputs), "certificate.mapped_inputs should be an array");
+    const certificateArns = assertRecord(certificateMappedInputs[0], "certificate ARN mapped input");
+    assert.equal(certificateArns.id, "certificate_arns");
+    assert.deepEqual(certificateArns.default, ["<<ref.stack.output.certificate_arn>>"]);
+    const additionalCertificateArns = findInput(albInputs, "additional_certificate_arns");
+    assert.equal(additionalCertificateArns.type, "string_array");
+    assert.deepEqual(additionalCertificateArns.default, []);
+    assert.deepEqual(additionalCertificateArns.show_when, { https_listener_enabled: true });
+
+    const clusterInputs = getModuleInputs(cluster.module);
+    for (const [inputId, mappedInputId, additionalInputId] of [
+      ["public_alb_certificate", "public_alb_certificate_arns", "public_alb_additional_certificate_arns"],
+      ["private_alb_certificate", "private_alb_certificate_arns", "private_alb_additional_certificate_arns"],
+    ]) {
+      const clusterCertificate = findInput(clusterInputs, inputId);
+      assert.equal(clusterCertificate.type, "$ref:rvn-acm-certificate");
+      const mappedInputs = clusterCertificate.mapped_inputs;
+      assert.ok(Array.isArray(mappedInputs), `${inputId}.mapped_inputs should be an array`);
+      assert.equal(assertRecord(mappedInputs[0], `${inputId} ARN mapped input`).id, mappedInputId);
+      assert.deepEqual(findInput(clusterInputs, additionalInputId).default, []);
+    }
+
+    const standaloneCertificateArns = assertString(getTerraformVariable(alb.module, "certificate_arns"));
+    assert.match(standaloneCertificateArns, /certificate_arns != nil/);
+    assert.match(standaloneCertificateArns, /concat\(module\.input\.additional_certificate_arns/);
+    assert.match(
+      assertString(getTerraformVariable(cluster.module, "public_alb_certificate_arns")),
+      /concat\(module\.input\.public_alb_additional_certificate_arns/,
+    );
+    assert.match(
+      assertString(getTerraformVariable(cluster.module, "private_alb_certificate_arns")),
+      /concat\(module\.input\.private_alb_additional_certificate_arns/,
+    );
+
+    const ipv4Ingress = assertString(getTerraformVariable(alb.module, "ingress_cidr_blocks"));
+    assert.match(ipv4Ingress, /ingress_cidr_blocks != nil/);
+    assert.doesNotMatch(ipv4Ingress, /ingress_cidr_blocks != \[\]/);
+    assert.match(ipv4Ingress, /internal_load_balancer_enabled/);
+    assert.match(ipv4Ingress, /10\.0\.0\.0\/8/);
+    assert.match(ipv4Ingress, /0\.0\.0\.0\/0/);
+
+    const ipv6Ingress = assertString(getTerraformVariable(alb.module, "ingress_ipv6_cidr_blocks"));
+    assert.match(ipv6Ingress, /internal_load_balancer_enabled \? \[\]/);
+    assert.match(ipv6Ingress, /::\/0/);
+
+    const ui = assertRecord(alb.module.ui, "module.ui");
+    const links = assertString(ui.links);
+    assert.match(links, /https_listener_enabled/);
+    assert.match(links, /http_listener_enabled/);
+    assert.match(links, /stack\.output\.alb_dns_name/);
+  });
+
   it("compiles EC2 service load balancer source choices", async () => {
     const compiled = await compileDefinitionFile(
       join(repoRoot, "compute", "ec2_service", "rvn-ec2-service-definition.yml"),
