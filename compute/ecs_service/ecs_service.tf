@@ -197,13 +197,12 @@ resource "aws_ecs_service" "this" {
       error_message = "Native traffic-shift strategies (blue_green/linear/canary) rewrite a single production listener rule; additional listener rules would keep serving the old revision throughout the deployment. Use at most one listener rule with these strategies."
     }
 
-
     precondition {
       condition = (
-        length(local.nlb_listeners) <= 1
+        !local.rolling_nlb_listeners_enabled
         || var.deployment_type == "rolling"
       )
-      error_message = "Multiple NLB listeners support rolling deployments only."
+      error_message = "nlb_listeners requires rolling deployments because traffic-shift infrastructure is not created for this shape."
     }
   }
 }

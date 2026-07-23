@@ -305,4 +305,10 @@ resource "aws_lb_listener" "nlb_additional" {
     Name         = "${var.name}-${each.key}-nlb-listener"
     ListenerPort = each.key
   })
+
+  # The ECS deployment controller may rewrite the default action during
+  # service updates; ignore to prevent spurious Terraform drift.
+  lifecycle {
+    ignore_changes = [default_action]
+  }
 }

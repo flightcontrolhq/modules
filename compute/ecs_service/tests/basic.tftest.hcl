@@ -245,7 +245,7 @@ run "rolling_service_with_multiple_nlb_listeners" {
   }
 }
 
-run "traffic_shift_rejects_multiple_nlb_listeners" {
+run "traffic_shift_rejects_nlb_listeners" {
   command = plan
 
   variables {
@@ -262,13 +262,6 @@ run "traffic_shift_rejects_multiple_nlb_listeners" {
           port            = 5000
           protocol        = "TCP"
           container_port  = 5000
-          target_protocol = "TCP"
-        },
-        {
-          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
-          port            = 5001
-          protocol        = "TCP"
-          container_port  = 5001
           target_protocol = "TCP"
         },
       ]
@@ -289,13 +282,48 @@ run "service_rejects_more_than_five_nlb_listeners" {
         protocol = "TCP"
       }
       nlb_listeners = [
-        for index in range(6) : {
+        {
           nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
-          port            = 5000 + index
+          port            = 5000
           protocol        = "TCP"
-          container_port  = 6000 + index
+          container_port  = 6000
           target_protocol = "TCP"
-        }
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5001
+          protocol        = "TCP"
+          container_port  = 6001
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5002
+          protocol        = "TCP"
+          container_port  = 6002
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5003
+          protocol        = "TCP"
+          container_port  = 6003
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5004
+          protocol        = "TCP"
+          container_port  = 6004
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5005
+          protocol        = "TCP"
+          container_port  = 6005
+          target_protocol = "TCP"
+        },
       ]
     }
   }
