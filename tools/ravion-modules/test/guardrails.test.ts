@@ -56,6 +56,38 @@ describe("migration guardrails", () => {
       (error) => error instanceof GuardrailError && error.message.includes("Duplicate definition.type") && error.message.includes("ravion-aws-network"),
     );
   });
+
+  it("fails when a section label generates the same anchor as the definition name", async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), "ravion-section-label-"));
+    const modulePath = join(rootPath, "compute", "ec2_service");
+    await mkdir(modulePath, { recursive: true });
+    await writeFile(
+      join(modulePath, "rvn-ec2-service-definition.yml"),
+      [
+        "definition:",
+        "  type: rvn-ec2-service",
+        "  name: EC2 Service",
+        "  description: Test module",
+        "release:",
+        "  version: 1.0.0",
+        "  description: Initial release.",
+        "module:",
+        "  inputs:",
+        "    - id: section_service",
+        "      label: EC2 service",
+        "      type: section",
+        "",
+      ].join("\n"),
+    );
+
+    await assert.rejects(
+      compileAllDefinitions(rootPath),
+      (error) =>
+        error instanceof GuardrailError &&
+        error.message.includes("Section labels must not generate the same anchor") &&
+        error.message.includes("rvn-ec2-service"),
+    );
+  });
 });
 
 async function writeDefinition(rootPath: string, category: string, moduleName: string, type: string): Promise<void> {

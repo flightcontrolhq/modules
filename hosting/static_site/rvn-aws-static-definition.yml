@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.4
-  description: Improve build source, Railpack command, and builder instance guidance.
+  version: 0.3.5
+  description: Clarify the static hosting configuration section label.
 module:
   build:
     builder: >-
@@ -54,7 +54,7 @@ module:
       default: us-east-1
       description: Region for the S3 bucket. CloudFront and KVS always use us-east-1.
     - id: section_hosting
-      label: Static hosting
+      label: Static hosting config
       type: section
     - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
       description: Name for the bucket and other resources' prefix. Must be globally unique.

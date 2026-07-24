@@ -3,14 +3,14 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.3.2
-  description: Improve build source and builder instance guidance.
+  version: 0.3.3
+  description: Clarify the Lambda function configuration section label.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
     - $include: ../../partials/inputs/aws-region.yml
     - id: section_function
-      label: Lambda function
+      label: Lambda function config
       type: section
     - id: lambda_type
       immutable: true

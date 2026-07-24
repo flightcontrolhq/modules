@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 0.1.1
-  description: Reorganize EC2 service inputs and clarify web and storage configuration.
+  version: 0.1.2
+  description: Clarify the EC2 service configuration section label.
 module:
   inputs:
     - id: network
@@ -24,7 +24,7 @@ module:
       required: true
     - $include: ../../partials/inputs/private-subnet-placement.yml
     - id: section_service
-      label: EC2 service
+      label: EC2 service config
       type: section
     - id: name
       immutable: true

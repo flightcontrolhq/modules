@@ -53,6 +53,34 @@ export function validateUniqueDefinitionTypes(definitions: CompiledDefinition[])
   }
 }
 
+export function validateSectionLabelsDoNotCollideWithDefinitionNames(definitions: CompiledDefinition[]): void {
+  const collisions: string[] = [];
+
+  for (const definition of definitions) {
+    const inputs = definition.module.inputs;
+    if (!Array.isArray(inputs)) {
+      continue;
+    }
+
+    const definitionSlug = slugifyHeading(definition.name);
+    for (const input of inputs) {
+      if (!isRecord(input) || input.type !== "section" || typeof input.label !== "string") {
+        continue;
+      }
+
+      if (slugifyHeading(input.label) === definitionSlug) {
+        collisions.push(`${definition.type}: section "${input.label}" in ${definition.filePath}`);
+      }
+    }
+  }
+
+  if (collisions.length > 0) {
+    throw new GuardrailError(
+      `Section labels must not generate the same anchor as their module definition name:\n${collisions.map((collision) => `- ${collision}`).join("\n")}`,
+    );
+  }
+}
+
 async function findLegacyModuleDefinitionFiles(rootPath: string): Promise<string[]> {
   const yamlFiles: string[] = [];
   await collectYamlFiles(rootPath, rootPath, yamlFiles);
@@ -142,6 +170,14 @@ function isYamlFile(fileName: string): boolean {
 
 function normalizeRelativePath(rootPath: string, filePath: string): string {
   return relative(rootPath, filePath).split(sep).join("/");
+}
+
+function slugifyHeading(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_\s-]/g, "")
+    .replace(/\s+/g, "-");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

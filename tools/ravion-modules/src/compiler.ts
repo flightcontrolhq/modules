@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import YAML from "yaml";
 import { parseAuthoringDefinitionFile, type AuthoringDefinition } from "./authoring-schema.js";
-import { validateUniqueDefinitionTypes } from "./guardrails.js";
+import { validateSectionLabelsDoNotCollideWithDefinitionNames, validateUniqueDefinitionTypes } from "./guardrails.js";
 
 export interface CompiledDefinition {
   filePath: string;
@@ -78,6 +78,7 @@ export async function compileAllDefinitions(rootPath = process.cwd()): Promise<C
   const compiled = await Promise.all(definitionFiles.map((filePath) => compileDefinitionFile(filePath)));
   const sorted = compiled.sort((left, right) => left.filePath.localeCompare(right.filePath));
   validateUniqueDefinitionTypes(sorted);
+  validateSectionLabelsDoNotCollideWithDefinitionNames(sorted);
   return sorted;
 }
 
