@@ -505,7 +505,7 @@ variable "load_balancer_security_group_id" {
 
 variable "load_balancer_ingress_cidr_blocks" {
   type        = list(string)
-  description = "IPv4 CIDR blocks allowed to access a service-created NLB listener. Only used when load_balancer_attachment.nlb_listener is set and load_balancer_security_group_id is provided."
+  description = "IPv4 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
   default     = []
 
   validation {
@@ -516,7 +516,7 @@ variable "load_balancer_ingress_cidr_blocks" {
 
 variable "load_balancer_ingress_ipv6_cidr_blocks" {
   type        = list(string)
-  description = "IPv6 CIDR blocks allowed to access a service-created NLB listener. Only used when load_balancer_attachment.nlb_listener is set and load_balancer_security_group_id is provided."
+  description = "IPv6 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
   default     = []
 
   validation {
@@ -595,20 +595,24 @@ variable "load_balancer_attachment" {
       weight = optional(number, 100)
     })), [])
 
-    # NLB: Listener configuration (creates a new NLB listener)
-    nlb_listener = optional(object({
-      nlb_arn         = string           # ARN of the NLB to attach to
-      port            = number           # Listener port
-      protocol        = string           # TCP, TLS, UDP, TCP_UDP
-      certificate_arn = optional(string) # Required for TLS protocol
+    # NLB: Rolling-only listener configuration. The first listener uses
+    # the production target group above; each later listener gets its own
+    # target group and ECS load-balancer attachment.
+    nlb_listeners = optional(list(object({
+      nlb_arn         = string
+      port            = number
+      protocol        = string
+      container_port  = number
+      target_protocol = string
+      certificate_arn = optional(string)
       ssl_policy      = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
-      alpn_policy     = optional(string) # For TLS: HTTP1Only, HTTP2Only, etc.
-    }), null)
+      alpn_policy     = optional(string)
+    })), [])
 
     container_name = optional(string, null)
     container_port = optional(number, null)
   })
-  description = "Load balancer configuration including target group and listener rules."
+  description = "Load balancer configuration including target groups, ALB listener rules, and NLB listeners."
   default     = null
 
   validation {
@@ -617,6 +621,82 @@ variable "load_balancer_attachment" {
       var.load_balancer_attachment.target_group.protocol
     )
     error_message = "The protocol must be one of: HTTP, HTTPS (for ALB), or TCP, UDP, TLS, TCP_UDP, GENEVE (for NLB/GWLB)."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || (
+      !var.load_balancer_attachment.enabled
+      || length(var.load_balancer_attachment.listener_rules) > 0
+      || length(var.load_balancer_attachment.nlb_listeners) > 0
+    )
+    error_message = "An enabled load_balancer_attachment requires listener_rules for ALB or nlb_listeners for NLB."
+  }
+
+  validation {
+    condition     = var.load_balancer_attachment == null || length(var.load_balancer_attachment.listener_rules) == 0 || length(var.load_balancer_attachment.nlb_listeners) == 0
+    error_message = "Set listener_rules for ALB or nlb_listeners for NLB, not both."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      contains(["TCP", "TLS", "UDP"], listener.protocol)
+    ])
+    error_message = "Each nlb_listeners protocol must be TCP, TLS, or UDP."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.port >= 1 && listener.port <= 65535 && listener.container_port >= 1 && listener.container_port <= 65535
+    ])
+    error_message = "Each nlb_listeners port and container_port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || length(distinct([
+      for listener in var.load_balancer_attachment.nlb_listeners : listener.port
+    ])) == length(var.load_balancer_attachment.nlb_listeners)
+    error_message = "Each nlb_listeners port must be unique."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || length(distinct([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.container_port
+    ])) == length(var.load_balancer_attachment.nlb_listeners)
+    error_message = "Each nlb_listeners container_port must be unique."
+  }
+
+  validation {
+    condition     = var.load_balancer_attachment == null || length(var.load_balancer_attachment.nlb_listeners) <= 5
+    error_message = "nlb_listeners supports at most five listeners, matching the ECS service target group limit."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || length(var.load_balancer_attachment.nlb_listeners) == 0 || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.nlb_arn == var.load_balancer_attachment.nlb_listeners[0].nlb_arn
+    ])
+    error_message = "All nlb_listeners must use the same NLB ARN."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.protocol != "TLS" || try(length(listener.certificate_arn) > 0, false)
+    ])
+    error_message = "Each TLS listener in nlb_listeners requires certificate_arn."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.protocol == "TLS"
+      ? contains(["TCP", "TLS"], listener.target_protocol)
+      : listener.target_protocol == listener.protocol
+    ])
+    error_message = "TLS listeners must use TCP or TLS as target_protocol; TCP and UDP listeners must use the same target protocol as the listener."
   }
 
   validation {

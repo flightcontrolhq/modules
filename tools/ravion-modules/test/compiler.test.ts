@@ -190,6 +190,40 @@ describe("compiler", () => {
     assert.doesNotMatch(builder, /start_cmd/);
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
   });
+
+  it("compiles rolling ECS NLB services with per-listener configuration", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "ecs_service", "rvn-ecs-nlb-definition.yml"));
+    const listeners = findInput(getModuleInputs(compiled.module), "listeners");
+    const itemInputs = listeners.item_inputs;
+    assert.ok(Array.isArray(itemInputs), "listeners.item_inputs should be an array");
+
+    const tlsCertificate = findInput(
+      itemInputs.map((input) => assertRecord(input, "listeners.item_inputs[]")),
+      "tls_certificate",
+    );
+    assert.equal(tlsCertificate.type, "$ref:rvn-acm-certificate");
+    assert.deepEqual(tlsCertificate.show_when, { listener_protocol: "TLS" });
+
+    const loadBalancerAttachment = assertRecord(
+      getTerraformVariable(compiled.module, "load_balancer_attachment"),
+      "load_balancer_attachment",
+    );
+    const nlbListeners = assertString(loadBalancerAttachment.nlb_listeners);
+    assert.match(nlbListeners, /map\(module\.input\.listeners/);
+    assert.match(nlbListeners, /#\.tls_certificate_arn/);
+
+    const deploy = assertRecord(compiled.module.deploy, "module.deploy");
+    assert.equal(deploy.strategy, undefined);
+    assert.deepEqual(deploy.infrastructure, {
+      ecs_cluster_arn: "<<stack.output.service_cluster>>",
+      ecs_service_arn: "<<stack.output.service_arn>>",
+    });
+
+    const taskDefinition = assertRecord(deploy.task_definition, "module.deploy.task_definition");
+    const containerDefinitions = assertString(taskDefinition.container_definitions);
+    assert.match(containerDefinitions, /port_mappings": map\(module\.input\.listeners/);
+    assert.doesNotMatch(containerDefinitions, /module\.input\.container_port/);
+  });
 });
 
 function getModuleInputs(module: Record<string, unknown>): Record<string, unknown>[] {
