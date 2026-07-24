@@ -15,6 +15,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 
 | Category      | Module            | Description                                                            | Status  |
 | ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
+| `ai/`         | `bedrock`         | Regional Amazon Bedrock configuration and observability; starts with model invocation logging | v0.1.0 |
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
 | `cdn/`        | `cloudfront`      | AWS CloudFront distributions with origins, cache behaviors, and edge redirects (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
@@ -32,7 +33,6 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `kubernetes/` | `eks_karpenter`   | Karpenter on AWS: controller Pod Identity role, node role + instance profile, EC2_LINUX access entry, SQS interruption queue, and EventBridge rules | v1.0.0  |
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
-| `monitoring/` | `bedrock_model_invocation_logging` | Regional Amazon Bedrock model invocation logging with CloudWatch delivery and Ravion log viewing | v0.1.0 |
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
 | `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
 | `networking/` | `eips`            | AWS Elastic IP pool with deterministic Name tags and `/32` CIDR outputs | v1.0.0  |

@@ -8,7 +8,7 @@ locals {
 
   default_tags = {
     ManagedBy = "terraform"
-    Module    = "monitoring/bedrock_model_invocation_logging"
+    Module    = "ai/bedrock"
   }
 
   tags = merge(local.default_tags, var.tags)

@@ -1,4 +1,4 @@
-# Bedrock model invocation logging module tests — run from module root: tofu test
+# Amazon Bedrock module tests — run from module root: tofu test
 
 mock_provider "aws" {
   override_data {

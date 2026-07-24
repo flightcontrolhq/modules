@@ -1,8 +1,8 @@
-# Bedrock Model Invocation Logging Module
+# Amazon Bedrock Module
 
-Configures Amazon Bedrock model invocation logging for one AWS account and region. The module creates a CloudWatch Logs destination and a least-privilege IAM role that Bedrock assumes to deliver invocation records.
+Configures regional Amazon Bedrock settings for one AWS account. The first supported section is model invocation logging, which creates a CloudWatch Logs destination and a least-privilege IAM role that Bedrock assumes to deliver invocation records.
 
-## Features
+## Model invocation logging
 
 - Account- and region-wide Bedrock model invocation logging
 - CloudWatch Logs destination with configurable retention
@@ -21,11 +21,15 @@ Invocation logs can contain full model inputs and outputs. Treat the log group a
 
 Model invocation logging covers supported calls to the `bedrock-runtime` endpoint, including `Converse`, `ConverseStream`, `InvokeModel`, and `InvokeModelWithResponseStream`. It does not currently capture calls made through the `bedrock-mantle` endpoint.
 
+## Module scope
+
+The AWS provider also supports independently managed Bedrock resources such as prompts, guardrails, inference profiles, custom models, agents, flows, and knowledge bases. Those resources have independent lifecycles and can have multiple instances, so they should be introduced as focused modules under `ai/` rather than as lists inside this regional configuration module.
+
 ## Usage
 
 ```hcl
-module "bedrock_model_invocation_logging" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//monitoring/bedrock_model_invocation_logging?ref=rvn-bedrock-invocation-logging@0.1.0"
+module "bedrock" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//ai/bedrock?ref=rvn-bedrock@0.1.0"
 
   name   = "ravion-prod"
   region = "us-west-2"
@@ -43,8 +47,8 @@ module "bedrock_model_invocation_logging" {
 ### Enable additional modalities
 
 ```hcl
-module "bedrock_model_invocation_logging" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//monitoring/bedrock_model_invocation_logging?ref=rvn-bedrock-invocation-logging@0.1.0"
+module "bedrock" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//ai/bedrock?ref=rvn-bedrock@0.1.0"
 
   name   = "ai-prod"
   region = "us-west-2"
@@ -81,7 +85,7 @@ The CloudWatch log group and IAM role must also be brought under the same Terraf
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | name | Name prefix for the CloudWatch log group and IAM role | `string` | n/a | yes |
-| region | AWS region where invocation logging is configured | `string` | Provider region | no |
+| region | AWS region where Amazon Bedrock is configured | `string` | Provider region | no |
 | text_data_delivery_enabled | Include text inputs and outputs in invocation logs | `bool` | `true` | no |
 | image_data_delivery_enabled | Include image inputs and outputs in invocation logs | `bool` | `false` | no |
 | embedding_data_delivery_enabled | Include embedding inputs and outputs in invocation logs | `bool` | `false` | no |
@@ -95,10 +99,10 @@ The CloudWatch log group and IAM role must also be brought under the same Terraf
 
 | Name | Description |
 |------|-------------|
-| configuration_id | Region identifying the Bedrock model invocation logging configuration |
-| log_group_name | CloudWatch log group name |
-| log_group_arn | CloudWatch log group ARN |
-| logging_role_arn | IAM role ARN used by Bedrock for log delivery |
+| model_invocation_logging_configuration_id | Region identifying the Bedrock model invocation logging configuration |
+| model_invocation_log_group_name | CloudWatch log group name |
+| model_invocation_log_group_arn | CloudWatch log group ARN |
+| model_invocation_logging_role_arn | IAM role ARN used by Bedrock for log delivery |
 | aws_account_id | AWS account ID where logging is configured |
 | region | AWS region where logging is configured |
 

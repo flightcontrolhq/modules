@@ -14,7 +14,7 @@ variable "name" {
 
 variable "region" {
   type        = string
-  description = "AWS region where Bedrock model invocation logging is configured. Defaults to the region configured on the aws provider."
+  description = "AWS region where Amazon Bedrock is configured. Defaults to the region configured on the aws provider."
   default     = null
 
   validation {
@@ -30,7 +30,7 @@ variable "tags" {
 }
 
 ################################################################################
-# Invocation Data
+# Model Invocation Logging
 ################################################################################
 
 variable "text_data_delivery_enabled" {

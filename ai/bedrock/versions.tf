@@ -1,5 +1,5 @@
 ################################################################################
-# OpenTofu/Terraform and Provider Requirements
+# Amazon Bedrock Module Requirements
 ################################################################################
 
 terraform {

@@ -1,5 +1,5 @@
 ################################################################################
-# Bedrock Log Delivery Role
+# Model Invocation Log Delivery Role
 ################################################################################
 
 resource "aws_iam_role" "model_invocation_logging" {

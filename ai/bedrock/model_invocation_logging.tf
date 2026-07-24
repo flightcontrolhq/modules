@@ -1,5 +1,5 @@
 ################################################################################
-# Bedrock Model Invocation Logging
+# Model Invocation Logging
 ################################################################################
 
 resource "aws_bedrock_model_invocation_logging_configuration" "this" {

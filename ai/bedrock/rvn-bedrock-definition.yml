@@ -1,18 +1,18 @@
 definition:
-  type: rvn-bedrock-invocation-logging
-  name: Bedrock invocation logging
-  description: Deliver regional Amazon Bedrock model invocation inputs, outputs, and metadata to CloudWatch Logs.
+  type: rvn-bedrock
+  name: Amazon Bedrock
+  description: Configure regional Amazon Bedrock settings and observability.
 release:
   version: 0.1.0
-  description: Add regional Amazon Bedrock model invocation logging with CloudWatch delivery and Ravion log viewing.
+  description: Add Amazon Bedrock model invocation logging with CloudWatch delivery and Ravion log viewing.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
     - $merge:
         - ../../partials/inputs/aws-region.yml
-      description: Region whose Bedrock runtime invocations should be logged. Only one invocation logging configuration can exist per AWS account and region.
+      description: Region where Amazon Bedrock is configured. Model invocation logging permits only one configuration per AWS account and region.
     - id: section_logging
-      label: Invocation logging
+      label: Model invocation logging
       type: section
     - default: <<project.given_id>>-<<environment.given_id>>
       description: Name prefix for the CloudWatch log group and Bedrock log delivery IAM role.
@@ -128,7 +128,7 @@ module:
   stack:
     $template: ../../partials/templates/opentofu-stack.yml
     with:
-      base_path: monitoring/bedrock_model_invocation_logging
+      base_path: ai/bedrock
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
         embedding_data_delivery_enabled: << module.input.embedding_data_delivery_enabled >>
@@ -145,23 +145,23 @@ module:
   ui:
     logs: |-
       <<
-      stack.output.log_group_name ? [{
+      stack.output.model_invocation_log_group_name ? [{
         "id":"bedrock_model_invocations",
         "name":"Bedrock model invocations",
         "source":{
           "type":"cloudwatch",
           "aws_account_id":module.input.aws_account_id,
           "region":module.input.aws_region,
-          "log_group":stack.output.log_group_name
+          "log_group":stack.output.model_invocation_log_group_name
         }
       }] : []
       >>
   readme: |
-    Delivers Amazon Bedrock model invocation inputs, outputs, and metadata to CloudWatch Logs for one AWS account and region.
+    Configures Amazon Bedrock for one AWS account and region. The initial version delivers model invocation inputs, outputs, and metadata to CloudWatch Logs.
 
     ## Overview
 
-    Use this module to inspect and analyze Bedrock runtime calls from applications in a specific region. It creates the regional Bedrock invocation logging configuration, a CloudWatch log group, and a least-privilege IAM role for log delivery.
+    Use the Model invocation logging section to inspect and analyze Bedrock runtime calls from applications in a specific region. It creates the regional logging configuration, a CloudWatch log group, and a least-privilege IAM role for log delivery.
 
     The module's Logs tab displays the CloudWatch invocation records directly in Ravion. Records include model and request metadata, token counts, caller identity, and enabled input/output modalities.
 
@@ -203,10 +203,10 @@ module:
 
     CloudWatch Logs is the only destination in the initial version because it supports interactive inspection in Ravion and CloudWatch GenAI Observability. S3 delivery for large or long-term invocation payloads can be added independently in a future minor release.
 
-    The logging configuration is deliberately separate from application modules because it applies to every supported Bedrock runtime caller and model in the selected account and region.
+    The Bedrock configuration is deliberately separate from application modules because regional settings apply to every supported Bedrock runtime caller and model in the selected account and region. Independently versioned Bedrock resources, such as prompts, guardrails, agents, and knowledge bases, should be managed by focused modules with their own lifecycle.
 
     ## Learn more
 
     - [Amazon Bedrock model invocation logging](https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html)
     - [CloudWatch generative AI observability](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/GenAI-observability.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/monitoring/bedrock_model_invocation_logging)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/ai/bedrock)

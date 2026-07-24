@@ -1,5 +1,5 @@
 ################################################################################
-# CloudWatch Log Group
+# Model Invocation Log Group
 ################################################################################
 
 resource "aws_cloudwatch_log_group" "model_invocations" {

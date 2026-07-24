@@ -11,6 +11,7 @@ export class GuardrailError extends Error {
 }
 
 const MODULE_CATEGORIES = new Set([
+  "ai",
   "cache",
   "cdn",
   "compute",

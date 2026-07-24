@@ -16,6 +16,7 @@ This is the **Ravion Modules** repository - an OpenTofu/Terraform module library
 
 | Category | Purpose |
 |----------|---------|
+| `ai/` | Generative AI infrastructure |
 | `cache/` | Caching infrastructure (ElastiCache) |
 | `cdn/` | Content delivery (CloudFront) |
 | `compute/` | Compute resources (EC2, ECS, Lambda, Auto Scaling) |

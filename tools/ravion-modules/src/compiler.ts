@@ -26,6 +26,7 @@ const LOCAL_TOKEN_PATTERN = /\$local\.[A-Za-z0-9_.-]+/g;
 const WITH_TOKEN_PATTERN = /^\$with\.([A-Za-z0-9_.-]+)$/;
 const WITH_TOKEN_LEAK_PATTERN = /\$with\.[A-Za-z0-9_.-]+/;
 const MODULE_CATEGORIES = new Set([
+  "ai",
   "cache",
   "cdn",
   "compute",
