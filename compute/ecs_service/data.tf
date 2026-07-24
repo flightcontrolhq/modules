@@ -26,7 +26,6 @@ data "aws_lb_listener" "attached" {
 data "aws_lb" "attached" {
   count = local.enable_load_balancer ? ((local.enable_nlb_listener || length(var.load_balancer_attachment.listener_rules) > 0) ? 1 : 0) : 0
 
-  arn = local.enable_nlb_listener ? var.load_balancer_attachment.nlb_listener.nlb_arn : data.aws_lb_listener.attached[0].load_balancer_arn
+  arn = local.enable_nlb_listener ? local.primary_nlb_listener.nlb_arn : data.aws_lb_listener.attached[0].load_balancer_arn
 }
-
 
