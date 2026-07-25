@@ -11,11 +11,11 @@ module:
     - $merge:
         - ../../partials/inputs/aws-region.yml
       description: Region where Amazon Bedrock is configured. Model invocation logging permits only one configuration per AWS account and region.
-    - id: section_logging
-      label: Model invocation logging
+    - id: section_general
+      label: Amazon Bedrock
       type: section
     - default: <<project.given_id>>-<<environment.given_id>>
-      description: Name prefix for the CloudWatch log group and Bedrock log delivery IAM role.
+      description: Name prefix for resources created by this module.
       id: name
       label: Name slug
       patterns:
@@ -23,31 +23,49 @@ module:
           pattern: ^[a-z0-9]([a-z0-9-]{0,35}[a-z0-9])?$
       required: true
       type: string
+    - id: section_logging
+      label: Model invocation logging
+      type: section
+    - default: true
+      description: Deliver supported Amazon Bedrock model invocation inputs, outputs, and metadata to CloudWatch Logs.
+      id: model_invocation_logging_enabled
+      label: Invocation logging
+      type: boolean
     - default: true
       description: Include text model inputs and outputs in invocation logs. Prompts and responses may contain sensitive data.
       id: text_data_delivery_enabled
       label: Log text data
+      show_when:
+        model_invocation_logging_enabled: true
       type: boolean
     - collapsible: true
       default: false
       description: Include image model inputs and outputs in invocation logs.
       id: image_data_delivery_enabled
       label: Log image data
+      show_when:
+        model_invocation_logging_enabled: true
       type: boolean
     - collapsible: true
       default: false
       description: Include embedding model inputs and outputs in invocation logs.
       id: embedding_data_delivery_enabled
       label: Log embedding data
+      show_when:
+        model_invocation_logging_enabled: true
       type: boolean
     - collapsible: true
       default: false
       description: Include video model inputs and outputs in invocation logs.
       id: video_data_delivery_enabled
       label: Log video data
+      show_when:
+        model_invocation_logging_enabled: true
       type: boolean
     - id: section_cloudwatch
       label: CloudWatch Logs
+      show_when:
+        model_invocation_logging_enabled: true
       type: section
     - collapsible: true
       description: CloudWatch log group name. Defaults to /aws/bedrock/model-invocations/<name slug>.
@@ -57,6 +75,8 @@ module:
         - message: Use 1-512 letters, numbers, underscores, periods, hyphens, slashes, or hash characters.
           pattern: ^[A-Za-z0-9_./#-]{1,512}$
       placeholder: /aws/bedrock/model-invocations/ravion-prod
+      show_when:
+        model_invocation_logging_enabled: true
       type: string
     - collapsible: true
       default: 90
@@ -64,6 +84,8 @@ module:
       id: log_group_retention_days
       label: Log retention days
       required: true
+      show_when:
+        model_invocation_logging_enabled: true
       type: number
       values:
         - label: Never expire
@@ -120,6 +142,8 @@ module:
         - message: Use a valid KMS key ARN.
           pattern: ^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[0-9a-fA-F-]+$
       placeholder: arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012
+      show_when:
+        model_invocation_logging_enabled: true
       type: string
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
@@ -136,6 +160,7 @@ module:
         log_group_kms_key_arn: << module.input.log_group_kms_key_arn >>
         log_group_name: << module.input.log_group_name >>
         log_group_retention_days: << module.input.log_group_retention_days >>
+        model_invocation_logging_enabled: << module.input.model_invocation_logging_enabled >>
         name: << module.input.name >>
         region: << module.input.aws_region >>
         tags:
@@ -188,6 +213,7 @@ module:
     | AWS account | Yes | None | Account whose Bedrock invocations are logged. |
     | Region | Yes | None | Region whose Bedrock invocations are logged. |
     | Name slug | Yes | Project and environment given IDs | Prefix for the log group and IAM role. |
+    | Model invocation logging | No | true | Creates the regional logging configuration and its CloudWatch and IAM resources. |
     | Log text data | No | true | Includes text prompts and responses. |
     | Log image data | No | false | Includes image inputs and outputs. |
     | Log embedding data | No | false | Includes embedding inputs and outputs. |
@@ -203,7 +229,9 @@ module:
 
     CloudWatch Logs is the only destination in the initial version because it supports interactive inspection in Ravion and CloudWatch GenAI Observability. S3 delivery for large or long-term invocation payloads can be added independently in a future minor release.
 
-    The Bedrock configuration is deliberately separate from application modules because regional settings apply to every supported Bedrock runtime caller and model in the selected account and region. Independently versioned Bedrock resources, such as prompts, guardrails, agents, and knowledge bases, should be managed by focused modules with their own lifecycle.
+    This is the shared Terraform source module for Amazon Bedrock in an AWS account and region. Future capabilities, such as prompts, guardrails, inference profiles, agents, flows, and knowledge bases, should be added here as optional sections. Repeatable resources should use keyed maps and `for_each`, following the repository's ECS module pattern.
+
+    Additional Ravion definitions can provide simpler use-case-specific experiences while continuing to use the same `ai/bedrock` Terraform source module.
 
     ## Learn more
 

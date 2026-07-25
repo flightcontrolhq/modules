@@ -51,41 +51,41 @@ run "cloudwatch_text_logging_defaults" {
   command = plan
 
   assert {
-    condition     = aws_cloudwatch_log_group.model_invocations.name == "/aws/bedrock/model-invocations/ravion-prod"
+    condition     = aws_cloudwatch_log_group.model_invocations[0].name == "/aws/bedrock/model-invocations/ravion-prod"
     error_message = "The default log group name should include the module name"
   }
 
   assert {
-    condition     = aws_cloudwatch_log_group.model_invocations.retention_in_days == 90
+    condition     = aws_cloudwatch_log_group.model_invocations[0].retention_in_days == 90
     error_message = "Invocation logs should be retained for 90 days by default"
   }
 
   assert {
-    condition     = aws_bedrock_model_invocation_logging_configuration.this.logging_config[0].text_data_delivery_enabled
+    condition     = aws_bedrock_model_invocation_logging_configuration.this[0].logging_config[0].text_data_delivery_enabled
     error_message = "Text invocation logging should be enabled by default"
   }
 
   assert {
     condition = (
-      !aws_bedrock_model_invocation_logging_configuration.this.logging_config[0].image_data_delivery_enabled &&
-      !aws_bedrock_model_invocation_logging_configuration.this.logging_config[0].embedding_data_delivery_enabled &&
-      !aws_bedrock_model_invocation_logging_configuration.this.logging_config[0].video_data_delivery_enabled
+      !aws_bedrock_model_invocation_logging_configuration.this[0].logging_config[0].image_data_delivery_enabled &&
+      !aws_bedrock_model_invocation_logging_configuration.this[0].logging_config[0].embedding_data_delivery_enabled &&
+      !aws_bedrock_model_invocation_logging_configuration.this[0].logging_config[0].video_data_delivery_enabled
     )
     error_message = "Non-text invocation logging should be disabled by default"
   }
 
   assert {
     condition = (
-      aws_bedrock_model_invocation_logging_configuration.this.logging_config[0].cloudwatch_config[0].log_group_name ==
-      aws_cloudwatch_log_group.model_invocations.name
+      aws_bedrock_model_invocation_logging_configuration.this[0].logging_config[0].cloudwatch_config[0].log_group_name ==
+      aws_cloudwatch_log_group.model_invocations[0].name
     )
     error_message = "Bedrock should deliver logs to the module-managed log group"
   }
 
   assert {
     condition = (
-      aws_bedrock_model_invocation_logging_configuration.this.logging_config[0].cloudwatch_config[0].role_arn ==
-      aws_iam_role.model_invocation_logging.arn
+      aws_bedrock_model_invocation_logging_configuration.this[0].logging_config[0].cloudwatch_config[0].role_arn ==
+      aws_iam_role.model_invocation_logging[0].arn
     )
     error_message = "Bedrock should use the module-managed IAM role for log delivery"
   }
@@ -100,7 +100,7 @@ run "bedrock_role_is_scoped_to_account_and_region" {
 
   assert {
     condition = (
-      jsondecode(aws_iam_role.model_invocation_logging.assume_role_policy).Statement[0].Principal.Service ==
+      jsondecode(aws_iam_role.model_invocation_logging[0].assume_role_policy).Statement[0].Principal.Service ==
       "bedrock.amazonaws.com"
     )
     error_message = "Only the Bedrock service should be able to assume the logging role"
@@ -108,7 +108,7 @@ run "bedrock_role_is_scoped_to_account_and_region" {
 
   assert {
     condition = (
-      jsondecode(aws_iam_role.model_invocation_logging.assume_role_policy).Statement[0].Condition.StringEquals["aws:SourceAccount"] ==
+      jsondecode(aws_iam_role.model_invocation_logging[0].assume_role_policy).Statement[0].Condition.StringEquals["aws:SourceAccount"] ==
       "123456789012"
     )
     error_message = "The logging role trust policy should be scoped to the current AWS account"
@@ -116,7 +116,7 @@ run "bedrock_role_is_scoped_to_account_and_region" {
 
   assert {
     condition = (
-      jsondecode(aws_iam_role.model_invocation_logging.assume_role_policy).Statement[0].Condition.ArnLike["aws:SourceArn"] ==
+      jsondecode(aws_iam_role.model_invocation_logging[0].assume_role_policy).Statement[0].Condition.ArnLike["aws:SourceArn"] ==
       "arn:aws:bedrock:us-west-2:123456789012:*"
     )
     error_message = "The logging role trust policy should be scoped to Bedrock in the configured region"
@@ -124,7 +124,7 @@ run "bedrock_role_is_scoped_to_account_and_region" {
 
   assert {
     condition = (
-      jsondecode(aws_iam_role_policy.model_invocation_logging.policy).Statement[0].Resource ==
+      jsondecode(aws_iam_role_policy.model_invocation_logging[0].policy).Statement[0].Resource ==
       "arn:aws:logs:us-west-2:123456789012:log-group:/aws/bedrock/model-invocations/ravion-prod:log-stream:aws/bedrock/modelinvocations"
     )
     error_message = "The logging role policy should only allow writes to the Bedrock invocation log stream"
@@ -150,17 +150,17 @@ run "custom_log_group_and_modalities" {
   }
 
   assert {
-    condition     = aws_cloudwatch_log_group.model_invocations.name == "/custom/bedrock/invocations"
+    condition     = aws_cloudwatch_log_group.model_invocations[0].name == "/custom/bedrock/invocations"
     error_message = "The custom CloudWatch log group name should be used"
   }
 
   assert {
-    condition     = aws_cloudwatch_log_group.model_invocations.retention_in_days == 365
+    condition     = aws_cloudwatch_log_group.model_invocations[0].retention_in_days == 365
     error_message = "The custom CloudWatch retention should be used"
   }
 
   assert {
-    condition     = aws_cloudwatch_log_group.model_invocations.tags["Environment"] == "production"
+    condition     = aws_cloudwatch_log_group.model_invocations[0].tags["Environment"] == "production"
     error_message = "User tags should be merged into the CloudWatch log group tags"
   }
 }
@@ -180,8 +180,35 @@ run "all_delivery_types_disabled_rejected" {
   }
 
   expect_failures = [
-    aws_bedrock_model_invocation_logging_configuration.this,
+    aws_bedrock_model_invocation_logging_configuration.this[0],
   ]
+}
+
+run "model_invocation_logging_can_be_disabled" {
+  command = plan
+
+  variables {
+    model_invocation_logging_enabled = false
+  }
+
+  assert {
+    condition = (
+      length(aws_bedrock_model_invocation_logging_configuration.this) == 0 &&
+      length(aws_cloudwatch_log_group.model_invocations) == 0 &&
+      length(aws_iam_role.model_invocation_logging) == 0
+    )
+    error_message = "Disabling model invocation logging should omit its Bedrock, CloudWatch, and IAM resources"
+  }
+
+  assert {
+    condition = (
+      output.model_invocation_logging_configuration_id == null &&
+      output.model_invocation_log_group_name == null &&
+      output.model_invocation_log_group_arn == null &&
+      output.model_invocation_logging_role_arn == null
+    )
+    error_message = "Model invocation logging outputs should be null when the section is disabled"
+  }
 }
 
 run "unsupported_retention_rejected" {

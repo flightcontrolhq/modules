@@ -3,6 +3,8 @@
 ################################################################################
 
 resource "aws_cloudwatch_log_group" "model_invocations" {
+  count = var.model_invocation_logging_enabled ? 1 : 0
+
   region = var.region
 
   name              = local.log_group_name

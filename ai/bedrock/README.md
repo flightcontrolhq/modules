@@ -23,7 +23,17 @@ Model invocation logging covers supported calls to the `bedrock-runtime` endpoin
 
 ## Module scope
 
-The AWS provider also supports independently managed Bedrock resources such as prompts, guardrails, inference profiles, custom models, agents, flows, and knowledge bases. Those resources have independent lifecycles and can have multiple instances, so they should be introduced as focused modules under `ai/` rather than as lists inside this regional configuration module.
+This module is the shared Terraform source for Amazon Bedrock capabilities in an AWS account and region. Model invocation logging is the first supported section. Future capabilities—including prompts, guardrails, inference profiles, custom models, agents, flows, and knowledge bases—belong in this same module as optional sections.
+
+The long-term module surface should track the Bedrock resources exposed by the AWS Terraform provider. Each release must clearly distinguish implemented sections from provider capabilities that are still planned.
+
+Follow the repository's ECS module pattern when extending it:
+
+- Keep one Terraform source module at `ai/bedrock`.
+- Put each Bedrock capability in its own `.tf` file and variable/output section.
+- Model repeatable resources such as prompts and guardrails as keyed maps and create them with `for_each`.
+- Add Ravion definition variants over the same source module only when a simpler use-case-specific experience is useful.
+- Keep account- and region-wide singleton resources, such as model invocation logging, unique within the module.
 
 ## Usage
 
@@ -34,8 +44,9 @@ module "bedrock" {
   name   = "ravion-prod"
   region = "us-west-2"
 
-  text_data_delivery_enabled = true
-  log_group_retention_days   = 90
+  model_invocation_logging_enabled = true
+  text_data_delivery_enabled       = true
+  log_group_retention_days         = 90
 
   tags = {
     Environment = "production"
@@ -66,7 +77,7 @@ If model invocation logging is already enabled outside this module, import the r
 
 ```hcl
 import {
-  to = aws_bedrock_model_invocation_logging_configuration.this
+  to = aws_bedrock_model_invocation_logging_configuration.this[0]
   id = "us-west-2"
 }
 ```
@@ -84,8 +95,9 @@ The CloudWatch log group and IAM role must also be brought under the same Terraf
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| name | Name prefix for the CloudWatch log group and IAM role | `string` | n/a | yes |
+| name | Name prefix for resources created by the module | `string` | n/a | yes |
 | region | AWS region where Amazon Bedrock is configured | `string` | Provider region | no |
+| model_invocation_logging_enabled | Enable regional Bedrock model invocation logging | `bool` | `true` | no |
 | text_data_delivery_enabled | Include text inputs and outputs in invocation logs | `bool` | `true` | no |
 | image_data_delivery_enabled | Include image inputs and outputs in invocation logs | `bool` | `false` | no |
 | embedding_data_delivery_enabled | Include embedding inputs and outputs in invocation logs | `bool` | `false` | no |
@@ -93,16 +105,16 @@ The CloudWatch log group and IAM role must also be brought under the same Terraf
 | log_group_name | Name of the CloudWatch log group to create | `string` | `/aws/bedrock/model-invocations/<name>` | no |
 | log_group_retention_days | Number of days to retain invocation logs; use 0 for indefinite retention | `number` | `90` | no |
 | log_group_kms_key_arn | Optional customer-managed KMS key ARN for the CloudWatch log group | `string` | `null` | no |
-| tags | Additional tags for the CloudWatch log group and IAM role | `map(string)` | `{}` | no |
+| tags | Additional tags for resources created by the module | `map(string)` | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| model_invocation_logging_configuration_id | Region identifying the Bedrock model invocation logging configuration |
-| model_invocation_log_group_name | CloudWatch log group name |
-| model_invocation_log_group_arn | CloudWatch log group ARN |
-| model_invocation_logging_role_arn | IAM role ARN used by Bedrock for log delivery |
+| model_invocation_logging_configuration_id | Region identifying the Bedrock model invocation logging configuration; null if disabled |
+| model_invocation_log_group_name | CloudWatch log group name; null if disabled |
+| model_invocation_log_group_arn | CloudWatch log group ARN; null if disabled |
+| model_invocation_logging_role_arn | IAM role ARN used by Bedrock for log delivery; null if disabled |
 | aws_account_id | AWS account ID where logging is configured |
 | region | AWS region where logging is configured |
 

@@ -4,7 +4,7 @@
 
 variable "name" {
   type        = string
-  description = "Name prefix for the CloudWatch log group and IAM role created by this module."
+  description = "Name prefix for resources created by this module."
 
   validation {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,35}[a-z0-9])?$", var.name))
@@ -25,13 +25,19 @@ variable "region" {
 
 variable "tags" {
   type        = map(string)
-  description = "A map of additional tags to assign to the CloudWatch log group and IAM role."
+  description = "A map of additional tags to assign to resources created by this module."
   default     = {}
 }
 
 ################################################################################
 # Model Invocation Logging
 ################################################################################
+
+variable "model_invocation_logging_enabled" {
+  type        = bool
+  description = "Enable account- and region-wide Amazon Bedrock model invocation logging."
+  default     = true
+}
 
 variable "text_data_delivery_enabled" {
   type        = bool

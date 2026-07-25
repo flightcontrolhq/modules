@@ -3,6 +3,8 @@
 ################################################################################
 
 resource "aws_bedrock_model_invocation_logging_configuration" "this" {
+  count = var.model_invocation_logging_enabled ? 1 : 0
+
   region = var.region
 
   logging_config {
@@ -12,8 +14,8 @@ resource "aws_bedrock_model_invocation_logging_configuration" "this" {
     video_data_delivery_enabled     = var.video_data_delivery_enabled
 
     cloudwatch_config {
-      log_group_name = aws_cloudwatch_log_group.model_invocations.name
-      role_arn       = aws_iam_role.model_invocation_logging.arn
+      log_group_name = aws_cloudwatch_log_group.model_invocations[0].name
+      role_arn       = aws_iam_role.model_invocation_logging[0].arn
     }
   }
 

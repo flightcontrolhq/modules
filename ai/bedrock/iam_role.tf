@@ -3,6 +3,8 @@
 ################################################################################
 
 resource "aws_iam_role" "model_invocation_logging" {
+  count = var.model_invocation_logging_enabled ? 1 : 0
+
   name = "${var.name}-bedrock-invocation-logging"
 
   assume_role_policy = jsonencode({
@@ -32,8 +34,10 @@ resource "aws_iam_role" "model_invocation_logging" {
 }
 
 resource "aws_iam_role_policy" "model_invocation_logging" {
+  count = var.model_invocation_logging_enabled ? 1 : 0
+
   name = "${var.name}-bedrock-invocation-logging"
-  role = aws_iam_role.model_invocation_logging.id
+  role = aws_iam_role.model_invocation_logging[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -44,7 +48,7 @@ resource "aws_iam_role_policy" "model_invocation_logging" {
           "logs:PutLogEvents",
         ]
         Effect   = "Allow"
-        Resource = "${aws_cloudwatch_log_group.model_invocations.arn}:log-stream:aws/bedrock/modelinvocations"
+        Resource = "${aws_cloudwatch_log_group.model_invocations[0].arn}:log-stream:aws/bedrock/modelinvocations"
       }
     ]
   })
