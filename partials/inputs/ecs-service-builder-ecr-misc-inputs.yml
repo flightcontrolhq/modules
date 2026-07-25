@@ -1,6 +1,11 @@
 - $template: ../templates/builder-infrastructure-inputs.yml
   with:
     no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
+    show_when:
+      build_source:
+        - dockerfile
+        - railpack
+        - nixpacks
 - id: section_ecr
   label: Image registry lifecycle
   type: section

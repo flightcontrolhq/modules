@@ -143,6 +143,8 @@ describe("compiler", () => {
 
     assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack", "nixpacks"]);
     assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_ecr")), ["dockerfile", "railpack", "nixpacks"]);
+    assert.equal(findInput(inputs, "min_capacity").label, "Minimum tasks");
+    assert.equal(findInput(inputs, "max_capacity").label, "Maximum tasks");
 
     const build = getModuleBuild(compiled.module);
     const builder = assertString(build.builder);
@@ -189,6 +191,329 @@ describe("compiler", () => {
     assert.match(builder, /output_directory: module\.input\.output_directory/);
     assert.doesNotMatch(builder, /start_cmd/);
     assert.doesNotMatch(builder, /cache_from: \{tag: "railpack"\}/);
+  });
+
+  it("compiles primary ALB certificate references, additional SNI certificates, and visibility-aware ingress defaults", async () => {
+    const [alb, cluster] = await Promise.all([
+      compileDefinitionFile(join(repoRoot, "networking", "alb", "rvn-aws-alb-definition.yml")),
+      compileDefinitionFile(join(repoRoot, "compute", "ecs_cluster", "rvn-ecs-cluster-definition.yml")),
+    ]);
+    const albInputs = getModuleInputs(alb.module);
+
+    assert.equal(findInput(albInputs, "internal_load_balancer_enabled").label, "Internal load balancer");
+    assert.equal(findInput(albInputs, "http_listener_enabled").label, "HTTP");
+    assert.equal(findInput(albInputs, "https_listener_enabled").label, "HTTPS");
+    assert.ok(findInput(albInputs, "http_listener_port"));
+    assert.ok(findInput(albInputs, "https_listener_port"));
+
+    const certificate = findInput(albInputs, "certificate");
+    assert.equal(certificate.type, "$ref:rvn-acm-certificate");
+    assert.equal(certificate.required, true);
+    assert.deepEqual(certificate.show_when, { https_listener_enabled: true });
+    const certificateMappedInputs = certificate.mapped_inputs;
+    assert.ok(Array.isArray(certificateMappedInputs), "certificate.mapped_inputs should be an array");
+    const certificateArns = assertRecord(certificateMappedInputs[0], "certificate ARN mapped input");
+    assert.equal(certificateArns.id, "certificate_arns");
+    assert.equal(certificateArns.type, "string_array");
+    assert.deepEqual(certificateArns.default, ["<<ref.stack.output.certificate_arn>>"]);
+    const additionalCertificateArns = findInput(albInputs, "additional_certificate_arns");
+    assert.equal(additionalCertificateArns.type, "string_array");
+    assert.deepEqual(additionalCertificateArns.default, []);
+    assert.deepEqual(additionalCertificateArns.show_when, { https_listener_enabled: true });
+
+    const clusterInputs = getModuleInputs(cluster.module);
+    for (const [inputId, mappedInputId, additionalInputId] of [
+      ["public_alb_certificate", "public_alb_certificate_arns", "public_alb_additional_certificate_arns"],
+      ["private_alb_certificate", "private_alb_certificate_arns", "private_alb_additional_certificate_arns"],
+    ]) {
+      const clusterCertificate = findInput(clusterInputs, inputId);
+      assert.equal(clusterCertificate.type, "$ref:rvn-acm-certificate");
+      const mappedInputs = clusterCertificate.mapped_inputs;
+      assert.ok(Array.isArray(mappedInputs), `${inputId}.mapped_inputs should be an array`);
+      const mappedInput = assertRecord(mappedInputs[0], `${inputId} ARN mapped input`);
+      assert.equal(mappedInput.id, mappedInputId);
+      assert.equal(mappedInput.type, "string_array");
+      assert.deepEqual(findInput(clusterInputs, additionalInputId).default, []);
+    }
+
+    assert.match(
+      assertString(getTerraformVariable(alb.module, "certificate_arns")),
+      /concat\(module\.input\.additional_certificate_arns/,
+    );
+    assert.match(
+      assertString(getTerraformVariable(cluster.module, "public_alb_certificate_arns")),
+      /concat\(module\.input\.public_alb_additional_certificate_arns/,
+    );
+    assert.match(
+      assertString(getTerraformVariable(cluster.module, "private_alb_certificate_arns")),
+      /concat\(module\.input\.private_alb_additional_certificate_arns/,
+    );
+
+    const ipv4Ingress = assertString(getTerraformVariable(alb.module, "ingress_cidr_blocks"));
+    assert.match(ipv4Ingress, /ingress_cidr_blocks != nil/);
+    assert.doesNotMatch(ipv4Ingress, /ingress_cidr_blocks != \[\]/);
+    assert.match(ipv4Ingress, /internal_load_balancer_enabled/);
+    assert.match(ipv4Ingress, /10\.0\.0\.0\/8/);
+    assert.match(ipv4Ingress, /0\.0\.0\.0\/0/);
+
+    const ipv6Ingress = assertString(getTerraformVariable(alb.module, "ingress_ipv6_cidr_blocks"));
+    assert.match(ipv6Ingress, /internal_load_balancer_enabled \? \[\]/);
+    assert.match(ipv6Ingress, /::\/0/);
+
+    const ui = assertRecord(alb.module.ui, "module.ui");
+    const links = assertString(ui.links);
+    assert.match(links, /https_listener_enabled/);
+    assert.match(links, /http_listener_enabled/);
+    assert.match(links, /stack\.output\.alb_dns_name/);
+  });
+
+  it("compiles EC2 service load balancer source choices", async () => {
+    const compiled = await compileDefinitionFile(
+      join(repoRoot, "compute", "ec2_service", "rvn-ec2-service-definition.yml"),
+    );
+    const inputs = getModuleInputs(compiled.module);
+
+    assert.equal(compiled.type, "rvn-ec2-service");
+    assert.deepEqual(
+      inputs.filter((input) => input.type === "section").map((input) => input.id),
+      [
+        "section_service",
+        "section_build",
+        "section_dockerfile",
+        "section_railpack",
+        "section_deployment",
+        "section_web",
+        "section_routing",
+        "section_health",
+        "section_storage",
+        "section_scaling",
+        "section_app_config",
+        "section_networking",
+        "section_builder_config",
+        "section_ecr",
+        "section_logging",
+        "section_advanced",
+      ],
+    );
+
+    for (const inputId of [
+      "deployment_concurrency_max",
+      "deployment_errors_max",
+      "target_group_slow_start",
+      "target_group_stickiness_type",
+      "target_group_stickiness_cookie_name",
+      "health_check_grace_period",
+      "direct_access_cidr_blocks",
+      "data_volume_creation_enabled",
+      "min_capacity",
+      "max_capacity",
+      "cpu_autoscaling_enabled",
+      "ecr_scan_on_push_enabled",
+    ]) {
+      assert.ok(findInput(inputs, inputId), `expected EC2 service input ${inputId}`);
+    }
+
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_builder_config")), ["dockerfile", "railpack"]);
+    assert.deepEqual(findInput(inputs, "deploy_source_base_path").show_when, {
+      deploy_type: "manual",
+      deploy_source_repo: { not: "" },
+    });
+    assert.equal(inputs.some((input) => input.id === "min_size" || input.id === "max_size"), false);
+    assert.equal(findInput(inputs, "min_capacity").label, "Minimum instances");
+    assert.equal(findInput(inputs, "max_capacity").label, "Maximum instances");
+    assert.equal(getTerraformVariable(compiled.module, "min_size"), "<< module.input.min_capacity >>");
+    assert.equal(getTerraformVariable(compiled.module, "max_size"), "<< module.input.max_capacity >>");
+
+    const imageRef = findInput(getDeployInputs(compiled.module), "image_ref");
+    assert.deepEqual(imageRef.patterns, [
+      {
+        message: "Image tags and digests must not contain whitespace.",
+        pattern: "^\\S+$",
+      },
+    ]);
+
+    const loadBalancerSource = findInput(inputs, "load_balancer_source");
+    assert.equal(loadBalancerSource.default, "standalone_alb");
+    assert.equal(loadBalancerSource.immutable, true);
+    assert.deepEqual(getValueOptions(loadBalancerSource), ["standalone_alb", "ecs_cluster"]);
+      assert.deepEqual(loadBalancerSource.show_when, { http_traffic_enabled: true });
+
+    const standaloneAlb = findInput(inputs, "alb");
+    assert.equal(standaloneAlb.required, true);
+    assert.deepEqual(standaloneAlb.show_when, {
+      http_traffic_enabled: true,
+      load_balancer_source: "standalone_alb",
+    });
+    const standaloneMappedInputs = standaloneAlb.mapped_inputs;
+    assert.ok(Array.isArray(standaloneMappedInputs), "alb.mapped_inputs should be an array");
+    assert.ok(
+      standaloneMappedInputs.some((input) => assertRecord(input, "ALB mapped input").id === "alb_arn_suffix"),
+      "expected standalone ALB ARN suffix mapping",
+    );
+
+    const ecsCluster = findInput(inputs, "ecs_cluster");
+    assert.equal(ecsCluster.required, true);
+    assert.equal(ecsCluster.immutable, true);
+    assert.deepEqual(ecsCluster.show_when, {
+      http_traffic_enabled: true,
+      load_balancer_source: "ecs_cluster",
+    });
+    const clusterMappedInputs = ecsCluster.mapped_inputs;
+    assert.ok(Array.isArray(clusterMappedInputs), "ecs_cluster.mapped_inputs should be an array");
+    const clusterMappedInputIds = clusterMappedInputs.map((input) => assertRecord(input, "ECS cluster mapped input").id);
+    for (const inputId of [
+      "public_alb_http_listener_arn",
+      "public_alb_https_listener_arn",
+      "public_alb_security_group_id",
+      "public_alb_arn_suffix",
+      "private_alb_http_listener_arn",
+      "private_alb_https_listener_arn",
+      "private_alb_security_group_id",
+      "private_alb_arn_suffix",
+    ]) {
+      assert.ok(clusterMappedInputIds.includes(inputId), `expected ECS cluster mapping ${inputId}`);
+    }
+
+    const clusterAlbVisibility = findInput(inputs, "ecs_cluster_alb_visibility");
+    assert.equal(clusterAlbVisibility.default, "public");
+    assert.equal(clusterAlbVisibility.immutable, undefined);
+    assert.deepEqual(getValueOptions(clusterAlbVisibility), ["public", "private"]);
+    assert.deepEqual(clusterAlbVisibility.show_when, {
+      http_traffic_enabled: true,
+      load_balancer_source: "ecs_cluster",
+    });
+    const loadBalancerAttachment = assertRecord(
+      getTerraformVariable(compiled.module, "load_balancer_attachment"),
+      "load_balancer_attachment",
+    );
+    const listenerRules = loadBalancerAttachment.listener_rules;
+    assert.equal(loadBalancerAttachment.creation_enabled, "<< module.input.http_traffic_enabled >>");
+    assert.ok(Array.isArray(listenerRules) && listenerRules.length === 1, "load balancer attachment should have one listener rule");
+    const listenerArn = assertString(assertRecord(listenerRules[0], "listener rule").listener_arn);
+    assert.match(listenerArn, /load_balancer_source == "standalone_alb"/);
+    assert.match(listenerArn, /alb_https_listener_arn \|\| module\.input\.alb_http_listener_arn/);
+    assert.match(listenerArn, /ecs_cluster_alb_visibility == "public"/);
+    assert.match(listenerArn, /public_alb_https_listener_arn \|\| module\.input\.public_alb_http_listener_arn/);
+    assert.match(listenerArn, /private_alb_https_listener_arn \|\| module\.input\.private_alb_http_listener_arn/);
+
+    const targetGroup = assertRecord(loadBalancerAttachment.target_group, "load_balancer_attachment.target_group");
+    assert.equal(targetGroup.slow_start, "<< module.input.target_group_slow_start >>");
+    const stickiness = assertString(targetGroup.stickiness);
+    assert.match(stickiness, /module\.input\.target_group_stickiness_type/);
+    assert.match(stickiness, /module\.input\.target_group_stickiness_cookie_name/);
+
+    const loadBalancerSecurityGroupId = assertString(
+      getTerraformVariable(compiled.module, "load_balancer_security_group_id"),
+    );
+    assert.match(loadBalancerSecurityGroupId, /load_balancer_source == "standalone_alb"/);
+    assert.match(loadBalancerSecurityGroupId, /alb_security_group_id/);
+    assert.match(loadBalancerSecurityGroupId, /public_alb_security_group_id/);
+    assert.match(loadBalancerSecurityGroupId, /private_alb_security_group_id/);
+
+    const ecrRepositoryCreationEnabled = assertString(
+      getTerraformVariable(compiled.module, "ecr_repository_creation_enabled"),
+    );
+    assert.match(ecrRepositoryCreationEnabled, /module\.input\.deploy_type == "container"/);
+    assert.equal(
+      getTerraformVariable(compiled.module, "ecr_scan_on_push_enabled"),
+      "<< module.input.ecr_scan_on_push_enabled >>",
+    );
+    assert.equal(
+      getTerraformVariable(compiled.module, "health_check_grace_period"),
+      "<< module.input.health_check_grace_period >>",
+    );
+    assert.match(
+      assertString(getTerraformVariable(compiled.module, "direct_access_cidr_blocks")),
+      /module\.input\.http_traffic_enabled/,
+    );
+    assert.equal(
+      getTerraformVariable(compiled.module, "public_ip_assignment_enabled"),
+      "<< module.input.private_subnet_placement_enabled ? false : true >>",
+    );
+    assert.equal(
+      getTerraformVariable(compiled.module, "data_volume_creation_enabled"),
+      "<< module.input.data_volume_creation_enabled >>",
+    );
+    assert.match(
+      assertString(getTerraformVariable(compiled.module, "deploy_health_check_path")),
+      /module\.input\.health_check_path/,
+    );
+    assert.match(
+      assertString(getTerraformVariable(compiled.module, "container_start_command")),
+      /module\.input\.container_start_command/,
+    );
+
+    const deploy = assertRecord(compiled.module.deploy, "module.deploy");
+    assert.equal(deploy.timeout, 86400);
+    assert.deepEqual(deploy.concurrency, { queue_overflow: "oldest", queue_size: 1 });
+    assert.deepEqual(deploy.strategy, {
+      type: "rolling",
+      concurrency_max: "<< module.input.deployment_concurrency_max >>",
+      errors_max: "<< module.input.deployment_errors_max >>",
+    });
+
+    const ui = assertRecord(compiled.module.ui, "module.ui");
+    const metrics = assertString(ui.metrics);
+    assert.match(metrics, /module\.input\.http_traffic_enabled/);
+    assert.match(metrics, /GroupDesiredCapacity/);
+    assert.match(metrics, /GroupInServiceInstances/);
+    assert.match(metrics, /LoadBalancer:/);
+    assert.match(metrics, /TargetGroup:/);
+    assert.match(metrics, /HTTPCode_Target_4XX_Count/);
+    assert.match(metrics, /UnHealthyHostCount/);
+    assert.doesNotMatch(metrics, /namespace:"AWS\/EC2"/);
+  });
+
+  it("propagates shared build input guidance to every consumer", async () => {
+    const definitionPaths = [
+      ["compute", "ec2_service", "rvn-ec2-service-definition.yml"],
+      ["compute", "ecs_service", "rvn-ecs-nlb-definition.yml"],
+      ["compute", "ecs_service", "rvn-ecs-web-definition.yml"],
+      ["compute", "ecs_service", "rvn-ecs-worker-definition.yml"],
+      ["compute", "lambda", "rvn-lambda-definition.yml"],
+      ["hosting", "static_site", "rvn-aws-static-definition.yml"],
+    ];
+    const definitions = await Promise.all(definitionPaths.map((path) => compileDefinitionFile(join(repoRoot, ...path))));
+
+    for (const definition of definitions) {
+      const inputs = getModuleInputs(definition.module);
+      assert.equal(
+        findInput(inputs, "source_repo").description,
+        "Repository containing the application source for Dockerfile or Railpack builds.",
+        `${definition.type} should include shared Git source guidance`,
+      );
+
+      const builderType = findInput(inputs, "build_infrastructure_type");
+      assert.equal(
+        builderType.description,
+        "Use on-demand EC2 for predictable availability or EC2 Spot for lower cost with possible capacity delays or interruption.",
+        `${definition.type} should include shared builder guidance`,
+      );
+      const builderOptions = builderType.values;
+      assert.ok(Array.isArray(builderOptions), `${definition.type} builder type should have values`);
+      assert.deepEqual(
+        builderOptions.map((option) => {
+          const value = assertRecord(option, `${definition.type} builder option`);
+          return [value.value, value.description];
+        }),
+        [
+          ["ec2", "Use on-demand capacity for predictable availability without Spot interruption."],
+          ["ec2-spot", "Use lower-cost Spot capacity that can wait for capacity or be interrupted by AWS."],
+        ],
+      );
+    }
+
+    for (const definition of definitions.filter((candidate) => candidate.type !== "rvn-lambda")) {
+      const inputs = getModuleInputs(definition.module);
+      assert.equal(
+        findInput(inputs, "railpack_install_cmd").description,
+        "Optional dependency installation command. Leave blank to use Railpack detection.",
+      );
+      assert.equal(
+        findInput(inputs, "railpack_build_cmd").description,
+        "Optional application build command. Leave blank to use Railpack detection.",
+      );
+    }
   });
 
   it("compiles rolling ECS NLB services with per-listener configuration", async () => {
@@ -238,6 +563,13 @@ function getModuleInputs(module: Record<string, unknown>): Record<string, unknow
 function getModuleBuild(module: Record<string, unknown>): Record<string, unknown> {
   assert.ok(isRecord(module.build), "module.build should be an object");
   return module.build;
+}
+
+function getDeployInputs(module: Record<string, unknown>): Record<string, unknown>[] {
+  const deploy = assertRecord(module.deploy, "module.deploy");
+  const inputs = deploy.inputs;
+  assert.ok(Array.isArray(inputs), "module.deploy.inputs should be an array");
+  return inputs.map((input) => assertRecord(input, "deploy input"));
 }
 
 function findInput(inputs: Record<string, unknown>[], id: string): Record<string, unknown> {

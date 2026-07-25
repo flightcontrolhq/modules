@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.3.1
-  description: "Add Railpack support for zip package and container image builds."
+  version: 0.3.2
+  description: Improve build source and builder instance guidance.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -884,6 +884,11 @@ module:
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select an AWS account and region to load available EC2 instance types.
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - id: section_ecr
       label: Image registry lifecycle
       type: section
