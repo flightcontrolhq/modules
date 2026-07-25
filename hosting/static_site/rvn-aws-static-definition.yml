@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.3
-  description: Replace legacy CloudFront rewrite functions without leaving unmanaged resources.
+  version: 0.3.4
+  description: Improve build source, Railpack command, and builder instance guidance.
 module:
   build:
     builder: >-
@@ -318,6 +318,11 @@ module:
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select an AWS account and region to load available EC2 instance types.
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - id: section_deploy
       label: Deploy config
       type: section

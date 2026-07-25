@@ -260,14 +260,14 @@ resource "aws_lb_listener_rule" "test" {
 resource "aws_lb_listener" "nlb" {
   count = local.enable_load_balancer && local.enable_nlb_listener ? 1 : 0
 
-  load_balancer_arn = var.load_balancer_attachment.nlb_listener.nlb_arn
-  port              = var.load_balancer_attachment.nlb_listener.port
-  protocol          = var.load_balancer_attachment.nlb_listener.protocol
+  load_balancer_arn = local.primary_nlb_listener.nlb_arn
+  port              = local.primary_nlb_listener.port
+  protocol          = local.primary_nlb_listener.protocol
 
   # TLS-specific settings
-  certificate_arn = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.certificate_arn : null
-  ssl_policy      = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.ssl_policy : null
-  alpn_policy     = var.load_balancer_attachment.nlb_listener.protocol == "TLS" ? var.load_balancer_attachment.nlb_listener.alpn_policy : null
+  certificate_arn = local.primary_nlb_listener.protocol == "TLS" ? local.primary_nlb_listener.certificate_arn : null
+  ssl_policy      = local.primary_nlb_listener.protocol == "TLS" ? local.primary_nlb_listener.ssl_policy : null
+  alpn_policy     = local.primary_nlb_listener.protocol == "TLS" ? local.primary_nlb_listener.alpn_policy : null
 
   default_action {
     type             = "forward"
@@ -280,6 +280,34 @@ resource "aws_lb_listener" "nlb" {
 
   # The ECS deployment controller rewrites the default action during
   # native traffic-shift deployments; a no-op for rolling deployments.
+  lifecycle {
+    ignore_changes = [default_action]
+  }
+}
+
+resource "aws_lb_listener" "nlb_additional" {
+  for_each = local.additional_nlb_listeners
+
+  load_balancer_arn = each.value.nlb_arn
+  port              = each.value.port
+  protocol          = each.value.protocol
+
+  certificate_arn = each.value.protocol == "TLS" ? each.value.certificate_arn : null
+  ssl_policy      = each.value.protocol == "TLS" ? each.value.ssl_policy : null
+  alpn_policy     = each.value.protocol == "TLS" ? each.value.alpn_policy : null
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.nlb_additional[each.key].arn
+  }
+
+  tags = merge(local.tags, {
+    Name         = "${var.name}-${each.key}-nlb-listener"
+    ListenerPort = each.key
+  })
+
+  # The ECS deployment controller may rewrite the default action during
+  # service updates; ignore to prevent spurious Terraform drift.
   lifecycle {
     ignore_changes = [default_action]
   }

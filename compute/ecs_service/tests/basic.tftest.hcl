@@ -173,6 +173,185 @@ run "service_with_load_balancer" {
 }
 
 ################################################################################
+# Test: Rolling service with multiple NLB listeners
+################################################################################
+
+run "rolling_service_with_multiple_nlb_listeners" {
+  command = plan
+
+  variables {
+    deployment_type                   = "rolling"
+    container_port                    = 5000
+    load_balancer_security_group_id   = "sg-12345678"
+    load_balancer_ingress_cidr_blocks = ["0.0.0.0/0"]
+    load_balancer_attachment = {
+      target_group = {
+        port     = 5000
+        protocol = "TCP"
+      }
+      nlb_listeners = [
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5000
+          protocol        = "TCP"
+          container_port  = 5000
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5443
+          protocol        = "TLS"
+          container_port  = 5443
+          target_protocol = "TLS"
+          certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+        },
+      ]
+    }
+  }
+
+  assert {
+    condition     = aws_lb_listener.nlb[0].port == 5000 && aws_lb_listener.nlb_additional["5443"].port == 5443
+    error_message = "Should create the primary and additional NLB listeners on their configured ports"
+  }
+
+  assert {
+    condition     = aws_lb_target_group.tg_1[0].protocol == "TCP" && aws_lb_target_group.nlb_additional["5443"].protocol == "TLS"
+    error_message = "Should create one target group per listener with its configured target protocol"
+  }
+
+  assert {
+    condition     = length(aws_lb_target_group.tg_2) == 0 && length(aws_iam_role.ecs_infrastructure) == 0
+    error_message = "Rolling multi-listener services should omit traffic-shift-only target groups and IAM infrastructure"
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_ecs_task_definition.this.container_definitions)[0].portMappings) == 2
+    error_message = "Should expose every listener container port in the placeholder task definition"
+  }
+
+  assert {
+    condition     = toset(keys(output.nlb_listener_arns)) == toset(["5000", "5443"]) && toset(keys(output.nlb_target_group_arns)) == toset(["5000", "5443"])
+    error_message = "Should export listener and target group ARNs keyed by listener port"
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.nlb_listener_ipv4["0.0.0.0/0"].from_port == 5000
+    error_message = "Primary listener ingress should preserve the legacy CIDR-only state key during upgrades"
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.nlb_additional_listener_ipv4["5443|0.0.0.0/0"].from_port == 5443
+    error_message = "Additional listener ingress should use a listener-port and CIDR state key"
+  }
+}
+
+run "traffic_shift_rejects_nlb_listeners" {
+  command = plan
+
+  variables {
+    deployment_type = "blue_green"
+    container_port  = 5000
+    load_balancer_attachment = {
+      target_group = {
+        port     = 5000
+        protocol = "TCP"
+      }
+      nlb_listeners = [
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5000
+          protocol        = "TCP"
+          container_port  = 5000
+          target_protocol = "TCP"
+        },
+      ]
+    }
+  }
+
+  expect_failures = [aws_ecs_service.this]
+}
+
+run "service_rejects_legacy_nlb_listener" {
+  command = plan
+
+  variables {
+    load_balancer_attachment = {
+      target_group = {
+        port     = 5000
+        protocol = "TCP"
+      }
+      nlb_listener = {
+        nlb_arn  = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+        port     = 5000
+        protocol = "TCP"
+      }
+    }
+  }
+
+  expect_failures = [var.load_balancer_attachment]
+}
+
+run "service_rejects_more_than_five_nlb_listeners" {
+  command = plan
+
+  variables {
+    container_port = 5000
+    load_balancer_attachment = {
+      target_group = {
+        port     = 5000
+        protocol = "TCP"
+      }
+      nlb_listeners = [
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5000
+          protocol        = "TCP"
+          container_port  = 6000
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5001
+          protocol        = "TCP"
+          container_port  = 6001
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5002
+          protocol        = "TCP"
+          container_port  = 6002
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5003
+          protocol        = "TCP"
+          container_port  = 6003
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5004
+          protocol        = "TCP"
+          container_port  = 6004
+          target_protocol = "TCP"
+        },
+        {
+          nlb_arn         = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/my-nlb/1234567890123456"
+          port            = 5005
+          protocol        = "TCP"
+          container_port  = 6005
+          target_protocol = "TCP"
+        },
+      ]
+    }
+  }
+
+  expect_failures = [var.load_balancer_attachment]
+}
+
+################################################################################
 # Test: Service with Load Balancer (Auto Priority)
 ################################################################################
 

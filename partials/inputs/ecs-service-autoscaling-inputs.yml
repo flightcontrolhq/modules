@@ -5,21 +5,17 @@
   label: Autoscaling
   type: boolean
   default: true
-- id: min_capacity
-  label: Minimum tasks
-  type: number
-  description: Recommend at least 2 for production.
-  min: 0
-  show_when:
-    auto_scaling_enabled: true
-  default: 1
-- id: max_capacity
-  label: Maximum tasks
-  type: number
-  min: 1
-  show_when:
-    auto_scaling_enabled: true
-  default: 3
+- $template: ../templates/autoscaling-capacity-inputs.yml
+  with:
+    min_capacity_overrides:
+      label: Minimum tasks
+      description: Recommend at least 2 for production.
+      show_when:
+        auto_scaling_enabled: true
+    max_capacity_overrides:
+      label: Maximum tasks
+      show_when:
+        auto_scaling_enabled: true
 - id: desired_count
   label: Desired tasks
   type: number

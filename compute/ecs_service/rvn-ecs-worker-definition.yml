@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.3.2
-  description: "Accept mixed IAM policy document shapes for task role inline policies."
+  version: 0.3.3
+  description: Improve build source, Railpack command, and builder instance guidance.
 module:
   inputs:
     - id: section_cluster

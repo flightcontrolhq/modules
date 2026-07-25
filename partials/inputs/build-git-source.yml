@@ -1,5 +1,6 @@
 - id: source_repo
   label: Git repository
+  description: Repository containing the application source for Dockerfile or Railpack builds.
   required: true
   show_when: $with.show_when
   type: gitrepo
