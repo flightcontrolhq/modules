@@ -1,0 +1,279 @@
+definition:
+  type: rvn-aws-iam-policy
+  name: AWS IAM Policy
+  description: Creates one reusable customer-managed AWS IAM policy from structured statements or a complete JSON policy document.
+release:
+  version: 0.1.0
+  description: Initial module definition with immutable policy identity fields and structured statement support.
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $include: ../../partials/inputs/aws-region.yml
+    - id: section_policy
+      label: IAM policy
+      type: section
+    - default: <<module.given_id>>
+      description: Name of the customer-managed IAM policy. Policy names must be unique within their path in the AWS account.
+      id: name
+      immutable: true
+      label: Policy name
+      patterns:
+        - message: "1-128 letters, numbers, plus, equals, comma, period, at, underscore, or hyphen characters."
+          pattern: ^[A-Za-z0-9+=,.@_-]{1,128}$
+      required: true
+      type: string
+    - description: Optional description stored on the IAM policy. AWS does not allow this value to be changed after creation.
+      id: description
+      immutable: true
+      label: Description
+      patterns:
+        - message: 1000 characters or fewer.
+          pattern: ^.{0,1000}$
+      type: string
+    - collapsible: true
+      default: /
+      description: IAM path for organizing the policy. Most policies should use the root path.
+      id: path
+      immutable: true
+      label: Path
+      patterns:
+        - message: Start and end with a slash, for example / or /application/.
+          pattern: ^/$|^/.*/$
+        - message: Asterisks are not allowed in IAM paths.
+          pattern: ^[^*]*$
+        - message: 512 characters or fewer.
+          pattern: ^.{1,512}$
+      required: true
+      type: string
+    - id: section_document
+      label: Policy document
+      type: section
+    - default: structured
+      description: Build the policy with structured statements or provide a complete JSON document.
+      id: policy_document_mode
+      label: Policy document format
+      required: true
+      type: string
+      values:
+        - label: Structured statements
+          value: structured
+        - label: JSON document
+          value: json
+    - default: []
+      description: Define permissions this policy grants or denies. Each statement matches Action or NotAction values against Resource or NotResource ARNs and can add conditions to narrow access. Prefer explicit actions and resource ARNs over wildcards.
+      id: policy_statements
+      item_inputs:
+        - description: Optional IAM statement ID.
+          id: sid
+          label: SID
+          required: false
+          type: string
+        - default: Allow
+          description: Whether this statement allows or denies the listed actions.
+          id: effect
+          label: Effect
+          required: true
+          type: string
+          values:
+            - label: Allow
+              value: Allow
+            - label: Deny
+              value: Deny
+        - default: Action
+          description: Match the listed actions or every applicable action except those listed.
+          id: action_match_mode
+          label: Action matching
+          required: true
+          type: string
+          values:
+            - label: Listed actions
+              value: Action
+            - label: All except listed actions
+              value: NotAction
+        - add_button_label: Add action
+          description: IAM actions granted or denied by this statement.
+          id: actions
+          label: Actions
+          placeholder: s3:GetObject
+          required: true
+          show_when:
+            action_match_mode: Action
+          type: string_array
+        - add_button_label: Add excluded action
+          description: IAM actions excluded from this statement's match. NotAction can create broad permissions and should be used carefully.
+          id: not_actions
+          label: Excluded actions (NotAction)
+          placeholder: iam:*
+          required: true
+          show_when:
+            action_match_mode: NotAction
+          type: string_array
+        - default: Resource
+          description: Match the listed resources or every applicable resource except those listed.
+          id: resource_match_mode
+          label: Resource matching
+          required: true
+          type: string
+          values:
+            - label: Listed resources
+              value: Resource
+            - label: All except listed resources
+              value: NotResource
+        - add_button_label: Add resource
+          description: Resource ARNs covered by this statement. Use wildcards only when the AWS service requires them.
+          id: resources
+          label: Resources
+          placeholder: arn:aws:s3:::my-bucket/*
+          required: true
+          show_when:
+            resource_match_mode: Resource
+          type: string_array
+        - add_button_label: Add excluded resource
+          description: Resource ARNs excluded from this statement's match. NotResource can create broad permissions and should be used carefully.
+          id: not_resources
+          label: Excluded resources (NotResource)
+          placeholder: arn:aws:s3:::my-bucket/protected/*
+          required: true
+          show_when:
+            resource_match_mode: NotResource
+          type: string_array
+        - default: []
+          description: Optional IAM conditions that further restrict this statement.
+          id: conditions
+          item_inputs:
+            - $template: ../../partials/templates/iam-condition-operator-input.yml
+              with:
+                default: StringEquals
+            - description: IAM context key evaluated by the condition.
+              id: variable
+              label: Condition key
+              placeholder: aws:ResourceAccount
+              required: true
+              type: string
+            - add_button_label: Add condition value
+              description: Allowed or matched values for the condition key.
+              id: values
+              label: Condition values
+              placeholder: "123456789012"
+              required: true
+              type: string_array
+          item_label: Condition
+          label: Conditions
+          required: false
+          type: object_array
+      item_label: Policy statement
+      item_title:
+        template: "{effect}: {action_match_mode} on {resource_match_mode}"
+        fallback: Policy statement
+      label: Policy statements
+      required: true
+      show_when:
+        policy_document_mode: structured
+      type: object_array
+    - description: Complete IAM policy JSON document. This is used instead of structured statements.
+      id: policy_json
+      label: Policy JSON
+      patterns:
+        - message: Include a JSON object with Version and Statement properties.
+          pattern: ^\s*\{[\s\S]*"Version"[\s\S]*"Statement"[\s\S]*\}\s*$
+      placeholder: |-
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:GetObject"],
+              "Resource": ["arn:aws:s3:::my-bucket/*"]
+            }
+          ]
+        }
+      required: true
+      show_when:
+        policy_document_mode: json
+      type: text
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the execution environment for Terraform runners. Must use the same AWS account as selected above.
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: security/iam_policy
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        description: << module.input.description >>
+        name: << module.input.name >>
+        path: << module.input.path >>
+        policy_json: << module.input.policy_json >>
+        policy_statements: << module.input.policy_statements || [] >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+  readme: |
+    Creates one reusable customer-managed AWS IAM policy from structured statements or a complete JSON policy document.
+
+    ## Overview
+
+    Use this module when permissions need to be managed independently from an IAM role. The policy ARN can be attached to one or more roles, reused across workloads, or supplied as a permissions boundary.
+
+    Customer-managed policies are versioned by AWS when their document changes. Keep statements narrowly scoped to the actions and resource ARNs each workload needs.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Shared workload permissions | Reuse one policy across several IAM roles without duplicating inline policy documents. |
+    | Permissions boundary | Set the maximum permissions that another IAM role can receive. |
+    | Independently managed access | Update permissions without combining policy ownership with trust relationships or instance profiles. |
+    | Complex policy document | Use complete JSON when a policy cannot be represented by the structured statement form. |
+
+    ## Policy documents
+
+    Structured statements are the default. Each statement requires an effect, either Action or NotAction values, and either Resource or NotResource values. Optional conditions can restrict access by IAM context keys such as account, source ARN, principal tags, or resource tags.
+
+    NotAction and NotResource invert what a statement matches. They can simplify explicit deny policies, but combining either with Allow can grant broader access than expected. Prefer listed actions and resources unless an inverse statement is necessary.
+
+    JSON document accepts a complete IAM policy document. Use this mode for uncommon IAM elements or documents produced by another trusted policy-authoring workflow. The JSON document replaces structured statements rather than merging with them.
+
+    IAM policies can have broad security impact. Avoid wildcard actions and resources unless the AWS service requires them, and add conditions where they reduce unintended access.
+
+    ## Using the policy
+
+    This module creates the policy but does not attach it. Attach the Policy ARN output through the AWS IAM Role module's Managed policy ARNs setting, or use it as that module's Permission boundary ARN.
+
+    Keeping policy creation and role creation separate allows a policy to be shared, audited, and updated without duplicating role trust configuration.
+
+    ## Configuration
+
+    | Setting | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | AWS account | Yes | None | AWS account where the customer-managed policy is created. |
+    | Region | Yes | None | Runner region for the stack. IAM resources are global, but Terraform still runs with an AWS region. |
+    | Policy name | Yes | Module given ID | Must be unique within the selected path in the AWS account. |
+    | Description | No | None | AWS does not allow a managed policy description to be edited after creation. |
+    | Path | No | / | IAM path used to organize the policy. |
+    | Policy document format | Yes | Structured statements | Chooses between the statement editor and complete JSON. |
+    | Policy statements | In structured mode | Empty list | At least one statement is required when structured mode is selected. |
+    | Policy JSON | In JSON mode | None | Complete policy document used instead of structured statements. |
+    | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
+    | Terraform execution environment | No | None | Optional runner environment override. |
+    | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
+
+    ## Design decisions
+
+    The module manages one policy and no attachments. IAM roles, users, and groups have separate lifecycles, while a customer-managed policy may be shared by several consumers.
+
+    Structured statements require an explicit Action or NotAction choice and an explicit Resource or NotResource choice. The module does not add wildcard permissions automatically.
+
+    Policy name, description, and path are immutable in Ravion because AWS replaces the managed policy when any of these values change. Replacement would sever attachments managed outside this module.
+
+    Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
+
+    ## Learn more
+
+    - [IAM managed policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
+    - [IAM JSON policy elements](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html)
+    - [IAM permissions boundaries](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html)
+    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/iam_policy)
