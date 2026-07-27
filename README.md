@@ -15,7 +15,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 
 | Category      | Module            | Description                                                            | Status  |
 | ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
-| `ai/`         | `bedrock`         | Amazon Bedrock capabilities organized as regional sections; starts with model invocation logging | v0.1.0 |
+| `ai/`         | `bedrock`         | Amazon Bedrock model invocation logging, guardrails, application inference profiles, provisioned throughput, custom models, and model access (includes `rvn-bedrock` module definition) | v1.0.0  |
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
 | `cdn/`        | `cloudfront`      | AWS CloudFront distributions with origins, cache behaviors, and edge redirects (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |

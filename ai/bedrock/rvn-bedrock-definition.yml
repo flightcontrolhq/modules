@@ -3,8 +3,8 @@ definition:
   name: Amazon Bedrock
   description: Configure regional Amazon Bedrock settings and observability.
 release:
-  version: 0.1.0
-  description: Add Amazon Bedrock model invocation logging with CloudWatch delivery and Ravion log viewing.
+  version: 0.2.0
+  description: Add guardrails, application inference profiles, provisioned throughput, custom models, and foundation model access alongside model invocation logging.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -145,6 +145,591 @@ module:
       show_when:
         model_invocation_logging_enabled: true
       type: string
+    - id: section_guardrails
+      label: Guardrails
+      type: section
+    - collapsible: true
+      default: {}
+      description: Guardrails that filter model inputs and outputs. Reference a guardrail from your application by its ID and version. Each guardrail must configure at least one filter.
+      id: guardrails
+      item_inputs:
+        - description: Guardrail name shown in the Bedrock console. Defaults to the guardrail key.
+          id: name
+          label: Guardrail name
+          patterns:
+            - message: Use 1-50 letters, numbers, underscores, or hyphens, starting with a letter or number.
+              pattern: ^[0-9a-zA-Z][0-9a-zA-Z_-]{0,49}$
+          required: false
+          type: string
+        - description: What this guardrail protects against.
+          id: description
+          label: Description
+          required: false
+          type: string
+        - default: Sorry, I am unable to respond to that request.
+          description: Message returned to the caller when an input is blocked.
+          id: blocked_input_messaging
+          label: Blocked input message
+          required: false
+          type: string
+        - default: Sorry, I am unable to respond to that request.
+          description: Message returned to the caller when a model output is blocked.
+          id: blocked_outputs_messaging
+          label: Blocked output message
+          required: false
+          type: string
+        - collapsible: true
+          description: Customer-managed KMS key ARN used to encrypt the guardrail.
+          id: kms_key_arn
+          label: KMS key ARN
+          patterns:
+            - message: Use a valid KMS key ARN.
+              pattern: ^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[0-9a-fA-F-]+$
+          required: false
+          type: string
+        - default: []
+          description: Harmful content categories to filter, with a blocking strength for prompts and for model responses.
+          id: content_filters
+          item_inputs:
+            - description: Harmful content category to filter.
+              id: type
+              label: Category
+              required: true
+              type: string
+              values:
+                - label: Hate
+                  value: HATE
+                - label: Insults
+                  value: INSULTS
+                - label: Sexual
+                  value: SEXUAL
+                - label: Violence
+                  value: VIOLENCE
+                - label: Misconduct
+                  value: MISCONDUCT
+                - label: Prompt attack
+                  value: PROMPT_ATTACK
+            - default: HIGH
+              description: Blocking strength applied to prompts sent to the model.
+              id: input_strength
+              label: Prompt strength
+              required: true
+              type: string
+              values:
+                - label: None
+                  value: NONE
+                - label: Low
+                  value: LOW
+                - label: Medium
+                  value: MEDIUM
+                - label: High
+                  value: HIGH
+            - default: HIGH
+              description: Blocking strength applied to model responses.
+              id: output_strength
+              label: Response strength
+              required: true
+              type: string
+              values:
+                - label: None
+                  value: NONE
+                - label: Low
+                  value: LOW
+                - label: Medium
+                  value: MEDIUM
+                - label: High
+                  value: HIGH
+          item_label: Content filter
+          label: Content filters
+          required: false
+          type: object_array
+        - collapsible: true
+          description: Content filter tier. Standard supports more languages and improves robustness over Classic.
+          id: content_filter_tier
+          label: Content filter tier
+          required: false
+          type: string
+          values:
+            - label: Classic
+              value: CLASSIC
+            - label: Standard
+              value: STANDARD
+        - default: []
+          description: Topics the model must refuse to discuss.
+          id: denied_topics
+          item_inputs:
+            - description: Short name for the topic.
+              id: name
+              label: Topic name
+              required: true
+              type: string
+            - description: What the topic covers. Bedrock uses this definition to detect the topic.
+              id: definition
+              label: Definition
+              required: true
+              type: string
+            - description: Example phrases that fall under this topic.
+              id: examples
+              label: Examples
+              required: false
+              type: string_array
+          item_label: Denied topic
+          label: Denied topics
+          required: false
+          type: object_array
+        - collapsible: true
+          description: Denied topic tier. Standard supports more languages and improves robustness over Classic.
+          id: denied_topic_tier
+          label: Denied topic tier
+          required: false
+          type: string
+          values:
+            - label: Classic
+              value: CLASSIC
+            - label: Standard
+              value: STANDARD
+        - collapsible: true
+          default: []
+          description: Exact words and phrases to block in prompts and responses.
+          id: denied_words
+          item_inputs:
+            - description: Word or phrase to block.
+              id: text
+              label: Word or phrase
+              required: true
+              type: string
+          item_label: Denied word
+          label: Denied words
+          required: false
+          type: object_array
+        - collapsible: true
+          default: []
+          description: AWS-managed word lists to block.
+          id: managed_word_lists
+          item_inputs:
+            - default: PROFANITY
+              description: Managed word list to block.
+              id: type
+              label: Managed list
+              required: true
+              type: string
+              values:
+                - label: Profanity
+                  value: PROFANITY
+          item_label: Managed word list
+          label: Managed word lists
+          required: false
+          type: object_array
+        - collapsible: true
+          default: []
+          description: Personally identifiable information to block or mask. Common types include EMAIL, PHONE, NAME, ADDRESS, CREDIT_DEBIT_CARD_NUMBER, US_SOCIAL_SECURITY_NUMBER, AWS_ACCESS_KEY, and IP_ADDRESS.
+          id: pii_entities
+          item_inputs:
+            - description: PII entity type as defined by Amazon Bedrock, for example EMAIL or US_SOCIAL_SECURITY_NUMBER.
+              id: type
+              label: Entity type
+              patterns:
+                - message: Use uppercase letters, numbers, and underscores.
+                  pattern: ^[A-Z0-9_]+$
+              placeholder: EMAIL
+              required: true
+              type: string
+            - default: ANONYMIZE
+              description: What to do when this entity is detected.
+              id: action
+              label: Action
+              required: true
+              type: string
+              values:
+                - label: Mask the value
+                  value: ANONYMIZE
+                - label: Block the request
+                  value: BLOCK
+                - label: Take no action
+                  value: NONE
+          item_label: PII entity
+          label: PII entities
+          required: false
+          type: object_array
+        - collapsible: true
+          default: []
+          description: Custom regular expressions to block or mask, for internal identifiers and other account-specific patterns.
+          id: regex_filters
+          item_inputs:
+            - description: Short name for this pattern.
+              id: name
+              label: Pattern name
+              required: true
+              type: string
+            - description: Regular expression to match.
+              id: pattern
+              label: Regular expression
+              placeholder: EMP-[0-9]{6}
+              required: true
+              type: string
+            - default: BLOCK
+              description: What to do when the pattern matches.
+              id: action
+              label: Action
+              required: true
+              type: string
+              values:
+                - label: Block the request
+                  value: BLOCK
+                - label: Mask the value
+                  value: ANONYMIZE
+                - label: Take no action
+                  value: NONE
+            - description: What this pattern matches.
+              id: description
+              label: Description
+              required: false
+              type: string
+          item_label: Regex filter
+          label: Regex filters
+          required: false
+          type: object_array
+        - collapsible: true
+          default: []
+          description: Contextual grounding checks that block responses which are unsupported by the provided source material or irrelevant to the query.
+          id: grounding_filters
+          item_inputs:
+            - description: Check to apply.
+              id: type
+              label: Check
+              required: true
+              type: string
+              values:
+                - label: Grounding
+                  value: GROUNDING
+                - label: Relevance
+                  value: RELEVANCE
+            - default: 0.75
+              description: Confidence below which the response is blocked. Must be at least 0 and less than 1.
+              id: threshold
+              label: Threshold
+              required: true
+              type: number
+          item_label: Grounding filter
+          label: Grounding filters
+          required: false
+          type: object_array
+        - collapsible: true
+          description: Full ARN of a guardrail profile for cross-region guardrail evaluation.
+          id: cross_region_guardrail_profile_identifier
+          label: Cross-region guardrail profile ARN
+          patterns:
+            - message: Use a full Bedrock guardrail profile ARN.
+              pattern: "^arn:[^:]+:bedrock:"
+          placeholder: arn:aws:bedrock:us-west-2:123456789012:guardrail-profile/us.guardrail.v1:0
+          required: false
+          type: string
+        - collapsible: true
+          default: false
+          description: Publish an immutable version of this guardrail. A version snapshots the guardrail as it exists when published; later edits do not change it.
+          id: version_creation_enabled
+          label: Publish a version
+          type: boolean
+        - collapsible: true
+          description: Description of the published version. Change this to publish a new snapshot after editing the guardrail.
+          id: version_description
+          label: Version description
+          required: false
+          show_when:
+            version_creation_enabled: true
+          type: string
+        - collapsible: true
+          default: false
+          description: Keep the published version in AWS when it is removed from this configuration.
+          id: version_skip_destroy
+          label: Retain version on destroy
+          show_when:
+            version_creation_enabled: true
+          type: boolean
+        - collapsible: true
+          description: Additional tags for this guardrail.
+          id: tags
+          label: Tags
+          required: false
+          type: keyvalue
+      item_label: Guardrail
+      key:
+        label: Guardrail key
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+        placeholder: safety
+      label: Guardrails
+      required: false
+      type: object_map
+    - id: section_inference_profiles
+      label: Application inference profiles
+      type: section
+    - collapsible: true
+      default: {}
+      description: Application inference profiles that copy a foundation model or system-defined profile so invocation cost and usage can be tracked and tagged per application.
+      id: inference_profiles
+      item_inputs:
+        - description: Profile name. Defaults to the name slug followed by the profile key.
+          id: name
+          label: Profile name
+          required: false
+          type: string
+        - description: What this profile is used for.
+          id: description
+          label: Description
+          required: false
+          type: string
+        - description: ARN of the foundation model or system-defined inference profile to copy.
+          id: copy_from
+          label: Source model or profile ARN
+          patterns:
+            - message: Use a Bedrock foundation model or inference profile ARN.
+              pattern: "^arn:[^:]+:bedrock:"
+          placeholder: arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0
+          required: true
+          type: string
+        - collapsible: true
+          description: Additional tags for this inference profile.
+          id: tags
+          label: Tags
+          required: false
+          type: keyvalue
+      item_label: Inference profile
+      key:
+        label: Profile key
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+        placeholder: chat
+      label: Application inference profiles
+      required: false
+      type: object_map
+    - id: section_provisioned_throughput
+      label: Provisioned throughput
+      type: section
+    - collapsible: true
+      default: {}
+      description: Provisioned throughput reservations that guarantee capacity for a model. Reservations with a commitment term bill for the full term and cannot be cancelled early.
+      id: provisioned_model_throughputs
+      item_inputs:
+        - description: Reservation name. Defaults to the name slug followed by the reservation key.
+          id: provisioned_model_name
+          label: Reservation name
+          required: false
+          type: string
+        - description: ARN of the foundation or custom model to reserve capacity for.
+          id: model_arn
+          label: Model ARN
+          patterns:
+            - message: Use a Bedrock model ARN.
+              pattern: "^arn:[^:]+:bedrock:"
+          placeholder: arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0
+          required: true
+          type: string
+        - default: 1
+          description: Number of model units to reserve.
+          id: model_units
+          label: Model units
+          min: 1
+          required: true
+          type: number
+        - description: Commitment term. Leave unset to bill on demand and allow deletion at any time.
+          id: commitment_duration
+          label: Commitment term
+          required: false
+          type: string
+          values:
+            - label: One month
+              value: OneMonth
+            - label: Six months
+              value: SixMonths
+        - collapsible: true
+          description: Additional tags for this reservation.
+          id: tags
+          label: Tags
+          required: false
+          type: keyvalue
+      item_label: Reservation
+      key:
+        label: Reservation key
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+        placeholder: chat
+      label: Provisioned throughput reservations
+      required: false
+      type: object_map
+    - id: section_custom_models
+      label: Custom models
+      type: section
+    - collapsible: true
+      default: {}
+      description: Model customization jobs that fine-tune or continue pre-training a base model on your own data and register the resulting custom model. Jobs run once and can take hours to complete.
+      id: custom_models
+      item_inputs:
+        - description: Custom model name. Defaults to the name slug followed by the model key.
+          id: custom_model_name
+          label: Custom model name
+          required: false
+          type: string
+        - description: Customization job name. Defaults to the name slug followed by the model key.
+          id: job_name
+          label: Job name
+          required: false
+          type: string
+        - description: Base model to customize, given as a model ID or ARN.
+          id: base_model_identifier
+          label: Base model
+          placeholder: arn:aws:bedrock:us-west-2::foundation-model/amazon.titan-text-lite-v1
+          required: true
+          type: string
+        - description: IAM role Bedrock assumes to read training data and write job output. The role must allow access to the S3 locations below.
+          id: role_arn
+          label: Service role ARN
+          patterns:
+            - message: Use a valid IAM role ARN.
+              pattern: ^arn:[^:]+:iam::[0-9]{12}:role/
+          placeholder: arn:aws:iam::123456789012:role/bedrock-customization
+          required: true
+          type: string
+        - default: FINE_TUNING
+          description: How the base model is customized.
+          id: customization_type
+          label: Customization type
+          required: true
+          type: string
+          values:
+            - label: Fine tuning
+              value: FINE_TUNING
+            - label: Continued pre-training
+              value: CONTINUED_PRE_TRAINING
+            - label: Distillation
+              value: DISTILLATION
+            - label: Imported
+              value: IMPORTED
+        - description: Training hyperparameters for the base model, such as epochCount, batchSize, and learningRate.
+          id: hyperparameters
+          label: Hyperparameters
+          required: true
+          type: keyvalue
+        - description: S3 URI of the training dataset.
+          id: training_data_s3_uri
+          label: Training data S3 URI
+          patterns:
+            - message: Use an s3:// URI.
+              pattern: ^s3://
+          placeholder: s3://my-bucket/training/train.jsonl
+          required: true
+          type: string
+        - description: S3 URI where job output and metrics are written.
+          id: output_data_s3_uri
+          label: Output data S3 URI
+          patterns:
+            - message: Use an s3:// URI.
+              pattern: ^s3://
+          placeholder: s3://my-bucket/training/output/
+          required: true
+          type: string
+        - collapsible: true
+          default: []
+          description: S3 URIs of validation datasets used to report validation loss.
+          id: validation_data_s3_uris
+          label: Validation data S3 URIs
+          required: false
+          type: string_array
+        - collapsible: true
+          description: Customer-managed KMS key ARN used to encrypt the custom model.
+          id: kms_key_id
+          label: KMS key ARN
+          required: false
+          type: string
+        - collapsible: true
+          default: []
+          description: Private subnets the customization job runs in. Set both subnets and security groups, or neither.
+          id: vpc_subnet_ids
+          label: VPC subnet IDs
+          required: false
+          type: string_array
+        - collapsible: true
+          default: []
+          description: Security groups attached to the customization job. Set both subnets and security groups, or neither.
+          id: vpc_security_group_ids
+          label: VPC security group IDs
+          required: false
+          type: string_array
+        - collapsible: true
+          description: Additional tags for this custom model.
+          id: tags
+          label: Tags
+          required: false
+          type: keyvalue
+      item_label: Custom model
+      key:
+        label: Model key
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+        placeholder: support
+      label: Custom models
+      required: false
+      type: object_map
+    - id: section_model_access
+      label: Model access
+      type: section
+    - collapsible: true
+      default: {}
+      description: Foundation model agreements to accept for this account and region. Accepting an agreement grants the account access to the model. The current offer is resolved automatically unless a token is pinned.
+      id: foundation_model_agreements
+      item_inputs:
+        - description: Model ID to request access for.
+          id: model_id
+          label: Model ID
+          placeholder: anthropic.claude-sonnet-4-20250514-v1:0
+          required: true
+          type: string
+        - default: PUBLIC
+          description: Offer type to accept.
+          id: offer_type
+          label: Offer type
+          required: true
+          type: string
+          values:
+            - label: Public
+              value: PUBLIC
+            - label: All
+              value: ALL
+        - collapsible: true
+          description: Pin a specific offer token instead of resolving the current one. Leave empty in most cases.
+          id: offer_token
+          label: Offer token
+          required: false
+          type: string
+      item_label: Model agreement
+      key:
+        label: Agreement key
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+        placeholder: claude
+      label: Foundation model agreements
+      required: false
+      type: object_map
+    - collapsible: true
+      description: JSON use case form required before access is granted to some models, such as the Anthropic models. Leave empty when no submission is required.
+      id: model_access_use_case_form_data
+      label: Use case form data
+      placeholder: |-
+        {
+          "companyName": "Example Inc",
+          "companyWebsite": "https://example.com",
+          "intendedUsers": "Internal support agents",
+          "industryOption": "Technology",
+          "otherIndustryOption": "",
+          "useCases": "Summarizing internal support tickets"
+        }
+      required: false
+      type: text
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
@@ -155,13 +740,19 @@ module:
       base_path: ai/bedrock
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
+        custom_models: << module.input.custom_models || {} >>
         embedding_data_delivery_enabled: << module.input.embedding_data_delivery_enabled >>
+        foundation_model_agreements: << module.input.foundation_model_agreements || {} >>
+        guardrails: << module.input.guardrails || {} >>
         image_data_delivery_enabled: << module.input.image_data_delivery_enabled >>
+        inference_profiles: << module.input.inference_profiles || {} >>
         log_group_kms_key_arn: << module.input.log_group_kms_key_arn >>
         log_group_name: << module.input.log_group_name >>
         log_group_retention_days: << module.input.log_group_retention_days >>
+        model_access_use_case_form_data: << module.input.model_access_use_case_form_data >>
         model_invocation_logging_enabled: << module.input.model_invocation_logging_enabled >>
         name: << module.input.name >>
+        provisioned_model_throughputs: << module.input.provisioned_model_throughputs || {} >>
         region: << module.input.aws_region >>
         tags:
           $include: ../../partials/stack/ravion-tags.yml
@@ -176,25 +767,34 @@ module:
         "source":{
           "type":"cloudwatch",
           "aws_account_id":module.input.aws_account_id,
-          "region":module.input.aws_region,
+          "region":stack.output.region,
           "log_group":stack.output.model_invocation_log_group_name
         }
       }] : []
       >>
   readme: |
-    Configures Amazon Bedrock for one AWS account and region. The initial version delivers model invocation inputs, outputs, and metadata to CloudWatch Logs.
+    Configures Amazon Bedrock for one AWS account and region: model invocation logging, guardrails, application inference profiles, provisioned throughput, custom models, and foundation model access.
 
     ## Overview
 
-    Use the Model invocation logging section to inspect and analyze Bedrock runtime calls from applications in a specific region. It creates the regional logging configuration, a CloudWatch log group, and a least-privilege IAM role for log delivery.
+    Every section is optional and off by default except model invocation logging. Configure only the sections you need.
 
-    The module's Logs tab displays the CloudWatch invocation records directly in Ravion. Records include model and request metadata, token counts, caller identity, and enabled input/output modalities.
+    - **Model invocation logging** delivers Bedrock runtime inputs, outputs, and metadata to CloudWatch Logs. It creates the regional logging configuration, a log group, and a least-privilege IAM role for log delivery. The module's Logs tab displays the invocation records directly in Ravion, including model and request metadata, token counts, caller identity, and enabled modalities.
+    - **Guardrails** filter model inputs and outputs by harmful content category, denied topic, denied word, PII entity, custom regular expression, and contextual grounding. Applications reference a guardrail by its ID and version.
+    - **Application inference profiles** copy a foundation model or system-defined profile so invocation cost and usage can be tracked and tagged per application.
+    - **Provisioned throughput** reserves dedicated model capacity, on demand or under a commitment term.
+    - **Custom models** run a fine-tuning or continued pre-training job on your own data and register the resulting model.
+    - **Model access** accepts foundation model agreements so the account can invoke a model in this region.
 
     ## Scope and lifecycle
 
-    Amazon Bedrock permits one model invocation logging configuration per AWS account and region. Deploy exactly one instance of this module for each account and region that should be monitored. Do not attach it to each application or model.
+    Amazon Bedrock permits one model invocation logging configuration per AWS account and region. Deploy exactly one instance of this module with invocation logging enabled for each account and region that should be monitored. Do not attach it to each application or model.
 
-    Destroying the module disables future model invocation logging in that region. Existing records are removed when Terraform destroys the module-managed CloudWatch log group.
+    Destroying the module disables future model invocation logging in that region and deletes the guardrails, inference profiles, and throughput reservations it manages. Existing log records are removed when Terraform destroys the module-managed CloudWatch log group.
+
+    Guardrail versions are immutable snapshots. Publishing a version captures the guardrail as it exists at that moment; later edits do not change a published version. Change the version description to publish a new snapshot.
+
+    Provisioned throughput with a commitment term bills for the full term and cannot be cancelled early. Model customization jobs run once and can take hours; changing a job's configuration replaces it with a new job.
 
     ## Sensitive data
 
@@ -221,20 +821,30 @@ module:
     | Log group name | No | Generated from the name slug | CloudWatch Logs destination. |
     | Log retention days | No | 90 | Use 0 to retain indefinitely. |
     | Log group KMS key ARN | No | AWS-managed encryption | Optional customer-managed encryption key. |
+    | Guardrails | No | None | Content, topic, word, PII, regex, and grounding filters. Each guardrail needs at least one filter. |
+    | Application inference profiles | No | None | Per-application cost and usage tracking over a model or system profile. |
+    | Provisioned throughput reservations | No | None | Reserved model capacity. Committed terms cannot be cancelled early. |
+    | Custom models | No | None | Fine-tuning or continued pre-training jobs and the resulting custom models. |
+    | Foundation model agreements | No | None | Model access for this account and region. The current offer is resolved automatically. |
+    | Use case form data | No | None | JSON use case submission required by some models, such as the Anthropic models. |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
     | Terraform execution environment | No | None | Optional runner environment override. |
     | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
 
     ## Design decisions
 
-    CloudWatch Logs is the only destination in the initial version because it supports interactive inspection in Ravion and CloudWatch GenAI Observability. S3 delivery for large or long-term invocation payloads can be added independently in a future minor release.
+    CloudWatch Logs is the only invocation log destination because it supports interactive inspection in Ravion and CloudWatch GenAI Observability. S3 delivery for large or long-term invocation payloads can be added independently in a future minor release.
 
-    This is the shared Terraform source module for Amazon Bedrock in an AWS account and region. Future capabilities, such as prompts, guardrails, inference profiles, agents, flows, and knowledge bases, should be added here as optional sections. Repeatable resources should use keyed maps and `for_each`, following the repository's ECS module pattern.
+    This is the shared Terraform source module for Amazon Bedrock in an AWS account and region. It covers the full `aws_bedrock_*` resource family. Bedrock Agents (`aws_bedrockagent_*`: agents, knowledge bases, data sources, flows, prompts) and AgentCore (`aws_bedrockagentcore_*`: agent runtimes, gateways, memory, browsers, code interpreters) should be added here as further optional sections. Repeatable resources use keyed maps and `for_each`, following the repository's ECS module pattern.
 
     Additional Ravion definitions can provide simpler use-case-specific experiences while continuing to use the same `ai/bedrock` Terraform source module.
 
     ## Learn more
 
     - [Amazon Bedrock model invocation logging](https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html)
+    - [Amazon Bedrock guardrails](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html)
+    - [Amazon Bedrock inference profiles](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles.html)
+    - [Amazon Bedrock provisioned throughput](https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput.html)
+    - [Amazon Bedrock model customization](https://docs.aws.amazon.com/bedrock/latest/userguide/custom-models.html)
     - [CloudWatch generative AI observability](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/GenAI-observability.html)
     - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/ai/bedrock)

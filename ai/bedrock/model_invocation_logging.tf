@@ -5,8 +5,6 @@
 resource "aws_bedrock_model_invocation_logging_configuration" "this" {
   count = var.model_invocation_logging_enabled ? 1 : 0
 
-  region = var.region
-
   logging_config {
     text_data_delivery_enabled      = var.text_data_delivery_enabled
     image_data_delivery_enabled     = var.image_data_delivery_enabled
