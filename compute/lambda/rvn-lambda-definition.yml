@@ -178,7 +178,7 @@ module:
           value: s3_package
           show_when:
             package_type: Zip
-        - description: Deploy an image from the ECR repository configured on this module. The repository must be in the same region as the function; a repository in a different AWS account works when its repository policy grants pull access to the function's account. Provide only the tag or digest at deploy time.
+        - description: Deploy an image from the ECR repository configured on this module. The repository must be in the same region as the function; a repository in a different AWS account works when its repository policy grants pull access to the function's account and the Lambda service principal. Provide only the tag or digest at deploy time.
           label: Pull from image registry
           value: image_registry
           show_when:
