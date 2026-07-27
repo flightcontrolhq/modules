@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.3.2
-  description: Improve build source and builder instance guidance.
+  version: 0.3.3
+  description: Document cross-account ECR support for image registry deploys.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -178,7 +178,7 @@ module:
           value: s3_package
           show_when:
             package_type: Zip
-        - description: Deploy an image from the ECR repository configured on this module. Lambda requires an ECR repository in the same AWS account. Provide only the tag or digest at deploy time.
+        - description: Deploy an image from the ECR repository configured on this module. The repository must be in the same region as the function; a repository in a different AWS account works when its repository policy grants pull access to the function's account and the Lambda service principal. Provide only the tag or digest at deploy time.
           label: Pull from image registry
           value: image_registry
           show_when:
@@ -203,7 +203,7 @@ module:
     - id: image_repository
       label: Image repository
       type: string
-      description: ECR repository URI without a tag or digest, such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function. Lambda requires an ECR repository in the same AWS account.
+      description: ECR repository URI without a tag or digest, such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function. The repository must be in the same region as the function. A repository in a different AWS account works when its repository policy grants pull access to the function's account and the Lambda service principal.
       placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function
       required: true
       show_when:
