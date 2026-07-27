@@ -404,10 +404,10 @@ module:
                   value: GROUNDING
                 - label: Relevance
                   value: RELEVANCE
-            - default: 0.75
-              description: Confidence below which the response is blocked. Must be at least 0 and less than 1.
+            - description: Confidence below which the response is blocked. Must be at least 0 and less than 1, for example 0.75.
               id: threshold
               label: Threshold
+              placeholder: "0.75"
               required: true
               type: number
           item_label: Grounding filter
