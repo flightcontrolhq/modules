@@ -457,6 +457,12 @@ variable "public_alb_ingress_cidr_blocks" {
   }
 }
 
+variable "public_alb_ingress_ipv6_cidr_blocks" {
+  type        = list(string)
+  description = "IPv6 CIDR blocks allowed to access the public ALB."
+  default     = ["::/0"]
+}
+
 variable "public_alb_access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the public ALB."
@@ -538,6 +544,12 @@ variable "private_alb_ingress_cidr_blocks" {
     condition     = alltrue([for cidr in var.private_alb_ingress_cidr_blocks : can(cidrhost(cidr, 0))])
     error_message = "All private_alb_ingress_cidr_blocks must be valid IPv4 CIDR blocks."
   }
+}
+
+variable "private_alb_ingress_ipv6_cidr_blocks" {
+  type        = list(string)
+  description = "IPv6 CIDR blocks allowed to access the private ALB. Defaults to no IPv6 ingress; RFC1918 has no IPv6 equivalent."
+  default     = []
 }
 
 variable "private_alb_access_logs_enabled" {

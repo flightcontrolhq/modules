@@ -23,5 +23,9 @@ locals {
   # Listener configuration
   create_http_listener  = var.http_listener_enabled
   create_https_listener = var.https_listener_enabled
+
+  # IPv6 ingress defaults depend on visibility: internet-facing allows all IPv6
+  # sources, internal allows none (RFC1918 has no IPv6 equivalent).
+  ingress_ipv6_cidr_blocks = var.ingress_ipv6_cidr_blocks != null ? var.ingress_ipv6_cidr_blocks : (var.internal_load_balancer_enabled ? [] : ["::/0"])
 }
 

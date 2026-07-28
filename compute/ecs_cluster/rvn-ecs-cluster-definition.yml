@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.3.1
-  description: Add additional ALB certificate ARN fields for SNI.
+  version: 0.4.0
+  description: Default the private ALB to no IPv6 ingress and add IPv6 ingress CIDR inputs.
 module:
   inputs:
     - id: network
@@ -329,6 +329,15 @@ module:
       show_when:
         private_alb_enabled: true
       type: string_array
+    - add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      description: Allowed IPv6 CIDRs for private ALB access. Defaults to no IPv6 ingress.
+      id: private_alb_ingress_ipv6_cidr_blocks
+      label: Ingress IPv6 CIDRs
+      placeholder: fd00::/8
+      show_when:
+        private_alb_enabled: true
+      type: string_array
     - collapsible: true
       description: Idle timeout for the private ALB.
       id: private_alb_idle_timeout
@@ -603,7 +612,7 @@ module:
     - **Shared load balancers:** Cluster-level ALBs and NLBs can be reused by services in the environment
     - **Private subnet placement:** ECS tasks and EC2 capacity use private subnets from the selected VPC
     - **Public ingress by default:** Public ALBs use Terraform's default internet ingress unless overridden in Terraform
-    - **Private ingress by default:** Private ALBs use Terraform's default RFC1918 private CIDR ranges unless overridden
+    - **Private ingress by default:** Private ALBs use Terraform's default RFC1918 private CIDR ranges and no IPv6 ingress unless overridden
     - **Enhanced Container Insights:** Enhanced production metrics are collected by default for operational visibility
 
     ## Learn more
@@ -655,6 +664,7 @@ module:
         private_alb_https_enabled: << module.input.private_alb_https_enabled >>
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
         private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
+        private_alb_ingress_ipv6_cidr_blocks: << module.input.private_alb_ingress_ipv6_cidr_blocks >>
         private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
         private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
         private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
