@@ -248,8 +248,8 @@ module "api_service" {
 | ec2_imdsv2_enabled | Require IMDSv2 | `bool` | `true` | no |
 | ec2_weight | EC2 weight in default strategy | `number` | `1` | no |
 | ec2_base | Base tasks on EC2 | `number` | `0` | no |
-| ec2_managed_termination_protection | Managed termination protection | `string` | `"ENABLED"` | no |
-| ec2_managed_scaling_status | Enable managed scaling | `string` | `"ENABLED"` | no |
+| ec2_managed_termination_protection_enabled | Enable managed termination protection | `bool` | `true` | no |
+| ec2_managed_scaling_enabled | Enable managed scaling | `bool` | `true` | no |
 | ec2_managed_scaling_target_capacity | Target capacity percentage | `number` | `100` | no |
 | ec2_security_group_ids | Additional security groups for EC2 | `list(string)` | `[]` | no |
 
@@ -459,8 +459,8 @@ module "api_service" {
 ║                                                                          │ • ec2_root_volume_size/type             │  ║
 ║                                                                          │ • ec2_user_data, ec2_imdsv2_enabled      │  ║
 ║                                                                          │ • ec2_weight, ec2_base                  │  ║
-║                                                                          │ • ec2_managed_termination_protection    │  ║
-║                                                                          │ • ec2_managed_scaling_status            │  ║
+║                                                                          │ • ec2_managed_termination_*             │  ║
+║                                                                          │ • ec2_managed_scaling_enabled           │  ║
 ║                                                                          │ • ec2_managed_scaling_target_capacity   │  ║
 ║                                                                          │ • ec2_security_group_ids                │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
@@ -869,9 +869,9 @@ When EC2 capacity provider is enabled, ECS uses **Capacity Provider Managed Scal
 │     → ECS scales IN the ASG (respecting termination protection)              │
 │                                                                              │
 │  Configuration:                                                              │
-│  • ec2_managed_scaling_status = "ENABLED"                                    │
+│  • ec2_managed_scaling_enabled = true                                         │
 │  • ec2_managed_scaling_target_capacity = 100 (%)                             │
-│  • ec2_managed_termination_protection = "ENABLED"                            │
+│  • ec2_managed_termination_protection_enabled = true                          │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
