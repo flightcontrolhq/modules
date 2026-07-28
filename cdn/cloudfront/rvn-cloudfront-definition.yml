@@ -4,7 +4,7 @@ definition:
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
   version: 0.4.1
-  description: Add configurable custom headers for primary and additional origins.
+  description: Add configurable option for VPC origin.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
