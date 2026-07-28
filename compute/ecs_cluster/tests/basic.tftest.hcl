@@ -456,17 +456,17 @@ run "ec2_asg_settings" {
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.min_size == 1
+    condition     = module.ecs_autoscaling[0].autoscaling_group_min_size == 1
     error_message = "ASG should have the correct min size"
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.max_size == 5
+    condition     = module.ecs_autoscaling[0].autoscaling_group_max_size == 5
     error_message = "ASG should have the correct max size"
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.desired_capacity == 2
+    condition     = module.ecs_autoscaling[0].autoscaling_group_desired_capacity == 2
     error_message = "ASG should have the correct desired capacity"
   }
 }
@@ -476,12 +476,12 @@ run "ec2_termination_protection" {
   command = plan
 
   variables {
-    ec2_instance_type                  = "t3.medium"
-    ec2_managed_termination_protection = "ENABLED"
+    ec2_instance_type                          = "t3.medium"
+    ec2_managed_termination_protection_enabled = true
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.protect_from_scale_in == true
+    condition     = module.ecs_autoscaling[0].ecs_capacity_provider_config.managed_termination_protection == "ENABLED"
     error_message = "ASG should have scale-in protection when termination protection is ENABLED"
   }
 
@@ -496,12 +496,12 @@ run "ec2_termination_protection_disabled" {
   command = plan
 
   variables {
-    ec2_instance_type                  = "t3.medium"
-    ec2_managed_termination_protection = "DISABLED"
+    ec2_instance_type                          = "t3.medium"
+    ec2_managed_termination_protection_enabled = false
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.protect_from_scale_in == false
+    condition     = module.ecs_autoscaling[0].ecs_capacity_provider_config.managed_termination_protection == "DISABLED"
     error_message = "ASG should not have scale-in protection when termination protection is DISABLED"
   }
 }
@@ -512,7 +512,7 @@ run "ec2_managed_scaling" {
 
   variables {
     ec2_instance_type                   = "t3.medium"
-    ec2_managed_scaling_status          = "ENABLED"
+    ec2_managed_scaling_enabled         = true
     ec2_managed_scaling_target_capacity = 80
   }
 
@@ -524,6 +524,20 @@ run "ec2_managed_scaling" {
   assert {
     condition     = aws_ecs_capacity_provider.ec2[0].auto_scaling_group_provider[0].managed_scaling[0].target_capacity == 80
     error_message = "Managed scaling should have correct target capacity"
+  }
+}
+
+run "ec2_managed_scaling_disabled" {
+  command = plan
+
+  variables {
+    ec2_instance_type           = "t3.medium"
+    ec2_managed_scaling_enabled = false
+  }
+
+  assert {
+    condition     = aws_ecs_capacity_provider.ec2[0].auto_scaling_group_provider[0].managed_scaling[0].status == "DISABLED"
+    error_message = "Managed scaling should be disabled"
   }
 }
 

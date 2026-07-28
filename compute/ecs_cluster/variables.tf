@@ -358,26 +358,16 @@ variable "ec2_base" {
   }
 }
 
-variable "ec2_managed_termination_protection" {
-  type        = string
-  description = "Managed termination protection for the EC2 capacity provider."
-  default     = "ENABLED"
-
-  validation {
-    condition     = contains(["ENABLED", "DISABLED"], var.ec2_managed_termination_protection)
-    error_message = "The ec2_managed_termination_protection must be 'ENABLED' or 'DISABLED'."
-  }
+variable "ec2_managed_termination_protection_enabled" {
+  type        = bool
+  description = "Whether managed termination protection is enabled for the EC2 capacity provider."
+  default     = true
 }
 
-variable "ec2_managed_scaling_status" {
-  type        = string
-  description = "Enable or disable managed scaling for the EC2 capacity provider."
-  default     = "ENABLED"
-
-  validation {
-    condition     = contains(["ENABLED", "DISABLED"], var.ec2_managed_scaling_status)
-    error_message = "The ec2_managed_scaling_status must be 'ENABLED' or 'DISABLED'."
-  }
+variable "ec2_managed_scaling_enabled" {
+  type        = bool
+  description = "Whether managed scaling is enabled for the EC2 capacity provider."
+  default     = true
 }
 
 variable "ec2_managed_scaling_target_capacity" {
