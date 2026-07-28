@@ -95,7 +95,7 @@ module:
       default: false
       show_when:
         origin_source: ecs_web_service
-    - id: vpc_origin_domain_name
+    - id: origin_vpc_domain_name
       label: VPC origin domain name
       type: string
       description: Host name CloudFront uses as the origin domain and Host header. With HTTPS to the origin, it must be covered by the load balancer's TLS certificate and match the service's host-based listener rule. No public DNS record is required.
@@ -718,7 +718,7 @@ module:
           (#.signed_urls_enabled ? #.trusted_key_group_ids : [])}) : [] >>
         origins: >-
           << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
-          (module.input.origin_vpc_enabled == true ? module.input.vpc_origin_domain_name :
+          (module.input.origin_vpc_enabled == true ? module.input.origin_vpc_domain_name :
           module.input.ecs_web_alb_dns_name) : module.input.origin_source == "ecs_cluster" ?
           module.input.ecs_cluster_alb_dns_name : module.input.origin_source == "s3_bucket" ?
           module.input.s3_bucket_regional_domain_name : module.input.origin_domain_name),
