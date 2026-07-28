@@ -239,8 +239,8 @@ variable "ingress_cidr_blocks" {
 
 variable "ingress_ipv6_cidr_blocks" {
   type        = list(string)
-  description = "A list of IPv6 CIDR blocks allowed to access the ALB."
-  default     = ["::/0"]
+  description = "A list of IPv6 CIDR blocks allowed to access the ALB. Defaults to all IPv6 sources for internet-facing load balancers and no IPv6 ingress for internal load balancers."
+  default     = null
 }
 
 ################################################################################
