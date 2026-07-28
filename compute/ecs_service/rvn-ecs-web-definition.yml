@@ -340,7 +340,10 @@ module:
                         cookie_duration: << module.input.target_group_stickiness_cookie_duration >>
                         cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
                         enabled: << module.input.target_group_stickiness_enabled >>
-                        type: << module.input.target_group_stickiness_type >>
+                        # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
+                        # (show_when) and renders null, but the Terraform variable validation and the
+                        # aws_lb_target_group stickiness block both require a non-null type.
+                        type: '<< module.input.target_group_stickiness_enabled ? module.input.target_group_stickiness_type : "lb_cookie" >>'
                       target_type: ip
                 load_balancer_security_group_id: >-
                   << module.input.public_web_service_enabled ? module.input.public_alb_security_group_id :
