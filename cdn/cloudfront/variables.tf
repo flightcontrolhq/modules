@@ -79,7 +79,9 @@ variable "origins" {
       enabled              = bool
       origin_shield_region = string
     }))
-    s3_origin_enabled = optional(bool, false)
+    s3_origin_enabled  = optional(bool, false)
+    vpc_origin_enabled = optional(bool, false)
+    vpc_origin_arn     = optional(string)
   }))
   description = "A list of origin configurations for the CloudFront distribution."
 
@@ -116,6 +118,16 @@ variable "origins" {
   validation {
     condition     = alltrue([for o in var.origins : o.connection_timeout == null || (o.connection_timeout >= 1 && o.connection_timeout <= 10)])
     error_message = "The connection_timeout must be between 1 and 10 seconds."
+  }
+
+  validation {
+    condition     = alltrue([for o in var.origins : !o.vpc_origin_enabled || o.vpc_origin_arn != null])
+    error_message = "A vpc_origin_arn is required when vpc_origin_enabled is true."
+  }
+
+  validation {
+    condition     = alltrue([for o in var.origins : !(o.vpc_origin_enabled && o.s3_origin_enabled)])
+    error_message = "An origin cannot enable both vpc_origin_enabled and s3_origin_enabled."
   }
 }
 

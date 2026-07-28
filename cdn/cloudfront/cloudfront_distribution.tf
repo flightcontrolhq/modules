@@ -24,12 +24,21 @@ resource "aws_cloudfront_distribution" "this" {
       ) : origin.value.origin_access_control_id
 
       dynamic "custom_origin_config" {
-        for_each = origin.value.s3_origin_enabled ? [] : [1]
+        for_each = origin.value.s3_origin_enabled || origin.value.vpc_origin_enabled ? [] : [1]
         content {
           http_port                = origin.value.http_port
           https_port               = origin.value.https_port
           origin_protocol_policy   = origin.value.origin_protocol_policy
           origin_ssl_protocols     = origin.value.origin_ssl_protocols
+          origin_keepalive_timeout = origin.value.origin_keepalive_timeout
+          origin_read_timeout      = origin.value.origin_read_timeout
+        }
+      }
+
+      dynamic "vpc_origin_config" {
+        for_each = origin.value.vpc_origin_enabled ? [1] : []
+        content {
+          vpc_origin_id            = aws_cloudfront_vpc_origin.this[origin.value.origin_id].id
           origin_keepalive_timeout = origin.value.origin_keepalive_timeout
           origin_read_timeout      = origin.value.origin_read_timeout
         }
