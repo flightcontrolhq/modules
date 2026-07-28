@@ -76,6 +76,20 @@ output "origin_access_control_ids" {
 }
 
 ################################################################################
+# VPC Origins
+################################################################################
+
+output "vpc_origin_ids" {
+  description = "A map of origin_id to CloudFront VPC origin ID for VPC-enabled origins."
+  value       = { for k, v in aws_cloudfront_vpc_origin.this : k => v.id }
+}
+
+output "vpc_origin_arns" {
+  description = "A map of origin_id to CloudFront VPC origin ARN for VPC-enabled origins."
+  value       = { for k, v in aws_cloudfront_vpc_origin.this : k => v.arn }
+}
+
+################################################################################
 # Logging
 ################################################################################
 

@@ -81,6 +81,28 @@ module:
           description: Load balancer DNS name from the selected ECS web service, used as the origin domain. If this is empty, update the service to rvn-ecs-web 0.8.0 or later and apply its stack, then re-select the service.
           required: true
           default: <<ref.stack.output.load_balancer_dns_name>>
+        - id: ecs_web_alb_arn
+          label: Service load balancer ARN
+          type: string
+          description: Load balancer ARN from the selected ECS web service, used to create the CloudFront VPC origin when private origin is enabled. If this is empty, update the service to rvn-ecs-web 0.8.0 or later and apply its stack, then re-select the service.
+          required: false
+          default: <<ref.stack.output.load_balancer_arn>>
+    - id: origin_vpc_enabled
+      label: Private origin (VPC origin)
+      type: boolean
+      description: Connect to the service's load balancer through a CloudFront VPC origin instead of over the public internet. Use when the service runs on a private (internal) load balancer.
+      required: false
+      default: false
+      show_when:
+        origin_source: ecs_web_service
+    - id: vpc_origin_domain_name
+      label: VPC origin domain name
+      type: string
+      description: Host name CloudFront uses as the origin domain and Host header. With HTTPS to the origin, it must be covered by the load balancer's TLS certificate and match the service's host-based listener rule. No public DNS record is required.
+      placeholder: my-service.private.example.com
+      required: true
+      show_when:
+        origin_vpc_enabled: true
     - id: ecs_cluster
       label: ECS cluster
       type: $ref:rvn-ecs-cluster
@@ -696,11 +718,15 @@ module:
           (#.signed_urls_enabled ? #.trusted_key_group_ids : [])}) : [] >>
         origins: >-
           << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
-          module.input.ecs_web_alb_dns_name : module.input.origin_source == "ecs_cluster" ?
+          (module.input.origin_vpc_enabled == true ? module.input.vpc_origin_domain_name :
+          module.input.ecs_web_alb_dns_name) : module.input.origin_source == "ecs_cluster" ?
           module.input.ecs_cluster_alb_dns_name : module.input.origin_source == "s3_bucket" ?
           module.input.s3_bucket_regional_domain_name : module.input.origin_domain_name),
           "origin_protocol_policy": module.input.origin_protocol_policy, "s3_origin_enabled":
-          module.input.origin_source == "s3_bucket", "custom_headers":
+          module.input.origin_source == "s3_bucket", "vpc_origin_enabled": (module.input.origin_source
+          == "ecs_web_service" && module.input.origin_vpc_enabled == true), "vpc_origin_arn":
+          (module.input.origin_source == "ecs_web_service" && module.input.origin_vpc_enabled == true ?
+          module.input.ecs_web_alb_arn : nil), "custom_headers":
           (module.input.origin_custom_headers != nil ? module.input.origin_custom_headers : [])}] |
           concat(module.input.additional_origins != nil ? module.input.additional_origins : []) >>
         price_class: << module.input.price_class >>

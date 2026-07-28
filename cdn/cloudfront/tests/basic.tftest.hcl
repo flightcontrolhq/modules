@@ -695,6 +695,113 @@ run "test_origins_validation_multiple" {
 }
 
 #-------------------------------------------------------------------------------
+# VPC Origin Tests
+#-------------------------------------------------------------------------------
+
+# Test: VPC origin creates the VPC origin resource and uses vpc_origin_config
+run "test_vpc_origin_created" {
+  command = plan
+
+  variables {
+    origins = [
+      {
+        origin_id          = "alb-origin"
+        domain_name        = "website.private.example.com"
+        vpc_origin_enabled = true
+        vpc_origin_arn     = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/1234567890abcdef"
+      }
+    ]
+    default_cache_behavior = {
+      target_origin_id       = "alb-origin"
+      viewer_protocol_policy = "redirect-to-https"
+    }
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_vpc_origin.this) == 1
+    error_message = "A VPC origin resource should be created when vpc_origin_enabled is true."
+  }
+
+  assert {
+    condition     = aws_cloudfront_vpc_origin.this["alb-origin"].vpc_origin_endpoint_config[0].arn == "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/1234567890abcdef"
+    error_message = "The VPC origin endpoint should target the provided load balancer ARN."
+  }
+
+  assert {
+    condition     = aws_cloudfront_vpc_origin.this["alb-origin"].vpc_origin_endpoint_config[0].origin_protocol_policy == "https-only"
+    error_message = "The VPC origin endpoint should use the origin's protocol policy."
+  }
+
+  assert {
+    condition     = length([for o in aws_cloudfront_distribution.this["primary"].origin : o if length(o.vpc_origin_config) == 1]) == 1
+    error_message = "The distribution origin should be configured with vpc_origin_config."
+  }
+
+  assert {
+    condition     = length([for o in aws_cloudfront_distribution.this["primary"].origin : o if length(o.custom_origin_config) > 0]) == 0
+    error_message = "No custom_origin_config should be emitted for a VPC-enabled origin."
+  }
+}
+
+# Test: No VPC origin resources are created by default
+run "test_vpc_origin_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudfront_vpc_origin.this) == 0
+    error_message = "No VPC origin resources should be created when vpc_origin_enabled is not set."
+  }
+}
+
+# Test: Invalid origins - vpc_origin_enabled without vpc_origin_arn
+run "test_vpc_origin_requires_arn" {
+  command = plan
+
+  variables {
+    origins = [
+      {
+        origin_id          = "alb-origin"
+        domain_name        = "website.private.example.com"
+        vpc_origin_enabled = true
+      }
+    ]
+    default_cache_behavior = {
+      target_origin_id       = "alb-origin"
+      viewer_protocol_policy = "redirect-to-https"
+    }
+  }
+
+  expect_failures = [
+    var.origins,
+  ]
+}
+
+# Test: Invalid origins - vpc_origin_enabled and s3_origin_enabled together
+run "test_vpc_origin_conflicts_with_s3" {
+  command = plan
+
+  variables {
+    origins = [
+      {
+        origin_id          = "mixed-origin"
+        domain_name        = "my-bucket.s3.us-east-1.amazonaws.com"
+        s3_origin_enabled  = true
+        vpc_origin_enabled = true
+        vpc_origin_arn     = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/1234567890abcdef"
+      }
+    ]
+    default_cache_behavior = {
+      target_origin_id       = "mixed-origin"
+      viewer_protocol_policy = "redirect-to-https"
+    }
+  }
+
+  expect_failures = [
+    var.origins,
+  ]
+}
+
+#-------------------------------------------------------------------------------
 # Logging Validation Tests
 #-------------------------------------------------------------------------------
 
