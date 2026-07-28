@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.4.0
-  description: Default the private ALB to no IPv6 ingress and add IPv6 ingress CIDR inputs.
+  version: 0.5.0
+  description: Add a managed scaling input for EC2 capacity and default managed termination protection to enabled.
 module:
   inputs:
     - id: network
@@ -190,10 +190,24 @@ module:
           not: ""
       type: text
     - collapsible: true
+      default: ENABLED
       description: Managed termination protection for EC2 capacity.
       id: ec2_managed_termination_protection
       label: Managed termination protection
-      placeholder: ENABLED
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: string
+      values:
+        - label: Enabled
+          value: ENABLED
+        - label: Disabled
+          value: DISABLED
+    - collapsible: true
+      default: ENABLED
+      description: Lets ECS automatically scale the EC2 Auto Scaling Group to match task demand. Disable to manage the instance count yourself.
+      id: ec2_managed_scaling_status
+      label: Managed scaling
       show_when:
         ec2_instance_type:
           not: ""
@@ -583,7 +597,7 @@ module:
     | Fargate               | No       | `true`               | Allow services to use Fargate capacity                        |
     | Fargate Spot          | No       | `true`               | Allow services to use lower-cost interruptible Fargate Spot   |
     | EC2 instance type     | No       | —                    | Enables EC2 capacity when selected                            |
-    | Public load balancer  | No       | `false`              | Create an internet-facing ALB                                 |
+    | Public load balancer  | No       | `true`               | Create an internet-facing ALB                                 |
     | Private load balancer | No       | `false`              | Create an internal ALB                                        |
     | Public NLB            | No       | `false`              | Create an internet-facing Network Load Balancer               |
     | Private NLB           | No       | `false`              | Create an internal Network Load Balancer                      |
@@ -601,6 +615,7 @@ module:
     | Spot instance types             | Additional instance types for mixed Spot capacity       |
     | Custom AMI ID                   | Custom ECS AMI; blank uses the latest ECS-optimized AMI |
     | Key pair name                   | EC2 key pair for SSH access                             |
+    | Managed scaling                 | Let ECS scale the Auto Scaling Group to match task demand |
     | Managed scaling target capacity | Spare capacity target for ECS managed scaling           |
 
     ## Design decisions
@@ -639,6 +654,7 @@ module:
         ec2_spot_enabled: << module.input.ec2_spot_enabled >>
         ec2_instance_type: << module.input.ec2_instance_type >>
         ec2_key_name: << module.input.ec2_key_name >>
+        ec2_managed_scaling_status: << module.input.ec2_managed_scaling_status >>
         ec2_managed_scaling_target_capacity: << module.input.ec2_managed_scaling_target_capacity >>
         ec2_managed_termination_protection: << module.input.ec2_managed_termination_protection >>
         ec2_max_size: << module.input.ec2_max_size >>
