@@ -4,7 +4,7 @@ definition:
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
   version: 0.4.2
-  description: Correct the documented default for Allowed methods; it is Read only, not All methods.
+  description: Default Allowed methods to Read only, matching the Terraform module and documentation.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -316,7 +316,7 @@ module:
       type: string
       description: HTTP methods CloudFront forwards to the origin. Use all methods for apps that accept form posts or API writes.
       required: true
-      default: all
+      default: read
       values:
         - label: All methods
           description: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
