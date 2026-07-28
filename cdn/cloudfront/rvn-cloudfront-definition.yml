@@ -91,7 +91,6 @@ module:
       label: Private origin (VPC origin)
       type: boolean
       description: Connect to the service's load balancer through a CloudFront VPC origin instead of over the public internet. Use when the service runs on a private (internal) load balancer.
-      required: false
       default: false
       show_when:
         origin_source: ecs_web_service
