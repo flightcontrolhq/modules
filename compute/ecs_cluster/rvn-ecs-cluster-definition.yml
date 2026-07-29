@@ -245,6 +245,7 @@ module:
         show_when:
           public_alb_enabled: true
           public_alb_https_enabled: true
+          use_ravion_managed_domains: false
     - collapsible: true
       description: SSL policy for public ALB HTTPS.
       id: public_alb_ssl_policy
@@ -315,6 +316,7 @@ module:
         show_when:
           private_alb_enabled: true
           private_alb_https_enabled: true
+          use_ravion_managed_domains: false
     - collapsible: true
       description: SSL policy for private ALB HTTPS.
       id: private_alb_ssl_policy

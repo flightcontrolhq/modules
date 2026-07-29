@@ -158,12 +158,16 @@ module:
           label: CloudFront certificate ARN
           type: string
       required: false
+      show_when:
+        use_ravion_managed_domains: false
       type: $ref:rvn-acm-certificate
     - add_button_label: Add domain alias
       default: []
       description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain.
       id: distribution_aliases
       label: Domain aliases
+      show_when:
+        use_ravion_managed_domains: false
       type: string_array
     - default: PriceClass_All
       description: You can reduce edge locations for some cost savings if it becomes an issue.
@@ -344,7 +348,7 @@ module:
       label: Managed domains
       type: section
     - default: false
-      description: Have Ravion issue and manage the CloudFront viewer TLS certificate and DNS for this site. Leave the distribution aliases and ACM certificate fields empty in this mode; Ravion attaches the certificate and aliases server-side.
+      description: Have Ravion issue and manage the CloudFront viewer TLS certificate and DNS for this site. Ravion attaches the certificate and aliases server-side, so the manual CloudFront certificate and alias fields are hidden in this mode.
       id: use_ravion_managed_domains
       label: Ravion-managed domains
       type: boolean

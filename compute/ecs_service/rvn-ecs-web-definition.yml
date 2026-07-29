@@ -22,7 +22,7 @@ module:
           type: boolean
           description: Whether the selected cluster has Ravion-managed domains enabled (its ALB HTTPS listener serves the cluster wildcard certificate).
           collapsible: true
-          default: <<ref.stack.output.ravion_managed_domains_enabled>>
+          default: << ref.stack.output.ravion_managed_domains_enabled || false >>
         - id: cluster_parent_fqdn
           label: Cluster domain apex
           type: string
@@ -322,7 +322,11 @@ module:
         target_group_stickiness_type: app_cookie
     - $template: ../../partials/templates/alb-listener-rule-inputs.yml
       with:
-        field_overrides: {}
+        # Managed mode discards caller listener rules (the module creates
+        # host-header rules from `domains`), so hide the manual routing inputs.
+        field_overrides:
+          show_when:
+            ravion_managed_domains_enabled: false
     - id: section_domains
       label: Domains
       show_when:
