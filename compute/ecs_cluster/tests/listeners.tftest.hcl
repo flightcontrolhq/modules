@@ -90,8 +90,8 @@ run "byo_public_https_single_cert" {
   command = plan
 
   variables {
-    enable_public_alb           = true
-    public_alb_enable_https     = true
+    public_alb_enabled           = true
+    public_alb_https_enabled     = true
     public_alb_certificate_arns = ["arn:aws:acm:us-east-1:111122223333:certificate/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]
   }
 
@@ -121,8 +121,8 @@ run "byo_public_https_sni" {
   command = plan
 
   variables {
-    enable_public_alb       = true
-    public_alb_enable_https = true
+    public_alb_enabled       = true
+    public_alb_https_enabled = true
     public_alb_certificate_arns = [
       "arn:aws:acm:us-east-1:111122223333:certificate/11111111-1111-1111-1111-111111111111",
       "arn:aws:acm:us-east-1:111122223333:certificate/22222222-2222-2222-2222-222222222222",
@@ -142,8 +142,8 @@ run "byo_public_https_requires_cert" {
   command = plan
 
   variables {
-    enable_public_alb       = true
-    public_alb_enable_https = true
+    public_alb_enabled       = true
+    public_alb_https_enabled = true
     # no public_alb_certificate_arns; use_ravion_managed_domains defaults false
   }
 
@@ -155,8 +155,8 @@ run "byo_private_https_single_cert" {
   command = plan
 
   variables {
-    enable_private_alb           = true
-    private_alb_enable_https     = true
+    private_alb_enabled           = true
+    private_alb_https_enabled     = true
     private_alb_certificate_arns = ["arn:aws:acm:us-east-1:111122223333:certificate/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]
   }
 
@@ -176,8 +176,8 @@ run "byo_private_https_sni" {
   command = plan
 
   variables {
-    enable_private_alb       = true
-    private_alb_enable_https = true
+    private_alb_enabled       = true
+    private_alb_https_enabled = true
     private_alb_certificate_arns = [
       "arn:aws:acm:us-east-1:111122223333:certificate/44444444-4444-4444-4444-444444444444",
       "arn:aws:acm:us-east-1:111122223333:certificate/55555555-5555-5555-5555-555555555555",
@@ -195,8 +195,8 @@ run "byo_private_https_requires_cert" {
   command = plan
 
   variables {
-    enable_private_alb       = true
-    private_alb_enable_https = true
+    private_alb_enabled       = true
+    private_alb_https_enabled = true
     # no private_alb_certificate_arns; use_ravion_managed_domains defaults false
   }
 
@@ -214,8 +214,8 @@ run "ravion_managed_public_https" {
   command = plan
 
   variables {
-    enable_public_alb          = true
-    public_alb_enable_https    = true
+    public_alb_enabled          = true
+    public_alb_https_enabled    = true
     use_ravion_managed_domains = true
     ravion_aws_account_id      = "aws_testaccount"
   }
@@ -247,13 +247,13 @@ run "public_alb_http_only_no_sni_eval" {
   command = plan
 
   variables {
-    enable_public_alb       = true
-    public_alb_enable_https = false
+    public_alb_enabled       = true
+    public_alb_https_enabled = false
   }
 
   assert {
     condition     = length(aws_lb_listener.public_https) == 0
-    error_message = "No HTTPS listener when public_alb_enable_https = false"
+    error_message = "No HTTPS listener when public_alb_https_enabled = false"
   }
 
   assert {

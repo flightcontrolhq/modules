@@ -21,20 +21,24 @@ locals {
   ravion_distribution_domain = local.ravion_static_enabled ? try(values(module.cdn.distribution_domain_names)[0], null) : null
 }
 
-resource "ravion_certificate" "site" {
+resource "ravion_aws_acm_certificate" "site" {
   count = local.ravion_static_enabled ? 1 : 0
 
-  role           = "instance"
-  domains        = length(var.domains) > 0 ? var.domains : null
-  name           = length(var.domains) == 0 ? var.name : null
-  aws_account_id = var.ravion_aws_account_id
-  aws_region     = "us-east-1"
-  target_arn     = local.ravion_distribution_arn
+  domains            = length(var.domains) > 0 ? var.domains : null
+  name               = length(var.domains) == 0 ? var.name : null
+  module_instance_id = var.module_instance_id
+  aws_account_id     = var.ravion_aws_account_id
+  aws_region         = "us-east-1"
+  target_arn         = local.ravion_distribution_arn
 
   lifecycle {
     precondition {
       condition     = !var.use_ravion_managed_domains || (var.ravion_aws_account_id != null && var.ravion_aws_account_id != "")
       error_message = "ravion_aws_account_id (aws_*) is required when use_ravion_managed_domains = true."
+    }
+    precondition {
+      condition     = !var.use_ravion_managed_domains || (var.module_instance_id != null && var.module_instance_id != "")
+      error_message = "module_instance_id (minst_*) is required when use_ravion_managed_domains = true."
     }
     precondition {
       condition     = length(var.domains) <= 10
@@ -47,7 +51,8 @@ resource "ravion_certificate" "site" {
 resource "ravion_domain" "custom" {
   for_each = local.ravion_static_enabled ? toset(var.domains) : toset([])
 
-  name            = each.value
-  target_dns_name = local.ravion_distribution_domain
-  target_zone_id  = "Z2FDTNDATAQYW2" # CloudFront's global hosted zone id
+  name               = each.value
+  module_instance_id = var.module_instance_id
+  target_dns_name    = local.ravion_distribution_domain
+  target_zone_id     = "Z2FDTNDATAQYW2" # CloudFront's global hosted zone id
 }
