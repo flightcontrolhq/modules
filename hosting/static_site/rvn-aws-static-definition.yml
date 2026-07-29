@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.5
-  description: Document cache header defaults as the blank module inputs they are, with the applied value explained.
+  version: 0.4.0
+  description: "Add Ravion-managed domains: Ravion owns the CloudFront viewer certificate + aliases, with an automatic site domain or custom domains with DNS validation."
 module:
   build:
     builder: >-
@@ -340,6 +340,23 @@ module:
       label: Successful deploys to retain
       min: 0
       type: number
+    - id: section_managed_domains
+      label: Managed domains
+      type: section
+    - default: false
+      description: Have Ravion issue and manage the CloudFront viewer TLS certificate and DNS for this site. Leave the distribution aliases and ACM certificate fields empty in this mode; Ravion attaches the certificate and aliases server-side.
+      id: use_ravion_managed_domains
+      label: Ravion-managed domains
+      type: boolean
+    - add_button_label: Add domain
+      description: Fully-qualified domains for the site. Each gets covered by a dedicated certificate with DNS validation records you add at your DNS host. Empty = an automatic Ravion domain for the site.
+      id: domains
+      label: Domains
+      max_length: 10
+      placeholder: www.example.com
+      show_when:
+        use_ravion_managed_domains: true
+      type: string_array
     - $include: ../../partials/inputs/terraform-settings.yml
     - $include: ../../partials/inputs/execution-environment.yml
     - $merge:
@@ -551,6 +568,9 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         assets_cache_control: << module.input.assets_cache_control >>
         cache_policy_id: << module.input.cache_policy_id >>
+        use_ravion_managed_domains: << module.input.use_ravion_managed_domains >>
+        domains: << module.input.domains || [] >>
+        ravion_aws_account_id: << module.input.aws_account_id >>
         logging_bucket_creation_enabled: << module.input.logging_enabled >>
         default_root_object: << module.input.default_root_object >>
         default_version: << module.input.default_version >>
