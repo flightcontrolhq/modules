@@ -1,0 +1,114 @@
+- id: section_task
+  label: Container resources
+  type: section
+- id: capacity_provider
+  label: Capacity provider
+  type: string
+  description: Choose the primary capacity provider. Most services should use only one provider.
+  required: true
+  default: fargate
+  values:
+    - label: Fargate
+      value: fargate
+    - label: Fargate spot
+      value: fargate_spot
+    - label: EC2
+      value: ec2
+- id: additional_fargate_capacity_enabled
+  label: Also use Fargate
+  type: boolean
+  description: Add Fargate to the capacity provider strategy in addition to the primary provider.
+  collapsible: true
+  show_when:
+    capacity_provider:
+      not: fargate
+  default: false
+- id: additional_fargate_spot_capacity_enabled
+  label: Also use Fargate spot
+  type: boolean
+  description: Add lower-cost interruptible Fargate spot capacity in addition to the primary provider.
+  collapsible: true
+  show_when:
+    capacity_provider:
+      not: fargate_spot
+  default: false
+- id: additional_ec2_capacity_enabled
+  label: Also use EC2
+  type: boolean
+  description: Add EC2 capacity from the selected cluster in addition to the primary provider.
+  collapsible: true
+  show_when:
+    capacity_provider:
+      not: ec2
+  default: false
+- id: fargate_size
+  label: App size
+  type: compound
+  description: CPU and memory for Fargate tasks. Prices are estimated from AWS Fargate pricing for the selected region, architecture, and capacity provider.
+  fields:
+    - vcpu
+    - memory_gb
+  required: true
+  show_when:
+    capacity_provider:
+      - fargate
+      - fargate_spot
+  default:
+    memory_gb: 4
+    vcpu: 2
+  values: $values:aws/fargate/sizes?region=<<module.input.aws_region>>&cpuArchitecture=<<module.input.cpu_architecture>>&operatingSystem=linux&capacityProvider=<<module.input.capacity_provider>>
+- id: task_ephemeral_storage_size_gib
+  label: App ephemeral storage (GiB)
+  type: number
+  description: Optional ephemeral storage size for each Fargate app task, from 21 to 200 GiB. Leave blank to use the AWS default of 20 GiB.
+  collapsible: true
+  show_when:
+    capacity_provider:
+      - fargate
+      - fargate_spot
+  min: 21
+  max: 200
+  required: false
+- id: task_cpu
+  label: App vCPU
+  type: string
+  description: vCPU reserved for each app task on EC2 capacity. Leave at least 0.25 vCPU unreserved on each EC2 instance for the ECS agent and system processes.
+  placeholder: "1"
+  required: true
+  show_when:
+    capacity_provider: ec2
+  default: "1.5"
+  patterns:
+    - message: Enter a vCPU value, such as 0.5, 1, or 2.
+      pattern: ^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+- id: task_memory
+  label: App memory in GB
+  type: string
+  description: Memory reserved for each app task on EC2 capacity. Leave at least 0.5 GB unreserved on each EC2 instance for the ECS agent and system processes.
+  placeholder: "1"
+  required: true
+  show_when:
+    capacity_provider: ec2
+  default: "3.5"
+  patterns:
+    - message: Enter a memory value in GB, such as 0.5, 1, or 4.
+      pattern: ^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+- id: cpu_architecture
+  label: CPU architecture
+  type: string
+  description: Use x86_64 for broad compatibility; use ARM64 for lower cost when your image and dependencies support it.
+  collapsible: true
+  default: X86_64
+  values:
+    - description: Best default when you are unsure, use native x86 dependencies, or deploy existing images built for AMD/Intel CPUs.
+      label: x86_64 - widest compatibility
+      value: X86_64
+    - description: Often cheaper and efficient, but your image must be built for ARM64 and all native dependencies must support it.
+      label: ARM64 - lower cost
+      value: ARM64
+- id: execute_command_enabled
+  label: ECS exec
+  type: boolean
+  description: Enable ECS Exec for interactive debugging in running containers. Leave off by default for tighter access control; turn on when operators need shell/debug access through AWS Systems Manager.
+  collapsible: true
+  default: false

@@ -1,0 +1,878 @@
+definition:
+  type: rvn-ecs-cluster
+  name: ECS Cluster
+  description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
+release:
+  version: 0.5.0
+  description: "BREAKING: Rename ec2_managed_termination_protection to ec2_managed_termination_protection_enabled and ec2_managed_scaling_status to ec2_managed_scaling_enabled; both inputs now accept booleans instead of ENABLED or DISABLED strings."
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - $template: ../../partials/templates/network-ref-mapped-inputs.yml
+          with:
+            aws_account_id_default: << ref.input.aws_account_id >>
+            aws_region_default: << ref.input.aws_region >>
+            execution_environment_default: << ref.input.execution_environment_id >>
+            private_subnet_ids_default: <<ref.stack.output.private_subnet_ids>>
+            public_subnet_ids_default: <<ref.stack.output.public_subnet_ids>>
+            vpc_id_default: <<ref.stack.output.vpc_id>>
+      required: true
+      type: $ref:rvn-aws-network
+    - id: section_cluster
+      label: ECS cluster
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>
+      description: Name prefix for all resources. Terraform requires 1-28 characters so generated ALB names fit AWS limits.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: The name must be 1-28 characters, contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$
+      required: true
+      type: string
+    - default: true
+      description: Prevent accidental deletion of load balancers created by this module.
+      id: load_balancer_deletion_protection_enabled
+      label: Load balancer deletion protection
+      type: boolean
+    - default: enhanced
+      description: Configures CloudWatch Container Insights for the ECS cluster. Enhanced observability adds detailed task and container metrics and may increase CloudWatch costs.
+      id: container_insights
+      label: Container insights
+      type: string
+      values:
+        - label: Enhanced observability
+          value: enhanced
+        - label: Standard
+          value: enabled
+        - label: Disabled
+          value: disabled
+    - id: section_capacity
+      label: Capacity providers
+      type: section
+    - default: true
+      description: Allows ECS services in this cluster to use Fargate for serverless task capacity.
+      id: fargate_enabled
+      label: Fargate
+      type: boolean
+    - default: true
+      description: Allows ECS services in this cluster to use Fargate Spot for lower-cost, interruptible serverless task capacity.
+      id: fargate_spot_enabled
+      label: Fargate spot
+      type: boolean
+    - description: Enables the EC2 capacity provider when set. Leave blank to use only Fargate/Fargate Spot.
+      id: ec2_instance_type
+      label: EC2 instance type
+      no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
+      placeholder: Select an instance type to enable EC2 capacity
+      type: string
+      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
+    - description: Configure the EC2 Auto Scaling Group and capacity provider settings used when an instance type is selected.
+      id: section_ec2_capacity
+      label: EC2 capacity
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: section
+    - description: Minimum EC2 instances in the Auto Scaling Group. To speed up deployments and autoscaling, set this high enough to keep spare capacity for all ECS services using this cluster. As a starting point, use about 2x the total desired task instances across those services.
+      id: ec2_min_size
+      label: Min instances
+      min: 0
+      placeholder: "0"
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: number
+    - description: Maximum EC2 instances in the Auto Scaling Group. Must be high enough to accommodate 2x the total max task instances across all ECS services using this cluster, otherwise deployments can fail.
+      id: ec2_max_size
+      label: Max instances
+      min: 1
+      placeholder: "10"
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: number
+    - description: Configure the root EBS volume attached to each EC2 capacity instance.
+      id: section_ec2_volume
+      label: EC2 volume
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: section
+    - collapsible: true
+      description: Root EBS volume size for EC2 capacity instances.
+      id: ec2_root_volume_size
+      label: Root volume size (GB)
+      max: 16384
+      min: 8
+      placeholder: "30"
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: number
+    - add_button_label: Add security group ID
+      collapsible: true
+      description: Additional security groups attached to EC2 capacity instances.
+      id: ec2_security_group_ids
+      label: Additional security groups
+      placeholder: sg-...
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Use Spot instances in the EC2 Auto Scaling Group.
+      id: ec2_spot_enabled
+      label: Spot instances
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: boolean
+    - add_button_label: Add instance type
+      collapsible: true
+      description: Additional instance types for Spot capacity.
+      id: ec2_spot_instance_types
+      label: Spot instance types
+      placeholder: t3.large
+      show_when:
+        ec2_spot_enabled: true
+        ec2_instance_type:
+          not: ""
+      type: string_array
+    - collapsible: true
+      description: Custom AMI for EC2 capacity. Leave blank to use the latest ECS-optimized AMI.
+      id: ec2_ami_id
+      label: Custom AMI ID
+      placeholder: ami-...
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: string
+    - collapsible: true
+      description: Key pair for SSH access to EC2 capacity instances.
+      id: ec2_key_name
+      label: SSH key pair name
+      placeholder: my-key-pair
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: string
+    - collapsible: true
+      description: Root EBS volume type.
+      id: ec2_root_volume_type
+      label: Root volume type
+      placeholder: gp3
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: string
+      values:
+        - label: gp3
+          value: gp3
+        - label: gp2
+          value: gp2
+        - label: io1
+          value: io1
+        - label: io2
+          value: io2
+    - collapsible: true
+      description: Additional user data script appended after ECS config.
+      id: ec2_user_data
+      label: Additional user data
+      placeholder: "#!/bin/bash"
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: text
+    - collapsible: true
+      default: true
+      description: Managed termination protection for EC2 capacity.
+      id: ec2_managed_termination_protection_enabled
+      label: Managed termination protection
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: boolean
+    - collapsible: true
+      default: true
+      description: Lets ECS automatically scale the EC2 Auto Scaling Group to match task demand. Disable to manage the instance count yourself.
+      id: ec2_managed_scaling_enabled
+      label: Managed scaling
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: boolean
+    - collapsible: true
+      description: Defaults to 100% which means ECS autoscales EC2 instances to have zero extra capacity (cheapest). Reduce to something like 80-90% if you want to pay for spare capacity for faster autoscaling.
+      id: ec2_managed_scaling_target_capacity
+      label: Managed scaling target capacity (%)
+      max: 100
+      min: 1
+      placeholder: "100"
+      show_when:
+        ec2_instance_type:
+          not: ""
+        ec2_managed_scaling_enabled: true
+      type: number
+    - description: Creates an internet-facing Application Load Balancer for services that should receive traffic from the public internet, such as websites, public APIs, and webhook endpoints.
+      id: section_public_alb
+      label: Public application load balancer
+      type: section
+    - default: true
+      id: public_alb_enabled
+      label: Public load balancer
+      type: boolean
+    - default: true
+      description: Enable HTTPS listener on the public ALB.
+      id: public_alb_https_enabled
+      label: HTTPS
+      show_when:
+        public_alb_enabled: true
+      type: boolean
+    - $template: ../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the public ALB HTTPS listener for SNI.
+        additional_certificate_arns_input_id: public_alb_additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_input_id: public_alb_certificate_arns
+        certificate_description: Primary ACM certificate module for public ALB HTTPS.
+        certificate_input_id: public_alb_certificate
+        show_when:
+          public_alb_enabled: true
+          public_alb_https_enabled: true
+    - collapsible: true
+      description: SSL policy for public ALB HTTPS.
+      id: public_alb_ssl_policy
+      label: SSL policy
+      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
+      show_when:
+        public_alb_enabled: true
+        public_alb_https_enabled: true
+      type: string
+    - collapsible: true
+      description: Idle timeout for the public ALB.
+      id: public_alb_idle_timeout
+      label: Idle timeout (seconds)
+      max: 4000
+      min: 1
+      placeholder: "60"
+      show_when:
+        public_alb_enabled: true
+      type: number
+    - collapsible: true
+      description: WAFv2 Web ACL ARN for the public ALB.
+      id: public_alb_web_acl_arn
+      label: WAF web ACL ARN
+      placeholder: arn:aws:wafv2:...
+      show_when:
+        public_alb_enabled: true
+      type: string
+    - collapsible: true
+      default: false
+      description: Enable public ALB access logging.
+      id: public_alb_access_logs_enabled
+      label: Access logs
+      show_when:
+        public_alb_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for public ALB access logs.
+      id: public_alb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        public_alb_enabled: true
+        public_alb_access_logs_enabled: true
+      type: string
+    - description: Creates an internal Application Load Balancer for services that should only be reachable inside the VPC or private network, such as internal APIs, admin tools, and service-to-service traffic.
+      id: section_private_alb
+      label: Private application load balancer
+      type: section
+    - default: false
+      id: private_alb_enabled
+      label: Private load balancer
+      type: boolean
+    - default: false
+      description: Enable HTTPS listener on the private ALB.
+      id: private_alb_https_enabled
+      label: HTTPS
+      show_when:
+        private_alb_enabled: true
+      type: boolean
+    - $template: ../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the private ALB HTTPS listener for SNI.
+        additional_certificate_arns_input_id: private_alb_additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_input_id: private_alb_certificate_arns
+        certificate_description: Primary ACM certificate module for private ALB HTTPS.
+        certificate_input_id: private_alb_certificate
+        show_when:
+          private_alb_enabled: true
+          private_alb_https_enabled: true
+    - collapsible: true
+      description: SSL policy for private ALB HTTPS.
+      id: private_alb_ssl_policy
+      label: SSL policy
+      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
+      show_when:
+        private_alb_enabled: true
+        private_alb_https_enabled: true
+      type: string
+    - add_button_label: Add CIDR block
+      collapsible: true
+      description: Allowed IPv4 CIDRs for private ALB access. Terraform defaults to RFC1918 private ranges.
+      id: private_alb_ingress_cidr_blocks
+      label: Ingress CIDRs
+      placeholder: 10.0.0.0/8
+      show_when:
+        private_alb_enabled: true
+      type: string_array
+    - add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      description: Allowed IPv6 CIDRs for private ALB access. Defaults to no IPv6 ingress.
+      id: private_alb_ingress_ipv6_cidr_blocks
+      label: Ingress IPv6 CIDRs
+      placeholder: fd00::/8
+      show_when:
+        private_alb_enabled: true
+      type: string_array
+    - collapsible: true
+      description: Idle timeout for the private ALB.
+      id: private_alb_idle_timeout
+      label: Idle timeout (seconds)
+      max: 4000
+      min: 1
+      placeholder: "60"
+      show_when:
+        private_alb_enabled: true
+      type: number
+    - collapsible: true
+      default: false
+      description: Enable private ALB access logging.
+      id: private_alb_access_logs_enabled
+      label: Access logs
+      show_when:
+        private_alb_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for private ALB access logs.
+      id: private_alb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        private_alb_enabled: true
+        private_alb_access_logs_enabled: true
+      type: string
+    - description: Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer the Application Load Balancer sections above.
+      id: section_nlb
+      label: Network load balancers
+      type: section
+    - default: false
+      description: Create an internet-facing Network Load Balancer.
+      id: public_nlb_enabled
+      label: Public NLB
+      type: boolean
+    - add_button_label: Add security group ID
+      collapsible: true
+      description: Security groups for the public NLB.
+      id: public_nlb_security_group_ids
+      label: Security groups
+      placeholder: sg-...
+      show_when:
+        public_nlb_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Enable cross-zone load balancing for the public NLB.
+      id: public_nlb_cross_zone_load_balancing_enabled
+      label: Cross-zone load balancing
+      show_when:
+        public_nlb_enabled: true
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Assign static Elastic IPs to the public NLB.
+      id: public_nlb_elastic_ips_enabled
+      label: Use elastic IPs
+      show_when:
+        public_nlb_enabled: true
+      type: boolean
+    - add_button_label: Add allocation ID
+      collapsible: true
+      description: Elastic IP allocation IDs for the public NLB, one per subnet.
+      id: public_nlb_elastic_ip_allocation_ids
+      label: Elastic IP allocation IDs
+      placeholder: eipalloc-...
+      show_when:
+        public_nlb_enabled: true
+        public_nlb_elastic_ips_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Enable public NLB access logging.
+      id: public_nlb_access_logs_enabled
+      label: Access logs
+      show_when:
+        public_nlb_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for public NLB access logs.
+      id: public_nlb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        public_nlb_enabled: true
+        public_nlb_access_logs_enabled: true
+      type: string
+    - default: false
+      description: Create an internal Network Load Balancer.
+      id: private_nlb_enabled
+      label: Private NLB
+      type: boolean
+    - add_button_label: Add security group ID
+      collapsible: true
+      description: Security groups for the private NLB.
+      id: private_nlb_security_group_ids
+      label: Security groups
+      placeholder: sg-...
+      show_when:
+        private_nlb_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Enable cross-zone load balancing for the private NLB.
+      id: private_nlb_cross_zone_load_balancing_enabled
+      label: Cross-zone load balancing
+      show_when:
+        private_nlb_enabled: true
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Assign static Elastic IPs to the private NLB.
+      id: private_nlb_elastic_ips_enabled
+      label: Use elastic IPs
+      show_when:
+        private_nlb_enabled: true
+      type: boolean
+    - add_button_label: Add allocation ID
+      collapsible: true
+      description: Elastic IP allocation IDs for the private NLB, one per subnet.
+      id: private_nlb_elastic_ip_allocation_ids
+      label: Elastic IP allocation IDs
+      placeholder: eipalloc-...
+      show_when:
+        private_nlb_enabled: true
+        private_nlb_elastic_ips_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Enable private NLB access logging.
+      id: private_nlb_access_logs_enabled
+      label: Access logs
+      show_when:
+        private_nlb_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for private NLB access logs.
+      id: private_nlb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        private_nlb_enabled: true
+        private_nlb_access_logs_enabled: true
+      type: string
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  readme: |-
+    Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
+
+    ## Overview
+
+    Amazon ECS (Elastic Container Service) runs containerized workloads on AWS. This module creates an ECS cluster inside your selected VPC and configures the capacity providers and shared load balancers that services can use.
+
+    The ECS cluster module provides:
+
+    - **Fargate and Fargate Spot** capacity providers for serverless containers
+    - **Optional EC2 capacity** with an Auto Scaling Group and managed ECS capacity provider
+    - **Public and private Application Load Balancers** for HTTP and HTTPS services
+    - **Public and private Network Load Balancers** for TCP/UDP and static IP use cases
+    - **CloudWatch Container Insights** dashboard metrics for production visibility
+
+    Terraform source: [flightcontrolhq/modules/compute/ecs_cluster](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_cluster)
+
+    ## Use cases
+
+    | Scenario                       | ECS cluster helps by...                                          |
+    | ------------------------------ | ---------------------------------------------------------------- |
+    | Running web apps and APIs      | Providing Fargate capacity and shared ALBs for HTTP traffic      |
+    | Reducing compute cost          | Allowing services to use Fargate Spot or EC2 Spot capacity       |
+    | Hosting private services       | Creating internal load balancers reachable only inside the VPC   |
+    | Running TCP/UDP workloads      | Creating Network Load Balancers for non-HTTP protocols           |
+    | Operating production workloads | Enabling Container Insights metrics for tasks, services, and EC2 |
+    | Supporting custom runtimes     | Adding EC2 capacity when workloads need host-level control       |
+
+    ## Capacity providers
+
+    ### Fargate
+
+    Fargate runs containers without managing EC2 instances. It is the simplest option for most web apps, APIs, workers, and scheduled tasks.
+
+    ### Fargate Spot
+
+    Fargate Spot uses spare AWS capacity at a lower cost. It is best for interruptible workloads such as queues, batch jobs, background workers, and services that can tolerate replacement tasks.
+
+    ### EC2 capacity
+
+    EC2 capacity creates an Auto Scaling Group and ECS capacity provider for tasks that need host-level control, custom AMIs, SSH access, special networking, or lower long-running compute costs.
+
+    Select an **EC2 instance type** to enable EC2 capacity. Leave it blank for a Fargate-only cluster.
+
+    ## Load balancers
+
+    ### Public application load balancer
+
+    Creates an internet-facing Application Load Balancer for services that should receive public HTTP or HTTPS traffic, such as websites, public APIs, and webhook endpoints.
+
+    Use the public ALB for:
+
+    - Websites and browser apps
+    - Public APIs
+    - Webhooks
+    - HTTP/HTTPS traffic with host or path routing
+
+    ### Private application load balancer
+
+    Creates an internal Application Load Balancer for services reachable only inside the VPC or private network, such as internal APIs, admin tools, and service-to-service traffic.
+
+    Use the private ALB for:
+
+    - Internal APIs
+    - Admin dashboards
+    - Backend services
+    - Private HTTP/HTTPS routing
+
+    For either ALB, the selected Certificate is the default HTTPS certificate. Use Additional certificate ARNs to attach more ACM certificates to the same listener through SNI.
+
+    ### Network load balancers
+
+    Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer an Application Load Balancer.
+
+    ## Observability
+
+    Container Insights collects ECS cluster, service, and task CPU, memory, network, and storage metrics in CloudWatch. The module dashboard includes:
+
+    - CPU and memory used
+    - Running task and service counts
+    - Network received and sent
+    - Storage read and write
+    - EC2 container instance count
+    - EC2 instance CPU, memory, running task, and reserved capacity metrics
+
+    Metrics appear only after tasks are running in the cluster. EC2-specific charts appear only when EC2 capacity exists and the required Container Insights instance metrics are available.
+
+    ## Configuration
+
+    | Field                 | Required | Default              | Description                                                   |
+    | --------------------- | -------- | -------------------- | ------------------------------------------------------------- |
+    | VPC network           | Yes      | —                    | Existing VPC, subnets, AWS account, and region                |
+    | Name slug             | Yes      | `{project}-{env}`    | Name prefix for ECS and load balancer resources               |
+    | Container insights    | No       | `enhanced`           | Collect enhanced task, service, cluster, and EC2 metrics in CloudWatch |
+    | Fargate               | No       | `true`               | Allow services to use Fargate capacity                        |
+    | Fargate Spot          | No       | `true`               | Allow services to use lower-cost interruptible Fargate Spot   |
+    | EC2 instance type     | No       | —                    | Enables EC2 capacity when selected                            |
+    | Public load balancer  | No       | `true`               | Create an internet-facing ALB                                 |
+    | Private load balancer | No       | `false`              | Create an internal ALB                                        |
+    | Public NLB            | No       | `false`              | Create an internet-facing Network Load Balancer               |
+    | Private NLB           | No       | `false`              | Create an internal Network Load Balancer                      |
+    | Tags                  | No       | Environment, Project | Custom tags applied to all resources                          |
+
+    ## EC2 capacity settings
+
+    | Field                           | Description                                             |
+    | ------------------------------- | ------------------------------------------------------- |
+    | Minimum instances               | Keep enough EC2 capacity for all ECS services; start around 2x the total desired task instances |
+    | Maximum instances               | Must fit 2x the total max task instances across all ECS services, or deployments can fail       |
+    | Root volume size                | Root EBS volume size for ECS instances                  |
+    | Additional security groups      | Extra security groups attached to ECS instances         |
+    | Spot instances                  | Use Spot instances in the EC2 Auto Scaling Group        |
+    | Spot instance types             | Additional instance types for mixed Spot capacity       |
+    | Custom AMI ID                   | Custom ECS AMI; blank uses the latest ECS-optimized AMI |
+    | Key pair name                   | EC2 key pair for SSH access                             |
+    | Managed scaling                 | Let ECS scale the Auto Scaling Group to match task demand |
+    | Managed scaling target capacity | Spare capacity target for ECS managed scaling           |
+
+    ## Design decisions
+
+    This ECS cluster follows AWS ECS production patterns:
+
+    - **Fargate-first defaults:** Fargate and Fargate Spot are enabled so services can start without managing instances
+    - **EC2 opt-in:** EC2 capacity is created only when an instance type is selected
+    - **Shared load balancers:** Cluster-level ALBs and NLBs can be reused by services in the environment
+    - **Private subnet placement:** ECS tasks and EC2 capacity use private subnets from the selected VPC
+    - **Public ingress by default:** Public ALBs use Terraform's default internet ingress unless overridden in Terraform
+    - **Private ingress by default:** Private ALBs use Terraform's default RFC1918 private CIDR ranges and no IPv6 ingress unless overridden
+    - **Enhanced Container Insights:** Enhanced production metrics are collected by default for operational visibility
+
+    ## Learn more
+
+    **Amazon ECS**
+
+    - [Amazon ECS Developer Guide](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/) — Official documentation
+    - [Fargate capacity providers](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-capacity-providers.html) — Fargate and Fargate Spot behavior
+    - [Amazon ECS capacity providers](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cluster-capacity-providers.html) — Capacity provider strategy and EC2 integration
+
+    **Load balancing and observability**
+
+    - [Application Load Balancers](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html) — HTTP/HTTPS load balancing
+    - [Network Load Balancers](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html) — TCP/UDP and static IP load balancing
+    - [ECS Container Insights](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-container-insights.html) — CloudWatch metrics and dashboards
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/ecs_cluster
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
+        ec2_ami_id: << module.input.ec2_ami_id >>
+        ec2_spot_enabled: << module.input.ec2_spot_enabled >>
+        ec2_instance_type: << module.input.ec2_instance_type >>
+        ec2_key_name: << module.input.ec2_key_name >>
+        ec2_managed_scaling_enabled: << module.input.ec2_managed_scaling_enabled >>
+        ec2_managed_scaling_target_capacity: << module.input.ec2_managed_scaling_target_capacity >>
+        ec2_managed_termination_protection_enabled: << module.input.ec2_managed_termination_protection_enabled >>
+        ec2_max_size: << module.input.ec2_max_size >>
+        ec2_min_size: << module.input.ec2_min_size >>
+        ec2_root_volume_size: << module.input.ec2_root_volume_size >>
+        ec2_root_volume_type: << module.input.ec2_root_volume_type >>
+        ec2_security_group_ids: << module.input.ec2_security_group_ids >>
+        ec2_spot_instance_types: << module.input.ec2_spot_instance_types >>
+        ec2_user_data: << module.input.ec2_user_data >>
+        container_insights: << module.input.container_insights >>
+        fargate_enabled: << module.input.fargate_enabled >>
+        fargate_spot_enabled: << module.input.fargate_spot_enabled >>
+        private_alb_enabled: << module.input.private_alb_enabled >>
+        private_nlb_enabled: << module.input.private_nlb_enabled >>
+        public_alb_enabled: << module.input.public_alb_enabled >>
+        public_nlb_enabled: << module.input.public_nlb_enabled >>
+        name: << module.input.name >>
+        private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
+        private_alb_certificate_arns: >-
+          << (module.input.private_alb_certificate_arns != nil ? module.input.private_alb_certificate_arns : []) |
+          concat(module.input.private_alb_additional_certificate_arns != nil ? module.input.private_alb_additional_certificate_arns : []) >>
+        private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
+        private_alb_https_enabled: << module.input.private_alb_https_enabled >>
+        private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
+        private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
+        private_alb_ingress_ipv6_cidr_blocks: << module.input.private_alb_ingress_ipv6_cidr_blocks >>
+        private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
+        private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
+        private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
+        private_nlb_access_logs_enabled: << module.input.private_nlb_access_logs_enabled >>
+        private_nlb_cross_zone_load_balancing_enabled: << module.input.private_nlb_cross_zone_load_balancing_enabled >>
+        private_nlb_elastic_ips_enabled: << module.input.private_nlb_elastic_ips_enabled >>
+        private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
+        private_subnet_ids: << module.input.private_subnet_ids >>
+        public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
+        public_alb_certificate_arns: >-
+          << (module.input.public_alb_certificate_arns != nil ? module.input.public_alb_certificate_arns : []) |
+          concat(module.input.public_alb_additional_certificate_arns != nil ? module.input.public_alb_additional_certificate_arns : []) >>
+        public_alb_access_logs_enabled: << module.input.public_alb_access_logs_enabled >>
+        public_alb_https_enabled: << module.input.public_alb_https_enabled >>
+        public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>
+        public_alb_ssl_policy: << module.input.public_alb_ssl_policy >>
+        public_alb_web_acl_arn: << module.input.public_alb_web_acl_arn >>
+        public_nlb_access_logs_bucket_arn: << module.input.public_nlb_access_logs_bucket_arn >>
+        public_nlb_elastic_ip_allocation_ids: << module.input.public_nlb_elastic_ip_allocation_ids >>
+        public_nlb_access_logs_enabled: << module.input.public_nlb_access_logs_enabled >>
+        public_nlb_cross_zone_load_balancing_enabled: << module.input.public_nlb_cross_zone_load_balancing_enabled >>
+        public_nlb_elastic_ips_enabled: << module.input.public_nlb_elastic_ips_enabled >>
+        public_nlb_security_group_ids: << module.input.public_nlb_security_group_ids >>
+        public_subnet_ids: << module.input.public_subnet_ids || [] >>
+        region: << module.input.aws_region >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        vpc_id: << module.input.vpc_id >>
+  ui:
+    links: |-
+      <<
+      (module.input.public_alb_enabled && stack.output.public_alb_dns_name ? [{"name":"Public ALB","href":(module.input.public_alb_https_enabled ? "https://" : "http://") + stack.output.public_alb_dns_name}] : []) +
+      (module.input.private_alb_enabled && stack.output.private_alb_dns_name ? [{"name":"Private ALB","href":(module.input.private_alb_https_enabled ? "https://" : "http://") + stack.output.private_alb_dns_name}] : []) +
+      (module.input.public_nlb_enabled && stack.output.public_nlb_dns_name ? [{"name":"Public NLB","href":"http://" + stack.output.public_nlb_dns_name}] : []) +
+      (module.input.private_nlb_enabled && stack.output.private_nlb_dns_name ? [{"name":"Private NLB","href":"http://" + stack.output.private_nlb_dns_name}] : [])
+      >>
+    metrics:
+      - id: task_cpu_utilization
+        name: CPU used
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: CpuUtilized
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: task_memory_utilization
+        name: Memory used
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: MemoryUtilized
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: running_tasks
+        name: Running tasks
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: TaskCount
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: services
+        name: Services
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: ServiceCount
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: network_rx
+        name: Network received
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: NetworkRxBytes
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: network_tx
+        name: Network sent
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: NetworkTxBytes
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: storage_read
+        name: Storage read
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: StorageReadBytes
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: storage_write
+        name: Storage write
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: StorageWriteBytes
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Sum
+          type: cloudwatch
+        type: line
+      - id: ec2_container_instances
+        name: EC2 container instances
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: ContainerInstanceCount
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: ec2_instance_cpu_utilization
+        name: EC2 instance CPU utilization
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: instance_cpu_utilization
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: ec2_instance_memory_utilization
+        name: EC2 instance memory utilization
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: instance_memory_utilization
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: ec2_running_tasks
+        name: EC2 running tasks
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: instance_number_of_running_tasks
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: ec2_cpu_reserved_capacity
+        name: EC2 CPU reserved capacity
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: instance_cpu_reserved_capacity
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: ec2_memory_reserved_capacity
+        name: EC2 memory reserved capacity
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << stack.output.cluster_name >>
+          name: instance_memory_reserved_capacity
+          namespace: ECS/ContainerInsights
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line

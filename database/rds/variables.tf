@@ -48,10 +48,21 @@ variable "engine" {
   }
 }
 
-variable "engine_version" {
+variable "engine_major_version" {
   type        = string
-  description = "The version number of the database engine. If not specified, the latest available version will be used."
+  description = "The major version of the database engine. If not specified, the latest available version will be used. Examples: 15 for PostgreSQL or SQL Server, 8.0 for MySQL, 19 for Oracle."
   default     = null
+}
+
+variable "engine_minor_version" {
+  type        = string
+  description = "The optional minor version of the database engine. Appended to engine_major_version when specified. Examples: 4, 35, 0.0.ru-2023-10.rur-2023-10.r1."
+  default     = null
+
+  validation {
+    condition     = var.engine_minor_version == null || var.engine_major_version != null
+    error_message = "The engine_major_version must be set when engine_minor_version is set."
+  }
 }
 
 variable "license_model" {
@@ -137,7 +148,7 @@ variable "storage_throughput" {
 # Encryption
 ################################################################################
 
-variable "storage_encrypted" {
+variable "storage_encryption_enabled" {
   type        = bool
   description = "Enable encryption at rest for the DB instance."
   default     = true
@@ -194,7 +205,7 @@ variable "port" {
   }
 }
 
-variable "publicly_accessible" {
+variable "public_access_enabled" {
   type        = bool
   description = "Whether the DB instance is publicly accessible. Should be false for production workloads."
   default     = false
@@ -202,7 +213,7 @@ variable "publicly_accessible" {
 
 variable "availability_zone" {
   type        = string
-  description = "The AZ for the DB instance. If multi_az is true, this is ignored."
+  description = "The AZ for the DB instance. If multi_az_enabled is true, this is ignored."
   default     = null
 }
 
@@ -216,7 +227,7 @@ variable "ca_cert_identifier" {
 # Security Group
 ################################################################################
 
-variable "create_security_group" {
+variable "security_group_creation_enabled" {
   type        = bool
   description = "Whether to create a security group for the RDS instance."
   default     = true
@@ -224,7 +235,7 @@ variable "create_security_group" {
 
 variable "security_group_id" {
   type        = string
-  description = "The ID of an existing security group to use. Required if create_security_group is false."
+  description = "The ID of an existing security group to use. Required if security_group_creation_enabled is false."
   default     = null
 
   validation {
@@ -259,13 +270,13 @@ variable "allowed_cidr_blocks" {
 # High Availability
 ################################################################################
 
-variable "multi_az" {
+variable "multi_az_enabled" {
   type        = bool
   description = "Enable Multi-AZ deployment for high availability."
   default     = false
 }
 
-variable "create_read_replica" {
+variable "read_replica_creation_enabled" {
   type        = bool
   description = "Whether to create read replicas for the primary instance."
   default     = false
@@ -320,7 +331,7 @@ variable "username" {
 
 variable "password" {
   type        = string
-  description = "The master password for the database. Required if manage_master_user_password is false."
+  description = "The master password for the database. Required if master_user_password_management_enabled is false."
   default     = null
   sensitive   = true
 
@@ -330,7 +341,7 @@ variable "password" {
   }
 }
 
-variable "manage_master_user_password" {
+variable "master_user_password_management_enabled" {
   type        = bool
   description = "Whether to manage the master user password with AWS Secrets Manager."
   default     = true
@@ -423,13 +434,13 @@ variable "backup_window" {
   }
 }
 
-variable "copy_tags_to_snapshot" {
+variable "snapshot_tag_copying_enabled" {
   type        = bool
   description = "Whether to copy tags to snapshots."
   default     = true
 }
 
-variable "delete_automated_backups" {
+variable "automated_backups_deletion_enabled" {
   type        = bool
   description = "Whether to delete automated backups when the DB instance is deleted."
   default     = true
@@ -443,7 +454,7 @@ variable "snapshot_identifier" {
 
 variable "final_snapshot_identifier" {
   type        = string
-  description = "The name of the final snapshot when deleting the DB instance. Required if skip_final_snapshot is false."
+  description = "The name of the final snapshot when deleting the DB instance. Required if final_snapshot_creation_enabled is true."
   default     = null
 
   validation {
@@ -452,10 +463,10 @@ variable "final_snapshot_identifier" {
   }
 }
 
-variable "skip_final_snapshot" {
+variable "final_snapshot_creation_enabled" {
   type        = bool
-  description = "Whether to skip creating a final snapshot when deleting the DB instance."
-  default     = false
+  description = "Whether to create a final snapshot when deleting the DB instance."
+  default     = true
 }
 
 variable "restore_to_point_in_time" {
@@ -485,25 +496,25 @@ variable "maintenance_window" {
   }
 }
 
-variable "auto_minor_version_upgrade" {
+variable "minor_version_auto_upgrade_enabled" {
   type        = bool
   description = "Enable automatic minor version upgrades during the maintenance window."
   default     = true
 }
 
-variable "allow_major_version_upgrade" {
+variable "major_version_upgrade_enabled" {
   type        = bool
   description = "Allow major version upgrades when changing engine versions."
   default     = false
 }
 
-variable "apply_immediately" {
+variable "immediate_apply_enabled" {
   type        = bool
   description = "Whether to apply changes immediately or during the next maintenance window."
   default     = false
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "Enable deletion protection for the DB instance."
   default     = true
@@ -532,7 +543,7 @@ variable "monitoring_interval" {
 
 variable "monitoring_role_arn" {
   type        = string
-  description = "The ARN of the IAM role for Enhanced Monitoring. Required if monitoring_interval > 0 and create_monitoring_role is false."
+  description = "The ARN of the IAM role for Enhanced Monitoring. Required if monitoring_interval > 0 and monitoring_role_creation_enabled is false."
   default     = null
 
   validation {
@@ -541,7 +552,7 @@ variable "monitoring_role_arn" {
   }
 }
 
-variable "create_monitoring_role" {
+variable "monitoring_role_creation_enabled" {
   type        = bool
   description = "Whether to create an IAM role for Enhanced Monitoring."
   default     = true
@@ -579,7 +590,7 @@ variable "performance_insights_kms_key_id" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "create_cloudwatch_alarms" {
+variable "cloudwatch_alarms_creation_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for CPU, storage, and connections."
   default     = false
@@ -656,7 +667,7 @@ variable "cloudwatch_ok_actions" {
 # Parameter Group
 ################################################################################
 
-variable "create_parameter_group" {
+variable "parameter_group_creation_enabled" {
   type        = bool
   description = "Whether to create a DB parameter group."
   default     = true
@@ -664,7 +675,7 @@ variable "create_parameter_group" {
 
 variable "parameter_group_name" {
   type        = string
-  description = "The name of an existing DB parameter group to use. Required if create_parameter_group is false."
+  description = "The name of an existing DB parameter group to use. Required if parameter_group_creation_enabled is false."
   default     = null
 }
 
@@ -693,7 +704,7 @@ variable "parameters" {
 # Option Group
 ################################################################################
 
-variable "create_option_group" {
+variable "option_group_creation_enabled" {
   type        = bool
   description = "Whether to create a DB option group. Typically used for Oracle and SQL Server."
   default     = false
@@ -707,7 +718,7 @@ variable "option_group_name" {
 
 variable "option_group_engine_version" {
   type        = string
-  description = "The major engine version for the option group. If not specified, it is derived from engine_version."
+  description = "The major engine version for the option group. If not specified, it is derived from engine_major_version."
   default     = null
 }
 

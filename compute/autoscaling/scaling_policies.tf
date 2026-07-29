@@ -50,7 +50,7 @@ resource "aws_autoscaling_policy" "this" {
     for_each = each.value.policy_type == "TargetTrackingScaling" && each.value.target_tracking_configuration != null ? [each.value.target_tracking_configuration] : []
     content {
       target_value     = target_tracking_configuration.value.target_value
-      disable_scale_in = target_tracking_configuration.value.disable_scale_in
+      disable_scale_in = !target_tracking_configuration.value.scale_in_enabled
 
       # Predefined metric specification
       dynamic "predefined_metric_specification" {

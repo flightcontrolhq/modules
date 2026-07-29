@@ -7,7 +7,7 @@ resource "aws_ecs_cluster" "this" {
 
   setting {
     name  = "containerInsights"
-    value = var.enable_container_insights ? "enabled" : "disabled"
+    value = var.container_insights
   }
 
   tags = merge(local.tags, {
@@ -23,8 +23,8 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
   cluster_name = aws_ecs_cluster.this.name
 
   capacity_providers = concat(
-    var.enable_fargate ? ["FARGATE"] : [],
-    var.enable_fargate_spot ? ["FARGATE_SPOT"] : [],
+    var.fargate_enabled ? ["FARGATE"] : [],
+    var.fargate_spot_enabled ? ["FARGATE_SPOT"] : [],
     local.enable_ec2 ? [aws_ecs_capacity_provider.ec2[0].name] : []
   )
 
@@ -37,4 +37,3 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
     }
   }
 }
-

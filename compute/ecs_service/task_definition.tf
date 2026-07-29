@@ -136,7 +136,7 @@ resource "aws_iam_role" "task" {
 
 # ECS Exec support
 data "aws_iam_policy_document" "task_exec_command" {
-  count = local.create_task_role && var.enable_execute_command ? 1 : 0
+  count = local.create_task_role && var.execute_command_enabled ? 1 : 0
 
   statement {
     effect = "Allow"
@@ -159,7 +159,7 @@ data "aws_iam_policy_document" "task_exec_command" {
 }
 
 resource "aws_iam_role_policy" "task_exec_command" {
-  count = local.create_task_role && var.enable_execute_command ? 1 : 0
+  count = local.create_task_role && var.execute_command_enabled ? 1 : 0
 
   name   = "ecs-exec"
   role   = aws_iam_role.task[0].id
@@ -176,7 +176,7 @@ resource "aws_iam_role_policy_attachment" "task_additional" {
 
 # Inline task role policies
 resource "aws_iam_role_policy" "task_inline" {
-  for_each = local.create_task_role ? var.task_role_inline_policies : {}
+  for_each = { for name, policy in var.task_role_inline_policies : name => policy if local.create_task_role }
 
   name   = each.key
   role   = aws_iam_role.task[0].id
@@ -206,6 +206,13 @@ resource "aws_ecs_task_definition" "this" {
     content {
       operating_system_family = var.runtime_platform.operating_system_family
       cpu_architecture        = var.runtime_platform.cpu_architecture
+    }
+  }
+
+  dynamic "ephemeral_storage" {
+    for_each = var.task_ephemeral_storage_size_gib == null ? [] : [var.task_ephemeral_storage_size_gib]
+    content {
+      size_in_gib = ephemeral_storage.value
     }
   }
 
@@ -249,8 +256,9 @@ resource "aws_ecs_task_definition" "this" {
     Name = var.name
   })
 
+  depends_on = [aws_cloudwatch_log_group.this]
+
   lifecycle {
     ignore_changes = all
   }
 }
-

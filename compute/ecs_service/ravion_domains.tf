@@ -76,42 +76,20 @@ locals {
   # explicitly to a free value.
   ravion_priority = var.ravion_listener_rule_priority > 0 ? var.ravion_listener_rule_priority : ((parseint(substr(sha256(var.name), 0, 12), 16) % 48000) + 1000)
 
-  ravion_target_group_arn = (
-    length(aws_lb_target_group.this) > 0 ? aws_lb_target_group.this[0].arn : (
-      length(aws_lb_target_group.tg_1) > 0 ? aws_lb_target_group.tg_1[0].arn : null
-    )
-  )
-}
-
-# Plan-time authorization guard: a service may only nest its auto-domains under
-# a cluster wildcard apex it actually references in its config. Fails the plan
-# with a clear message if cluster_parent_fqdn was pointed at another cluster's
-# apex the run doesn't reference. The control plane enforces the same rule at
-# apply against a signed token claim (Dns:PARENT_APEX_UNAUTHORIZED), so this
-# only moves the failure earlier.
-data "ravion_parent_apex_check" "cluster" {
-  count              = local.ravion_managed && length(local.wildcard_covered) > 0 ? 1 : 0
-  parent_domain_name = local.apex
+  ravion_target_group_arn = length(aws_lb_target_group.tg_1) > 0 ? aws_lb_target_group.tg_1[0].arn : null
 }
 
 # Wildcard-covered domains (incl. the auto-FQDN): nest under the cluster
 # wildcard. No per-service cert; the cluster `*.<apex>` ALIAS routes them.
+# Parent-apex authorization (may this service nest under that apex?) runs
+# automatically in the provider's ModifyPlan; the control plane enforces the
+# same rule at apply against a signed token claim (Dns:PARENT_APEX_UNAUTHORIZED).
 resource "ravion_domain" "wildcard" {
   for_each = toset(local.wildcard_covered)
 
   name               = trimsuffix(each.value, ".${local.apex}")
   module_instance_id = var.module_instance_id
   parent_domain_name = local.apex
-
-  lifecycle {
-    precondition {
-      # try(...) allows when the check is skipped (count 0) or the apex isn't yet
-      # resolvable (first apply before the cluster exists) — the apply-time guard
-      # takes over there.
-      condition     = try(one(data.ravion_parent_apex_check.cluster[*].authorized), true)
-      error_message = "This service may not nest ${each.value} under ${local.apex}: this deployment does not reference that cluster. Set cluster_parent_fqdn from your own cluster's ravion_cluster_domain_fqdn output."
-    }
-  }
 }
 
 # Per-service certificate covering the custom (non-wildcard) domains (<=10 SANs),
@@ -119,7 +97,6 @@ resource "ravion_domain" "wildcard" {
 resource "ravion_aws_acm_certificate" "svc" {
   count = length(local.custom_domains) > 0 ? 1 : 0
 
-  role               = "instance"
   domains            = local.custom_domains
   module_instance_id = var.module_instance_id
   aws_account_id     = var.ravion_aws_account_id

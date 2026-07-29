@@ -14,8 +14,9 @@ mock_provider "aws" {
   override_data {
     target = data.aws_region.current
     values = {
-      id   = "us-east-1"
-      name = "us-east-1"
+      id     = "us-east-1"
+      name   = "us-east-1"
+      region = "us-east-1"
     }
   }
 
@@ -258,7 +259,7 @@ run "test_force_destroy_default_false" {
   }
 
   assert {
-    condition     = var.force_destroy == false
+    condition     = var.force_destroy_enabled == false
     error_message = "force_destroy should default to false."
   }
 }
@@ -268,12 +269,12 @@ run "test_force_destroy_can_be_true" {
   command = plan
 
   variables {
-    name          = "test-bucket"
-    force_destroy = true
+    name                  = "test-bucket"
+    force_destroy_enabled = true
   }
 
   assert {
-    condition     = var.force_destroy == true
+    condition     = var.force_destroy_enabled == true
     error_message = "force_destroy should be able to be set to true."
   }
 }
@@ -351,8 +352,8 @@ run "test_bucket_force_destroy_true" {
   command = plan
 
   variables {
-    name          = "test-bucket"
-    force_destroy = true
+    name                  = "test-bucket"
+    force_destroy_enabled = true
   }
 
   assert {
@@ -584,6 +585,11 @@ run "test_encryption_sse_s3_default" {
     condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].apply_server_side_encryption_by_default[0].kms_master_key_id) == null
     error_message = "KMS key should be null when using SSE-S3."
   }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule[*].blocked_encryption_types) == tolist(["SSE-C"])
+    error_message = "SSE-C uploads should be blocked."
+  }
 }
 
 # Test: encryption uses SSE-KMS when KMS key is provided
@@ -710,6 +716,184 @@ run "test_versioning_enabled_variable_default" {
     condition     = var.versioning_enabled == false
     error_message = "versioning_enabled variable should default to false."
   }
+}
+
+#-------------------------------------------------------------------------------
+# CORS Configuration Tests
+#-------------------------------------------------------------------------------
+
+# Test: no CORS configuration when rules are empty
+run "test_cors_rules_empty" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+  }
+
+  assert {
+    condition     = length(var.cors_rules) == 0
+    error_message = "cors_rules should default to empty list."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_cors_configuration.this) == 0
+    error_message = "CORS configuration should not be created when rules are empty."
+  }
+}
+
+# Test: CORS configuration created when rules provided
+run "test_cors_rules_single_rule" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    cors_rules = [
+      {
+        id              = "app"
+        allowed_methods = ["GET", "PUT"]
+        allowed_origins = ["https://app.example.com"]
+        allowed_headers = ["*"]
+        expose_headers  = ["ETag"]
+        max_age_seconds = 3000
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_cors_configuration.this) == 1
+    error_message = "CORS configuration should be created when rules are provided."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_cors_configuration.this[0].cors_rule).id == "app"
+    error_message = "CORS rule should have the correct id."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_cors_configuration.this[0].cors_rule).allowed_methods == toset(["GET", "PUT"])
+    error_message = "CORS rule should have the correct allowed methods."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_cors_configuration.this[0].cors_rule).allowed_origins == toset(["https://app.example.com"])
+    error_message = "CORS rule should have the correct allowed origins."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_cors_configuration.this[0].cors_rule).allowed_headers == toset(["*"])
+    error_message = "CORS rule should have the correct allowed headers."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_cors_configuration.this[0].cors_rule).expose_headers == toset(["ETag"])
+    error_message = "CORS rule should have the correct exposed headers."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_cors_configuration.this[0].cors_rule).max_age_seconds == 3000
+    error_message = "CORS rule should have the correct max age."
+  }
+}
+
+# Test: multiple CORS rules are supported
+run "test_cors_rules_multiple" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    cors_rules = [
+      {
+        allowed_methods = ["GET"]
+        allowed_origins = ["https://app.example.com"]
+      },
+      {
+        allowed_methods = ["POST"]
+        allowed_origins = ["https://admin.example.com"]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_cors_configuration.this[0].cors_rule) == 2
+    error_message = "CORS configuration should include two rules."
+  }
+}
+
+# Test: CORS configuration references correct bucket
+run "test_cors_bucket_reference" {
+  command = plan
+
+  variables {
+    name = "my-test-bucket"
+    cors_rules = [
+      {
+        allowed_methods = ["GET"]
+        allowed_origins = ["https://app.example.com"]
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_s3_bucket_cors_configuration.this[0].bucket == aws_s3_bucket.this.id
+    error_message = "CORS configuration should reference the correct bucket."
+  }
+}
+
+# Test: invalid CORS method rejected
+run "test_cors_invalid_method" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    cors_rules = [
+      {
+        allowed_methods = ["OPTIONS"]
+        allowed_origins = ["https://app.example.com"]
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.cors_rules,
+  ]
+}
+
+# Test: empty CORS origins rejected
+run "test_cors_empty_origins" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    cors_rules = [
+      {
+        allowed_methods = ["GET"]
+        allowed_origins = []
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.cors_rules,
+  ]
+}
+
+# Test: empty CORS methods rejected
+run "test_cors_empty_methods" {
+  command = plan
+
+  variables {
+    name = "test-bucket"
+    cors_rules = [
+      {
+        allowed_methods = []
+        allowed_origins = ["https://app.example.com"]
+      }
+    ]
+  }
+
+  expect_failures = [
+    var.cors_rules,
+  ]
 }
 
 #-------------------------------------------------------------------------------
@@ -1180,6 +1364,51 @@ run "test_policy_template_vpc_flow_logs" {
   }
 }
 
+# Test: cloudfront_oac_read template produces valid statements
+run "test_policy_template_cloudfront_oac_read" {
+  command = plan
+
+  variables {
+    name                         = "test-bucket"
+    policy_templates             = ["cloudfront_oac_read"]
+    cloudfront_distribution_arns = ["arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"]
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements) == 1
+    error_message = "cloudfront_oac_read template should produce 1 statement."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Sid == "AllowCloudFrontOACRead"
+    error_message = "cloudfront_oac_read statement should have correct Sid."
+  }
+
+  assert {
+    condition     = local.policy_template_statements[0].Principal.Service == "cloudfront.amazonaws.com"
+    error_message = "cloudfront_oac_read statement should use the CloudFront service principal."
+  }
+
+  assert {
+    condition     = length(local.policy_template_statements[0].Condition.StringEquals["aws:SourceArn"]) == 1 && contains(local.policy_template_statements[0].Condition.StringEquals["aws:SourceArn"], "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE")
+    error_message = "cloudfront_oac_read statement should scope access to distribution ARNs."
+  }
+}
+
+# Test: cloudfront_oac_read requires distribution ARNs
+run "test_policy_template_cloudfront_oac_read_requires_arns" {
+  command = plan
+
+  variables {
+    name             = "test-bucket"
+    policy_templates = ["cloudfront_oac_read"]
+  }
+
+  expect_failures = [
+    var.policy_templates,
+  ]
+}
+
 # Test: multiple policy templates can be combined
 run "test_policy_templates_combined" {
   command = plan
@@ -1260,12 +1489,15 @@ run "test_policy_templates_all_valid" {
 
   variables {
     name             = "test-bucket"
-    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"]
+    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs", "cloudfront_oac_read"]
+    cloudfront_distribution_arns = [
+      "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+    ]
   }
 
   assert {
-    condition     = length(local.policy_template_statements) == 8
-    error_message = "All four templates combined should produce 8 statements (1 + 3 + 2 + 2)."
+    condition     = length(local.policy_template_statements) == 9
+    error_message = "All five templates combined should produce 9 statements (1 + 3 + 2 + 2 + 1)."
   }
 }
 
@@ -1485,12 +1717,15 @@ run "test_bucket_policy_all_templates" {
 
   variables {
     name             = "test-bucket"
-    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"]
+    policy_templates = ["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs", "cloudfront_oac_read"]
+    cloudfront_distribution_arns = [
+      "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+    ]
   }
 
   assert {
-    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 8
-    error_message = "Bucket policy should contain 8 statements from all templates."
+    condition     = length(jsondecode(aws_s3_bucket_policy.this[0].policy).Statement) == 9
+    error_message = "Bucket policy should contain 9 statements from all templates."
   }
 }
 

@@ -65,7 +65,7 @@ mock_provider "aws" {
   }
 
   override_resource {
-    target = aws_security_group.ecs_instance
+    target = module.ecs_instance_security_group.aws_security_group.this
     values = {
       arn = "arn:aws:ec2:us-east-1:123456789012:security-group/sg-ecs123456789"
       id  = "sg-ecs123456789"
@@ -81,7 +81,7 @@ mock_provider "aws" {
   }
 
   override_resource {
-    target = aws_autoscaling_group.ecs
+    target = module.ecs_autoscaling.aws_autoscaling_group.this
     values = {
       arn = "arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:12345678-1234-1234-1234-123456789012:autoScalingGroupName/test-cluster-ecs"
     }
@@ -197,8 +197,8 @@ run "basic_ecs_cluster" {
   }
 
   assert {
-    condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "enabled"])
-    error_message = "Container Insights should be enabled by default"
+    condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "enhanced"])
+    error_message = "Container Insights should be enhanced by default"
   }
 }
 
@@ -207,16 +207,30 @@ run "container_insights_disabled" {
   command = plan
 
   variables {
-    enable_container_insights = false
+    container_insights = "disabled"
   }
 
   assert {
     condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "disabled"])
-    error_message = "Container Insights should be disabled when enable_container_insights is false"
+    error_message = "Container Insights should be disabled when container_insights is disabled"
   }
 }
 
-# Test 3: Resource tagging
+# Test 3: Container Insights standard mode
+run "container_insights_standard" {
+  command = plan
+
+  variables {
+    container_insights = "enabled"
+  }
+
+  assert {
+    condition     = anytrue([for s in aws_ecs_cluster.this.setting : s.name == "containerInsights" && s.value == "enabled"])
+    error_message = "Container Insights should use standard mode when container_insights is enabled"
+  }
+}
+
+# Test 4: Resource tagging
 run "resource_tagging" {
   command = plan
 
@@ -262,7 +276,7 @@ run "fargate_disabled" {
   command = plan
 
   variables {
-    enable_fargate = false
+    fargate_enabled = false
   }
 
   assert {
@@ -276,7 +290,7 @@ run "fargate_spot_enabled" {
   command = plan
 
   variables {
-    enable_fargate_spot = true
+    fargate_spot_enabled = true
   }
 
   assert {
@@ -305,10 +319,10 @@ run "both_fargate_providers" {
   command = plan
 
   variables {
-    enable_fargate      = true
-    enable_fargate_spot = true
-    fargate_weight      = 1
-    fargate_spot_weight = 2
+    fargate_enabled      = true
+    fargate_spot_enabled = true
+    fargate_weight       = 1
+    fargate_spot_weight  = 2
   }
 
   assert {
@@ -336,7 +350,7 @@ run "ec2_disabled_by_default" {
   }
 
   assert {
-    condition     = length(aws_autoscaling_group.ecs) == 0
+    condition     = length(module.ecs_autoscaling) == 0
     error_message = "Auto Scaling Group should not be created when EC2 disabled"
   }
 
@@ -351,7 +365,7 @@ run "ec2_disabled_by_default" {
   }
 
   assert {
-    condition     = length(aws_security_group.ecs_instance) == 0
+    condition     = length(module.ecs_instance_security_group) == 0
     error_message = "Security group should not be created when EC2 disabled"
   }
 }
@@ -370,7 +384,7 @@ run "ec2_capacity_provider_enabled" {
   }
 
   assert {
-    condition     = length(aws_autoscaling_group.ecs) == 1
+    condition     = length(module.ecs_autoscaling) == 1
     error_message = "Auto Scaling Group should be created for EC2 capacity provider"
   }
 
@@ -385,7 +399,7 @@ run "ec2_capacity_provider_enabled" {
   }
 
   assert {
-    condition     = length(aws_security_group.ecs_instance) == 1
+    condition     = length(module.ecs_instance_security_group) == 1
     error_message = "Security group should be created for EC2 instances"
   }
 }
@@ -398,7 +412,7 @@ run "ec2_launch_template_settings" {
     ec2_instance_type    = "t3.large"
     ec2_root_volume_size = 50
     ec2_root_volume_type = "gp3"
-    ec2_enable_imdsv2    = true
+    ec2_imdsv2_enabled   = true
   }
 
   assert {
@@ -427,8 +441,8 @@ run "ec2_imdsv2_disabled" {
   command = plan
 
   variables {
-    ec2_instance_type = "t3.medium"
-    ec2_enable_imdsv2 = false
+    ec2_instance_type  = "t3.medium"
+    ec2_imdsv2_enabled = false
   }
 
   assert {
@@ -449,17 +463,17 @@ run "ec2_asg_settings" {
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].min_size == 1
+    condition     = module.ecs_autoscaling[0].autoscaling_group_min_size == 1
     error_message = "ASG should have the correct min size"
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].max_size == 5
+    condition     = module.ecs_autoscaling[0].autoscaling_group_max_size == 5
     error_message = "ASG should have the correct max size"
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].desired_capacity == 2
+    condition     = module.ecs_autoscaling[0].autoscaling_group_desired_capacity == 2
     error_message = "ASG should have the correct desired capacity"
   }
 }
@@ -469,12 +483,12 @@ run "ec2_termination_protection" {
   command = plan
 
   variables {
-    ec2_instance_type                  = "t3.medium"
-    ec2_managed_termination_protection = "ENABLED"
+    ec2_instance_type                          = "t3.medium"
+    ec2_managed_termination_protection_enabled = true
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].protect_from_scale_in == true
+    condition     = module.ecs_autoscaling[0].ecs_capacity_provider_config.managed_termination_protection == "ENABLED"
     error_message = "ASG should have scale-in protection when termination protection is ENABLED"
   }
 
@@ -489,12 +503,12 @@ run "ec2_termination_protection_disabled" {
   command = plan
 
   variables {
-    ec2_instance_type                  = "t3.medium"
-    ec2_managed_termination_protection = "DISABLED"
+    ec2_instance_type                          = "t3.medium"
+    ec2_managed_termination_protection_enabled = false
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].protect_from_scale_in == false
+    condition     = module.ecs_autoscaling[0].ecs_capacity_provider_config.managed_termination_protection == "DISABLED"
     error_message = "ASG should not have scale-in protection when termination protection is DISABLED"
   }
 }
@@ -505,7 +519,7 @@ run "ec2_managed_scaling" {
 
   variables {
     ec2_instance_type                   = "t3.medium"
-    ec2_managed_scaling_status          = "ENABLED"
+    ec2_managed_scaling_enabled         = true
     ec2_managed_scaling_target_capacity = 80
   }
 
@@ -517,6 +531,20 @@ run "ec2_managed_scaling" {
   assert {
     condition     = aws_ecs_capacity_provider.ec2[0].auto_scaling_group_provider[0].managed_scaling[0].target_capacity == 80
     error_message = "Managed scaling should have correct target capacity"
+  }
+}
+
+run "ec2_managed_scaling_disabled" {
+  command = plan
+
+  variables {
+    ec2_instance_type           = "t3.medium"
+    ec2_managed_scaling_enabled = false
+  }
+
+  assert {
+    condition     = aws_ecs_capacity_provider.ec2[0].auto_scaling_group_provider[0].managed_scaling[0].status == "DISABLED"
+    error_message = "Managed scaling should be disabled"
   }
 }
 
@@ -564,11 +592,11 @@ run "ec2_spot_disabled_by_default" {
 
   variables {
     ec2_instance_type = "t3.medium"
-    ec2_enable_spot   = false
+    ec2_spot_enabled  = false
   }
 
   assert {
-    condition     = length(aws_autoscaling_group.ecs[0].mixed_instances_policy) == 0
+    condition     = length(module.ecs_autoscaling[0].aws_autoscaling_group.this.mixed_instances_policy) == 0
     error_message = "ASG should not use mixed instances policy when Spot disabled"
   }
 }
@@ -579,24 +607,24 @@ run "ec2_spot_enabled" {
 
   variables {
     ec2_instance_type                   = "t3.medium"
-    ec2_enable_spot                     = true
+    ec2_spot_enabled                    = true
     ec2_spot_instance_types             = ["t3.large", "t3.xlarge"]
     ec2_on_demand_base_capacity         = 1
     ec2_on_demand_percentage_above_base = 25
   }
 
   assert {
-    condition     = length(aws_autoscaling_group.ecs[0].mixed_instances_policy) == 1
+    condition     = length(module.ecs_autoscaling[0].aws_autoscaling_group.this.mixed_instances_policy) == 1
     error_message = "ASG should use mixed instances policy when Spot enabled"
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].mixed_instances_policy[0].instances_distribution[0].on_demand_base_capacity == 1
+    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.mixed_instances_policy[0].instances_distribution[0].on_demand_base_capacity == 1
     error_message = "ASG should have correct on-demand base capacity"
   }
 
   assert {
-    condition     = aws_autoscaling_group.ecs[0].mixed_instances_policy[0].instances_distribution[0].on_demand_percentage_above_base_capacity == 25
+    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.mixed_instances_policy[0].instances_distribution[0].on_demand_percentage_above_base_capacity == 25
     error_message = "ASG should have correct on-demand percentage above base"
   }
 }
@@ -620,8 +648,8 @@ run "public_alb_enabled" {
   command = plan
 
   variables {
-    enable_public_alb = true
-    public_subnet_ids = ["subnet-public1", "subnet-public2"]
+    public_alb_enabled = true
+    public_subnet_ids  = ["subnet-public1", "subnet-public2"]
   }
 
   assert {
@@ -635,9 +663,9 @@ run "public_alb_with_https" {
   command = plan
 
   variables {
-    enable_public_alb           = true
+    public_alb_enabled          = true
     public_subnet_ids           = ["subnet-public1", "subnet-public2"]
-    public_alb_enable_https     = true
+    public_alb_https_enabled    = true
     public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
@@ -652,11 +680,11 @@ run "public_alb_custom_settings" {
   command = plan
 
   variables {
-    enable_public_alb              = true
-    public_subnet_ids              = ["subnet-public1", "subnet-public2"]
-    public_alb_idle_timeout        = 120
-    deletion_protection            = false
-    public_alb_ingress_cidr_blocks = ["10.0.0.0/8"]
+    public_alb_enabled                        = true
+    public_subnet_ids                         = ["subnet-public1", "subnet-public2"]
+    public_alb_idle_timeout                   = 120
+    load_balancer_deletion_protection_enabled = false
+    public_alb_ingress_cidr_blocks            = ["10.0.0.0/8"]
   }
 
   assert {
@@ -684,7 +712,7 @@ run "private_alb_enabled" {
   command = plan
 
   variables {
-    enable_private_alb = true
+    private_alb_enabled = true
   }
 
   assert {
@@ -698,8 +726,8 @@ run "private_alb_with_https" {
   command = plan
 
   variables {
-    enable_private_alb           = true
-    private_alb_enable_https     = true
+    private_alb_enabled          = true
+    private_alb_https_enabled    = true
     private_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
@@ -714,10 +742,10 @@ run "private_alb_custom_settings" {
   command = plan
 
   variables {
-    enable_private_alb              = true
-    private_alb_idle_timeout        = 90
-    deletion_protection             = true
-    private_alb_ingress_cidr_blocks = ["192.168.0.0/16"]
+    private_alb_enabled                       = true
+    private_alb_idle_timeout                  = 90
+    load_balancer_deletion_protection_enabled = true
+    private_alb_ingress_cidr_blocks           = ["192.168.0.0/16"]
   }
 
   assert {
@@ -735,9 +763,9 @@ run "both_albs_enabled" {
   command = plan
 
   variables {
-    enable_public_alb  = true
-    enable_private_alb = true
-    public_subnet_ids  = ["subnet-public1", "subnet-public2"]
+    public_alb_enabled  = true
+    private_alb_enabled = true
+    public_subnet_ids   = ["subnet-public1", "subnet-public2"]
   }
 
   assert {
@@ -756,13 +784,13 @@ run "full_configuration" {
   command = plan
 
   variables {
-    enable_container_insights = true
-    enable_fargate            = true
-    enable_fargate_spot       = true
-    ec2_instance_type         = "t3.medium"
-    ec2_min_size              = 0
-    ec2_max_size              = 10
-    ec2_desired_capacity      = 2
+    container_insights   = "enhanced"
+    fargate_enabled      = true
+    fargate_spot_enabled = true
+    ec2_instance_type    = "t3.medium"
+    ec2_min_size         = 0
+    ec2_max_size         = 10
+    ec2_desired_capacity = 2
   }
 
   assert {
@@ -786,9 +814,9 @@ run "ec2_with_public_alb_ingress" {
   command = plan
 
   variables {
-    ec2_instance_type = "t3.medium"
-    enable_public_alb = true
-    public_subnet_ids = ["subnet-public1", "subnet-public2"]
+    ec2_instance_type  = "t3.medium"
+    public_alb_enabled = true
+    public_subnet_ids  = ["subnet-public1", "subnet-public2"]
   }
 
   assert {
@@ -802,8 +830,8 @@ run "ec2_with_private_alb_ingress" {
   command = plan
 
   variables {
-    ec2_instance_type  = "t3.medium"
-    enable_private_alb = true
+    ec2_instance_type   = "t3.medium"
+    private_alb_enabled = true
   }
 
   assert {
@@ -817,9 +845,9 @@ run "ec2_without_albs_no_ingress" {
   command = plan
 
   variables {
-    ec2_instance_type  = "t3.medium"
-    enable_public_alb  = false
-    enable_private_alb = false
+    ec2_instance_type   = "t3.medium"
+    public_alb_enabled  = false
+    private_alb_enabled = false
   }
 
   assert {
@@ -838,8 +866,8 @@ run "no_fargate_providers" {
   command = plan
 
   variables {
-    enable_fargate      = false
-    enable_fargate_spot = false
+    fargate_enabled      = false
+    fargate_spot_enabled = false
   }
 
   assert {
@@ -879,16 +907,18 @@ run "ec2_custom_weights" {
 
   variables {
     ec2_instance_type = "t3.medium"
-    enable_fargate    = true
+    fargate_enabled   = true
     fargate_weight    = 1
     fargate_base      = 1
     ec2_weight        = 2
     ec2_base          = 0
   }
 
+  # AWS rejects default strategies mixing Fargate and EC2 providers, so the
+  # default strategy commits to a single family (EC2 wins when enabled).
   assert {
-    condition     = length(aws_ecs_cluster_capacity_providers.this.default_capacity_provider_strategy) == 2
-    error_message = "Should have 2 capacity provider strategies (Fargate + EC2)"
+    condition     = length(aws_ecs_cluster_capacity_providers.this.default_capacity_provider_strategy) == 1
+    error_message = "Default strategy should contain only the EC2 capacity provider when EC2 is enabled"
   }
 }
 
@@ -931,7 +961,7 @@ run "asg_uses_private_subnets" {
   }
 
   assert {
-    condition     = length(aws_autoscaling_group.ecs[0].vpc_zone_identifier) == 3
+    condition     = length(module.ecs_autoscaling[0].aws_autoscaling_group.this.vpc_zone_identifier) == 3
     error_message = "ASG should be deployed to all private subnets"
   }
 }
@@ -949,4 +979,3 @@ run "ec2_detailed_monitoring" {
     error_message = "EC2 detailed monitoring should be enabled"
   }
 }
-

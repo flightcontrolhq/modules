@@ -10,7 +10,7 @@ resource "aws_iam_role" "this" {
 
   assume_role_policy    = local.assume_role_policy
   max_session_duration  = var.max_session_duration
-  force_detach_policies = var.force_detach_policies
+  force_detach_policies = var.policy_force_detach_enabled
   permissions_boundary  = var.permission_boundary_arn
 
   tags = merge(local.tags, {

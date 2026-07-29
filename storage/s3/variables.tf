@@ -50,7 +50,7 @@ variable "name" {
 # Bucket Configuration
 #-------------------------------------------------------------------------------
 
-variable "force_destroy" {
+variable "force_destroy_enabled" {
   type        = bool
   description = "Whether to force destroy the bucket even if it contains objects. Use with caution."
   default     = false
@@ -118,6 +118,53 @@ variable "versioning_enabled" {
   type        = bool
   description = "Whether to enable versioning for the S3 bucket. When enabled, S3 keeps multiple versions of an object in the same bucket."
   default     = false
+}
+
+#-------------------------------------------------------------------------------
+# CORS
+#-------------------------------------------------------------------------------
+
+variable "cors_rules" {
+  type = list(object({
+    id              = optional(string)
+    allowed_headers = optional(list(string), [])
+    allowed_methods = list(string)
+    allowed_origins = list(string)
+    expose_headers  = optional(list(string), [])
+    max_age_seconds = optional(number)
+  }))
+  description = "List of CORS rule configurations for the bucket. Each rule defines allowed origins, methods, headers, exposed headers, and preflight cache duration. Note: allowed_headers defaults to [] (no headers permitted in preflight). For PUT/POST operations with custom request headers, set allowed_headers = [\"*\"] or list the specific headers explicitly."
+  default     = []
+
+  validation {
+    condition     = length(var.cors_rules) <= 100
+    error_message = "A bucket can have at most 100 CORS rules."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.cors_rules : length(rule.allowed_methods) > 0])
+    error_message = "Each CORS rule must include at least one allowed method."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.cors_rules : length(rule.allowed_origins) > 0])
+    error_message = "Each CORS rule must include at least one allowed origin."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for rule in var.cors_rules : [
+        for method in rule.allowed_methods :
+        contains(["GET", "PUT", "HEAD", "POST", "DELETE"], method)
+      ]
+    ]))
+    error_message = "CORS allowed_methods values must be one of: GET, PUT, HEAD, POST, DELETE."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.cors_rules : rule.max_age_seconds == null || rule.max_age_seconds >= 0])
+    error_message = "CORS max_age_seconds must be greater than or equal to 0."
+  }
 }
 
 #-------------------------------------------------------------------------------
@@ -211,15 +258,31 @@ variable "lifecycle_rules" {
 
 variable "policy_templates" {
   type        = list(string)
-  description = "List of policy template names to apply to the bucket. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs."
+  description = "List of policy template names to apply to the bucket. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs, cloudfront_oac_read."
   default     = []
 
   validation {
     condition = alltrue([
       for template in var.policy_templates :
-      contains(["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs"], template)
+      contains(["deny_insecure_transport", "alb_access_logs", "nlb_access_logs", "vpc_flow_logs", "cloudfront_oac_read"], template)
     ])
-    error_message = "Invalid policy template name. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs."
+    error_message = "Invalid policy template name. Available templates: deny_insecure_transport, alb_access_logs, nlb_access_logs, vpc_flow_logs, cloudfront_oac_read."
+  }
+
+  validation {
+    condition     = !contains(var.policy_templates, "cloudfront_oac_read") || length(var.cloudfront_distribution_arns) > 0
+    error_message = "cloudfront_distribution_arns must contain at least one distribution ARN when cloudfront_oac_read is selected."
+  }
+}
+
+variable "cloudfront_distribution_arns" {
+  type        = list(string)
+  description = "CloudFront distribution ARNs allowed to read objects when the cloudfront_oac_read policy template is selected."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.cloudfront_distribution_arns : can(regex("^arn:aws:cloudfront::[0-9]{12}:distribution/[A-Z0-9]+$", arn))])
+    error_message = "Each CloudFront distribution ARN must use arn:aws:cloudfront::123456789012:distribution/EXAMPLE format."
   }
 }
 
@@ -234,9 +297,9 @@ variable "custom_policy" {
   }
 }
 
-variable "create_bucket_policy" {
+variable "bucket_policy_creation_override_enabled" {
   type        = bool
-  description = "Override the default decision to create a bucket policy. When null (default), the module creates a policy if policy_templates or custom_policy is set. Set to true when passing a custom_policy whose value is known-after-apply."
+  description = "Overrides automatic bucket policy creation detection. Use only when custom_policy is known after plan, such as policies that depend on resources created in the same apply."
   default     = null
 }
 

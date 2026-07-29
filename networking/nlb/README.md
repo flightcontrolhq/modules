@@ -63,7 +63,7 @@ module "nlb" {
   name       = "internal"
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
-  internal   = true
+  internal_load_balancer_enabled   = true
 }
 ```
 
@@ -88,7 +88,7 @@ module "nlb" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 
-  enable_elastic_ips        = true
+  elastic_ips_enabled        = true
   elastic_ip_allocation_ids = aws_eip.nlb[*].allocation_id
 }
 ```
@@ -104,7 +104,7 @@ module "nlb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   # Access Logs - creates S3 bucket automatically
-  enable_access_logs         = true
+  access_logs_enabled         = true
   access_logs_retention_days = 365
 }
 ```
@@ -119,7 +119,7 @@ module "nlb" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 
-  enable_access_logs     = true
+  access_logs_enabled     = true
   access_logs_bucket_arn = "arn:aws:s3:::my-existing-logs-bucket"
   access_logs_prefix     = "nlb-logs"
 }
@@ -137,7 +137,7 @@ module "nlb" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 
-  enable_cross_zone_load_balancing = true
+  cross_zone_load_balancing_enabled = true
 }
 ```
 
@@ -196,9 +196,9 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| internal | If true, the NLB will be internal (not internet-facing) | `bool` | `false` | no |
-| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false | `bool` | `true` | no |
-| enable_cross_zone_load_balancing | Enable cross-zone load balancing | `bool` | `false` | no |
+| internal_load_balancer_enabled | If true, the NLB will be internal_load_balancer_enabled (not internet-facing) | `bool` | `false` | no |
+| deletion_protection_enabled | If true, the resource cannot be deleted via the AWS API until this is set to false | `bool` | `true` | no |
+| cross_zone_load_balancing_enabled | Enable cross-zone load balancing | `bool` | `false` | no |
 | dns_record_client_routing_policy | How traffic is distributed among NLB AZs (any_availability_zone, availability_zone_affinity, partial_availability_zone_affinity) | `string` | `null` | no |
 
 ### Security Group
@@ -215,14 +215,14 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_elastic_ips | Enable static IP addresses using Elastic IPs | `bool` | `false` | no |
+| elastic_ips_enabled | Enable static IP addresses using Elastic IPs | `bool` | `false` | no |
 | elastic_ip_allocation_ids | A list of Elastic IP allocation IDs, one per subnet | `list(string)` | `[]` | no |
 
 ### Access Logs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_access_logs | Enable access logging for the NLB | `bool` | `false` | no |
+| access_logs_enabled | Enable access logging for the NLB | `bool` | `false` | no |
 | access_logs_bucket_arn | ARN of an existing S3 bucket for access logs (creates new if null) | `string` | `null` | no |
 | access_logs_prefix | The S3 prefix for access logs | `string` | `""` | no |
 | access_logs_retention_days | Days to retain access logs in S3 | `number` | `90` | no |
@@ -302,9 +302,9 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │      NETWORK                    │   │      NLB SETTINGS                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal                              │  ║
-║  │ • tags                      │   │ • subnet_ids (required)         │   │ • deletion_protection                   │  ║
-║  └──────────────┬──────────────┘   │ • security_group_ids            │   │ • enable_cross_zone_load_balancing      │  ║
+║  │ • name (required)           │   │ • vpc_id (required)             │   │ • internal_load_balancer_enabled                              │  ║
+║  │ • tags                      │   │ • subnet_ids (required)         │   │ • deletion_protection_enabled                   │  ║
+║  └──────────────┬──────────────┘   │ • security_group_ids            │   │ • cross_zone_load_balancing_enabled      │  ║
 ║                 │                  └─────────────────────────────────┘   │ • dns_record_client_routing_policy      │  ║
 ║                 │                                                        │ • enforce_security_group_inbound_rules  │  ║
 ║                 │                                                        │   _on_private_link_traffic              │  ║
@@ -317,7 +317,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║  │  │ • tags = merge(default_tags, var.tags)                                                                   │   │  ║
 ║  │  │                                                                                                           │   │  ║
 ║  │  │ ACCESS LOGS FLAGS:                                                                                        │   │  ║
-║  │  │ • create_access_logs_bucket = var.enable_access_logs && var.access_logs_bucket_arn == null               │   │  ║
+║  │  │ • create_access_logs_bucket = var.access_logs_enabled && var.access_logs_bucket_arn == null               │   │  ║
 ║  │  │ • access_logs_bucket_name = create_access_logs_bucket ? aws_s3_bucket.access_logs[0].id :                │   │  ║
 ║  │  │                             (var.access_logs_bucket_arn != null ? regex(...) : null)                     │   │  ║
 ║  │  └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │  ║
@@ -326,7 +326,7 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │    ELASTIC IPs              │   │      ACCESS LOGS                │   │      ACCESS LOGS S3 CONFIG              │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • enable_elastic_ips        │   │ • enable_access_logs            │   │ • access_logs_retention_days            │  ║
+║  │ • elastic_ips_enabled        │   │ • access_logs_enabled            │   │ • access_logs_retention_days            │  ║
 ║  │ • elastic_ip_allocation_ids │   │ • access_logs_bucket_arn        │   │ • access_logs_kms_key_id                │  ║
 ║  └─────────────────────────────┘   │ • access_logs_prefix            │   │ • access_logs_versioning_enabled        │  ║
 ║                                    └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
@@ -433,17 +433,17 @@ resource "aws_vpc_security_group_ingress_rule" "from_nlb" {
 ║                                                     ▼                                                                  ║
 ║  var.vpc_id ─────────────────────────────► aws_lb.this (NLB)                                                          ║
 ║  var.subnet_ids ─────────────────────────►      │                                                                     ║
-║  var.internal ───────────────────────────►      │                                                                     ║
+║  var.internal_load_balancer_enabled ───────────────────────────►      │                                                                     ║
 ║  var.security_group_ids ─────────────────►      │                                                                     ║
-║  var.deletion_protection ────────────────►      │                                                                     ║
-║  var.enable_cross_zone_load_balancing ───►      │                                                                     ║
+║  var.deletion_protection_enabled ────────────────►      │                                                                     ║
+║  var.cross_zone_load_balancing_enabled ───►      │                                                                     ║
 ║  var.dns_record_client_routing_policy ───►      │                                                                     ║
 ║  local.tags ─────────────────────────────►      │                                                                     ║
 ║                                                  │                                                                     ║
-║  var.enable_elastic_ips ─────────────────►      │ (dynamic subnet_mapping)                                            ║
+║  var.elastic_ips_enabled ─────────────────►      │ (dynamic subnet_mapping)                                            ║
 ║  var.elastic_ip_allocation_ids ──────────►      │                                                                     ║
 ║                                                  │                                                                     ║
-║  var.enable_access_logs ─────────────────►      │ (dynamic access_logs)                                               ║
+║  var.access_logs_enabled ─────────────────►      │ (dynamic access_logs)                                               ║
 ║  local.access_logs_bucket_name ──────────►      │                                                                     ║
 ║  var.access_logs_prefix ─────────────────►      │                                                                     ║
 ║                                                  │                                                                     ║
@@ -520,7 +520,7 @@ Cross-zone load balancing distributes traffic evenly across all targets in all e
 
 ```hcl
 # Enable when you have uneven target distribution
-enable_cross_zone_load_balancing = true
+cross_zone_load_balancing_enabled = true
 ```
 
 ### How do Elastic IPs work with NLB?

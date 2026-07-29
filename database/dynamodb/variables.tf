@@ -221,7 +221,7 @@ variable "point_in_time_recovery_enabled" {
   default     = true
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
   default     = true
@@ -233,10 +233,10 @@ variable "deletion_protection" {
 
 variable "replicas" {
   type = list(object({
-    region_name            = string
-    kms_key_arn            = optional(string)
-    propagate_tags         = optional(bool, true)
-    point_in_time_recovery = optional(bool, true)
+    region_name                    = string
+    kms_key_arn                    = optional(string)
+    tag_propagation_enabled        = optional(bool, true)
+    point_in_time_recovery_enabled = optional(bool, true)
   }))
   description = "List of replica regions for a global table (v2). Requires stream_enabled = true."
   default     = []
@@ -332,7 +332,7 @@ variable "autoscaling_indexes" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "create_cloudwatch_alarms" {
+variable "cloudwatch_alarms_creation_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for throttled requests and system errors."
   default     = false

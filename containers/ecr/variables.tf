@@ -38,13 +38,13 @@ variable "image_tag_mutability" {
   }
 }
 
-variable "scan_on_push" {
+variable "image_scan_on_push_enabled" {
   type        = bool
   description = "Indicates whether images are scanned for vulnerabilities after being pushed."
   default     = true
 }
 
-variable "force_delete" {
+variable "force_delete_enabled" {
   type        = bool
   description = "If true, the repository will be deleted even if it contains images. Use with caution."
   default     = false
@@ -86,7 +86,7 @@ variable "lifecycle_policy" {
   default     = null
 }
 
-variable "enable_default_lifecycle_policy" {
+variable "default_lifecycle_policy_enabled" {
   type        = bool
   description = "Apply a built-in lifecycle policy that expires untagged images and caps the number of tagged images retained. Ignored if lifecycle_policy is set."
   default     = false
@@ -94,7 +94,7 @@ variable "enable_default_lifecycle_policy" {
 
 variable "untagged_image_expiry_days" {
   type        = number
-  description = "Number of days after which untagged images are expired. Used only when enable_default_lifecycle_policy is true."
+  description = "Number of days after which untagged images are expired. Used only when default_lifecycle_policy_enabled is true."
   default     = 14
 
   validation {
@@ -105,7 +105,7 @@ variable "untagged_image_expiry_days" {
 
 variable "max_tagged_image_count" {
   type        = number
-  description = "Maximum number of tagged images to retain. Older images beyond this count are expired. Used only when enable_default_lifecycle_policy is true."
+  description = "Maximum number of tagged images to retain. Older images beyond this count are expired. Used only when default_lifecycle_policy_enabled is true."
   default     = 100
 
   validation {

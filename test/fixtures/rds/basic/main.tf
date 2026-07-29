@@ -69,10 +69,11 @@ module "vpc" {
 module "rds" {
   source = "../../../../database/rds"
 
-  name           = var.name
-  engine         = "postgres"
-  engine_version = "16.6"
-  instance_class = "db.t3.micro"
+  name                 = var.name
+  engine               = "postgres"
+  engine_major_version = "16"
+  engine_minor_version = "6"
+  instance_class       = "db.t3.micro"
 
   allocated_storage      = 20
   parameter_group_family = "postgres16"
@@ -83,15 +84,15 @@ module "rds" {
   username = "dbadmin"
   db_name  = "testdb"
 
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Test-friendly lifecycle settings.
-  deletion_protection          = false
-  skip_final_snapshot          = true
-  backup_retention_period      = 1
-  apply_immediately            = true
-  performance_insights_enabled = false
+  deletion_protection_enabled     = false
+  final_snapshot_creation_enabled = false
+  backup_retention_period         = 1
+  immediate_apply_enabled         = true
+  performance_insights_enabled    = false
 
   tags = local.common_tags
 }
@@ -128,6 +129,11 @@ output "address" {
 output "port" {
   description = "RDS endpoint port."
   value       = module.rds.port
+}
+
+output "db_parameter_group_name" {
+  description = "RDS DB parameter group name."
+  value       = module.rds.db_parameter_group_name
 }
 
 output "security_group_id" {

@@ -9,11 +9,12 @@
 # before the cache lookup, so each promoted version produces a fresh cache key
 # automatically — no CreateInvalidation, no custom_error_responses needed.
 #
-# The viewer-response CloudFront Function (created when manage_cache_control =
+# The viewer-response CloudFront Function (created when cache_control_enabled =
 # true, the default) sets Cache-Control on every response based on the
-# rewritten URI shape: HTML responses get a short s-maxage + long
-# stale-while-revalidate, hashed assets get the immutable 1-year browser
-# cache. See functions/cache_control.js for the classification rules.
+# rewritten URI shape. These headers only steer the BROWSER — CloudFront
+# ignores viewer-response headers for edge TTLs. HTML responses get
+# revalidate-always, hashed assets get the immutable 1-year browser cache.
+# See functions/cache_control.js for the classification rules.
 ################################################################################
 
 module "cdn" {
@@ -29,14 +30,14 @@ module "cdn" {
 
   origins = [
     {
-      origin_id      = local.origin_id
-      domain_name    = module.hosting.bucket_regional_domain_name
-      s3_origin      = true
-      custom_headers = var.additional_origin_headers
-      origin_shield = var.origin_shield_region == null ? null : {
+      origin_id         = local.origin_id
+      domain_name       = module.hosting.bucket_regional_domain_name
+      s3_origin_enabled = true
+      custom_headers    = var.additional_origin_headers
+      origin_shield = var.origin_shield_enabled ? {
         enabled              = true
-        origin_shield_region = var.origin_shield_region
-      }
+        origin_shield_region = local.origin_shield_region
+      } : null
     }
   ]
 
@@ -45,8 +46,8 @@ module "cdn" {
     viewer_protocol_policy       = "redirect-to-https"
     allowed_methods              = ["GET", "HEAD", "OPTIONS"]
     cached_methods               = ["GET", "HEAD"]
-    compress                     = true
-    cache_policy_id              = var.cache_policy_id
+    compression_enabled          = true
+    cache_policy_id              = local.effective_cache_policy_id
     origin_request_policy_id     = var.origin_request_policy_id
     response_headers_policy_id   = local.effective_response_headers_policy_id
     function_associations        = local.cff_associations
@@ -55,11 +56,13 @@ module "cdn" {
 
   ordered_cache_behaviors = local.ordered_behaviors
 
-  default_root_object = var.default_root_object
-  price_class         = var.price_class
-  http_version        = "http2and3"
-  is_ipv6_enabled     = true
-  wait_for_deployment = var.wait_for_deployment
+  custom_error_responses = local.custom_error_responses
+
+  default_root_object     = var.default_root_object
+  price_class             = var.price_class
+  http_version            = "http2and3"
+  ipv6_enabled            = true
+  deployment_wait_enabled = var.deployment_wait_enabled
 
   minimum_protocol_version = var.minimum_protocol_version
 
@@ -68,11 +71,12 @@ module "cdn" {
 
   web_acl_id = var.web_acl_id
 
-  enable_logging                = var.enable_logging
-  create_logging_bucket         = var.create_logging_bucket
-  logging_bucket_domain_name    = var.logging_bucket_domain_name
-  logging_prefix                = var.logging_prefix
-  logging_bucket_retention_days = var.logging_retention_days
+  logging_enabled                 = var.logging_enabled
+  logging_destination             = var.logging_destination
+  logging_bucket_creation_enabled = var.logging_bucket_creation_enabled
+  logging_bucket_domain_name      = var.logging_bucket_domain_name
+  logging_prefix                  = var.logging_prefix
+  logging_bucket_retention_days   = var.logging_retention_days
 
   tags = local.tags
 }

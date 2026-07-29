@@ -4,8 +4,8 @@
 
 resource "aws_acm_certificate" "this" {
   region                    = var.region
-  domain_name               = var.domain_name
-  subject_alternative_names = length(var.subject_alternative_names) > 0 ? var.subject_alternative_names : null
+  domain_name               = var.domains[0]
+  subject_alternative_names = length(var.domains) > 1 ? slice(var.domains, 1, length(var.domains)) : null
   validation_method         = "DNS"
 
   lifecycle {
@@ -22,7 +22,7 @@ resource "aws_acm_certificate" "this" {
 ################################################################################
 
 resource "aws_acm_certificate_validation" "this" {
-  count = var.wait_for_validation ? 1 : 0
+  count = var.certificate_validation_wait_enabled ? 1 : 0
 
   region          = var.region
   certificate_arn = aws_acm_certificate.this.arn

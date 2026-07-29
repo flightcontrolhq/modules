@@ -86,13 +86,13 @@ variable "network_type" {
   }
 }
 
-variable "enable_http_endpoint" {
+variable "http_endpoint_enabled" {
   description = "Enable HTTP endpoint (Data API) for the Aurora cluster."
   type        = bool
   default     = false
 }
 
-variable "enable_local_write_forwarding" {
+variable "local_write_forwarding_enabled" {
   description = "Enable local write forwarding for the Aurora cluster. Only supported on Aurora MySQL."
   type        = bool
   default     = false
@@ -104,13 +104,13 @@ variable "ca_certificate_identifier" {
   default     = null
 }
 
-variable "apply_immediately" {
+variable "immediate_apply_enabled" {
   description = "Specifies whether any cluster modifications are applied immediately, or during the next maintenance window."
   type        = bool
   default     = false
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   description = "If the cluster should have deletion protection enabled."
   type        = bool
   default     = true
@@ -151,7 +151,7 @@ variable "availability_zones" {
   default     = []
 }
 
-variable "publicly_accessible" {
+variable "public_access_enabled" {
   description = "Bool to control if instances are publicly accessible. Default is false."
   type        = bool
   default     = false
@@ -167,7 +167,7 @@ variable "db_subnet_group_name" {
 # Security Group
 ################################################################################
 
-variable "create_security_group" {
+variable "security_group_creation_enabled" {
   description = "Whether to create a new security group for the Aurora cluster."
   type        = bool
   default     = true
@@ -232,7 +232,7 @@ variable "master_username" {
 }
 
 variable "master_password" {
-  description = "Password for the master DB user. Required when manage_master_user_password is false. Must be 8-128 characters."
+  description = "Password for the master DB user. Required when master_user_password_management_enabled is false. Must be 8-128 characters."
   type        = string
   default     = null
   sensitive   = true
@@ -243,7 +243,7 @@ variable "master_password" {
   }
 }
 
-variable "manage_master_user_password" {
+variable "master_user_password_management_enabled" {
   description = "Whether to manage the master user password with Secrets Manager. Default is true."
   type        = bool
   default     = true
@@ -270,7 +270,7 @@ variable "iam_database_authentication_enabled" {
 # Encryption
 ################################################################################
 
-variable "storage_encrypted" {
+variable "storage_encryption_enabled" {
   description = "Specifies whether the DB cluster storage is encrypted."
   type        = bool
   default     = true
@@ -328,7 +328,7 @@ variable "instances" {
   type = map(object({
     instance_class               = optional(string)
     availability_zone            = optional(string)
-    publicly_accessible          = optional(bool)
+    public_access_enabled        = optional(bool)
     promotion_tier               = optional(number)
     performance_insights_enabled = optional(bool)
     monitoring_interval          = optional(number)
@@ -393,16 +393,16 @@ variable "preferred_backup_window" {
   }
 }
 
-variable "copy_tags_to_snapshot" {
+variable "snapshot_tag_copying_enabled" {
   description = "Copy all cluster tags to snapshots."
   type        = bool
   default     = true
 }
 
-variable "skip_final_snapshot" {
+variable "final_snapshot_creation_enabled" {
   description = "Determines whether a final DB snapshot is created before the cluster is deleted."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "final_snapshot_identifier" {
@@ -450,13 +450,13 @@ variable "preferred_maintenance_window" {
   }
 }
 
-variable "allow_major_version_upgrade" {
+variable "major_version_upgrade_enabled" {
   description = "Enable to allow major engine version upgrades when changing engine versions."
   type        = bool
   default     = false
 }
 
-variable "auto_minor_version_upgrade" {
+variable "minor_version_auto_upgrade_enabled" {
   description = "Indicates that minor engine upgrades will be applied automatically during the maintenance window."
   type        = bool
   default     = true
@@ -466,14 +466,14 @@ variable "auto_minor_version_upgrade" {
 # Parameter Groups
 ################################################################################
 
-variable "create_cluster_parameter_group" {
+variable "cluster_parameter_group_creation_enabled" {
   description = "Whether to create a new cluster parameter group."
   type        = bool
   default     = true
 }
 
 variable "cluster_parameter_group_name" {
-  description = "The name of an existing cluster parameter group to use. Required if create_cluster_parameter_group is false."
+  description = "The name of an existing cluster parameter group to use. Required if cluster_parameter_group_creation_enabled is false."
   type        = string
   default     = null
 }
@@ -494,14 +494,14 @@ variable "cluster_parameters" {
   default = []
 }
 
-variable "create_db_parameter_group" {
+variable "db_parameter_group_creation_enabled" {
   description = "Whether to create a new DB parameter group for instances."
   type        = bool
   default     = true
 }
 
 variable "db_parameter_group_name" {
-  description = "The name of an existing DB parameter group to use. Required if create_db_parameter_group is false."
+  description = "The name of an existing DB parameter group to use. Required if db_parameter_group_creation_enabled is false."
   type        = string
   default     = null
 }
@@ -544,7 +544,7 @@ variable "monitoring_interval" {
 }
 
 variable "monitoring_role_arn" {
-  description = "The ARN of the IAM role for Enhanced Monitoring. If not provided and create_monitoring_role is true, a new role will be created."
+  description = "The ARN of the IAM role for Enhanced Monitoring. If not provided and monitoring_role_creation_enabled is true, a new role will be created."
   type        = string
   default     = null
 
@@ -554,7 +554,7 @@ variable "monitoring_role_arn" {
   }
 }
 
-variable "create_monitoring_role" {
+variable "monitoring_role_creation_enabled" {
   description = "Whether to create an IAM role for Enhanced Monitoring."
   type        = bool
   default     = true
@@ -588,7 +588,7 @@ variable "performance_insights_kms_key_id" {
   }
 }
 
-variable "create_cloudwatch_alarms" {
+variable "cloudwatch_alarms_creation_enabled" {
   description = "Whether to create CloudWatch alarms for the Aurora cluster."
   type        = bool
   default     = false
@@ -665,7 +665,7 @@ variable "cloudwatch_alarm_period" {
 # Auto-scaling
 ################################################################################
 
-variable "enable_autoscaling" {
+variable "autoscaling_enabled" {
   description = "Whether to enable Application Auto Scaling for Aurora read replicas."
   type        = bool
   default     = false
@@ -762,7 +762,7 @@ variable "custom_endpoints" {
 # Global Database
 ################################################################################
 
-variable "create_global_cluster" {
+variable "global_cluster_creation_enabled" {
   description = "Whether to create a global Aurora cluster."
   type        = bool
   default     = false
@@ -785,7 +785,7 @@ variable "source_region" {
   default     = null
 }
 
-variable "enable_global_write_forwarding" {
+variable "global_write_forwarding_enabled" {
   description = "Whether to enable global write forwarding. Only supported on Aurora PostgreSQL."
   type        = bool
   default     = false
@@ -795,7 +795,7 @@ variable "enable_global_write_forwarding" {
 # Activity Streams
 ################################################################################
 
-variable "enable_activity_stream" {
+variable "activity_stream_enabled" {
   description = "Whether to enable Database Activity Streams on the Aurora cluster."
   type        = bool
   default     = false
@@ -813,7 +813,7 @@ variable "activity_stream_mode" {
 }
 
 variable "activity_stream_kms_key_id" {
-  description = "The ARN of the KMS key used to encrypt activity stream data. Required when enable_activity_stream is true."
+  description = "The ARN of the KMS key used to encrypt activity stream data. Required when activity_stream_enabled is true."
   type        = string
   default     = null
 

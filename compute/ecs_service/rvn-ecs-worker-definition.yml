@@ -1,0 +1,218 @@
+definition:
+  type: rvn-ecs-worker
+  name: ECS Worker
+  description: Background worker ECS service for running private container workloads without exposed ports.
+release:
+  version: 0.3.3
+  description: Improve build source, Railpack command, and builder instance guidance.
+module:
+  inputs:
+    - id: section_cluster
+      label: ECS cluster
+      type: section
+    - id: cluster
+      immutable: true
+      label: ECS cluster
+      type: $ref:rvn-ecs-cluster
+      mapped_inputs:
+        - $include: ../../partials/inputs/ecs-service-cluster-common-mapped-inputs.yml
+      required: true
+    - id: section_service
+      label: Worker service
+      type: section
+    - id: name
+      immutable: true
+      label: Service name
+      type: string
+      description: Name for the ECS worker service and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
+    - id: private_subnet_placement_enabled
+      label: Run in private subnets
+      type: boolean
+      description: Recommended. Requires a NAT gateway or equivalent for internet access and keeps worker tasks off public subnets.
+      default: true
+    - $include: ../../partials/inputs/ecs-service-build-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-capacity-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-autoscaling-inputs.yml
+    - $template: ../../partials/templates/ecs-service-runtime-env-inputs.yml
+      with:
+        environment_variables_description: Runtime environment variables passed to the worker container.
+    - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-efs-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
+  stack:
+    type: opentofu
+    ravion_state_backend_workspace: >-
+      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
+      + module.given_id + "-" + stack.id>>
+    pipelines:
+      defaults:
+        input:
+          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
+          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
+          base_path: compute/ecs_service
+          branch: main
+          execution_environment_id: << module.input.execution_environment_id >>
+          ref: $local.module_tag
+          repo: https://github.com/flightcontrolhq/modules
+          stack_id: <<stack.id>>
+          terraform_variables:
+            $merge:
+              - ../../partials/stack/ecs-service-common-terraform-variables.yml
+              - container_port: 3000
+                load_balancer_attachment: null
+          tool: opentofu
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
+        variant: standard
+      change:
+        pipeline_id: << defaults.change_pipeline_id >>
+      destroy:
+        pipeline_id: << defaults.destroy_pipeline_id >>
+  build:
+    $include: ../../partials/build/ecs-service-image-build.yml
+  deploy:
+    $merge:
+      - ../../partials/deploy/ecs-service-deploy-common.yml
+    task_definition:
+      $merge:
+        - ../../partials/deploy/ecs-service-task-definition-common.yml
+      container_definitions: >-
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.image_start_command)
+        > 0 ? module.input.image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
+        int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
+        "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment":
+        (module.input.environment_variables != nil ? module.input.environment_variables : []), "essential": true,
+        "image": (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains
+        "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository
+        + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
+        stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url + ":" +
+        deploy.input.image_ref)), "linux_parameters": {"init_process_enabled": true}, "log_configuration":
+        {"log_driver": "awsfirelens"}, "memory": (module.input.capacity_provider == "ec2" ?
+        int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) * 1024)),
+        "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []),
+        "name": (stack.output.container_name), "readonly_root_filesystem": false, "repository_credentials":
+        (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
+        module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
+        "stop_timeout": 30}, {"name": "log_router", "image": module.input.firelens_image, "cpu": 0,
+        "memory_reservation": 51, "essential": true, "environment": ([{name: "FIRELENS_CONFIG_CONTENT",
+        value: "[SERVICE]\n    Flush 1\n    Grace 30\n\n" + (module.input.firelens_config ?
+        module.input.firelens_config + "\n" : "") + (module.input.firelens_cloudwatch_output_enabled ?
+        "\n[OUTPUT]\n    Name cloudwatch\n    Match *\n    region " + stack.output.region +
+        "\n    log_group_name " + stack.output.log_group_name +
+        "\n    auto_create_group true\n    log_stream_prefix " + stack.output.log_stream_prefix +
+        "/\n    retry_limit 2\n    log_key log\n    log_format json/emf\n" : "")}] |
+        concat(module.input.firelens_environment_variables != nil ? module.input.firelens_environment_variables : [])),
+        "secrets": module.input.firelens_secrets != nil ? module.input.firelens_secrets : [], "command":
+        ["/bin/sh", "-c", "printf '%s' \"$FIRELENS_CONFIG_CONTENT\" > /flightcontrol-firelens.conf && exec /entrypoint.sh"],
+        "user": "0", "log_configuration": {"log_driver": "awslogs", "options": {"awslogs-group":
+        stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
+        stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
+        "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
+        "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
+        (len(module.input.image_start_command) > 0 ? module.input.image_start_command : nil), "cpu":
+        (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
+        int(float(module.input.fargate_size.vcpu) * 1024)), "environment": (module.input.environment_variables != nil ?
+        module.input.environment_variables : []), "essential": true, "image": (module.input.build_source ==
+        "image_registry" ? (deploy.input.image_ref contains "sha256:" ? module.input.image_repository + "@" +
+        deploy.input.image_ref : module.input.image_repository + ":" + deploy.input.image_ref) :
+        (deploy.input.image_ref contains "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
+        stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
+        {"init_process_enabled": true}, "log_configuration": {"log_driver": "awslogs", "options":
+        {"awslogs-group": stack.output.log_group_name, "awslogs-region": stack.output.region,
+        "awslogs-stream-prefix": stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider ==
+        "ec2" ? int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
+        1024)), "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
+        (stack.output.container_name), "readonly_root_filesystem": false,
+        "repository_credentials": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
+        module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
+        "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars : []) >>
+  ui:
+    logs:
+      - id: ecs_worker_logs
+        name: ECS worker logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: << stack.output.log_group_name >>
+          log_stream_prefix: << stack.output.log_stream_prefix >>
+    metrics:
+      - $include: ../../partials/ui/ecs-service-common-metrics.yml
+  readme: |
+    Background worker ECS service for running private container workloads without exposed ports.
+
+    ## Overview
+
+    The ECS Worker module creates an ECS service for background jobs, queue consumers, event processors, and other private workloads in an existing Ravion ECS cluster. It uses the same ECS service Terraform module as ECS Web Server, but does not create or attach a load balancer target group and does not expose a primary container port.
+
+    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+
+    ## Use cases
+
+    | Scenario | ECS Worker helps by... |
+    | -------- | ---------------------- |
+    | Queue consumers | Running scalable workers for SQS, Kafka, Redis, or custom queues |
+    | Background jobs | Processing async work without public HTTP routing |
+    | Event processors | Running long-lived containers that consume streams or events |
+    | Private workloads | Keeping tasks off external load balancers and public ports |
+
+    ## Networking
+
+    Workers do not expose a primary app port and are not registered with an Application Load Balancer. Run in private subnets is enabled by default so tasks stay private while using NAT or equivalent egress for outbound dependencies.
+
+    Sidecars may still define port mappings for task-local agents, proxies, or helper containers. Those sidecar ports are not exposed through a load balancer by this module.
+
+    ## Build and deployment
+
+    Workers support Dockerfile, Railpack, and Pull from image registry deployments. Deployments update the ECS service task definition with the selected image, generated container definition, logs, runtime environment variables, secrets, IAM roles, volumes, sidecars, and selected capacity provider settings. For Railpack builds, you can optionally pin the Railpack version and override install, build, and start commands. For Fargate and Fargate Spot, App ephemeral storage uses the AWS default of 20 GiB unless you increase it to 21-200 GiB. For image registry deployments, use Start command to override the image default CMD when the worker process uses a different command.
+
+    ## Persistent storage
+
+    Enable the EFS file system setting, select a Ravion EFS module, and set the EFS mount path. Ravion adds the task volume, mounts it into the worker container, attaches the file system's client security group to the service so NFS traffic is allowed, and mounts through the file system's access point when one is enabled. Sidecars mount the same file system through their Mount points setting with `efs` as the source volume.
+
+    EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. Transit encryption is enabled by default. Enable EFS IAM authorization to authorize file system access with the task role; the task role must allow elasticfilesystem:ClientMount, plus elasticfilesystem:ClientWrite or elasticfilesystem:ClientRootAccess as needed.
+
+    ## Autoscaling
+
+    Autoscaling is enabled by default with CPU and memory target tracking. Use custom metric scaling policies for queue depth, lag, backlog, or other workload-specific metrics that better represent worker demand. When autoscaling is disabled, Desired tasks controls how many worker tasks the ECS service keeps running.
+
+    ## Configuration
+
+    | Field | Required | Default | Description |
+    | ----- | -------- | ------- | ----------- |
+    | ECS cluster | Yes | - | Existing rvn-ecs-cluster module instance |
+    | Service name | Yes | {project}-{env}-{module} | Name for the ECS service and related resources |
+    | Run in private subnets | No | true | Run tasks in private subnets without public IPs |
+    | Build source | Yes | dockerfile | Dockerfile, Railpack, or Pull from image registry |
+    | Start command | No | [] | Command arguments that override an image default CMD |
+    | Capacity provider | Yes | fargate | Primary service capacity provider |
+    | App size | No | 2 vCPU, 4 GB | Fargate task CPU and memory |
+    | App ephemeral storage (GiB) | No | 20 | Fargate task ephemeral storage |
+    | Autoscaling | No | true | Enable CPU and optional memory target tracking |
+    | Desired tasks | Yes* | 1 | Number of worker tasks when autoscaling is disabled |
+    | Custom metric scaling policies | No | [] | Queue/backlog-oriented target tracking policies |
+    | Runtime environment variables | No | - | Environment variables passed to the worker container |
+    | Runtime secrets | No | - | Secrets injected from SSM Parameter Store or Secrets Manager |
+    | Sidecars | No | [] | Additional containers in the worker task |
+    | EFS file system | No | false | Mount an EFS file system into the worker container |
+    | EFS mount path | Yes* | /mnt/efs | Worker container path for the referenced file system |
+
+    ## Design decisions
+
+    - The module intentionally creates an ECS service without load balancer attachment or primary container port mappings.
+    - Sidecar port mappings are allowed for task-local communication, agents, and proxies.
+    - Desired count uses the autoscaling minimum when autoscaling is enabled and the Desired tasks input when autoscaling is disabled.
+    - Advanced Terraform variables exist for exceptional lower-level overrides. Prefer the typed Ravion fields whenever possible.
+
+    ## Learn more
+
+    - [Amazon ECS services](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_services.html)
+    - [Amazon ECS capacity providers](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cluster-capacity-providers.html)
+    - [Amazon ECS service auto scaling](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html)

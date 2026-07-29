@@ -15,7 +15,7 @@ resource "aws_dynamodb_table" "this" {
   stream_enabled   = var.stream_enabled || local.has_replicas
   stream_view_type = (var.stream_enabled || local.has_replicas) ? var.stream_view_type : null
 
-  deletion_protection_enabled = var.deletion_protection
+  deletion_protection_enabled = var.deletion_protection_enabled
 
   dynamic "attribute" {
     for_each = var.attributes
@@ -81,8 +81,8 @@ resource "aws_dynamodb_table" "this" {
     content {
       region_name            = replica.value.region_name
       kms_key_arn            = replica.value.kms_key_arn
-      propagate_tags         = replica.value.propagate_tags
-      point_in_time_recovery = replica.value.point_in_time_recovery
+      propagate_tags         = replica.value.tag_propagation_enabled
+      point_in_time_recovery = replica.value.point_in_time_recovery_enabled
     }
   }
 

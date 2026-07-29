@@ -1,21 +1,23 @@
 # ECS Service Module
 
-This module creates an Amazon ECS service with a placeholder task definition, load balancer integration, auto scaling, and service discovery. It supports both rolling and blue/green deployment strategies.
+This module creates an Amazon ECS service with a placeholder task definition, load balancer integration, auto scaling, and service discovery. It supports the native ECS deployment strategies: rolling, blue/green, linear, and canary.
 
-**Note:** This module provisions infrastructure with a placeholder container (hello-world). An external deployment controller (e.g. CodeDeploy or another CI/CD tool) is expected to deploy the actual application by updating the task definition.
+**Note:** This module provisions infrastructure with a placeholder container (hello-world). The Flightcontrol deploy manager deploys the actual application by registering task definitions and calling UpdateService with the authoritative `deploymentConfiguration` (strategy, bake times, pause lifecycle hooks) on every deploy.
+
+For ALB attachments, the module provisions the production + alternate target-group pair, ECS infrastructure role, and `load_balancer.advanced_configuration`, so deployment strategy remains a per-deployment decision. The rolling-only `nlb_listeners` shape instead creates one target group per listener and omits traffic-shift infrastructure. ALB traffic-shift deployments require a single production listener rule. `deployment_type` only seeds the strategy at create time.
 
 ## Features
 
-- ECS service with configurable deployment strategies (rolling or blue/green)
+- ECS service with configurable native deployment strategies (rolling, blue/green, linear, canary)
 - Placeholder task definition (hello-world) - the external deployment controller updates with the actual application
 - IAM roles for task execution and task roles with optional ECS Exec support
 - Security group for ECS tasks with configurable ingress rules
 - Target group creation for ALB/NLB integration
 - Listener rule configuration for path-based and host-based routing
-- NLB listener creation with TLS support
+- One or more NLB listeners with per-listener container ports and TLS support for rolling deployments
 - Application Auto Scaling with target tracking and scheduled scaling
 - AWS Cloud Map service discovery integration
-- Blue/green deployment infrastructure (managed by an external deployment controller)
+- Native traffic-shift deployment infrastructure for ALB attachments
 - Support for EFS and Docker volume configurations
 - Capacity provider strategy support for mixed Fargate/EC2 deployments
 
@@ -32,8 +34,8 @@ module "ecs_cluster" {
   private_subnet_ids = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
   public_subnet_ids  = ["subnet-public-1", "subnet-public-2"]
 
-  enable_public_alb       = true
-  public_alb_enable_https = true
+  public_alb_enabled       = true
+  public_alb_https_enabled = true
   public_alb_certificate_arns = ["arn:aws:acm:us-east-1:123456789012:certificate/abc123"]
 }
 
@@ -114,9 +116,10 @@ module "api_service" {
   }
 }
 
-# Use the outputs to configure an external deployment controller
-# module.api_service.blue_target_group_arn
-# module.api_service.green_target_group_arn
+# Target groups + ECS infrastructure role for the traffic shift:
+# module.api_service.production_target_group_arn
+# module.api_service.alternate_target_group_arn
+# module.api_service.ecs_infrastructure_role_arn
 ```
 
 ### With Service Discovery
@@ -170,11 +173,13 @@ module "tcp_service" {
       port     = 5000
       protocol = "TCP"
     }
-    nlb_listener = {
-      nlb_arn  = aws_lb.nlb.arn
-      port     = 5000
-      protocol = "TCP"
-    }
+    nlb_listeners = [{
+      nlb_arn         = aws_lb.nlb.arn
+      port            = 5000
+      protocol        = "TCP"
+      container_port  = 5000
+      target_protocol = "TCP"
+    }]
   }
 }
 ```
@@ -253,7 +258,7 @@ module "worker_service" {
 | Name | Version |
 |------|---------|
 | opentofu/terraform | >= 1.10.0 |
-| aws | >= 5.0 |
+| aws | >= 6.21 |
 
 ## Inputs
 
@@ -270,7 +275,7 @@ module "worker_service" {
 |------|-------------|------|---------|----------|
 | vpc_id | VPC ID where the service will run | `string` | n/a | yes |
 | subnet_ids | Subnet IDs for ECS tasks | `list(string)` | n/a | yes |
-| assign_public_ip | Assign public IP to tasks (for Fargate in public subnets without NAT) | `bool` | `false` | no |
+| public_ip_assignment_enabled | Assign public IP to tasks (for Fargate in public subnets without NAT) | `bool` | `false` | no |
 | security_group_ids | Additional security group IDs to attach | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the service | `list(string)` | `[]` | no |
 
@@ -286,12 +291,20 @@ module "worker_service" {
 |------|-------------|------|---------|----------|
 | task_cpu | CPU units for the task (256, 512, 1024, 2048, 4096, 8192, 16384) | `number` | `256` | no |
 | task_memory | Memory (MiB) for the task (512-122880) | `number` | `512` | no |
+| task_ephemeral_storage_size_gib | Ephemeral storage size in GiB for Fargate tasks (null = AWS default 20 GiB; set value must be 21-200 GiB) | `number` | `null` | no |
 | container_port | Port for the placeholder container | `number` | `80` | no |
 | launch_type | Launch type (FARGATE or EC2) | `string` | `"FARGATE"` | no |
 | network_mode | Docker networking mode (awsvpc, bridge, host, none) | `string` | `"awsvpc"` | no |
 | requires_compatibilities | Launch type compatibility requirements | `list(string)` | `["FARGATE"]` | no |
 | runtime_platform | Runtime platform configuration (OS family, CPU architecture) | `object` | `{}` | no |
 | volumes | List of volume definitions (EFS or Docker) | `list(object)` | `[]` | no |
+
+### CloudWatch Logs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| log_retention_days | Days to retain CloudWatch logs (0 = retain indefinitely) | `number` | `30` | no |
+| log_kms_key_id | KMS key ARN for encrypting the log group (null = default encryption) | `string` | `null` | no |
 
 ### IAM
 
@@ -307,14 +320,22 @@ module "worker_service" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | desired_count | Desired number of tasks (0 for infrastructure-first) | `number` | `0` | no |
-| deployment_type | Deployment type: rolling or blue_green | `string` | `"rolling"` | no |
+| deployment_type | Initial deployment strategy for direct Terraform use; Ravion stacks use rolling and set blue_green/linear/canary per deploy via UpdateService | `string` | `"rolling"` | no |
+| deployment_strategy_config | Initial bake/canary/linear tuning for direct Terraform use; Ravion stacks set this per deploy through the deploy manager | `object` | `{}` | no |
+| test_listener_rule_arn | Optional ALB listener rule ARN for test traffic during blue/green validation when the module-created green listener rule is not enabled | `string` | `null` | no |
+| green_alb_listener_rule_enabled | Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments, so the new revision can be validated before production traffic shifts. ALB-only; no effect for NLB services | `bool` | `true` | no |
+| test_traffic_condition_type | Which request attribute distinguishes test traffic for the green rule: `header` (test_header_name/value) or `query-string` (test_query_string_key/value). One type per service — ALB AND-combines conditions and ECS wires exactly one test rule, so genuine "header OR query-string" matching is not possible natively | `string` | `"query-string"` | no |
+| test_header_name | HTTP header name that routes test traffic to the green target group when test_traffic_condition_type is `header` | `string` | `"X-Ravion-Test"` | no |
+| test_header_value | Value paired with test_header_name when test_traffic_condition_type is `header` | `string` | `"1"` | no |
+| test_query_string_key | Query-string key that routes test traffic to the green target group when test_traffic_condition_type is `query-string` (e.g. `?__x-rvn-test__=1`) | `string` | `"__x-rvn-test__"` | no |
+| test_query_string_value | Value paired with test_query_string_key when test_traffic_condition_type is `query-string` | `string` | `"1"` | no |
 | deployment_minimum_healthy_percent | Minimum healthy percent during deployment | `number` | `100` | no |
 | deployment_maximum_percent | Maximum percent during deployment | `number` | `200` | no |
-| enable_execute_command | Enable ECS Exec for debugging | `bool` | `false` | no |
-| force_new_deployment | Force a new deployment | `bool` | `false` | no |
-| wait_for_steady_state | Wait for service to reach steady state | `bool` | `true` | no |
+| execute_command_enabled | Enable ECS Exec for debugging | `bool` | `false` | no |
+| new_deployment_forcing_enabled | Force a new deployment | `bool` | `false` | no |
+| steady_state_wait_enabled | Wait for service to reach steady state | `bool` | `true` | no |
 | health_check_grace_period_seconds | Grace period for LB health checks | `number` | `0` | no |
-| enable_ecs_managed_tags | Enable ECS managed tags | `bool` | `true` | no |
+| ecs_managed_tags_enabled | Enable ECS managed tags | `bool` | `true` | no |
 | propagate_tags | Propagate tags from SERVICE or TASK_DEFINITION | `string` | `"SERVICE"` | no |
 | platform_version | Fargate platform version | `string` | `"LATEST"` | no |
 | capacity_provider_strategies | Capacity provider strategies | `list(object)` | `[]` | no |
@@ -329,13 +350,13 @@ module "worker_service" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| load_balancer_attachment | Load balancer configuration including target group, listener rules, and NLB listener | `object` | `null` | no |
+| load_balancer_attachment | Load balancer configuration including target group, listener rules, and NLB listeners | `object` | `null` | no |
 
 The `load_balancer_attachment` object includes:
 - `enabled` - Enable load balancer attachment (default: true)
 - `target_group` - Target group configuration (port, protocol, health_check, stickiness)
 - `listener_rules` - ALB listener rules with conditions. Each rule accepts an optional `priority` (1-50000); when omitted, AWS automatically assigns the next available priority after the current highest rule on the listener.
-- `nlb_listener` - NLB listener configuration (port, protocol, certificate_arn for TLS)
+- `nlb_listeners` - Rolling-only NLB listener configurations. Each item defines an NLB ARN, listener port and protocol, container port, target protocol, and optional TLS settings. Listener and container ports must be unique, and ECS supports at most five listeners per service. Configure the complete list when creating the service; changing it later requires replacing the ECS service because its load balancer attachments are deployment-managed.
 - `container_name` / `container_port` - Override container to attach
 
 ### Auto Scaling
@@ -398,29 +419,36 @@ The `service_discovery` object includes:
 | security_group_id | The ID of the service security group |
 | security_group_arn | The ARN of the service security group |
 
-### Target Groups - Rolling Deployment
+### Target Groups
+
+A production (tg-1) + alternate (tg-2) pair exists for ALB attachments. Rolling-only NLB attachments create one production target group per listener and no alternate.
 
 | Name | Description |
 |------|-------------|
-| target_group_arn | Target group ARN (null if LB disabled or blue/green) |
-| target_group_arn_suffix | Target group ARN suffix for CloudWatch metrics |
-| target_group_name | Target group name |
-
-### Target Groups - Blue/Green Deployment
-
-| Name | Description |
-|------|-------------|
-| blue_target_group_arn | Blue target group ARN |
-| blue_target_group_name | Blue target group name |
-| green_target_group_arn | Green target group ARN |
-| green_target_group_name | Green target group name |
-| target_group_arns | Map of all target group ARNs (primary for rolling, blue/green for blue_green) |
+| production_target_group_arn | Production target group ARN (null if LB disabled) |
+| production_target_group_name | Production target group name |
+| alternate_target_group_arn | Alternate target group ARN ECS shifts traffic to during native deployments |
+| alternate_target_group_name | Alternate target group name |
+| target_group_arn | Alias of production_target_group_arn |
+| target_group_arn_suffix | Production target group ARN suffix for CloudWatch metrics |
+| target_group_arns | Map of all target group ARNs, including additional NLB listener target groups |
+| ecs_infrastructure_role_arn | IAM role ECS assumes to manage listener wiring during native traffic-shift deployments |
 
 ### NLB Listener
 
 | Name | Description |
 |------|-------------|
-| nlb_listener_arn | NLB listener ARN (null if not using NLB) |
+| nlb_listener_arn | Primary NLB listener ARN (null if not using NLB) |
+| nlb_listener_arns | Map of NLB listener ports to listener ARNs |
+| nlb_target_group_arns | Map of NLB listener ports to production target group ARNs |
+
+### Load Balancer
+
+| Name | Description |
+|------|-------------|
+| load_balancer_arn | ARN of the load balancer the service is attached to (null if no LB attachment) |
+| load_balancer_dns_name | DNS name of the attached load balancer, usable as a CloudFront or DNS origin |
+| load_balancer_zone_id | Canonical hosted zone ID of the attached load balancer, for Route53 alias records |
 
 ### Auto Scaling
 
@@ -442,6 +470,14 @@ The `service_discovery` object includes:
 |------|-------------|
 | container_name | The name of the primary container |
 | container_port | The port of the primary container |
+
+### CloudWatch Logs
+
+| Name | Description |
+|------|-------------|
+| log_group_name | The name of the CloudWatch log group used by the task |
+| log_group_arn | The ARN of the CloudWatch log group used by the task |
+| log_stream_prefix | The awslogs stream prefix for the primary container |
 
 ## Architecture
 
@@ -500,7 +536,7 @@ The `service_discovery` object includes:
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • vpc_id (required)             │   │ • cluster_arn (required)                │  ║
 ║  │ • tags                      │   │ • subnet_ids (required)         │   └─────────────────────────────────────────┘  ║
-║  └──────────────┬──────────────┘   │ • assign_public_ip              │                                                 ║
+║  └──────────────┬──────────────┘   │ • public_ip_assignment_enabled  │                                                 ║
 ║                 │                  │ • security_group_ids            │                                                 ║
 ║                 │                  │ • allowed_cidr_blocks           │                                                 ║
 ║                 │                  └─────────────────────────────────┘                                                 ║
@@ -510,13 +546,13 @@ The `service_discovery` object includes:
 ║  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │  ║
 ║  │  │ • default_tags = { ManagedBy = "terraform", Module = "compute/ecs_service" }                              │   │  ║
 ║  │  │ • tags = merge(default_tags, var.tags)                                                                    │   │  ║
-║  │  │ • deployment_controller_type = var.deployment_type == "blue_green" ? "CODE_DEPLOY" : "ECS"                │   │  ║
+║  │  │ • deployment_controller_type = "ECS" (always; strategy is per-deployment)                                 │   │  ║
 ║  │  │ • placeholder_container_name = "app"                                                                      │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • enable_load_balancer = var.load_balancer_attachment != null && var.load_balancer_attachment.enabled     │   │  ║
-║  │  │ • enable_nlb_listener = enable_load_balancer && var.load_balancer_attachment.nlb_listener != null         │   │  ║
-║  │  │ • enable_auto_scaling = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
+║  │  │ • enable_nlb_listener = enable_load_balancer && nlb_listeners is configured                                │   │  ║
+║  │  │ • auto_scaling_enabled = var.auto_scaling != null && var.auto_scaling.enabled                              │   │  ║
 ║  │  │ • enable_service_discovery = var.service_discovery != null                                                │   │  ║
 ║  │  │ • create_execution_role = var.execution_role_arn == null                                                  │   │  ║
 ║  │  │ • create_task_role = var.task_role_arn == null                                                            │   │  ║
@@ -526,10 +562,10 @@ The `service_discovery` object includes:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │   TASK DEFINITION           │   │       SERVICE CONFIG            │   │        DEPLOYMENT                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • task_cpu                  │   │ • desired_count                 │   │ • deployment_type (rolling/blue_green)  │  ║
-║  │ • task_memory               │   │ • enable_execute_command        │   │ • deployment_minimum_healthy_percent    │  ║
-║  │ • container_port            │   │ • force_new_deployment          │   │ • deployment_maximum_percent            │  ║
-║  │ • launch_type               │   │ • wait_for_steady_state         │   │ • deployment_circuit_breaker            │  ║
+║  │ • task_cpu                  │   │ • desired_count                 │   │ • deployment_type (strategy seed)       │  ║
+║  │ • task_memory               │   │ • execute_command_enabled        │   │ • deployment_minimum_healthy_percent    │  ║
+║  │ • container_port            │   │ • new_deployment_forcing_enabled│   │ • deployment_maximum_percent            │  ║
+║  │ • launch_type               │   │ • steady_state_wait_enabled     │   │ • deployment_circuit_breaker            │  ║
 ║  │ • network_mode              │   │ • platform_version              │   └─────────────────────────────────────────┘  ║
 ║  │ • requires_compatibilities  │   │ • capacity_provider_strategies  │                                                ║
 ║  │ • runtime_platform          │   │ • health_check_grace_period_    │                                                ║
@@ -552,7 +588,7 @@ The `service_discovery` object includes:
 ║  │   - enabled                     │ - target_group: port, protocol, target_type, deregistration_delay,             │  ║
 ║  │   - container_name/port         │               health_check{}, stickiness{}                                     │  ║
 ║  │   - listener_rules[]: listener_arn, priority (optional), conditions[], weight                                     │  ║
-║  │   - nlb_listener: nlb_arn, port, protocol, certificate_arn, ssl_policy, alpn_policy                              │  ║
+║  │   - nlb_listener or nlb_listeners[]: NLB, listener, container port, target protocol, and TLS settings            │  ║
 ║  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐                                                ║
@@ -568,7 +604,7 @@ The `service_discovery` object includes:
 ║  │     · predefined_metric     │                                                                                      ║
 ║  │     · custom_metric{}       │                                                                                      ║
 ║  │     · scale_in/out_cooldown │                                                                                      ║
-║  │     · disable_scale_in      │                                                                                      ║
+║  │     · scale_in_enabled      │                                                                                      ║
 ║  │   - scheduled[]:            │                                                                                      ║
 ║  │     · name, schedule (cron) │                                                                                      ║
 ║  │     · min/max_capacity      │                                                                                      ║
@@ -619,7 +655,7 @@ The `service_discovery` object includes:
 ║                                        │  │  _breaker(dynamic)│  │ strategy (dynamic)│                             │   ║
 ║                                        │  └──────────────────┘  └───────────────────┘                             │   ║
 ║                                        │                                                                          │   ║
-║                                        │  deployment_controller.type = ECS | CODE_DEPLOY                          │   ║
+║                                        │  deployment_controller.type = ECS (always)                               │   ║
 ║                                        └────────────────────────────────────┬─────────────────────────────────────┘   ║
 ║                                                                             │                                          ║
 ║           ┌─────────────────────────────────────────┬───────────────────────┼───────────────────────┬───────────────┐  ║
@@ -629,20 +665,20 @@ The `service_discovery` object includes:
 ║    │  TARGET GROUPS        │    │  aws_lb_listener_rule.alb     │    │ aws_lb_listener  │   │aws_service_discovery   │ ║
 ║    │  (conditional)        │    │  (for_each: listener_rules)   │    │   .nlb[0]        │   │  _service.this[0]      │ ║
 ║    ├───────────────────────┤    ├───────────────────────────────┤    │  (count: 0 or 1) │   │(count: 0 or 1)         │ ║
-║    │ Rolling:              │    │ • path-pattern condition      │    ├──────────────────┤   ├────────────────────────┤ ║
+║    │ Always (when LB):     │    │ • path-pattern condition      │    ├──────────────────┤   ├────────────────────────┤ ║
 ║    │  aws_lb_target_group  │    │ • host-header condition       │    │ • TCP/TLS/UDP    │   │ • Cloud Map DNS        │ ║
-║    │   .this[0]            │    │ • http-header condition       │    │ • Certificate    │   │ • A or SRV records     │ ║
-║    │                       │    │ • query-string condition      │    │ • SSL policy     │   │ • Custom health check  │ ║
-║    │ Blue/Green:           │    │ • source-ip condition         │    └──────────────────┘   └────────────────────────┘ ║
-║    │  aws_lb_target_group  │    │ lifecycle: ignore action      │                                                      ║
-║    │   .tg_1[0] (blue)     │    │  (external controller swaps)  │                                                      ║
-║    │  aws_lb_target_group  │    └───────────────────────────────┘                                                      ║
-║    │   .tg_2[0] (green)    │                                                                                           ║
+║    │   .tg_1[0] (prod)     │    │ • http-header condition       │    │ • Certificate    │   │ • A or SRV records     │ ║
+║    │  aws_lb_target_group  │    │ • query-string condition      │    │ • SSL policy     │   │ • Custom health check  │ ║
+║    │   .tg_2[0] (alt)      │    │ • source-ip condition         │    └──────────────────┘   └────────────────────────┘ ║
+║    │                       │    │ lifecycle: ignore action      │                                                      ║
+║    │                       │    │  (ECS controller rewrites)    │                                                      ║
+║    │                       │    └───────────────────────────────┘                                                      ║
+║    │                       │                                                                                           ║
 ║    └───────────────────────┘                                                                                           ║
 ║                                                                                                                        ║
 ║                   ┌─────────────────────────────────────────────────────────────────────────────────────┐              ║
 ║                   │                              AUTO SCALING RESOURCES                                  │              ║
-║                   │                         (conditional: enable_auto_scaling)                           │              ║
+║                   │                         (conditional: auto_scaling_enabled)                           │              ║
 ║                   ├─────────────────────────────────────────────────────────────────────────────────────┤              ║
 ║                   │                                                                                      │              ║
 ║                   │  aws_appautoscaling_target.this[0]                                                   │              ║
@@ -684,13 +720,13 @@ The `service_discovery` object includes:
 ║  └─────────────────────────────────────────┘                                                                          ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
-║  │      TARGET GROUPS (Rolling)            │   │    TARGET GROUPS (Blue/Green)          │                            ║
+║  │      TARGET GROUPS (always w/ LB)       │   │    TRAFFIC-SHIFT INFRA                  │                            ║
 ║  ├─────────────────────────────────────────┤   ├─────────────────────────────────────────┤                            ║
-║  │ • target_group_arn                      │   │ • blue_target_group_arn                 │                            ║
-║  │ • target_group_arn_suffix               │   │ • blue_target_group_name                │                            ║
-║  │ • target_group_name                     │   │ • green_target_group_arn                │                            ║
-║  └─────────────────────────────────────────┘   │ • green_target_group_name               │                            ║
-║                                                │ • target_group_arns (map)               │                            ║
+║  │ • production_target_group_arn           │   │ • alternate_target_group_arn            │                            ║
+║  │ • production_target_group_name          │   │ • alternate_target_group_name           │                            ║
+║  │ • target_group_arn (alias)              │   │ • ecs_infrastructure_role_arn           │                            ║
+║  └─────────────────────────────────────────┘   │ • target_group_arns (map)               │                            ║
+║                                                │                                         │                            ║
 ║                                                └─────────────────────────────────────────┘                            ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────┐                            ║
@@ -722,8 +758,8 @@ The `service_discovery` object includes:
 ║                              └───────────────────┬────────────────────────┘                                            ║
 ║                                                  │                                                                     ║
 ║                                                  ▼                                                                     ║
-║  var.execution_role_policies ───► aws_iam_role.execution[0] ◄─── var.enable_execute_command                           ║
-║  var.task_role_policies ────────► aws_iam_role.task[0] ◄──────── var.enable_execute_command                           ║
+║  var.execution_role_policies ───► aws_iam_role.execution[0] ◄─── var.execute_command_enabled                           ║
+║  var.task_role_policies ────────► aws_iam_role.task[0] ◄──────── var.execute_command_enabled                           ║
 ║                                                  │                                                                     ║
 ║                                                  ▼                                                                     ║
 ║  var.task_cpu ─────────────────────────────────────────────────────────────┐                                           ║
@@ -739,7 +775,7 @@ The `service_discovery` object includes:
 ║                                                                  │                                                     ║
 ║  var.vpc_id ───────────────────────────────────────────────────────────────────────────────────────────┐               ║
 ║  var.subnet_ids ───────────────────────────────────────────────────────────────────────────────────────┤               ║
-║  var.assign_public_ip ─────────────────────────────────────────────────────────────────────────────────┤               ║
+║  var.public_ip_assignment_enabled ─────────────────────────────────────────────────────────────────────┤               ║
 ║  var.allowed_cidr_blocks ──────────► module.security_group ────────────────────────────────────────────┤               ║
 ║  var.security_group_ids ───────────────────────────────────────────────────────────────────────────────┤               ║
 ║                                                                                                        │               ║
@@ -758,12 +794,12 @@ The `service_discovery` object includes:
 ║           ▼                     ▼                     ▼                    ▼                  ▼                  ▼     ║
 ║  var.load_balancer_     var.load_balancer_    var.load_balancer_   var.auto_scaling   var.service_   (ECS Tasks)     ║
 ║    attachment           attachment            attachment                               discovery                      ║
-║    .target_group        .listener_rules       .nlb_listener                                                           ║
+║    .target_group        .listener_rules       .nlb_listeners                                                          ║
 ║           │                     │                     │                    │                  │                       ║
 ║           ▼                     ▼                     ▼                    ▼                  ▼                       ║
 ║  aws_lb_target_group    aws_lb_listener_rule  aws_lb_listener     aws_appautoscaling_  aws_service_discovery_        ║
-║  .this[0] / .tg_1[0]    .alb (for_each)       .nlb[0]             target.this[0]       service.this[0]               ║
-║  / .tg_2[0]                                                              │                                            ║
+║  .tg_1/.tg_2 + extras    .alb (for_each)       .nlb + extras       target.this[0]       service.this[0]               ║
+║                                                                          │                                            ║
 ║                                                                          │                                            ║
 ║                              ┌───────────────────────────────────────────┴───────────────────────────┐                 ║
 ║                              │                                                                       │                 ║
@@ -786,9 +822,9 @@ The `service_discovery` object includes:
 | `aws_ecs_task_definition` | 1 | Container configuration (placeholder) |
 | `aws_ecs_service` | 1 | Core ECS service resource |
 | `module.security_group` | 1 | Security group for tasks |
-| `aws_lb_target_group.this` | 0 or 1 | Target group for rolling deployment |
-| `aws_lb_target_group.tg_1` | 0 or 1 | Blue target group for blue/green |
-| `aws_lb_target_group.tg_2` | 0 or 1 | Green target group for blue/green |
+| `aws_lb_target_group.tg_1` | 0 or 1 | Production target group (created whenever a load balancer is attached) |
+| `aws_lb_target_group.tg_2` | 0 or 1 | Alternate target group ECS shifts traffic to during native deployments |
+| `aws_iam_role.ecs_infrastructure` | 0 or 1 | Role ECS assumes for load-balancer wiring during traffic shifts |
 | `aws_lb_listener_rule.alb` | for_each | ALB listener rules |
 | `aws_lb_listener.nlb` | 0 or 1 | NLB listener |
 | `aws_service_discovery_service` | 0 or 1 | Cloud Map service |
@@ -808,29 +844,76 @@ The module deploys `public.ecr.aws/docker/library/hello-world:latest` as a place
 
 The placeholder container prints a message and exits, so load balancer health checks will fail until the actual application is deployed. This is expected behavior.
 
-### When should I use rolling vs blue/green deployment?
+### When should I use which deployment strategy?
 
-| Feature | Rolling (ECS) | Blue/Green (external controller) |
-|---------|--------------|----------------------------------|
-| **Complexity** | Simple | More complex (requires an external deployment controller) |
-| **Rollback** | Automatic via circuit breaker | Instant traffic switch |
-| **Traffic shift** | Gradual (min/max healthy %) | All-at-once or gradual |
-| **Testing** | No pre-production testing | Test green before switching |
-| **Infrastructure** | 1 target group | 2 target groups |
+All four strategies run on the native ECS deployment controller — no
+CodeDeploy and no external controller.
 
-**Use rolling when:**
-- Simple deployments with automatic rollback are sufficient
-- You want minimal infrastructure complexity
-- Built-in ECS deployment features meet your needs
+The same infrastructure (2 target groups + infrastructure role) backs every load-balanced service, so eligible services can switch strategy on their next deployment. ALB traffic-shift deployments require a single production listener rule.
 
-**Use blue/green when:**
-- You need instant rollback capability
-- You want to test in production before switching traffic
-- You need advanced deployment strategies (canary, linear)
+| Feature | Rolling | Blue/Green | Linear | Canary |
+|---------|---------|------------|--------|--------|
+| **Traffic shift** | Task replacement (min/max healthy %) | All-at-once + bake | Equal % steps + per-step bake | Small % first, then the rest |
+| **Rollback** | Circuit breaker | Instant (old revision kept through bake) | Instant | Instant |
+| **Testing** | None | Test-listener validation before shift | Per-step validation | Canary validation |
+| **Target groups used** | Production only | Both | Both | Both |
+
+**Use rolling when:** simple deployments with automatic rollback are sufficient.
+
+**Use blue/green when:** you want full validation of the new revision (optionally via a test listener rule) before shifting all production traffic at once, with instant rollback during the bake window.
+
+**Use linear/canary when:** you want production traffic to shift gradually with monitoring between steps.
+
+### How do I access the standby service during a traffic-shift deployment?
+
+For ALB-backed blue_green, linear, and canary deployments, the module creates a test listener rule that routes matching requests to the standby, or green, task set on the alternate target group. The request must match the same host/path conditions as the production listener rule and include the test selector.
+
+By default, the selector is the query parameter `__x-rvn-test__=1`:
+
+```bash
+curl "https://api.example.com/health?__x-rvn-test__=1"
+```
+
+The alternate target group only has registered targets while ECS is running a traffic-shift deployment. Outside that window, the standby route may have no healthy targets.
+
+To override the query parameter in Terraform:
+
+```hcl
+test_query_string_key   = "preview"
+test_query_string_value = "green"
+```
+
+Then request `?preview=green`.
+
+To use an HTTP header instead of a query parameter:
+
+```hcl
+test_traffic_condition_type = "header"
+test_header_name            = "X-Ravion-Test"
+test_header_value           = "1"
+```
+
+Then send the header with the request:
+
+```bash
+curl -H "X-Ravion-Test: 1" "https://api.example.com/health"
+```
+
+When using the Ravion ECS Web Server module definition, set the same lower-level variables through Advanced Terraform variables. For example, to use a header selector:
+
+```json
+{
+  "test_traffic_condition_type": "header",
+  "test_header_name": "X-Ravion-Test",
+  "test_header_value": "1"
+}
+```
+
+The ALB rule can use one selector type per service: either `query-string` or `header`.
 
 ### How do I use this module with an NLB instead of an ALB?
 
-For NLB, configure the `nlb_listener` instead of `listener_rules`:
+For one or more NLB listeners, configure `nlb_listeners` instead of `listener_rules`:
 
 ```hcl
 load_balancer_attachment = {
@@ -839,22 +922,54 @@ load_balancer_attachment = {
     protocol = "TCP"  # or "TLS", "UDP", "TCP_UDP"
   }
   # No listener_rules for NLB
-  nlb_listener = {
+  nlb_listeners = [{
     nlb_arn         = aws_lb.nlb.arn
     port            = 5000
     protocol        = "TCP"
+    container_port  = 5000
+    target_protocol = "TCP"
     # For TLS:
     # certificate_arn = "arn:aws:acm:..."
     # ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  }
+  }]
 }
 ```
 
-### Can I use both ALB listener rules and NLB listener?
+NLB listeners support rolling deployments only. To expose multiple ports, add more items:
+
+```hcl
+deployment_type = "rolling"
+
+load_balancer_attachment = {
+  target_group = {
+    port     = 5000
+    protocol = "TCP"
+  }
+  nlb_listeners = [
+    {
+      nlb_arn         = aws_lb.nlb.arn
+      port            = 5000
+      protocol        = "TCP"
+      container_port  = 5000
+      target_protocol = "TCP"
+    },
+    {
+      nlb_arn         = aws_lb.nlb.arn
+      port            = 5443
+      protocol        = "TLS"
+      container_port  = 5443
+      target_protocol = "TLS"
+      certificate_arn = aws_acm_certificate.service.arn
+    },
+  ]
+}
+```
+
+### Can I use both ALB listener rules and NLB listeners?
 
 No, each ECS service can only be attached to one load balancer. Use either:
 - `listener_rules` for ALB (path/host-based routing)
-- `nlb_listener` for NLB (TCP/TLS/UDP)
+- `nlb_listeners` for NLB (TCP/TLS/UDP)
 
 ### How does auto scaling work with the predefined metrics?
 
@@ -913,7 +1028,7 @@ Note: The placeholder task definition does not mount volumes. Your application t
 
 ### How do I enable ECS Exec for debugging?
 
-Set `enable_execute_command = true`. This will:
+Set `execute_command_enabled = true`. This will:
 
 1. Add necessary IAM permissions to the task role
 2. Enable execute command on the ECS service
@@ -986,22 +1101,22 @@ Uses the ECS deployment controller for zero-downtime rolling updates:
 - Built-in circuit breaker with optional rollback
 - Simple and fully managed by ECS
 
-### Blue/Green Deployment
+### Native Traffic-Shift Strategies (blue_green / linear / canary)
 
-Sets up infrastructure for blue/green deployments managed by an external controller:
-- Creates two target groups (tg-1 and tg-2)
-- Sets deployment controller to CODE_DEPLOY
-- Outputs all ARNs needed to wire up the external controller
-- The external deployment controller (application, deployment group, etc.) must be managed outside of this module
+The infrastructure for the ECS deployment controller's built-in traffic shifting is provisioned for **every** load-balanced service — not just those created with a native `deployment_type` — so the strategy can change between deployments without Terraform changes:
+- Two target groups (tg-1 = production, tg-2 = alternate); rolling deployments only ever use tg-1
+- An ECS infrastructure IAM role (AmazonECSInfrastructureRolePolicyForLoadBalancers) that ECS assumes to rewrite listener rules and (de)register targets during the shift
+- The service's `load_balancer.advanced_configuration` (alternate target group, production listener rule, optional test listener rule, infrastructure role)
+- `deployment_configuration` is seeded from `deployment_type` / `deployment_strategy_config` at create time only; the Flightcontrol deploy manager passes the authoritative configuration — including pause lifecycle hooks — on every UpdateService call, so the block is in `ignore_changes`
 
 ## Notes
 
 - The module creates a security group that allows inbound traffic from the VPC CIDR on the container port
-- For Fargate tasks in public subnets without NAT, set `assign_public_ip = true`
+- For Fargate tasks in public subnets without NAT, set `public_ip_assignment_enabled = true`
 - The placeholder container uses hello-world from public ECR - no special permissions needed
-- For blue/green deployments, the module only creates the infrastructure; the external deployment controller must be configured separately
+- For blue_green/linear/canary deployments, ECS itself executes the traffic shift; the Flightcontrol deploy manager drives it via UpdateService and pause lifecycle hooks
 - The task definition has `lifecycle { ignore_changes = all }` since the external deployment controller manages updates
-- Listener rules have `lifecycle { ignore_changes = [action] }` for blue/green deployments where the external controller switches target groups
+- Listener rules have `lifecycle { ignore_changes = [action] }` — the ECS deployment controller rewrites the forward action (weighted target groups) during native traffic shifts
 - When using `ALBRequestCountPerTarget` metric for auto scaling, a load balancer must be configured
 - The `desired_count` defaults to 0 for infrastructure-first provisioning; the external controller will manage the actual count
 - Target group names are truncated to meet AWS naming requirements (max 32 characters)

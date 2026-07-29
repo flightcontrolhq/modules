@@ -5,6 +5,8 @@ This module creates an AWS Lambda function with broad runtime configuration supp
 ## Features
 
 - Supports both `Zip` and `Image` package types
+- Optional ECR repository for container image build pipelines
+- Single-apply bootstrap image seeding for module-managed ECR repositories
 - Supports standard Lambda and Lambda@Edge validation mode
 - Optional IAM role creation or use of an existing role
 - Optional CloudWatch log group creation with retention and KMS encryption
@@ -37,11 +39,12 @@ module "lambda" {
 module "lambda_image" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
-  name         = "image-fn"
-  package_type = "Image"
-  image_uri    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/image-fn:latest"
-  timeout      = 30
-  memory_size  = 512
+  name                            = "image-fn"
+  package_type                    = "Image"
+  architecture                    = "x86_64"
+  ecr_repository_creation_enabled = true
+  timeout                         = 30
+  memory_size                     = 512
 }
 ```
 
@@ -56,10 +59,10 @@ module "edge_lambda" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
   name              = "edge-rewrite"
-  is_lambda_at_edge = true
+  lambda_at_edge_enabled = true
 
   package_type = "Zip"
-  publish      = true
+  version_publishing_enabled      = true
   runtime      = "nodejs20.x"
   handler      = "index.handler"
   s3_bucket    = "my-lambda-artifacts"
@@ -125,17 +128,22 @@ module "lambda_with_integrations" {
 | description | Description of the Lambda function | `string` | `null` | no |
 | tags | Tags to assign to all resources | `map(string)` | `{}` | no |
 | package_type | Package type (`Zip` or `Image`) | `string` | `"Zip"` | no |
-| architectures | Lambda architectures | `list(string)` | `["x86_64"]` | no |
-| publish | Publish a version on update | `bool` | `false` | no |
+| architecture | Lambda architecture | `string` | `"x86_64"` | no |
+| version_publishing_enabled | Publish a version on update | `bool` | `false` | no |
 | handler | Function handler (Zip only) | `string` | `null` | no |
 | runtime | Function runtime (Zip only) | `string` | `null` | no |
 | filename | Local ZIP package path | `string` | `null` | no |
 | source_code_hash | Base64 SHA256 of package | `string` | `null` | no |
 | s3_bucket | S3 bucket for package | `string` | `null` | no |
 | s3_key | S3 key for package | `string` | `null` | no |
-| s3_object_version | S3 object version for package | `string` | `null` | no |
 | image_uri | Image URI (Image only) | `string` | `null` | no |
 | image_config | Image config override object | `object` | `null` | no |
+| ecr_repository_creation_enabled | Create an ECR repository for built container image deployments | `bool` | `false` | no |
+| ecr_repository_name | ECR repository name override | `string` | `null` | no |
+| ecr_image_tag_mutability | ECR image tag mutability (`MUTABLE` or `IMMUTABLE`) | `string` | `"MUTABLE"` | no |
+| ecr_scan_on_push_enabled | Scan images for vulnerabilities on push | `bool` | `true` | no |
+| ecr_force_deletion_enabled | Allow deleting the ECR repository even when it contains images | `bool` | `false` | no |
+| ecr_default_lifecycle_policy_enabled | Apply the built-in ECR lifecycle policy | `bool` | `false` | no |
 | memory_size | Memory in MB | `number` | `128` | no |
 | timeout | Timeout in seconds | `number` | `3` | no |
 | kms_key_arn | KMS key ARN for environment encryption | `string` | `null` | no |
@@ -149,16 +157,16 @@ module "lambda_with_integrations" {
 | file_system_configs | EFS mount configs | `list(object)` | `[]` | no |
 | snap_start_apply_on | SnapStart mode (`PublishedVersions`) | `string` | `null` | no |
 | code_signing_config_arn | Code signing config ARN | `string` | `null` | no |
-| create_role | Create IAM role | `bool` | `true` | no |
+| role_creation_enabled | Create IAM role | `bool` | `true` | no |
 | role_arn | Existing IAM role ARN | `string` | `null` | no |
 | role_name | IAM role name override | `string` | `null` | no |
 | role_path | IAM role path | `string` | `"/"` | no |
 | role_permissions_boundary | IAM permissions boundary ARN | `string` | `null` | no |
-| attach_basic_execution_policy | Attach AWS basic execution policy | `bool` | `true` | no |
-| attach_vpc_execution_policy | Attach AWS VPC execution policy when vpc_config is set | `bool` | `true` | no |
+| basic_execution_policy_enabled | Attach AWS basic execution policy | `bool` | `true` | no |
+| vpc_execution_policy_enabled | Attach AWS VPC execution policy when vpc_config is set | `bool` | `true` | no |
 | role_managed_policy_arns | Additional managed policy ARNs | `list(string)` | `[]` | no |
 | role_inline_policies | Inline IAM policies map (`name => json`) | `map(string)` | `{}` | no |
-| create_log_group | Create CloudWatch log group | `bool` | `true` | no |
+| log_group_creation_enabled | Create CloudWatch log group | `bool` | `true` | no |
 | log_group_name | Custom log group name | `string` | `null` | no |
 | log_retention_days | Log retention in days | `number` | `30` | no |
 | log_kms_key_id | KMS key for log group | `string` | `null` | no |
@@ -169,7 +177,7 @@ module "lambda_with_integrations" {
 | function_url_auth_type | Function URL auth type (`NONE` or `AWS_IAM`) | `string` | `"AWS_IAM"` | no |
 | function_url_invoke_mode | Function URL invoke mode (`BUFFERED` or `RESPONSE_STREAM`) | `string` | `"BUFFERED"` | no |
 | function_url_cors | Function URL CORS object | `object` | `null` | no |
-| is_lambda_at_edge | Enable Lambda@Edge compatibility validations | `bool` | `false` | no |
+| lambda_at_edge_enabled | Enable Lambda@Edge compatibility validations | `bool` | `false` | no |
 
 ## Outputs
 
@@ -188,10 +196,19 @@ module "lambda_with_integrations" {
 | event_source_mapping_ids | Event source mapping UUIDs by item index |
 | alias_arns | Alias ARNs by alias name |
 | function_url | Function URL when enabled |
+| code_bucket_id | Auto-created code bucket name when enabled |
+| code_bucket_arn | Auto-created code bucket ARN when enabled |
+| code_object_key | Initial bootstrap object key when created |
+| ecr_repository_arn | ECR repository ARN when enabled |
+| ecr_repository_name | ECR repository name when enabled |
+| ecr_repository_url | ECR repository URL when enabled |
+| aws_account_id | AWS account ID where resources are deployed |
+| region | AWS region where resources are deployed |
 
 ## Notes
 
 - Lambda@Edge deployments must be created in `us-east-1`.
-- The module enforces key Lambda@Edge constraints when `is_lambda_at_edge = true`.
+- The module enforces key Lambda@Edge constraints when `lambda_at_edge_enabled = true`.
 - For `Zip` package type, provide either `filename` or (`s3_bucket` + `s3_key`).
-- For `Image` package type, provide `image_uri`.
+- For `Image` package type, provide `image_uri`, or enable `ecr_repository_creation_enabled` so the module can seed a Lambda-compatible bootstrap image in the module-owned ECR repository during apply.
+- Bootstrap image seeding uses AWS CLI and standard POSIX tools on the Terraform/OpenTofu runner. When AWS CLI is missing, the module attempts a package-manager install with sudo/root access, then falls back to installing AWS CLI v2 in a temporary directory with Python 3.

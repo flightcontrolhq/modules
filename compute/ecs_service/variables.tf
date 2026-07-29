@@ -47,7 +47,7 @@ variable "subnet_ids" {
   }
 }
 
-variable "assign_public_ip" {
+variable "public_ip_assignment_enabled" {
   type        = bool
   description = "Assign a public IP address to the ECS tasks. Required for Fargate tasks in public subnets without NAT."
   default     = false
@@ -90,6 +90,22 @@ variable "task_memory" {
   validation {
     condition     = var.task_memory >= 512 && var.task_memory <= 122880
     error_message = "The task_memory must be between 512 and 122880 MiB."
+  }
+}
+
+variable "task_ephemeral_storage_size_gib" {
+  type        = number
+  description = "The ephemeral storage size in GiB for Fargate tasks. Set to null to use the AWS default of 20 GiB."
+  default     = null
+
+  validation {
+    condition     = var.task_ephemeral_storage_size_gib == null ? true : var.task_ephemeral_storage_size_gib >= 21 && var.task_ephemeral_storage_size_gib <= 200
+    error_message = "The task_ephemeral_storage_size_gib must be null or between 21 and 200 GiB."
+  }
+
+  validation {
+    condition     = var.task_ephemeral_storage_size_gib == null || (var.launch_type == "FARGATE" && contains(var.requires_compatibilities, "FARGATE"))
+    error_message = "The task_ephemeral_storage_size_gib is only supported when launch_type is FARGATE and requires_compatibilities includes FARGATE."
   }
 }
 
@@ -161,6 +177,30 @@ variable "container_port" {
 }
 
 ################################################################################
+# CloudWatch Logs
+################################################################################
+
+variable "log_retention_days" {
+  type        = number
+  description = "Number of days to retain CloudWatch logs for the task. Set to 0 to retain indefinitely."
+  default     = 30
+
+  validation {
+    condition = contains(
+      [0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653],
+      var.log_retention_days
+    )
+    error_message = "The log_retention_days must be one of the values accepted by CloudWatch Logs (0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, or 3653)."
+  }
+}
+
+variable "log_kms_key_id" {
+  type        = string
+  description = "The ARN of the KMS key to use for encrypting the CloudWatch log group. If null, logs are encrypted with the default CloudWatch encryption."
+  default     = null
+}
+
+################################################################################
 # Volumes
 ################################################################################
 
@@ -229,9 +269,14 @@ variable "task_role_policies" {
 }
 
 variable "task_role_inline_policies" {
-  type        = map(any)
+  type        = any
   description = "Inline IAM policies to attach to the task role, keyed by policy name. Values are policy documents as HCL/JSON objects. Only used if task_role_arn is null."
   default     = {}
+
+  validation {
+    condition     = can(keys(var.task_role_inline_policies))
+    error_message = "The task_role_inline_policies must be an object keyed by policy name."
+  }
 }
 
 variable "execution_role_policies" {
@@ -262,13 +307,90 @@ variable "desired_count" {
 
 variable "deployment_type" {
   type        = string
-  description = "The deployment type: 'rolling' (ECS) or 'blue_green' (CODE_DEPLOY)."
+  description = "Initial deployment strategy for direct Terraform use ('rolling', 'blue_green', 'linear', 'canary'). Ravion ECS Web stack provisioning passes 'rolling' and the Flightcontrol deploy manager passes the authoritative blue_green/linear/canary strategy on each UpdateService call, so strategy changes in Ravion do not require Terraform changes."
   default     = "rolling"
 
   validation {
-    condition     = contains(["rolling", "blue_green"], var.deployment_type)
-    error_message = "The deployment_type must be either 'rolling' or 'blue_green'."
+    condition     = contains(["rolling", "blue_green", "linear", "canary"], var.deployment_type)
+    error_message = "The deployment_type must be one of: 'rolling', 'blue_green', 'linear', 'canary'."
   }
+}
+
+variable "deployment_strategy_config" {
+  type = object({
+    # Minutes both revisions keep running after production traffic has
+    # fully shifted, before the old revision is terminated.
+    bake_time_in_minutes = optional(number, 10)
+
+    # Canary tuning — only used when deployment_type is 'canary'.
+    canary = optional(object({
+      canary_percent              = optional(number, 5.0)
+      canary_bake_time_in_minutes = optional(number, 10)
+    }), {})
+
+    # Linear tuning — only used when deployment_type is 'linear'.
+    linear = optional(object({
+      step_percent              = optional(number, 25.0)
+      step_bake_time_in_minutes = optional(number, 5)
+    }), {})
+  })
+  description = <<-EOT
+    Initial tuning for direct Terraform use with native traffic-shift
+    strategies (blue_green / linear / canary). Ravion ECS Web stack
+    provisioning uses rolling and the Flightcontrol deploy manager passes
+    the authoritative deploymentConfiguration (including pause lifecycle
+    hooks) on every UpdateService call, so post-create changes to these
+    values are ignored by Terraform (see ignore_changes on
+    aws_ecs_service.this).
+  EOT
+  default     = {}
+}
+
+variable "test_listener_rule_arn" {
+  type        = string
+  description = "Optional ARN of an externally-managed ALB listener rule that routes test traffic for blue/green validation (drives the TEST_TRAFFIC_SHIFT lifecycle stages). Only used for native traffic-shift strategies when the module-created green listener rule is not enabled."
+  default     = null
+}
+
+variable "green_alb_listener_rule_enabled" {
+  type        = bool
+  description = "Create a dedicated ALB listener rule that routes test traffic to the green (alternate) target group during native traffic-shift deployments (blue_green/linear/canary), so the new revision can be validated before production traffic shifts. The rule reuses the production listener and routing conditions plus a distinguishing test selector (query string by default, or header when test_traffic_condition_type is \"header\") and forwards to the alternate target group; the ECS deployment controller rewrites it through the TEST_TRAFFIC_SHIFT lifecycle stages. Created by default; no effect for NLB services."
+  default     = true
+}
+
+variable "test_header_name" {
+  type        = string
+  description = "HTTP header name that distinguishes test traffic for the green listener rule. Requests carrying this header (with test_header_value) match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"header\"."
+  default     = "X-Ravion-Test"
+}
+
+variable "test_header_value" {
+  type        = string
+  description = "Value paired with test_header_name for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"header\"."
+  default     = "1"
+}
+
+variable "test_traffic_condition_type" {
+  type        = string
+  description = "Which request attribute distinguishes test traffic for the green listener rule: \"header\" (matches test_header_name/test_header_value) or \"query-string\" (matches test_query_string_key/test_query_string_value). ALB AND-combines conditions within a single rule and ECS native blue/green wires exactly one test rule, so the selector is one type per service, not both at once. Only used when green_alb_listener_rule_enabled is true."
+  default     = "query-string"
+
+  validation {
+    condition     = contains(["header", "query-string"], var.test_traffic_condition_type)
+    error_message = "test_traffic_condition_type must be either \"header\" or \"query-string\"."
+  }
+}
+
+variable "test_query_string_key" {
+  type        = string
+  description = "Query-string key that distinguishes test traffic for the green listener rule (e.g. \"__x-rvn-test__\" matches ?__x-rvn-test__=...). Requests carrying this key/value match the green rule and reach the alternate target group; requests without it fall through to production. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"query-string\"."
+  default     = "__x-rvn-test__"
+}
+
+variable "test_query_string_value" {
+  type        = string
+  description = "Value paired with test_query_string_key for routing test traffic to the green target group. Only used when green_alb_listener_rule_enabled is true and test_traffic_condition_type is \"query-string\"."
+  default     = "1"
 }
 
 variable "deployment_minimum_healthy_percent" {
@@ -293,19 +415,19 @@ variable "deployment_maximum_percent" {
   }
 }
 
-variable "enable_execute_command" {
+variable "execute_command_enabled" {
   type        = bool
   description = "Enable ECS Exec for debugging containers."
   default     = false
 }
 
-variable "force_new_deployment" {
+variable "new_deployment_forcing_enabled" {
   type        = bool
   description = "Force a new deployment of the service."
   default     = false
 }
 
-variable "wait_for_steady_state" {
+variable "steady_state_wait_enabled" {
   type        = bool
   description = "Wait for the service to reach a steady state before completing."
   default     = true
@@ -322,7 +444,7 @@ variable "health_check_grace_period_seconds" {
   }
 }
 
-variable "enable_ecs_managed_tags" {
+variable "ecs_managed_tags_enabled" {
   type        = bool
   description = "Enable Amazon ECS managed tags for the tasks."
   default     = true
@@ -381,6 +503,28 @@ variable "load_balancer_security_group_id" {
   }
 }
 
+variable "load_balancer_ingress_cidr_blocks" {
+  type        = list(string)
+  description = "IPv4 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.load_balancer_ingress_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All load_balancer_ingress_cidr_blocks must be valid IPv4 CIDR blocks."
+  }
+}
+
+variable "load_balancer_ingress_ipv6_cidr_blocks" {
+  type        = list(string)
+  description = "IPv6 CIDR blocks allowed to access service-created NLB listeners. Only used when load_balancer_attachment.nlb_listeners is set and load_balancer_security_group_id is provided."
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.load_balancer_ingress_ipv6_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "All load_balancer_ingress_ipv6_cidr_blocks must be valid IPv6 CIDR blocks."
+  }
+}
+
 variable "allowed_cidr_blocks" {
   type        = list(string)
   description = "CIDR blocks allowed to access the service (in addition to load balancer)."
@@ -428,6 +572,16 @@ variable "load_balancer_attachment" {
     })
 
     # ALB: Listener rules (attach to existing ALB listener)
+    #
+    # IMPORTANT: only the first rule is wired into the service's
+    # advanced_configuration as the production listener rule. Native
+    # traffic-shift deployments (blue_green/linear/canary) rewrite only
+    # that rule — traffic on any additional rules never shifts to the
+    # new revision. Terraform rejects >1 rule when deployment_type is a
+    # traffic-shift strategy, but because the strategy is a
+    # per-deployment decision on the native ECS controller, services
+    # that may ever deploy with a traffic-shift strategy must also keep
+    # to a single rule.
     listener_rules = optional(list(object({
       listener_arn = string
       priority     = optional(number, null) # null = AWS auto-assigns next available priority
@@ -441,20 +595,24 @@ variable "load_balancer_attachment" {
       weight = optional(number, 100)
     })), [])
 
-    # NLB: Listener configuration (creates a new NLB listener)
-    nlb_listener = optional(object({
-      nlb_arn         = string           # ARN of the NLB to attach to
-      port            = number           # Listener port
-      protocol        = string           # TCP, TLS, UDP, TCP_UDP
-      certificate_arn = optional(string) # Required for TLS protocol
+    # NLB: Rolling-only listener configuration. The first listener uses
+    # the production target group above; each later listener gets its own
+    # target group and ECS load-balancer attachment.
+    nlb_listeners = optional(list(object({
+      nlb_arn         = string
+      port            = number
+      protocol        = string
+      container_port  = number
+      target_protocol = string
+      certificate_arn = optional(string)
       ssl_policy      = optional(string, "ELBSecurityPolicy-TLS13-1-2-2021-06")
-      alpn_policy     = optional(string) # For TLS: HTTP1Only, HTTP2Only, etc.
-    }), null)
+      alpn_policy     = optional(string)
+    })), [])
 
     container_name = optional(string, null)
     container_port = optional(number, null)
   })
-  description = "Load balancer configuration including target group and listener rules."
+  description = "Load balancer configuration including target groups, ALB listener rules, and NLB listeners."
   default     = null
 
   validation {
@@ -463,6 +621,82 @@ variable "load_balancer_attachment" {
       var.load_balancer_attachment.target_group.protocol
     )
     error_message = "The protocol must be one of: HTTP, HTTPS (for ALB), or TCP, UDP, TLS, TCP_UDP, GENEVE (for NLB/GWLB)."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || (
+      !var.load_balancer_attachment.enabled
+      || length(var.load_balancer_attachment.listener_rules) > 0
+      || length(var.load_balancer_attachment.nlb_listeners) > 0
+    )
+    error_message = "An enabled load_balancer_attachment requires listener_rules for ALB or nlb_listeners for NLB."
+  }
+
+  validation {
+    condition     = var.load_balancer_attachment == null || length(var.load_balancer_attachment.listener_rules) == 0 || length(var.load_balancer_attachment.nlb_listeners) == 0
+    error_message = "Set listener_rules for ALB or nlb_listeners for NLB, not both."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      contains(["TCP", "TLS", "UDP"], listener.protocol)
+    ])
+    error_message = "Each nlb_listeners protocol must be TCP, TLS, or UDP."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.port >= 1 && listener.port <= 65535 && listener.container_port >= 1 && listener.container_port <= 65535
+    ])
+    error_message = "Each nlb_listeners port and container_port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || length(distinct([
+      for listener in var.load_balancer_attachment.nlb_listeners : listener.port
+    ])) == length(var.load_balancer_attachment.nlb_listeners)
+    error_message = "Each nlb_listeners port must be unique."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || length(distinct([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.container_port
+    ])) == length(var.load_balancer_attachment.nlb_listeners)
+    error_message = "Each nlb_listeners container_port must be unique."
+  }
+
+  validation {
+    condition     = var.load_balancer_attachment == null || length(var.load_balancer_attachment.nlb_listeners) <= 5
+    error_message = "nlb_listeners supports at most five listeners, matching the ECS service target group limit."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || length(var.load_balancer_attachment.nlb_listeners) == 0 || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.nlb_arn == var.load_balancer_attachment.nlb_listeners[0].nlb_arn
+    ])
+    error_message = "All nlb_listeners must use the same NLB ARN."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.protocol != "TLS" || try(length(listener.certificate_arn) > 0, false)
+    ])
+    error_message = "Each TLS listener in nlb_listeners requires certificate_arn."
+  }
+
+  validation {
+    condition = var.load_balancer_attachment == null || alltrue([
+      for listener in var.load_balancer_attachment.nlb_listeners :
+      listener.protocol == "TLS"
+      ? contains(["TCP", "TLS"], listener.target_protocol)
+      : listener.target_protocol == listener.protocol
+    ])
+    error_message = "TLS listeners must use TCP or TLS as target_protocol; TCP and UDP listeners must use the same target protocol as the listener."
   }
 
   validation {
@@ -497,7 +731,7 @@ variable "auto_scaling" {
       }), null)
       scale_in_cooldown  = optional(number, 300)
       scale_out_cooldown = optional(number, 300)
-      disable_scale_in   = optional(bool, false)
+      scale_in_enabled   = optional(bool, true)
     })), [])
 
     scheduled = optional(list(object({
@@ -553,7 +787,7 @@ variable "deployment_circuit_breaker" {
 # ECR Repository
 ################################################################################
 
-variable "enable_ecr" {
+variable "ecr_repository_creation_enabled" {
   type        = bool
   description = "Create an ECR repository for this service's container image. When true, a repository is provisioned via the containers/ecr submodule."
   default     = false
@@ -576,19 +810,19 @@ variable "ecr_image_tag_mutability" {
   }
 }
 
-variable "ecr_scan_on_push" {
+variable "ecr_scan_on_push_enabled" {
   type        = bool
   description = "Scan images for vulnerabilities on push."
   default     = true
 }
 
-variable "ecr_force_delete" {
+variable "ecr_force_deletion_enabled" {
   type        = bool
   description = "Allow the ECR repository to be deleted even when it contains images."
   default     = false
 }
 
-variable "ecr_enable_default_lifecycle_policy" {
+variable "ecr_default_lifecycle_policy_enabled" {
   type        = bool
   description = "Apply the submodule's built-in lifecycle policy (expire untagged images and cap retained tagged images)."
   default     = false

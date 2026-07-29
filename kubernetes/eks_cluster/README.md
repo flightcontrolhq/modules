@@ -30,12 +30,12 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
 
-  endpoint_public_access  = true
-  endpoint_private_access = true
+  public_endpoint_access_enabled  = true
+  private_endpoint_access_enabled = true
 
-  enable_ebs_csi_driver         = true
-  enable_pod_identity_agent     = true
-  enable_lb_controller_pod_identity = true
+  ebs_csi_driver_enabled         = true
+  pod_identity_agent_enabled     = true
+  lb_controller_pod_identity_enabled = true
 
   access_entries = {
     "platform-admins" = {
@@ -69,32 +69,32 @@ module "eks" {
 | kubernetes_version | Kubernetes version (`MAJOR.MINOR`). | `string` | `null` | no |
 | vpc_id | VPC ID to launch the control plane ENIs into. | `string` | n/a | yes |
 | subnet_ids | Subnets for control plane ENIs (>=2, multi-AZ). | `list(string)` | n/a | yes |
-| endpoint_public_access | Expose the API server publicly. | `bool` | `false` | no |
-| endpoint_private_access | Expose the API server inside the VPC. | `bool` | `true` | no |
+| public_endpoint_access_enabled | Expose the API server publicly. | `bool` | `false` | no |
+| private_endpoint_access_enabled | Expose the API server inside the VPC. | `bool` | `true` | no |
 | public_access_cidrs | CIDRs allowed to hit the public endpoint. | `list(string)` | `["0.0.0.0/0"]` | no |
 | service_ipv4_cidr | Override the service CIDR (IPv4 only). | `string` | `null` | no |
 | ip_family | `ipv4` or `ipv6`. | `string` | `"ipv4"` | no |
 | additional_cluster_security_group_ingress | Extra cluster-SG ingress rules sourced by IPv4 CIDR. | `list(object)` | `[]` | no |
 | additional_cluster_security_group_ingress_sg | Extra cluster-SG ingress rules sourced by another SG. | `list(object)` | `[]` | no |
-| bootstrap_cluster_creator_admin_permissions | Auto-grant cluster-admin to the creating principal. | `bool` | `true` | no |
+| cluster_creator_admin_permissions_enabled | Auto-grant cluster-admin to the creating principal. | `bool` | `true` | no |
 | access_entries | EKS access entries to create (replaces aws-auth ConfigMap). | `map(object)` | `{}` | no |
 | enabled_cluster_log_types | Control plane log types to ship to CloudWatch. | `list(string)` | `["api","audit","authenticator"]` | no |
 | cluster_log_retention_in_days | Retention for the control plane log group. | `number` | `30` | no |
-| enable_secrets_encryption | Envelope-encrypt Kubernetes secrets with KMS. | `bool` | `true` | no |
+| secrets_encryption_enabled | Envelope-encrypt Kubernetes secrets with KMS. | `bool` | `true` | no |
 | secrets_kms_key_arn | Existing KMS key ARN; null = create one. | `string` | `null` | no |
 | vpc_cni_addon_version / coredns_addon_version / kube_proxy_addon_version | Pinned add-on versions. | `string` | `null` | no |
 | vpc_cni_addon_configuration_values / coredns_addon_configuration_values / kube_proxy_addon_configuration_values | JSON config overrides. | `string` | `null` | no |
-| enable_ebs_csi_driver | Install aws-ebs-csi-driver + Pod Identity role. | `bool` | `false` | no |
+| ebs_csi_driver_enabled | Install aws-ebs-csi-driver + Pod Identity role. | `bool` | `false` | no |
 | ebs_csi_addon_version | Pin EBS CSI add-on version. | `string` | `null` | no |
-| enable_pod_identity_agent | Install eks-pod-identity-agent. | `bool` | `true` | no |
+| pod_identity_agent_enabled | Install eks-pod-identity-agent. | `bool` | `true` | no |
 | pod_identity_agent_addon_version | Pin pod identity agent add-on version. | `string` | `null` | no |
-| enable_lb_controller_pod_identity | Create LB Controller Pod Identity role/association. | `bool` | `true` | no |
+| lb_controller_pod_identity_enabled | Create LB Controller Pod Identity role/association. | `bool` | `true` | no |
 | lb_controller_namespace | Namespace of the LB Controller SA. | `string` | `"kube-system"` | no |
 | lb_controller_service_account | Name of the LB Controller SA. | `string` | `"aws-load-balancer-controller"` | no |
 | pod_identity_associations | Extra `{ namespace, service_account, role_arn }` associations. | `map(object)` | `{}` | no |
 | tags | Tags applied to all created resources. | `map(string)` | `{}` | no |
 | region | AWS region override. | `string` | `null` | no |
-| deletion_protection | If true, the resource cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
+| deletion_protection_enabled | If true, the resource cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |
 
 ## Outputs
 
@@ -117,4 +117,4 @@ module "eks" {
 
 - The OIDC provider's thumbprint is taken from the cluster's TLS chain at apply time; AWS recommends this approach over hardcoding the well-known thumbprint.
 - The LB Controller's IAM policy is vendored from `kubernetes-sigs/aws-load-balancer-controller` upstream (`docs/install/iam_policy.json`) at `policies/lb_controller.json`. Refresh that file when you upgrade the controller version.
-- Pod Identity needs the `eks-pod-identity-agent` add-on. Disabling it (`enable_pod_identity_agent = false`) without disabling the helper roles will leave their associations created but non-functional at runtime.
+- Pod Identity needs the `eks-pod-identity-agent` add-on. Disabling it (`pod_identity_agent_enabled = false`) without disabling the helper roles will leave their associations created but non-functional at runtime.

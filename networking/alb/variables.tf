@@ -51,13 +51,13 @@ variable "subnet_ids" {
 # ALB Settings
 ################################################################################
 
-variable "internal" {
+variable "internal_load_balancer_enabled" {
   type        = bool
-  description = "If true, the ALB will be internal (not internet-facing)."
+  description = "If true, the ALB will be internal_load_balancer_enabled (not internet-facing)."
   default     = false
 }
 
-variable "deletion_protection" {
+variable "deletion_protection_enabled" {
   type        = bool
   description = "If true, the resource cannot be deleted via the AWS API until this is set to false. Safe-by-default."
   default     = true
@@ -74,13 +74,13 @@ variable "idle_timeout" {
   }
 }
 
-variable "enable_http2" {
+variable "http2_enabled" {
   type        = bool
   description = "Enable HTTP/2 on the ALB."
   default     = true
 }
 
-variable "drop_invalid_header_fields" {
+variable "invalid_header_drop_enabled" {
   type        = bool
   description = "Drop HTTP headers with invalid header fields. Recommended for security."
   default     = true
@@ -97,7 +97,7 @@ variable "desync_mitigation_mode" {
   }
 }
 
-variable "preserve_host_header" {
+variable "host_header_preservation_enabled" {
   type        = bool
   description = "Preserve the Host header in the HTTP request and send it to the target without modification."
   default     = false
@@ -114,7 +114,7 @@ variable "xff_header_processing_mode" {
   }
 }
 
-variable "enable_waf_fail_open" {
+variable "waf_fail_open_enabled" {
   type        = bool
   description = "Enable WAF fail open. If true, traffic is allowed when WAF is unavailable."
   default     = false
@@ -124,13 +124,13 @@ variable "enable_waf_fail_open" {
 # Listeners
 ################################################################################
 
-variable "enable_http_listener" {
+variable "http_listener_enabled" {
   type        = bool
   description = "Create an HTTP listener on port 80."
   default     = true
 }
 
-variable "enable_https_listener" {
+variable "https_listener_enabled" {
   type        = bool
   description = "Create an HTTPS listener on port 443. Requires certificate_arns to be provided."
   default     = false
@@ -158,7 +158,7 @@ variable "https_listener_port" {
   }
 }
 
-variable "http_to_https_redirect" {
+variable "http_to_https_redirect_enabled" {
   type        = bool
   description = "Redirect HTTP traffic to HTTPS. Only applies when both listeners are enabled."
   default     = true
@@ -176,7 +176,7 @@ variable "force_http_to_https_redirect" {
 
 variable "certificate_arns" {
   type        = list(string)
-  description = "ACM certificate ARNs for the HTTPS listener. The first ARN is used as the default certificate; the rest are attached for SNI. Required if enable_https_listener is true."
+  description = "ACM certificate ARNs for the HTTPS listener. The first ARN is used as the default certificate; the rest are attached for SNI. Required if https_listener_enabled is true."
   default     = []
 
   validation {
@@ -245,15 +245,15 @@ variable "ingress_cidr_blocks" {
 
 variable "ingress_ipv6_cidr_blocks" {
   type        = list(string)
-  description = "A list of IPv6 CIDR blocks allowed to access the ALB."
-  default     = ["::/0"]
+  description = "A list of IPv6 CIDR blocks allowed to access the ALB. Defaults to all IPv6 sources for internet-facing load balancers and no IPv6 ingress for internal load balancers."
+  default     = null
 }
 
 ################################################################################
 # Access Logs
 ################################################################################
 
-variable "enable_access_logs" {
+variable "access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the ALB."
   default     = false
@@ -308,7 +308,7 @@ variable "access_logs_versioning_enabled" {
 # WAF
 ################################################################################
 
-variable "enable_waf_association" {
+variable "waf_association_enabled" {
   type        = bool
   description = "Whether to associate a WAF Web ACL with the ALB. Set to true when providing web_acl_arn."
   default     = false
@@ -316,7 +316,7 @@ variable "enable_waf_association" {
 
 variable "web_acl_arn" {
   type        = string
-  description = "The ARN of a WAFv2 Web ACL to associate with the ALB. Required when enable_waf_association is true."
+  description = "The ARN of a WAFv2 Web ACL to associate with the ALB. Required when waf_association_enabled is true."
   default     = null
 
   validation {

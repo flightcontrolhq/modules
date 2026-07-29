@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -48,7 +48,7 @@ locals {
   effective_lifecycle_policy = (
     var.lifecycle_policy != null
     ? var.lifecycle_policy
-    : (var.enable_default_lifecycle_policy ? local.default_lifecycle_policy : null)
+    : (var.default_lifecycle_policy_enabled ? local.default_lifecycle_policy : null)
   )
 
   create_lifecycle_policy = local.effective_lifecycle_policy != null

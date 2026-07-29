@@ -70,13 +70,13 @@ variable "key_usage" {
   }
 }
 
-variable "multi_region" {
+variable "multi_region_enabled" {
   type        = bool
   description = "Whether to create the key as a multi-region primary key (replicas can later be created via aws_kms_replica_key)."
   default     = false
 }
 
-variable "enable_key_rotation" {
+variable "key_rotation_enabled" {
   type        = bool
   description = "Enable annual automatic rotation of the key material. AWS only supports automatic rotation for symmetric keys (SYMMETRIC_DEFAULT + ENCRYPT_DECRYPT); the module ignores this setting for any other shape."
   default     = true

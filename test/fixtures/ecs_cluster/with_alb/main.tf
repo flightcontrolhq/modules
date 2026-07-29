@@ -76,16 +76,16 @@ module "ecs_cluster" {
   public_subnet_ids  = module.vpc.public_subnet_ids
 
   # Enable Fargate capacity provider
-  enable_fargate      = true
-  enable_fargate_spot = false
+  fargate_enabled      = true
+  fargate_spot_enabled = false
 
   # Enable public ALB
-  enable_public_alb       = true
-  public_alb_enable_https = false
-  deletion_protection     = false
+  public_alb_enabled                        = true
+  public_alb_https_enabled                  = false
+  load_balancer_deletion_protection_enabled = false
 
   # Disable Container Insights to reduce costs for testing
-  enable_container_insights = false
+  container_insights = "disabled"
 
   tags = local.common_tags
 }

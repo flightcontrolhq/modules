@@ -169,7 +169,7 @@ variable "max_unavailable_percentage" {
   }
 }
 
-variable "force_update_version" {
+variable "version_force_update_enabled" {
   type        = bool
   description = "Allow EKS to force-evict pods (ignore PDBs) during a node group version update."
   default     = false
@@ -269,7 +269,7 @@ variable "security_group_ids" {
   }
 }
 
-variable "enable_detailed_monitoring" {
+variable "detailed_monitoring_enabled" {
   type        = bool
   description = "Enable EC2 detailed (1-minute) monitoring on instances."
   default     = false

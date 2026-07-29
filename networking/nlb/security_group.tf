@@ -11,7 +11,7 @@ module "security_group" {
   vpc_id      = var.vpc_id
   tags        = var.tags
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = concat(
     # Per-port IPv4 ingress rules
@@ -29,7 +29,7 @@ module "security_group" {
     # Per-port IPv6 ingress rules
     flatten([
       for listener in var.listener_ports : [
-        for cidr in var.ingress_ipv6_cidr_blocks : {
+        for cidr in local.ingress_ipv6_cidr_blocks : {
           description = "Allow ${upper(listener.protocol)} traffic on port ${listener.port} from ${cidr}"
           from_port   = listener.port
           to_port     = listener.port

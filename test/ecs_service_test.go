@@ -4,6 +4,7 @@ package test
 import (
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/flightcontrolhq/modules/test/helpers"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
@@ -167,6 +168,42 @@ func TestEcsServiceWithAlb(t *testing.T) {
 	// Verify ECS service is registered with the target group
 	hasTargetGroup := helpers.EcsServiceHasTargetGroup(t, clusterArn, serviceName, targetGroupArn, awsRegion)
 	assert.True(t, hasTargetGroup, "ECS service should be registered with the target group")
+
+	// The module wires load_balancer.advanced_configuration (alternate
+	// target group, production listener rule, infrastructure role)
+	// unconditionally — including for the rolling strategy used here, where
+	// CreateService carries no deployment_configuration. This asserts the
+	// real AWS API accepted that combination and persisted it on the
+	// service; if AWS ever rejected it, every rolling service with a load
+	// balancer (the module default) would fail to provision.
+	alternateTargetGroupArn := terraform.Output(t, terraformOptions, "alternate_target_group_arn")
+	require.NotEmpty(t, alternateTargetGroupArn, "alternate_target_group_arn should not be empty")
+
+	loadBalancers := helpers.GetEcsServiceLoadBalancers(t, clusterArn, serviceName, awsRegion)
+	require.Len(t, loadBalancers, 1, "ECS service should have exactly one load balancer attachment")
+
+	advancedConfig := loadBalancers[0].AdvancedConfiguration
+	require.NotNil(t, advancedConfig, "load balancer advanced configuration should be set on a rolling service")
+	assert.Equal(t, alternateTargetGroupArn, aws.ToString(advancedConfig.AlternateTargetGroupArn), "alternate target group should match the module output")
+	assert.NotEmpty(t, aws.ToString(advancedConfig.ProductionListenerRule), "production listener rule should be set")
+	assert.NotEmpty(t, aws.ToString(advancedConfig.RoleArn), "infrastructure role should be set")
+
+	// The production_listener_rule_arn output is what the deploy manager
+	// plumbs into UpdateService advancedConfiguration for native
+	// traffic-shift deployments, so it must match the rule AWS actually
+	// persisted on the service.
+	productionListenerRuleArn := terraform.Output(t, terraformOptions, "production_listener_rule_arn")
+	require.NotEmpty(t, productionListenerRuleArn, "production_listener_rule_arn should not be empty")
+	assert.Equal(t, productionListenerRuleArn, aws.ToString(advancedConfig.ProductionListenerRule), "production_listener_rule_arn output should match the rule on the service")
+
+	// The fixture configures a dedicated test listener rule, so the module
+	// must create it, export its ARN, and wire it into the service's
+	// advanced_configuration.test_listener_rule — the value the deploy
+	// manager forwards to drive the TEST_TRAFFIC_SHIFT lifecycle stages.
+	testListenerRuleArn := terraform.Output(t, terraformOptions, "test_listener_rule_arn")
+	require.NotEmpty(t, testListenerRuleArn, "test_listener_rule_arn should not be empty when a test listener rule is configured")
+	assert.NotEqual(t, productionListenerRuleArn, testListenerRuleArn, "test and production listener rules must be distinct")
+	assert.Equal(t, testListenerRuleArn, aws.ToString(advancedConfig.TestListenerRule), "test_listener_rule_arn output should match the rule on the service")
 
 	// Wait for targets to be registered in the target group
 	// The ECS service needs time to register tasks with the target group

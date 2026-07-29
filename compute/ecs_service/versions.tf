@@ -9,8 +9,10 @@ terraform {
 
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = ">= 6.0"
+      source = "hashicorp/aws"
+      # 6.21 adds linear_configuration / canary_configuration on the
+      # aws_ecs_service deployment_configuration block.
+      version = ">= 6.21"
     }
     ravion = {
       source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"

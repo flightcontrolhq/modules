@@ -33,8 +33,8 @@ mock_provider "aws" {
 }
 
 variables {
-  name        = "test-cert"
-  domain_name = "api.example.com"
+  name    = "test-cert"
+  domains = ["api.example.com"]
 }
 
 ################################################################################
@@ -51,7 +51,7 @@ run "defaults_no_route53_no_wait" {
 
   assert {
     condition     = length(aws_acm_certificate_validation.this) == 0
-    error_message = "aws_acm_certificate_validation should not be created when wait_for_validation is false"
+    error_message = "aws_acm_certificate_validation should not be created when certificate_validation_wait_enabled is false"
   }
 
   assert {
@@ -68,17 +68,17 @@ run "wait_for_validation_only" {
   command = plan
 
   variables {
-    wait_for_validation = true
+    certificate_validation_wait_enabled = true
   }
 
   assert {
     condition     = length(aws_acm_certificate_validation.this) == 1
-    error_message = "aws_acm_certificate_validation should be created when wait_for_validation is true"
+    error_message = "aws_acm_certificate_validation should be created when certificate_validation_wait_enabled is true"
   }
 
   assert {
     condition     = length(aws_route53_record.validation) == 0
-    error_message = "Route53 records should not be created when create_route53_validation_records is false"
+    error_message = "Route53 records should not be created when route53_validation_records_creation_enabled is false"
   }
 }
 
@@ -90,9 +90,9 @@ run "route53_and_wait" {
   command = plan
 
   variables {
-    create_route53_validation_records = true
-    route53_zone_id                   = "Z1234567890ABC"
-    wait_for_validation               = true
+    route53_validation_records_creation_enabled = true
+    route53_zone_id                             = "Z1234567890ABC"
+    certificate_validation_wait_enabled         = true
   }
 
   assert {
@@ -102,23 +102,32 @@ run "route53_and_wait" {
 
   assert {
     condition     = length(aws_acm_certificate_validation.this) == 1
-    error_message = "aws_acm_certificate_validation should be created when wait_for_validation is true"
+    error_message = "aws_acm_certificate_validation should be created when certificate_validation_wait_enabled is true"
   }
 }
 
 ################################################################################
-# Subject alternative names (still one validation block per domain in mock)
+# Ordered domains (still one validation block per domain in mock)
 ################################################################################
 
-run "with_sans_plan" {
+run "with_multiple_domains" {
   command = plan
 
   variables {
-    subject_alternative_names = ["www.example.com"]
+    domains = ["app.example.com", "www.example.com", "*.example.com"]
   }
 
   assert {
-    condition     = length(aws_acm_certificate.this.subject_alternative_names) == 1
-    error_message = "SANs should be passed to the certificate"
+    condition     = aws_acm_certificate.this.domain_name == "app.example.com"
+    error_message = "The first domain should be the certificate's primary domain"
+  }
+
+  assert {
+    condition = (
+      length(aws_acm_certificate.this.subject_alternative_names) == 2 &&
+      contains(aws_acm_certificate.this.subject_alternative_names, "www.example.com") &&
+      contains(aws_acm_certificate.this.subject_alternative_names, "*.example.com")
+    )
+    error_message = "Domains after the first should be passed as subject alternative names"
   }
 }

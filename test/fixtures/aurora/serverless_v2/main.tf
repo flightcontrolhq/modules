@@ -89,15 +89,15 @@ module "aurora" {
   master_username = "testadmin"
 
   # Security
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Test-friendly settings
-  deletion_protection          = false
-  skip_final_snapshot          = true
-  backup_retention_period      = 1
-  apply_immediately            = true
-  performance_insights_enabled = false
+  deletion_protection_enabled     = false
+  final_snapshot_creation_enabled = false
+  backup_retention_period         = 1
+  apply_immediately               = true
+  performance_insights_enabled    = false
 
   tags = local.common_tags
 }

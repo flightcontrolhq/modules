@@ -10,7 +10,7 @@ resource "aws_elasticache_replication_group" "this" {
 
   # Engine
   engine               = var.engine
-  engine_version       = var.engine_version
+  engine_version       = local.engine_version
   parameter_group_name = aws_elasticache_parameter_group.this[0].name
 
   # Node configuration
@@ -58,8 +58,8 @@ resource "aws_elasticache_replication_group" "this" {
 
   # Maintenance
   maintenance_window         = var.maintenance_window
-  apply_immediately          = var.apply_immediately
-  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  apply_immediately          = var.immediate_apply_enabled
+  auto_minor_version_upgrade = var.minor_version_auto_upgrade_enabled
 
   # Notifications
   notification_topic_arn = var.notification_topic_arn
@@ -80,8 +80,8 @@ resource "aws_elasticache_replication_group" "this" {
     }
 
     precondition {
-      condition     = var.create_security_group || var.security_group_id != null
-      error_message = "security_group_id is required when create_security_group is false."
+      condition     = var.security_group_creation_enabled || var.security_group_id != null
+      error_message = "security_group_id is required when security_group_creation_enabled is false."
     }
 
     ignore_changes = [
@@ -101,7 +101,7 @@ resource "aws_elasticache_cluster" "this" {
 
   # Engine
   engine               = var.engine
-  engine_version       = var.engine_version
+  engine_version       = local.engine_version
   parameter_group_name = aws_elasticache_parameter_group.this[0].name
 
   # Node configuration
@@ -118,8 +118,8 @@ resource "aws_elasticache_cluster" "this" {
 
   # Maintenance
   maintenance_window         = var.maintenance_window
-  apply_immediately          = var.apply_immediately
-  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  apply_immediately          = var.immediate_apply_enabled
+  auto_minor_version_upgrade = var.minor_version_auto_upgrade_enabled
 
   # Notifications
   notification_topic_arn = var.notification_topic_arn

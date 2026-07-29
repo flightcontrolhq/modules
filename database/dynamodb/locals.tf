@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -16,7 +16,6 @@ locals {
 
   # Billing mode flags
   is_provisioned = var.billing_mode == "PROVISIONED"
-  is_on_demand   = var.billing_mode == "PAY_PER_REQUEST"
 
   # Autoscaling is only valid for provisioned tables
   create_table_autoscaling = var.autoscaling_enabled && local.is_provisioned

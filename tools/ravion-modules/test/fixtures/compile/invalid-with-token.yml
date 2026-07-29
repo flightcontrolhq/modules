@@ -1,0 +1,12 @@
+definition:
+  type: ravion-aws-broken
+  name: Broken
+  description: Broken definition
+release:
+  version: 1.0.0
+  description: Broken release.
+module:
+  inputs:
+    - $template: modules/partials/templates/invalid-with-token.yml
+      with:
+        label: Region

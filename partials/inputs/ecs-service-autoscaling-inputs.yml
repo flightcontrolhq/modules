@@ -1,0 +1,201 @@
+- id: section_scaling
+  label: Autoscaling
+  type: section
+- id: auto_scaling_enabled
+  label: Autoscaling
+  type: boolean
+  default: true
+- $template: ../templates/autoscaling-capacity-inputs.yml
+  with:
+    min_capacity_overrides:
+      label: Minimum tasks
+      description: Recommend at least 2 for production.
+      show_when:
+        auto_scaling_enabled: true
+    max_capacity_overrides:
+      label: Maximum tasks
+      show_when:
+        auto_scaling_enabled: true
+- id: desired_count
+  label: Desired tasks
+  type: number
+  description: Number of tasks to keep running when autoscaling is disabled.
+  min: 1
+  show_when:
+    auto_scaling_enabled: false
+  default: 1
+- id: cpu_target_value
+  label: CPU target (%)
+  type: number
+  collapsible: true
+  max: 100
+  min: 1
+  show_when:
+    auto_scaling_enabled: true
+  default: 70
+- id: memory_target_value
+  label: Memory target (%)
+  type: number
+  description: Target average memory utilization for memory-based autoscaling. Leave blank to disable memory autoscaling.
+  collapsible: true
+  max: 100
+  min: 1
+  required: false
+  show_when:
+    auto_scaling_enabled: true
+  default: 80
+- id: scale_in_cooldown
+  label: Scale-in cooldown (secs)
+  type: number
+  description: Time after a scale-in activity before another scale-in can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
+  collapsible: true
+  min: 0
+  show_when:
+    auto_scaling_enabled: true
+  default: 300
+- id: scale_out_cooldown
+  label: Scale-out cooldown (secs)
+  type: number
+  description: Time after a scale-out activity before another scale-out can happen. AWS defaults ECS target tracking cooldowns to 300 secs; start here for production and tune if needed.
+  collapsible: true
+  min: 0
+  show_when:
+    auto_scaling_enabled: true
+  default: 300
+- id: scale_in_enabled
+  label: Scale in
+  type: boolean
+  description: Allow autoscaling to reduce task count automatically.
+  collapsible: true
+  show_when:
+    auto_scaling_enabled: true
+  default: true
+- id: scheduled_scaling
+  label: Scheduled scaling actions
+  type: object_array
+  description: Optional Application Auto Scaling scheduled actions for the ECS service desired count. Each action sets a recurring, one-time, or rate-based schedule and may update the minimum capacity, maximum capacity, or both.
+  item_inputs:
+    - id: name
+      label: Action name
+      type: string
+      description: Unique scheduled action name for this ECS service scalable target. AWS allows 1-256 characters and rejects leading/trailing spaces, control characters, colon, slash, and pipe.
+      placeholder: business-hours
+      required: true
+      patterns:
+        - message: Use 1-256 characters with no leading/trailing spaces and no control characters, colon, slash, or pipe.
+          pattern: ^(?! )(?!.* $)(?!.*[\x00-\x1F\x7F-\x9F:/|]).{1,256}$
+    - id: schedule
+      label: Schedule expression
+      type: string
+      description: "Application Auto Scaling schedule expression: at(yyyy-mm-ddThh:mm:ss), rate(value unit), or cron(fields). Cron normally uses six fields: minutes, hours, day-of-month, month, day-of-week, year."
+      placeholder: cron(0 13 ? * MON-FRI *)
+      required: true
+      patterns:
+        - message: Use at(...), rate(value minute|minutes|hour|hours|day|days), or cron(...).
+          pattern: ^(at\(.+\)|rate\([1-9][0-9]* (minute|minutes|hour|hours|day|days)\)|cron\(.+\))$
+    - id: min_capacity
+      label: Minimum capacity
+      type: number
+      description: Optional desired-count floor to apply when this action runs. Set minimum capacity, maximum capacity, or both.
+      min: 0
+      placeholder: "2"
+      required: false
+    - id: max_capacity
+      label: Maximum capacity
+      type: number
+      description: Optional desired-count ceiling to apply when this action runs. Set maximum capacity, minimum capacity, or both.
+      min: 0
+      placeholder: "10"
+      required: false
+    - id: timezone
+      label: Time zone
+      type: string
+      description: IANA/Joda-Time canonical time zone used for at() and cron() expressions. Defaults to UTC. Does not affect start_time or end_time.
+      placeholder: UTC
+      required: false
+      default: UTC
+      patterns:
+        - message: Use a canonical IANA/Joda-Time time zone such as UTC, America/New_York, Etc/GMT+9, or Pacific/Tahiti.
+          pattern: ^[A-Za-z_+-]+(?:/[A-Za-z0-9_+.-]+)*$
+    - id: start_time
+      label: Start time
+      type: string
+      description: Optional UTC boundary for when a recurring scheduled action starts. Terraform expects RFC 3339 format and this value is not affected by timezone.
+      placeholder: "2026-01-02T15:04:05Z"
+      required: false
+      patterns:
+        - message: Use UTC RFC 3339 format, for example 2026-01-02T15:04:05Z.
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$
+    - id: end_time
+      label: End time
+      type: string
+      description: Optional UTC boundary for when a recurring scheduled action stops. Terraform expects RFC 3339 format and this value is not affected by timezone.
+      placeholder: "2026-01-02T23:04:05Z"
+      required: false
+      patterns:
+        - message: Use UTC RFC 3339 format, for example 2026-01-02T23:04:05Z.
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$
+  item_label: Scheduled action
+  required: false
+  show_when:
+    auto_scaling_enabled: true
+  default: []
+- id: custom_metric_scaling_policies
+  label: Custom metric scaling policies
+  type: object_array
+  description: Additional target tracking scaling policies using custom CloudWatch metrics. Each policy must use a metric that changes proportionally with ECS service capacity.
+  item_inputs:
+    - id: policy_name
+      label: Policy name
+      type: string
+      description: Application Auto Scaling policy name. Terraform/AWS require 1-255 characters and this name must be unique for the scalable target.
+      placeholder: queue-depth
+      required: true
+      patterns:
+        - message: Use 1-255 characters.
+          pattern: ^.{1,255}$
+    - id: target_value
+      label: Target value
+      type: number
+      description: Target value for the custom metric. Choose a value appropriate for the CloudWatch metric, such as desired average queue depth per task.
+      placeholder: "100"
+      required: true
+    - id: custom_metric
+      label: Custom metric
+      type: object
+      description: "CloudWatch customized metric specification supported by this Terraform module: metric_name, namespace, statistic, and optional dimensions map. Statistic must be Average, Minimum, Maximum, SampleCount, or Sum."
+      placeholder: |-
+        metric_name: ApproximateNumberOfMessagesVisible
+        namespace: AWS/SQS
+        statistic: Average
+        dimensions:
+          QueueName: my-queue
+      required: true
+      default:
+        dimensions: {}
+    - id: scale_in_cooldown
+      label: Scale-in cooldown seconds
+      type: number
+      description: Seconds after a scale-in activity completes before another scale-in activity can start.
+      min: 0
+      placeholder: "300"
+      required: false
+      default: 300
+    - id: scale_out_cooldown
+      label: Scale-out cooldown seconds
+      type: number
+      description: Seconds to wait for a previous scale-out activity to take effect.
+      min: 0
+      placeholder: "60"
+      required: false
+      default: 300
+    - id: scale_in_enabled
+      label: Scale in
+      type: boolean
+      description: Allow this target tracking policy to remove running tasks automatically.
+      default: true
+  item_label: Custom metric policy
+  required: false
+  show_when:
+    auto_scaling_enabled: true
+  default: []

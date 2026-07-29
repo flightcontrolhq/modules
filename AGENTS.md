@@ -39,6 +39,11 @@ Every module **MUST** contain the following files:
 | `versions.tf` | Version constraints | OpenTofu/Terraform and provider version requirements |
 | `README.md` | Module documentation | Usage examples, input/output documentation, requirements |
 
+### Module Definitions
+
+- **Form labels and sections**: Use sentence case, not title case, for all form field labels and form section headers.
+- **Local module definition publishing**: When publishing a local development module definition, run the publish command directly. Do not run separate module-definition `validate` or `compile` commands first; publishing performs validation automatically.
+
 ### File Organization
 
 Each resource type should be defined in its own dedicated file, named after the resource it contains. This improves code organization, readability, and makes it easier to locate specific resources.
@@ -237,6 +242,19 @@ tofu init
 tofu validate
 ```
 
+### Provider Lock Files
+
+Each module commits its `.terraform.lock.hcl`. A committed lock file must contain the registry `zh:` checksums, not just a local `h1:` platform hash — Ravion runners on linux_amd64 fail `tofu init` with a checksum-verification error otherwise.
+
+- `tofu init` run with `-plugin-dir` or a filesystem provider mirror records only the local platform's `h1:` hash and **no** `zh:` checksums. Never commit a lock file produced that way.
+- To generate a correct lock file, run from the module directory:
+
+  ```bash
+  tofu providers lock -platform=linux_amd64 -platform=darwin_arm64
+  ```
+
+- If registry access is unavailable, copy the provider's hash block from another module's committed lock file that pins the same provider source and version (adjust the `constraints` line to match this module's `versions.tf`).
+
 ### When Creating New Modules
 
 1. Create the directory structure: `<category>/<module-name>/`
@@ -245,7 +263,8 @@ tofu validate
 4. Add validation to variables where applicable
 5. Include comprehensive examples in the module README
 6. **Update the root README.md Module Directory table**
-7. Format and validate before committing
+7. Generate `.terraform.lock.hcl` with registry checksums (see Provider Lock Files)
+8. Format and validate before committing
 
 ### When Modifying Existing Modules
 
@@ -264,6 +283,18 @@ Follow [Semantic Versioning](https://semver.org/):
 | **MAJOR** | Breaking changes | Removed variable, renamed resource, changed default that affects behavior |
 | **MINOR** | New features | New module, new optional variable, new output |
 | **PATCH** | Bug fixes | Documentation fix, validation fix, non-breaking default change |
+
+### Module Definition Release Metadata
+
+For changes to `*-definition.yml` files, update the top-level `release.version` and `release.description` according to semantic versioning when the branch has not already bumped that definition for the current change set.
+
+- Before bumping, inspect the current branch diff against its base branch and check whether `release.version` or `release.description` for that same definition has already changed.
+- If the branch already contains a release metadata bump for that definition, update the existing `release.description` only when needed to accurately summarize the combined branch changes; do not bump the version again.
+- If no bump exists yet on the branch, choose the semver bump from the authored version based on the user-facing impact: major for breaking config or behavior changes, minor for new modules/features/optional inputs/outputs, and patch for fixes or documentation-only corrections.
+- Keep `release.description` concise and user-facing. It should summarize the publishable change, not mention local publish attempts or implementation details.
+- After making module-definition changes, publish a local development version for testing unless the user explicitly says not to. Use `make publish-local-dev MODULE=<definition.type>` or the equivalent tooling path.
+
+For local development publishes, do **not** bump `release.version` just to publish a new local copy. The local publish tooling automatically appends the next numeric prerelease suffix to the authored version, such as `0.2.1-1`, `0.2.1-2`, and so on.
 
 ## Testing Requirements
 

@@ -1,0 +1,309 @@
+definition:
+  type: rvn-aws-network
+  name: VPC Network
+  description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
+release:
+  version: 0.2.2
+  description: Use non-deprecated AWS region lookup.
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      description: Recommend anything but us-east-1 as it has the most outages.
+    - id: section_vpc
+      label: VPC config
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>
+      description: Name prefix for all resources created by this module.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: The name must be 1-36 characters, contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,34}[a-z0-9])?$
+      required: true
+      type: string
+    - default: 10.0.0.0/16
+      description: The IPv4 CIDR block for the VPC.
+      id: vpc_cidr
+      immutable: true
+      label: VPC CIDR
+      required: false
+      type: string
+    - collapsible: true
+      description: Leave empty to create up to 3 public/private subnet pairs, capped by the availability zones available in the selected region and AWS account.
+      id: subnet_count
+      label: Subnet pairs
+      max: 6
+      min: 1
+      required: false
+      type: number
+    - id: section_nat
+      label: NAT gateway
+      type: section
+    - default: true
+      description: Needed if you want to access the internet from within private subnets
+      id: nat_gateway_enabled
+      label: NAT gateway
+      type: boolean
+    - default: false
+      description: High availability adds NAT Gateway to every AZ. Otherwise single NAT gateway serves all AZs.
+      id: nat_gateway_high_availability_enabled
+      label: NAT gateway high availability
+      type: boolean
+    - collapsible: true
+      default: null
+      description: |-
+        A list of pre-allocated Elastic IP allocation IDs (for example from the
+        networking/eips module) to associate with the NAT Gateway(s). When null
+        or empty (default), the module allocates new EIPs internally.
+
+        The list length must match the number of NAT Gateways the module will create:
+          - 1 when nat_gateway_high_availability_enabled = false
+          - the resolved subnet pair count when nat_gateway_high_availability_enabled = true
+
+        Supplied EIPs must already exist with domain = "vpc". This is useful for
+        keeping NAT public IPs stable across VPC replacements (e.g. for partner
+        allowlists or firewall rules).
+      id: nat_gateway_eip_allocation_ids
+      label: NAT gateway Elastic IP allocation IDs
+      required: false
+      type: string_array
+    - id: section_soc2
+      label: SOC 2
+      type: section
+    - default: false
+      description: Enable VPC Flow Logs for network traffic monitoring. Required for SOC 2.
+      id: flow_logs_enabled
+      label: Flow logs
+      type: boolean
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - id: section_peering
+      label: VPC peering
+      type: section
+    - description: |
+        Connect this VPC to other VPCs
+
+        NOTE: For cross-account or cross-region peerings, this module cannot manage the
+        peer VPC's route tables. The owner of the peer VPC is responsible for adding
+        return routes pointing at the peering connection.
+      id: vpc_peering_connections
+      item_inputs:
+        - description: The ID of the existing VPC to peer with.
+          id: peer_vpc_id
+          label: Peer VPC ID
+          required: true
+          type: string
+        - description: CIDR blocks of the peer VPC. Routes will be added in this VPC's route tables for each CIDR pointing at the peering connection.
+          id: peer_cidr_blocks
+          label: Peer CIDR blocks
+          required: true
+          type: string_array
+        - description: AWS account ID that owns the peer VPC. Defaults to the current account. Required for cross-account peering.
+          id: peer_owner_id
+          label: Peer AWS account ID number
+          required: false
+          type: string
+        - description: AWS region of the peer VPC. Defaults to the current region. Required for cross-region peering.
+          id: peer_region
+          label: Peer region
+          required: false
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          default: false
+          description: Allow DNS resolution of private hostnames in the peer VPC from this VPC. Only valid for same-account, same-region peerings.
+          id: remote_vpc_dns_resolution_enabled
+          label: Remote VPC DNS resolution
+          type: boolean
+        - collapsible: true
+          default: true
+          description: Add routes for peer_cidr_blocks to this VPC's public route table.
+          id: public_route_table_routes_enabled
+          label: Public route table routes
+          type: boolean
+        - collapsible: true
+          default: true
+          description: Add routes for peer_cidr_blocks to this VPC's private route table(s).
+          id: private_route_table_routes_enabled
+          label: Private route table routes
+          type: boolean
+        - collapsible: true
+          description: Optional list of route table IDs in the peer VPC to add return routes to (destination = this VPC's CIDR, target = the peering connection). Only supported for same-account, same-region peerings, since the AWS provider used by this module must have access to the peer's route tables. For cross-account or cross-region peerings, manage the return routes from the peer side instead.
+          id: peer_route_table_ids
+          label: Peer route table IDs
+          required: false
+          type: string_array
+      item_label: Peering connection
+      key:
+        label: Key
+      label: Peering connections
+      required: false
+      type: object_map
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
+  readme: |
+    Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
+
+    ## Overview
+
+    A VPC (Virtual Private Cloud) is the foundational networking layer for your AWS infrastructure. This module creates an isolated virtual network with public and private subnets spanning multiple availability zones, giving you complete control over your networking environment.
+
+    The VPC module provides:
+
+    - **Public and private subnets** across multiple availability zones for high availability
+    - **NAT Gateway** options for outbound internet access from private subnets
+    - **VPC Flow Logs** for network traffic monitoring and SOC 2 compliance
+    - **VPC Peering** to connect with existing VPCs across accounts or regions
+
+     Terraform source: [flightcontrolhq/modules/networking/vpc](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc)
+
+    ## Use cases
+
+    | Scenario                     | VPC helps by...                                            |
+    | ---------------------------- | ---------------------------------------------------------- |
+    | Running production workloads | Isolating resources in private subnets with NAT egress     |
+    | Deploying ECS/EKS clusters   | Providing subnet IDs and security groups for services      |
+    | Connecting to RDS databases  | Hosting databases in private subnets without public access |
+    | SOC 2 compliance             | Enabling flow logs for network traffic auditing            |
+    | Multi-region architecture    | Peering VPCs across regions for low-latency communication  |
+    | Partner IP allowlisting      | Using stable NAT Gateway IPs with pre-allocated EIPs       |
+
+    ## Subnet types
+
+    ### Public subnets
+
+    Public subnets have direct internet access via a free Internet Gateway. Resources in public subnets do not receive public IP addresses automatically; attach public IPs explicitly when needed. Use these for:
+
+    - Load balancers (ALB, NLB)
+    - Bastion hosts
+    - NAT Gateways
+
+    ### Private subnets
+
+    Private subnets have no direct internet access. Outbound traffic routes through NAT Gateway(s) when enabled. Use these for:
+
+    - Application servers (ECS tasks, EKS pods)
+    - RDS databases
+    - ElastiCache clusters
+    - Lambda functions with VPC access
+
+    ## NAT Gateway
+
+    NAT Gateway gives your private subnets two things:
+
+    1. **Internet access** — Resources can reach the internet for updates, API calls, and external services
+    2. **Static public IP** — All outbound traffic exits through the same IP, so partners can allowlist your IP address
+
+    | Mode              | Description                                          | Cost    |
+    | ----------------- | ---------------------------------------------------- | ------- |
+    | Disabled          | No outbound internet from private subnets            | $0      |
+    | Single (default)  | One NAT Gateway serves all availability zones        | ~$32/mo |
+    | High availability | One NAT Gateway per AZ, avoids cross-AZ data charges | ~$96/mo |
+
+    ### Keeping your IP stable
+
+    By default, the module creates a new Elastic IP for each NAT Gateway. If you ever reprovision the VPC, that IP changes.
+
+    To keep the same IP permanently, create your Elastic IPs separately and pass in the allocation IDs. This way, even if you destroy and recreate the entire VPC, your NAT Gateway will use the same public IP — no need to update partner allowlists or firewall rules.
+
+    ## Configuration
+
+    | Field                          | Required | Default              | Description                                                            |
+    | ------------------------------ | -------- | -------------------- | ---------------------------------------------------------------------- |
+    | AWS Account                    | Yes      | —                    | AWS account to deploy the VPC                                          |
+    | Region                         | Yes      | —                    | AWS region (recommend avoiding us-east-1 for reliability)              |
+    | Name                           | Yes      | `{project}-{env}`    | Name prefix for all resources (1-36 chars, lowercase, hyphens allowed) |
+    | VPC CIDR                       | No       | `10.0.0.0/16`        | IPv4 address range for the VPC                                         |
+    | Subnet pairs                   | No       | Auto                 | Up to 3 public/private subnet pairs, capped by available AZs           |
+    | NAT Gateway                    | No       | `true`               | Enable outbound internet from private subnets                          |
+    | NAT Gateway High Availability  | No       | `false`              | Deploy one NAT per AZ instead of a single shared NAT                   |
+    | NAT Gateway EIP Allocation IDs | No       | —                    | Pre-allocated EIPs for stable NAT public IPs                           |
+    | Flow Logs                      | No       | `false`              | Enable VPC Flow Logs (required for SOC 2)                              |
+    | Tags                           | No       | Environment, Project | Custom tags applied to all resources                                   |
+
+    ## VPC Peering
+
+    Connect this VPC to existing VPCs for private communication without traversing the internet. Peering supports:
+
+    - **Same-account, same-region:** Auto-accepts and configures routes in both directions
+    - **Cross-account or cross-region:** Creates the peering request; peer must accept and configure return routes
+
+    | Field                        | Description                                                           |
+    | ---------------------------- | --------------------------------------------------------------------- |
+    | Peer VPC ID                  | The VPC ID to peer with                                               |
+    | Peer CIDR Blocks             | CIDR blocks of the peer VPC (routes are added automatically)          |
+    | Peer Owner ID                | AWS account ID for cross-account peering                              |
+    | Peer Region                  | AWS region for cross-region peering                                   |
+    | Add to Public/Private Routes | Whether to add routes in this VPC's route tables                      |
+    | Peer Route Table IDs         | Route tables in the peer VPC to add return routes (same-account only) |
+
+    ## SOC 2 compliance
+
+    Enable **Flow Logs** to capture network traffic metadata for security auditing. Flow logs record:
+
+    - Source and destination IP addresses
+    - Ports and protocols
+    - Packet and byte counts
+    - Accept/reject actions
+
+    Logs are stored in CloudWatch Logs with configurable retention. This satisfies SOC 2 requirements for network traffic monitoring and audit trails.
+
+    ## Design decisions
+
+    This VPC follows [AWS VPC best practices](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-best-practices.html):
+
+    - **Availability zone spread:** Subnets are provisioned across up to 3 AZs by default, capped by the AZs available in the selected region and AWS account
+    - **Automatic CIDR allocation:** Subnets are /24 blocks carved from your VPC CIDR. With the default `10.0.0.0/16`, the first three public subnets get `10.0.1.0/24`, `10.0.2.0/24`, `10.0.3.0/24` and private subnets get `10.0.11.0/24`, `10.0.12.0/24`, `10.0.13.0/24`.
+    - **DNS enabled:** DNS support and hostnames are enabled for service discovery
+    - **Single route table for public:** All public subnets share one route table with an Internet Gateway route
+    - **Per-AZ route tables when HA NAT:** Each private subnet gets its own route table pointing to the NAT in its AZ
+
+    ## Learn more
+
+    **AWS VPC**
+
+    - [AWS VPC User Guide](https://docs.aws.amazon.com/vpc/latest/userguide/) — Official documentation
+    - [VPC Design Best Practices](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-best-practices.html) — Security recommendations
+    - [NAT Gateway Pricing](https://aws.amazon.com/vpc/pricing/) — Cost breakdown for NAT Gateways
+
+    **Network Architecture**
+
+    - [Plan your VPC](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-getting-started.html) — AWS guide to VPC planning
+    - [Building Scalable and Secure Multi-VPC Infrastructure](https://docs.aws.amazon.com/whitepapers/latest/building-scalable-secure-multi-vpc-network-infrastructure/welcome.html) — AWS whitepaper on VPC design patterns
+    - [Availability Zones](https://aws.amazon.com/about-aws/global-infrastructure/regions_az/) — Understanding AZ redundancy
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: networking/vpc
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        flow_logs_enabled: << module.input.flow_logs_enabled >>
+        nat_gateway_enabled: << module.input.nat_gateway_enabled >>
+        name: << module.input.name >>
+        nat_gateway_eip_allocation_ids: << module.input.nat_gateway_eip_allocation_ids >>
+        nat_gateway_high_availability_enabled: << module.input.nat_gateway_high_availability_enabled >>
+        region: << module.input.aws_region >>
+        subnet_count: << module.input.subnet_count >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        vpc_cidr: << module.input.vpc_cidr >>
+        vpc_peering_connections: << module.input.vpc_peering_connections >>
+  ui:
+    logs: |-
+      <<
+      module.input.flow_logs_enabled && stack.output.flow_log_cloudwatch_log_group_name ? [{
+        "id":"vpc_flow_logs",
+        "name":"VPC flow logs",
+        "source":{
+          "type":"cloudwatch",
+          "aws_account_id":module.input.aws_account_id,
+          "region":stack.output.region,
+          "log_group":stack.output.flow_log_cloudwatch_log_group_name
+        }
+      }] : []
+      >>

@@ -1,15 +1,16 @@
 # S3 Bucket Module
 
-This module creates an AWS S3 bucket with enterprise-grade security best practices including public access blocking, server-side encryption (SSE-S3 or SSE-KMS), versioning, lifecycle rules, and configurable bucket policies.
+This module creates an AWS S3 bucket with enterprise-grade security best practices including public access blocking, server-side encryption (SSE-S3 or SSE-KMS), versioning, CORS rules, lifecycle rules, and configurable bucket policies.
 
 ## Features
 
 - S3 bucket with configurable naming and force destroy options
 - Public access blocking (all four settings enabled by default)
-- Server-side encryption (SSE-S3 AES256 or SSE-KMS with optional Bucket Keys)
+- Server-side encryption (SSE-S3 AES256 or SSE-KMS with optional Bucket Keys) with SSE-C uploads blocked
 - Versioning support for object version management
+- CORS rules for browser-based cross-origin access
 - Comprehensive lifecycle rules for storage class transitions and expiration
-- Pre-built policy templates for common use cases (ALB/NLB logs, VPC Flow Logs, HTTPS enforcement)
+- Pre-built policy templates for common use cases (ALB/NLB logs, VPC Flow Logs, CloudFront OAC, HTTPS enforcement)
 - Custom bucket policy support with automatic merging
 - Automatic tag propagation with module defaults
 
@@ -105,6 +106,30 @@ module "s3" {
 }
 ```
 
+### Bucket with CORS Rules
+
+```hcl
+module "s3" {
+  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+
+  name = "my-cors-bucket"
+
+  cors_rules = [
+    {
+      allowed_methods = ["GET", "PUT"]
+      allowed_origins = ["https://app.example.com"]
+      allowed_headers = ["*"]
+      expose_headers  = ["ETag"]
+      max_age_seconds = 3000
+    }
+  ]
+
+  tags = {
+    Environment = "production"
+  }
+}
+```
+
 ### ALB Access Logs Bucket
 
 ```hcl
@@ -112,7 +137,7 @@ module "alb_logs" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-alb-access-logs"
-  force_destroy    = true
+  force_destroy_enabled = true
   policy_templates = ["alb_access_logs", "deny_insecure_transport"]
 
   lifecycle_rules = [
@@ -136,7 +161,7 @@ module "alb" {
   name                   = "main"
   vpc_id                 = module.vpc.vpc_id
   subnet_ids             = module.vpc.public_subnet_ids
-  enable_access_logs     = true
+  access_logs_enabled     = true
   access_logs_bucket_arn = module.alb_logs.bucket_arn
 }
 ```
@@ -148,7 +173,7 @@ module "flow_logs" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-vpc-flow-logs"
-  force_destroy    = true
+  force_destroy_enabled = true
   policy_templates = ["vpc_flow_logs", "deny_insecure_transport"]
 
   lifecycle_rules = [
@@ -173,7 +198,7 @@ module "nlb_logs" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-nlb-access-logs"
-  force_destroy    = true
+  force_destroy_enabled = true
   policy_templates = ["nlb_access_logs", "deny_insecure_transport"]
 
   lifecycle_rules = [
@@ -191,42 +216,26 @@ module "nlb_logs" {
 }
 ```
 
-### Bucket with Custom Policy
+### Private Bucket for CloudFront OAC
 
 ```hcl
 module "s3" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
-  name = "my-custom-policy-bucket"
+  name = "private-attachments"
 
-  # Combine templates with custom policy
-  policy_templates = ["deny_insecure_transport"]
-
-  custom_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowCloudFrontAccess"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:GetObject"
-        Resource = "arn:aws:s3:::my-custom-policy-bucket/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudfront::123456789012:distribution/EXAMPLE"
-          }
-        }
-      }
-    ]
-  })
+  policy_templates = ["deny_insecure_transport", "cloudfront_oac_read"]
+  cloudfront_distribution_arns = [
+    "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+  ]
 
   tags = {
     Environment = "production"
   }
 }
 ```
+
+Create or apply the CloudFront distribution first, then add its distribution ARN here so the private bucket can authorize that exact distribution.
 
 ### Full Configuration Example
 
@@ -235,7 +244,7 @@ module "s3" {
   source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name          = "my-full-config-bucket"
-  force_destroy = false
+  force_destroy_enabled = false
 
   # Encryption
   kms_key_id         = aws_kms_key.s3.arn
@@ -335,7 +344,7 @@ module "s3" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │       GENERAL               │   │    BUCKET CONFIGURATION         │   │        ENCRYPTION                       │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • name (required)           │   │ • force_destroy                 │   │ • kms_key_id                            │  ║
+║  │ • name (required)           │   │ • force_destroy_enabled         │   │ • kms_key_id                            │  ║
 ║  │ • tags                      │   │                                 │   │ • bucket_key_enabled                    │  ║
 ║  └──────────────┬──────────────┘   └─────────────────────────────────┘   └─────────────────────────────────────────┘  ║
 ║                 │                                                                                                      ║
@@ -349,7 +358,7 @@ module "s3" {
 ║  │  │ FEATURE FLAGS:                                                                                             │   │  ║
 ║  │  │ • use_kms_encryption = var.kms_key_id != null                                                             │   │  ║
 ║  │  │ • create_lifecycle_configuration = length(var.lifecycle_rules) > 0                                        │   │  ║
-║  │  │ • create_bucket_policy = length(var.policy_templates) > 0 || var.custom_policy != null                    │   │  ║
+║  │  │ • bucket policy is created when policy_templates or custom_policy are set, unless overridden                         │   │  ║
 ║  │  │                                                                                                            │   │  ║
 ║  │  │ POLICY PROCESSING:                                                                                         │   │  ║
 ║  │  │ • policy_template_statements = flatten(policy templates)                                                   │   │  ║
@@ -393,7 +402,7 @@ module "s3" {
 ║    │                                          (CORE RESOURCE)                                                     │    ║
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
 ║    │ • bucket = var.name                                                                                          │    ║
-║    │ • force_destroy = var.force_destroy                                                                          │    ║
+║    │ • force_destroy = var.force_destroy_enabled                                                                  │    ║
 ║    │ • tags = merged tags with Name                                                                               │    ║
 ║    └──────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘    ║
 ║                                                           │                                                            ║
@@ -464,7 +473,7 @@ module "s3" {
 ║                                        └────────────┬────────────┘                                                     ║
 ║                                                     │                                                                  ║
 ║                                                     ▼                                                                  ║
-║  var.force_destroy ─────────────────────► aws_s3_bucket.this ◄───────────────────── local.tags                        ║
+║  var.force_destroy_enabled ─────────────► aws_s3_bucket.this ◄───────────────────── local.tags                        ║
 ║                                                     │                                                                  ║
 ║                                                     │                                                                  ║
 ║           ┌─────────────────────────────────────────┼─────────────────────────────────────────┐                        ║
@@ -526,6 +535,7 @@ module "s3" {
 | `aws_s3_bucket_public_access_block` | 1 | Block public access settings |
 | `aws_s3_bucket_server_side_encryption_configuration` | 1 | Encryption configuration (SSE-S3 or SSE-KMS) |
 | `aws_s3_bucket_versioning` | 1 | Versioning configuration |
+| `aws_s3_bucket_cors_configuration` | 0 or 1 | CORS rules (when rules provided) |
 | `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Lifecycle rules (when rules provided) |
 | `aws_s3_bucket_policy` | 0 or 1 | Bucket policy (when templates or custom policy provided) |
 
@@ -542,7 +552,7 @@ module "s3" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| force_destroy | Whether to force destroy the bucket even if it contains objects. Use with caution. | `bool` | `false` | no |
+| force_destroy_enabled | Whether to force destroy the bucket even if it contains objects. Use with caution. | `bool` | `false` | no |
 
 ### Encryption
 
@@ -557,6 +567,12 @@ module "s3" {
 |------|-------------|------|---------|----------|
 | versioning_enabled | Whether to enable versioning for the S3 bucket. | `bool` | `false` | no |
 
+### CORS Rules
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| cors_rules | List of CORS rule configurations for browser-based cross-origin access. | `list(object({...}))` | `[]` | no |
+
 ### Lifecycle Rules
 
 | Name | Description | Type | Default | Required |
@@ -567,7 +583,8 @@ module "s3" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| policy_templates | List of policy template names to apply. Available: `deny_insecure_transport`, `alb_access_logs`, `nlb_access_logs`, `vpc_flow_logs`. | `list(string)` | `[]` | no |
+| policy_templates | List of policy template names to apply. Available: `deny_insecure_transport`, `alb_access_logs`, `nlb_access_logs`, `vpc_flow_logs`, `cloudfront_oac_read`. | `list(string)` | `[]` | no |
+| cloudfront_distribution_arns | CloudFront distribution ARNs allowed to read objects when `cloudfront_oac_read` is selected. | `list(string)` | `[]` | no |
 | custom_policy | Custom bucket policy JSON document. If provided alongside policy_templates, policies will be merged. | `string` | `null` | no |
 
 ### Public Access Block
@@ -626,6 +643,19 @@ The `lifecycle_rules` variable accepts a list of objects with the following stru
 | transitions | List of transitions to different storage classes | `list(object)` | no |
 | noncurrent_version_transitions | Transitions for noncurrent versions | `list(object)` | no |
 | abort_incomplete_multipart_upload_days | Days after which incomplete multipart uploads are aborted | `number` | no |
+
+## CORS Rules
+
+The `cors_rules` variable accepts a list of objects with the following structure:
+
+| Field | Description | Type | Required |
+|-------|-------------|------|----------|
+| id | Optional unique identifier for the rule | `string` | no |
+| allowed_headers | Headers allowed in CORS requests | `list(string)` | no |
+| allowed_methods | HTTP methods allowed in CORS requests. Valid values: `GET`, `PUT`, `HEAD`, `POST`, `DELETE` | `list(string)` | yes |
+| allowed_origins | Origins allowed to make CORS requests | `list(string)` | yes |
+| expose_headers | Response headers browsers may expose to client code | `list(string)` | no |
+| max_age_seconds | Seconds browsers can cache preflight responses | `number` | no |
 
 ### Storage Classes for Transitions
 
@@ -817,14 +847,16 @@ module "s3" {
 
 - **Public Access Blocked**: All four public access block settings are enabled by default.
 - **Encryption**: Server-side encryption is always enabled. Uses SSE-S3 (AES256) by default, or SSE-KMS when a KMS key is provided.
+- **SSE-C Blocked**: Uploads encrypted with customer-provided keys are blocked to preserve the secure S3 bucket default.
 - **HTTPS Enforcement**: Use the `deny_insecure_transport` policy template to enforce HTTPS-only access.
+- **CloudFront OAC**: Use the `cloudfront_oac_read` policy template with distribution ARNs to keep buckets private behind CloudFront.
 - **Bucket Keys**: When using SSE-KMS, S3 Bucket Keys are enabled by default to reduce KMS API costs.
 
 ## Notes
 
 - Bucket names must be globally unique across all AWS accounts.
 - Bucket names must be between 3-63 characters, contain only lowercase letters, numbers, hyphens, and periods.
-- The `force_destroy` option should be used with caution in production environments.
+- The `force_destroy_enabled` option should be used with caution in production environments.
 - When using lifecycle rules with versioning, consider configuring `noncurrent_version_expiration` to manage storage costs.
-- Policy templates automatically use data sources to get the current account ID, region, and ELB service account for proper policy configuration.
+- Policy templates automatically use data sources and module inputs to get the current account ID, region, ELB service account, and CloudFront distribution ARNs for proper policy configuration.
 - The bucket policy resource depends on the public access block to ensure proper ordering during creation.

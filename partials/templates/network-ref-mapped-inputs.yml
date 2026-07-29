@@ -1,0 +1,48 @@
+- id: section_aws
+  label: AWS account & region
+  type: section
+- default: $with.aws_account_id_default
+  id: aws_account_id
+  immutable: true
+  label: AWS account
+  type: string
+  values: $values:ravion/aws_accounts
+- default: $with.aws_region_default
+  description: AWS region for this module. If unset in Terraform, the provider region is used.
+  id: aws_region
+  immutable: true
+  label: Region
+  type: string
+  values: $values:aws/regions
+- collapsible: true
+  default: $with.execution_environment_default
+  description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
+  id: execution_environment_id
+  label: Terraform execution environment
+  type: string
+  values: $values:ravion/execution_environments
+- id: section_vpc
+  label: VPC
+  type: section
+- default: $with.vpc_id_default
+  id: vpc_id
+  immutable: true
+  label: VPC ID
+  required: true
+  type: string
+- add_button_label: Add private subnet ID
+  default: $with.private_subnet_ids_default
+  description: Required by Terraform. Used for private workloads and private load balancers.
+  id: private_subnet_ids
+  immutable: true
+  label: Private subnet IDs
+  required: true
+  type: string_array
+- add_button_label: Add public subnet ID
+  default: $with.public_subnet_ids_default
+  description: Used for public load balancers. Terraform defaults to [] when no public load balancer is enabled.
+  id: public_subnet_ids
+  immutable: true
+  label: Public subnet IDs
+  placeholder: subnet-...
+  type: string_array

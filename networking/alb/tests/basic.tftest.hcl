@@ -118,8 +118,8 @@ run "https_listener_enabled" {
   command = plan
 
   variables {
-    enable_https_listener = true
-    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    https_listener_enabled = true
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -143,9 +143,9 @@ run "http_to_https_redirect" {
   command = plan
 
   variables {
-    enable_https_listener  = true
-    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
-    http_to_https_redirect = true
+    https_listener_enabled         = true
+    certificate_arns               = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    http_to_https_redirect_enabled = true
   }
 
   assert {
@@ -161,7 +161,7 @@ run "http_to_https_redirect" {
   # The HTTP listener should have a redirect action when both listeners exist and redirect is enabled
   assert {
     condition     = aws_lb_listener.http[0].default_action[0].type == "redirect"
-    error_message = "HTTP listener should redirect to HTTPS when http_to_https_redirect is true"
+    error_message = "HTTP listener should redirect to HTTPS when http_to_https_redirect_enabled is true"
   }
 }
 
@@ -170,9 +170,9 @@ run "http_no_redirect" {
   command = plan
 
   variables {
-    enable_https_listener  = true
-    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
-    http_to_https_redirect = false
+    https_listener_enabled         = true
+    certificate_arns               = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    http_to_https_redirect_enabled = false
   }
 
   assert {
@@ -186,9 +186,9 @@ run "http_listener_disabled" {
   command = plan
 
   variables {
-    enable_http_listener  = false
-    enable_https_listener = true
-    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    http_listener_enabled  = false
+    https_listener_enabled = true
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -228,10 +228,10 @@ run "custom_ports" {
   command = plan
 
   variables {
-    http_listener_port    = 8080
-    https_listener_port   = 8443
-    enable_https_listener = true
-    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    http_listener_port     = 8080
+    https_listener_port    = 8443
+    https_listener_enabled = true
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -250,7 +250,7 @@ run "access_logs_new_bucket" {
   command = plan
 
   variables {
-    enable_access_logs         = true
+    access_logs_enabled        = true
     access_logs_retention_days = 90
   }
 
@@ -280,7 +280,7 @@ run "access_logs_existing_bucket" {
   command = plan
 
   variables {
-    enable_access_logs     = true
+    access_logs_enabled    = true
     access_logs_bucket_arn = "arn:aws:s3:::my-existing-bucket"
   }
 
@@ -295,7 +295,7 @@ run "access_logs_disabled" {
   command = plan
 
   variables {
-    enable_access_logs = false
+    access_logs_enabled = false
   }
 
   assert {
@@ -400,8 +400,8 @@ run "security_group_https_ingress" {
   command = plan
 
   variables {
-    enable_https_listener = true
-    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    https_listener_enabled = true
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
   }
 
   assert {
@@ -459,9 +459,9 @@ run "custom_ssl_policy" {
   command = plan
 
   variables {
-    enable_https_listener = true
-    certificate_arns      = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
-    ssl_policy            = "ELBSecurityPolicy-TLS-1-2-2017-01"
+    https_listener_enabled = true
+    certificate_arns       = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    ssl_policy             = "ELBSecurityPolicy-TLS-1-2-2017-01"
   }
 
   assert {
@@ -475,7 +475,7 @@ run "deletion_protection" {
   command = plan
 
   variables {
-    deletion_protection = true
+    deletion_protection_enabled = true
   }
 
   assert {
@@ -489,7 +489,7 @@ run "additional_certificates" {
   command = plan
 
   variables {
-    enable_https_listener = true
+    https_listener_enabled = true
     certificate_arns = [
       "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012",
       "arn:aws:acm:us-east-1:123456789012:certificate/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -508,7 +508,7 @@ run "no_additional_certs_without_https" {
   command = plan
 
   variables {
-    enable_https_listener = false
+    https_listener_enabled = false
     certificate_arns = [
       "arn:aws:acm:us-east-1:123456789012:certificate/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     ]
@@ -553,7 +553,7 @@ run "waf_fail_open" {
   command = plan
 
   variables {
-    enable_waf_fail_open = true
+    waf_fail_open_enabled = true
   }
 
   assert {

@@ -14,7 +14,7 @@
 ################################################################################
 
 resource "aws_iam_role" "deploy" {
-  count = var.create_deploy_role ? 1 : 0
+  count = var.deploy_role_creation_enabled ? 1 : 0
 
   name               = local.deploy_role_name
   assume_role_policy = var.deploy_role_trust_policy
@@ -24,13 +24,13 @@ resource "aws_iam_role" "deploy" {
   lifecycle {
     precondition {
       condition     = var.deploy_role_trust_policy != null
-      error_message = "deploy_role_trust_policy is required when create_deploy_role = true."
+      error_message = "deploy_role_trust_policy is required when deploy_role_creation_enabled = true."
     }
   }
 }
 
 resource "aws_iam_role_policy" "deploy" {
-  count = var.create_deploy_role ? 1 : 0
+  count = var.deploy_role_creation_enabled ? 1 : 0
 
   name   = "${local.deploy_role_name}-policy"
   role   = aws_iam_role.deploy[0].id

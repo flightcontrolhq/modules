@@ -23,10 +23,11 @@ Creates an Amazon RDS database instance with support for MySQL, PostgreSQL, Mari
 module "postgres" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.t4g.micro"
+  name                 = "my-postgres"
+  engine               = "postgres"
+  engine_major_version = "15"
+  engine_minor_version = "4"
+  instance_class       = "db.t4g.micro"
 
   allocated_storage = 20
 
@@ -49,10 +50,10 @@ module "postgres" {
 module "mysql" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-mysql"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.r6g.large"
+  name                 = "my-mysql"
+  engine               = "mysql"
+  engine_major_version = "8.0"
+  instance_class       = "db.r6g.large"
 
   allocated_storage     = 100
   max_allocated_storage = 500
@@ -60,7 +61,7 @@ module "mysql" {
   iops                  = 3000
   storage_throughput    = 125
 
-  multi_az = true
+  multi_az_enabled = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnet_ids
@@ -86,10 +87,11 @@ module "mysql" {
 module "postgres_with_replicas" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.r6g.large"
+  name                 = "my-postgres"
+  engine               = "postgres"
+  engine_major_version = "15"
+  engine_minor_version = "4"
+  instance_class       = "db.r6g.large"
 
   allocated_storage = 100
 
@@ -99,7 +101,7 @@ module "postgres_with_replicas" {
   username = "dbadmin"
 
   # Read replicas
-  create_read_replica  = true
+  read_replica_creation_enabled  = true
   read_replica_count   = 2
 
   allowed_security_group_ids = [module.app.security_group_id]
@@ -126,7 +128,7 @@ module "postgres" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # CloudWatch Alarms
-  create_cloudwatch_alarms               = true
+  cloudwatch_alarms_creation_enabled               = true
   cloudwatch_alarm_cpu_threshold         = 75
   cloudwatch_alarm_storage_threshold     = 10737418240 # 10 GiB
   cloudwatch_alarm_connections_threshold = 100
@@ -141,10 +143,10 @@ module "postgres" {
 module "mysql" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-mysql"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.t4g.medium"
+  name                 = "my-mysql"
+  engine               = "mysql"
+  engine_major_version = "8.0"
+  instance_class       = "db.t4g.medium"
 
   allocated_storage = 50
 
@@ -157,7 +159,7 @@ module "mysql" {
 
   # Enhanced Monitoring
   monitoring_interval     = 30
-  create_monitoring_role  = true
+  monitoring_role_creation_enabled  = true
 
   # Performance Insights (enabled by default)
   performance_insights_retention_period = 7
@@ -185,7 +187,7 @@ module "postgres" {
   username = "dbadmin"
 
   # Use existing security group instead of creating one
-  create_security_group = false
+  security_group_creation_enabled = false
   security_group_id     = aws_security_group.existing.id
 }
 ```
@@ -196,10 +198,11 @@ module "postgres" {
 module "postgres" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
-  instance_class = "db.r6g.large"
+  name                 = "my-postgres"
+  engine               = "postgres"
+  engine_major_version = "15"
+  engine_minor_version = "4"
+  instance_class       = "db.r6g.large"
 
   allocated_storage = 100
 
@@ -227,17 +230,20 @@ module "postgres" {
 }
 ```
 
+Managed parameter groups created by this module are named `rds-${name}` so the same name slug can be reused by other module types.
+
 ### Oracle with Option Group
 
 ```hcl
 module "oracle" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-oracle"
-  engine         = "oracle-ee"
-  engine_version = "19.0.0.0.ru-2023-10.rur-2023-10.r1"
-  instance_class = "db.r6i.large"
-  license_model  = "bring-your-own-license"
+  name                 = "my-oracle"
+  engine               = "oracle-ee"
+  engine_major_version = "19"
+  engine_minor_version = "0.0.0.0.ru-2023-10.rur-2023-10.r1"
+  instance_class       = "db.r6i.large"
+  license_model        = "bring-your-own-license"
 
   allocated_storage = 100
 
@@ -250,7 +256,7 @@ module "oracle" {
   allowed_security_group_ids = [module.app.security_group_id]
 
   # Option group
-  create_option_group = true
+  option_group_creation_enabled = true
   options = [
     {
       option_name = "STATSPACK"
@@ -269,10 +275,10 @@ module "oracle" {
 module "mysql" {
   source = "git::https://github.com/user/ravion-modules.git//database/rds?ref=v1.0.0"
 
-  name           = "my-mysql"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.r6g.large"
+  name                 = "my-mysql"
+  engine               = "mysql"
+  engine_major_version = "8.0"
+  instance_class       = "db.r6g.large"
 
   allocated_storage = 100
 
@@ -304,34 +310,35 @@ module "mysql" {
 | name | Name prefix for all resources created by this module. | `string` | n/a | yes |
 | engine | The database engine to use. | `string` | n/a | yes |
 | instance_class | The compute and memory capacity of the DB instance. | `string` | n/a | yes |
-| allocated_storage | The allocated storage in GiB. | `number` | n/a | yes |
+| allocated_storage | The allocated storage in GiB. AWS supports increasing allocated storage after creation, but not reducing it in place. | `number` | n/a | yes |
 | vpc_id | The ID of the VPC where the RDS instance will be created. | `string` | n/a | yes |
 | subnet_ids | A list of subnet IDs for the DB subnet group. | `list(string)` | n/a | yes |
 | username | The master username for the database. | `string` | n/a | yes |
 | tags | A map of tags to assign to all resources. | `map(string)` | `{}` | no |
-| engine_version | The version number of the database engine. | `string` | `null` | no |
+| engine_major_version | The major version of the database engine. Examples: 15 for PostgreSQL or SQL Server, 8.0 for MySQL, 19 for Oracle. | `string` | `null` | no |
+| engine_minor_version | The optional minor version of the database engine. | `string` | `null` | no |
 | license_model | The license model for Oracle/SQL Server. | `string` | `null` | no |
-| max_allocated_storage | Upper limit for storage autoscaling (0 to disable). | `number` | `0` | no |
+| max_allocated_storage | Upper limit for storage autoscaling (0 to disable). AWS can grow storage up to this limit, but storage cannot be reduced in place. | `number` | `0` | no |
 | storage_type | The storage type: gp2, gp3, io1, io2, or standard. | `string` | `"gp3"` | no |
 | iops | Provisioned IOPS for io1/io2, optional for gp3. | `number` | `null` | no |
 | storage_throughput | Storage throughput in MiB/s (gp3 only). | `number` | `null` | no |
-| storage_encrypted | Enable encryption at rest. | `bool` | `true` | no |
+| storage_encryption_enabled | Enable encryption at rest. | `bool` | `true` | no |
 | kms_key_id | KMS key ARN for storage encryption. | `string` | `null` | no |
 | port | Database port (defaults per engine). | `number` | `null` | no |
-| publicly_accessible | Whether the instance is publicly accessible. | `bool` | `false` | no |
-| availability_zone | AZ for the instance (ignored if multi_az). | `string` | `null` | no |
+| public_access_enabled | Whether the instance is publicly accessible. | `bool` | `false` | no |
+| availability_zone | AZ for the instance (ignored if multi_az_enabled). | `string` | `null` | no |
 | ca_cert_identifier | CA certificate identifier. | `string` | `null` | no |
-| create_security_group | Whether to create a security group. | `bool` | `true` | no |
+| security_group_creation_enabled | Whether to create a security group. | `bool` | `true` | no |
 | security_group_id | Existing security group ID to use. | `string` | `null` | no |
 | allowed_security_group_ids | Security group IDs allowed to access the instance. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the instance. | `list(string)` | `[]` | no |
-| multi_az | Enable Multi-AZ deployment. | `bool` | `false` | no |
-| create_read_replica | Whether to create read replicas. | `bool` | `false` | no |
+| multi_az_enabled | Enable Multi-AZ deployment. | `bool` | `false` | no |
+| read_replica_creation_enabled | Whether to create read replicas. | `bool` | `false` | no |
 | read_replica_count | Number of read replicas to create. | `number` | `1` | no |
 | read_replica_instance_class | Instance class for read replicas. | `string` | `null` | no |
 | read_replica_availability_zones | AZs for read replicas. | `list(string)` | `[]` | no |
-| password | Master password (required if manage_master_user_password is false). | `string` | `null` | no |
-| manage_master_user_password | Use Secrets Manager for master password. | `bool` | `true` | no |
+| password | Master password (required if master_user_password_management_enabled is false). | `string` | `null` | no |
+| master_user_password_management_enabled | Use Secrets Manager for master password. | `bool` | `true` | no |
 | master_user_secret_kms_key_id | KMS key for Secrets Manager secret. | `string` | `null` | no |
 | iam_database_authentication_enabled | Enable IAM database authentication. | `bool` | `false` | no |
 | db_name | Database name to create. | `string` | `null` | no |
@@ -341,35 +348,35 @@ module "mysql" {
 | domain_iam_role_name | IAM role for AD integration. | `string` | `null` | no |
 | backup_retention_period | Days to retain automated backups. | `number` | `7` | no |
 | backup_window | Daily backup window (HH:MM-HH:MM). | `string` | `null` | no |
-| copy_tags_to_snapshot | Copy tags to snapshots. | `bool` | `true` | no |
-| delete_automated_backups | Delete backups on instance deletion. | `bool` | `true` | no |
+| snapshot_tag_copying_enabled | Copy tags to snapshots. | `bool` | `true` | no |
+| automated_backups_deletion_enabled | Delete backups on instance deletion. | `bool` | `true` | no |
 | snapshot_identifier | Snapshot ID to restore from. | `string` | `null` | no |
 | final_snapshot_identifier | Name for final snapshot on deletion. | `string` | `null` | no |
-| skip_final_snapshot | Skip final snapshot on deletion. | `bool` | `false` | no |
+| final_snapshot_creation_enabled | Create a final snapshot on deletion. | `bool` | `true` | no |
 | restore_to_point_in_time | Point-in-time recovery configuration. | `object` | `null` | no |
 | maintenance_window | Weekly maintenance window. | `string` | `null` | no |
-| auto_minor_version_upgrade | Enable automatic minor version upgrades. | `bool` | `true` | no |
-| allow_major_version_upgrade | Allow major version upgrades. | `bool` | `false` | no |
-| apply_immediately | Apply changes immediately. | `bool` | `false` | no |
-| deletion_protection | Enable deletion protection. | `bool` | `true` | no |
+| minor_version_auto_upgrade_enabled | Enable automatic minor version upgrades. | `bool` | `true` | no |
+| major_version_upgrade_enabled | Allow major version upgrades. | `bool` | `false` | no |
+| immediate_apply_enabled | Apply changes immediately. | `bool` | `false` | no |
+| deletion_protection_enabled | Enable deletion protection. | `bool` | `true` | no |
 | enabled_cloudwatch_logs_exports | Log types to export to CloudWatch. | `list(string)` | `[]` | no |
 | monitoring_interval | Enhanced Monitoring interval (0 to disable). | `number` | `0` | no |
 | monitoring_role_arn | IAM role ARN for Enhanced Monitoring. | `string` | `null` | no |
-| create_monitoring_role | Create IAM role for Enhanced Monitoring. | `bool` | `true` | no |
+| monitoring_role_creation_enabled | Create IAM role for Enhanced Monitoring. | `bool` | `true` | no |
 | performance_insights_enabled | Enable Performance Insights. | `bool` | `true` | no |
 | performance_insights_retention_period | Performance Insights retention (days). | `number` | `7` | no |
 | performance_insights_kms_key_id | KMS key for Performance Insights. | `string` | `null` | no |
-| create_cloudwatch_alarms | Create CloudWatch alarms. | `bool` | `false` | no |
+| cloudwatch_alarms_creation_enabled | Create CloudWatch alarms. | `bool` | `false` | no |
 | cloudwatch_alarm_cpu_threshold | CPU utilization threshold (%). | `number` | `80` | no |
 | cloudwatch_alarm_storage_threshold | Free storage threshold (bytes). | `number` | `5368709120` | no |
 | cloudwatch_alarm_connections_threshold | Database connections threshold. | `number` | `100` | no |
 | cloudwatch_alarm_actions | ARNs to notify on ALARM. | `list(string)` | `[]` | no |
 | cloudwatch_ok_actions | ARNs to notify on OK. | `list(string)` | `[]` | no |
-| create_parameter_group | Whether to create a parameter group. | `bool` | `true` | no |
-| parameter_group_name | Existing parameter group name. | `string` | `null` | no |
+| parameter_group_creation_enabled | Whether to create a parameter group. Managed groups are named `rds-${name}`. | `bool` | `true` | no |
+| parameter_group_name | Existing parameter group name to use when creation is disabled. | `string` | `null` | no |
 | parameter_group_family | Parameter group family. | `string` | `null` | no |
 | parameters | Parameter name/value pairs. | `list(object)` | `[]` | no |
-| create_option_group | Whether to create an option group. | `bool` | `false` | no |
+| option_group_creation_enabled | Whether to create an option group. | `bool` | `false` | no |
 | option_group_name | Existing option group name. | `string` | `null` | no |
 | option_group_engine_version | Option group major engine version. | `string` | `null` | no |
 | options | Options for the option group. | `list(object)` | `[]` | no |
@@ -401,7 +408,7 @@ module "mysql" {
 | security_group_arn | The security group ARN. |
 | db_subnet_group_name | The DB subnet group name. |
 | db_subnet_group_arn | The DB subnet group ARN. |
-| db_parameter_group_name | The parameter group name. |
+| db_parameter_group_name | The DB parameter group name. Managed groups are named `rds-${name}`. |
 | db_parameter_group_arn | The parameter group ARN. |
 | db_option_group_name | The option group name. |
 | db_option_group_arn | The option group ARN. |
@@ -492,20 +499,20 @@ Valid log export types depend on the database engine:
 ║  │       GENERAL               │   │         ENGINE                  │   │          INSTANCE & STORAGE             │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • engine (required)             │   │ • instance_class (required)             │  ║
-║  │ • tags                      │   │ • engine_version                │   │ • allocated_storage (required)          │  ║
-║  └─────────────────────────────┘   │ • license_model                 │   │ • max_allocated_storage                 │  ║
-║                                    └─────────────────────────────────┘   │ • storage_type                          │  ║
-║                                                                          │ • iops, storage_throughput              │  ║
-║                                                                          │ • storage_encrypted, kms_key_id         │  ║
+║  │ • tags                      │   │ • engine_major_version          │   │ • allocated_storage (required)          │  ║
+║  └─────────────────────────────┘   │ • engine_minor_version          │   │ • max_allocated_storage                 │  ║
+║                                    │ • license_model                 │   │ • storage_type                          │  ║
+║                                    └─────────────────────────────────┘   │ • iops, storage_throughput              │  ║
+║                                                                          │ • storage_encryption_enabled, kms_key_id│  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │      NETWORK                │   │      SECURITY GROUP             │   │       HIGH AVAILABILITY                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • vpc_id (required)         │   │ • create_security_group         │   │ • multi_az                              │  ║
-║  │ • subnet_ids (required)     │   │ • security_group_id             │   │ • create_read_replica                   │  ║
+║  │ • vpc_id (required)         │   │ • security_group_creation_enabled         │   │ • multi_az_enabled                      │  ║
+║  │ • subnet_ids (required)     │   │ • security_group_id             │   │ • read_replica_creation_enabled                   │  ║
 ║  │ • port                      │   │ • allowed_security_group_ids    │   │ • read_replica_count                    │  ║
-║  │ • publicly_accessible       │   │ • allowed_cidr_blocks           │   │ • read_replica_instance_class           │  ║
+║  │ • public_access_enabled     │   │ • allowed_cidr_blocks           │   │ • read_replica_instance_class           │  ║
 ║  │ • availability_zone         │   └─────────────────────────────────┘   │ • read_replica_availability_zones       │  ║
 ║  │ • ca_cert_identifier        │                                         └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘                                                                                       ║
@@ -515,22 +522,22 @@ Valid log export types depend on the database engine:
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • username (required)       │   │ • db_name                       │   │ • backup_retention_period               │  ║
 ║  │ • password                  │   │ • character_set_name            │   │ • backup_window                         │  ║
-║  │ • manage_master_user_pwd    │   │ • timezone                      │   │ • copy_tags_to_snapshot                 │  ║
-║  │ • master_user_secret_kms_id │   │ • domain                        │   │ • delete_automated_backups              │  ║
+║  │ • master_user_password_mgmt │   │ • timezone                      │   │ • snapshot_tag_copying_enabled          │  ║
+║  │ • master_user_secret_kms_id │   │ • domain                        │   │ • automated_backups_deletion_enabled    │  ║
 ║  │ • iam_database_auth_enabled │   │ • domain_iam_role_name          │   │ • snapshot_identifier                   │  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘   │ • final_snapshot_identifier             │  ║
-║                                                                          │ • skip_final_snapshot                   │  ║
+║                                                                          │ • final_snapshot_creation_enabled       │  ║
 ║                                                                          │ • restore_to_point_in_time              │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
 ║                                                                                                                        ║
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │      MAINTENANCE            │   │         MONITORING              │   │       CLOUDWATCH ALARMS                 │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • maintenance_window        │   │ • monitoring_interval           │   │ • create_cloudwatch_alarms              │  ║
-║  │ • auto_minor_version_upgrade│   │ • monitoring_role_arn           │   │ • cloudwatch_alarm_cpu_threshold        │  ║
-║  │ • allow_major_version_upgrade│  │ • create_monitoring_role        │   │ • cloudwatch_alarm_storage_threshold    │  ║
-║  │ • apply_immediately         │   │ • performance_insights_enabled  │   │ • cloudwatch_alarm_connections_threshold│  ║
-║  │ • deletion_protection       │   │ • perf_insights_retention_period│   │ • cloudwatch_alarm_actions              │  ║
+║  │ • maintenance_window        │   │ • monitoring_interval           │   │ • cloudwatch_alarms_creation_enabled              │  ║
+║  │ • minor_version_auto_upgrade_enabled│ • monitoring_role_arn           │   │ • cloudwatch_alarm_cpu_threshold        │  ║
+║  │ • major_version_upgrade_enabled│ │ • monitoring_role_creation_enabled        │   │ • cloudwatch_alarm_storage_threshold    │  ║
+║  │ • immediate_apply_enabled   │   │ • performance_insights_enabled  │   │ • cloudwatch_alarm_connections_threshold│  ║
+║  │ • deletion_protection_enabled       │   │ • perf_insights_retention_period│   │ • cloudwatch_alarm_actions              │  ║
 ║  └─────────────────────────────┘   │ • perf_insights_kms_key_id      │   │ • cloudwatch_ok_actions                 │  ║
 ║                                    │ • enabled_cw_logs_exports       │   └─────────────────────────────────────────┘  ║
 ║                                    └─────────────────────────────────┘                                                 ║
@@ -538,7 +545,7 @@ Valid log export types depend on the database engine:
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐   ┌─────────────────────────────────────────┐  ║
 ║  │    PARAMETER GROUP          │   │        OPTION GROUP             │   │         BLUE/GREEN                      │  ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
-║  │ • create_parameter_group    │   │ • create_option_group           │   │ • blue_green_update                     │  ║
+║  │ • parameter_group_creation_enabled    │   │ • option_group_creation_enabled           │   │ • blue_green_update                     │  ║
 ║  │ • parameter_group_name      │   │ • option_group_name             │   │   └─ enabled                            │  ║
 ║  │ • parameter_group_family    │   │ • option_group_engine_version   │   └─────────────────────────────────────────┘  ║
 ║  │ • parameters                │   │ • options                       │                                                 ║
@@ -576,14 +583,14 @@ Valid log export types depend on the database engine:
 ║    │  Attributes:                                                                                                 │    ║
 ║    │  • identifier, engine, engine_version, instance_class                                                        │    ║
 ║    │  • allocated_storage, max_allocated_storage, storage_type, iops, storage_throughput                          │    ║
-║    │  • db_subnet_group_name, vpc_security_group_ids, publicly_accessible, port                                   │    ║
-║    │  • multi_az, availability_zone                                                                               │    ║
-║    │  • username, manage_master_user_password, master_user_secret_kms_key_id                                      │    ║
+║    │  • db_subnet_group_name, vpc_security_group_ids, public_access_enabled, port                                 │    ║
+║    │  • multi_az_enabled, availability_zone                                                                       │    ║
+║    │  • username, master_user_password_management_enabled, master_user_secret_kms_key_id                          │    ║
 ║    │  • db_name, parameter_group_name, option_group_name                                                          │    ║
-║    │  • storage_encrypted, kms_key_id, iam_database_authentication_enabled                                        │    ║
+║    │  • storage_encryption_enabled, kms_key_id, iam_database_authentication_enabled                               │    ║
 ║    │  • backup_retention_period, backup_window, maintenance_window                                                │    ║
 ║    │  • monitoring_interval, monitoring_role_arn, performance_insights_enabled                                    │    ║
-║    │  • enabled_cloudwatch_logs_exports, deletion_protection, skip_final_snapshot                                 │    ║
+║    │  • enabled_cloudwatch_logs_exports, deletion_protection_enabled, final_snapshot_creation_enabled             │    ║
 ║    │                                                                                                              │    ║
 ║    │  ┌─────────────────────────────┐                                                                             │    ║
 ║    │  │ dynamic "blue_green_update" │  (enabled for MySQL/MariaDB zero-downtime updates)                          │    ║
@@ -660,32 +667,32 @@ Valid log export types depend on the database engine:
 ║  var.name ─────────────────────────────► aws_db_subnet_group.this                                                     ║
 ║  var.tags ─────────────────────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
-║  var.create_security_group ────────────► aws_security_group.this[0]                                                   ║
+║  var.security_group_creation_enabled ────────────► aws_security_group.this[0]                                                   ║
 ║  var.allowed_security_group_ids ───────►         │                                                                    ║
 ║  var.allowed_cidr_blocks ──────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
-║  var.create_parameter_group ───────────► aws_db_parameter_group.this[0]                                               ║
+║  var.parameter_group_creation_enabled ───────────► aws_db_parameter_group.this[0]                                               ║
 ║  var.parameter_group_family ───────────►         │                                                                    ║
 ║  var.parameters ───────────────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
-║  var.create_option_group ──────────────► aws_db_option_group.this[0]                                                  ║
+║  var.option_group_creation_enabled ──────────────► aws_db_option_group.this[0]                                                  ║
 ║  var.options ──────────────────────────►         │                                                                    ║
 ║                                                  │                                                                    ║
 ║                                                  ▼                                                                    ║
 ║              ┌───────────────────────────────────────────────────────────────────────────────────┐                     ║
 ║  var.engine ────────────────────────────►│                                                       │                     ║
-║  var.engine_version ────────────────────►│                                                       │                     ║
+║  local.engine_version ───────────────────►│                                                       │                     ║
 ║  var.instance_class ────────────────────►│                                                       │                     ║
 ║  var.allocated_storage ─────────────────►│                                                       │                     ║
 ║  var.storage_type ──────────────────────►│                                                       │                     ║
 ║  var.iops ──────────────────────────────►│                                                       │                     ║
-║  var.storage_encrypted ─────────────────►│                    aws_db_instance.this               │                     ║
+║  var.storage_encryption_enabled ────────►│                    aws_db_instance.this               │                     ║
 ║  var.kms_key_id ────────────────────────►│                                                       │                     ║
-║  var.multi_az ──────────────────────────►│                                                       │                     ║
+║  var.multi_az_enabled ──────────────────►│                                                       │                     ║
 ║  var.username ──────────────────────────►│                                                       │                     ║
-║  var.manage_master_user_password ───────►│                                                       │                     ║
+║  var.master_user_password_management_enabled ─►│                                                  │                     ║
 ║  var.backup_retention_period ───────────►│                                                       │                     ║
-║  var.deletion_protection ───────────────►│                                                       │                     ║
+║  var.deletion_protection_enabled ───────────────►│                                                       │                     ║
 ║  var.performance_insights_enabled ──────►│                                                       │                     ║
 ║  var.blue_green_update ─────────────────►│                                                       │                     ║
 ║              └───────────────────────────────────────────────────┬───────────────────────────────┘                     ║
@@ -693,7 +700,7 @@ Valid log export types depend on the database engine:
 ║           ┌──────────────────────────────────────────────────────┼──────────────────────────────────────┐              ║
 ║           │                                                      │                                      │              ║
 ║           ▼                                                      ▼                                      ▼              ║
-║  var.create_read_replica                          var.create_monitoring_role           var.create_cloudwatch_alarms   ║
+║  var.read_replica_creation_enabled                          var.monitoring_role_creation_enabled           var.cloudwatch_alarms_creation_enabled   ║
 ║  var.read_replica_count                           var.monitoring_interval              var.cloudwatch_alarm_*         ║
 ║  var.read_replica_instance_class                           │                                      │                   ║
 ║           │                                                │                                      │                   ║
@@ -715,9 +722,9 @@ Valid log export types depend on the database engine:
 | `aws_db_subnet_group` | 1 | Subnet group for Multi-AZ placement |
 | `aws_db_instance` | 1 | Primary RDS database instance |
 | `aws_db_instance` (replica) | 0 to N | Read replicas for horizontal scaling |
-| `aws_security_group` | 0 or 1 | Security group (if `create_security_group = true`) |
-| `aws_db_parameter_group` | 0 or 1 | Custom parameters (if `create_parameter_group = true`) |
-| `aws_db_option_group` | 0 or 1 | Engine options (if `create_option_group = true`) |
-| `aws_iam_role` | 0 or 1 | Enhanced Monitoring role (if `create_monitoring_role = true`) |
+| `aws_security_group` | 0 or 1 | Security group (if `security_group_creation_enabled = true`) |
+| `aws_db_parameter_group` | 0 or 1 | Custom parameters (if `parameter_group_creation_enabled = true`) |
+| `aws_db_option_group` | 0 or 1 | Engine options (if `option_group_creation_enabled = true`) |
+| `aws_iam_role` | 0 or 1 | Enhanced Monitoring role (if `monitoring_role_creation_enabled = true`) |
 | `aws_iam_role_policy_attachment` | 0 or 1 | Monitoring role policy attachment |
-| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, storage, connections alarms (if `create_cloudwatch_alarms = true`) |
+| `aws_cloudwatch_metric_alarm` | 0 or 3 | CPU, storage, connections alarms (if `cloudwatch_alarms_creation_enabled = true`) |

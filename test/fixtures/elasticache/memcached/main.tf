@@ -83,8 +83,8 @@ module "elasticache" {
   num_cache_nodes = 1
 
   # Security - create a security group that allows access from VPC CIDR
-  create_security_group = true
-  allowed_cidr_blocks   = [module.vpc.vpc_cidr_block]
+  security_group_creation_enabled = true
+  allowed_cidr_blocks             = [module.vpc.vpc_cidr_block]
 
   # Apply changes immediately for testing
   apply_immediately = true
@@ -124,6 +124,11 @@ output "configuration_endpoint" {
 output "port" {
   description = "The port number on which the cache accepts connections."
   value       = module.elasticache.port
+}
+
+output "parameter_group_name" {
+  description = "The name of the ElastiCache parameter group."
+  value       = module.elasticache.parameter_group_name
 }
 
 output "security_group_id" {

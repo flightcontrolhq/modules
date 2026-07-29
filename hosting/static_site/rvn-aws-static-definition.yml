@@ -1,0 +1,681 @@
+definition:
+  type: rvn-aws-static
+  name: Static Hosting
+  description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
+release:
+  version: 0.3.5
+  description: Document cache header defaults as the blank module inputs they are, with the applied value explained.
+module:
+  build:
+    builder: >-
+      << module.input.build_source == "dockerfile" ? {type: "dockerfile", dockerfile: module.input.dockerfile
+      || "Dockerfile", context: module.input.dockerfile_context || ".", inject_env_variables_in_dockerfile:
+      module.input.dockerfile_inject_env_variables, output_directory: module.input.output_directory} :
+      (module.input.build_source == "railpack" || module.input.build_source == "nixpacks") ? {type: "railpack", railpack_version:
+      module.input.railpack_version, install_cmd: module.input.railpack_install_cmd,
+      build_cmd: module.input.railpack_build_cmd, output_directory: module.input.output_directory} :
+      {type: "disabled"} >>
+    destinations:
+      - bucket: << stack.output.hosting_bucket_id >>
+        id: hosting-bucket
+        region: << stack.output.region >>
+        type: s3
+    environment_variables: << module.input.build_environment_variables >>
+    infrastructure:
+      $include: ../../partials/build/infrastructure.yml
+    inputs:
+      - $include: ../../partials/inputs/build-inputs.yml
+    source:
+      $include: ../../partials/build/git-source.yml
+    timeout: 1800
+    type: '<< module.input.build_source == "s3_directory" ? "disabled" : "static" >>'
+  deploy:
+    definition:
+      cloudfront_invalidation_paths: << module.input.cloudfront_invalidation_paths >>
+      keep_latest_successful_deploy_count: << module.input.keep_latest_successful_deploy_count >>
+      s3_directory: << deploy.input.directory >>
+    infrastructure:
+      cloudfront_distribution_arns: << stack.output.cloudfront_distribution_arns >>
+      cloudfront_keyvaluestore_arn: << stack.output.cloudfront_keyvaluestore_arn >>
+      s3_bucket: << stack.output.hosting_bucket_id >>
+      s3_region: << stack.output.region >>
+    inputs:
+      - description: Existing S3 prefix to promote
+        id: directory
+        label: S3 directory
+        required: true
+        type: string
+    timeout: 1800
+    type: aws:static
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      default: us-east-1
+      description: Region for the S3 bucket. CloudFront and KVS always use us-east-1.
+    - id: section_hosting
+      label: Static hosting
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      description: Name for the bucket and other resources' prefix. Must be globally unique.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: "Use a valid S3 bucket name: lowercase letters, numbers, hyphens, and periods; start and end with a letter or number."
+          pattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
+      required: true
+      type: string
+    - default: spa
+      description: Use single page app for client-side routers, or Filesystem for static file trees where paths map to index files.
+      id: routing
+      label: Routing mode
+      required: true
+      type: string
+      values:
+        - description: Rewrite non-asset paths to index.html for client-side routers.
+          label: Single page app
+          value: spa
+        - description: Each path has its own file
+          label: Filesystem
+          value: filesystem
+    - collapsible: true
+      default: index.html
+      description: Object name resolved when a viewer requests the distribution root.
+      id: default_root_object
+      label: Default root object
+      type: string
+    - collapsible: true
+      default: main
+      description: Fallback version prefix and initial active KVS value.
+      id: default_version
+      label: Default version prefix
+      required: true
+      type: string
+    - id: section_build
+      label: Build config
+      type: section
+    - default: railpack
+      id: build_source
+      label: Build source
+      required: true
+      type: string
+      values:
+        - description: Automatically build static files with Railpack
+          label: Railpack
+          value: railpack
+        - description: Bring your own Dockerfile
+          label: Dockerfile
+          value: dockerfile
+        - description: Skip the build step and promote a directory you upload to the hosting S3 bucket yourself.
+          label: Manual upload to S3
+          value: s3_directory
+    - $template: ../../partials/inputs/build-git-source.yml
+      with:
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
+    - default: dist
+      description: Directory produced by the build and uploaded to S3.
+      id: output_directory
+      label: Output directory
+      required: true
+      show_when:
+        build_source:
+          - dockerfile
+          - railpack
+          - nixpacks
+      type: string
+    - $template: ../../partials/inputs/dockerfile-build.yml
+      with:
+        show_when:
+          build_source: dockerfile
+    - $template: ../../partials/inputs/railpack.yml
+      with:
+        show_when:
+          build_source:
+            - railpack
+            - nixpacks
+    - $merge:
+        - ../../partials/inputs/build-environment-variables.yml
+      show_when:
+        build_source:
+          - dockerfile
+          - railpack
+          - nixpacks
+    - $include: ../../partials/inputs/dockerfile-env-injection.yml
+    - id: section_cloudfront
+      label: CloudFront settings
+      type: section
+    - description: Required if using domain aliases. The certificate module must be in us-east-1.
+      id: distribution_acm_certificate
+      label: ACM certificate
+      mapped_inputs:
+        - default: <<ref.stack.output.certificate_arn>>
+          id: distribution_acm_certificate_arn
+          label: CloudFront certificate ARN
+          type: string
+      required: false
+      type: $ref:rvn-acm-certificate
+    - add_button_label: Add domain alias
+      default: []
+      description: Custom domain names like app.example.com. Leave empty to use the default cloudfront.net domain.
+      id: distribution_aliases
+      label: Domain aliases
+      type: string_array
+    - default: PriceClass_All
+      description: You can reduce edge locations for some cost savings if it becomes an issue.
+      id: price_class
+      label: Price class
+      type: string
+      values:
+        - label: All edge locations
+          value: PriceClass_All
+        - label: Most edge locations
+          value: PriceClass_200
+        - label: US, Canada, Europe
+          value: PriceClass_100
+    - default: none
+      id: geo_restriction_type
+      label: Geo restriction
+      type: string
+      values:
+        - label: None
+          value: none
+        - label: Whitelist
+          value: whitelist
+        - label: Blacklist
+          value: blacklist
+    - default: []
+      id: geo_restriction_locations
+      label: Geo restriction country codes
+      show_when:
+        geo_restriction_type:
+          - whitelist
+          - blacklist
+      type: string_array
+    - collapsible: true
+      description: Optional WAFv2 web ACL to associate with the distribution. Must be a global (CloudFront) web ACL.
+      id: web_acl_id
+      label: WAF web ACL ARN
+      placeholder: arn:aws:wafv2:us-east-1:123456789012:global/webacl/name/abc-123
+      required: false
+      type: string
+    - collapsible: true
+      default: false
+      description: Add a CloudFront Origin Shield caching layer in front of the S3 bucket to improve cache hit ratio and reduce S3 load for high-traffic sites. The Origin Shield region is chosen automatically based on the bucket region.
+      id: origin_shield_enabled
+      label: Origin Shield
+      type: boolean
+    - id: section_cache_headers
+      label: Cache and headers
+      type: section
+    - default: true
+      description: Attach a CloudFront Function that sets Cache-Control headers for HTML and asset responses.
+      id: cache_control_enabled
+      label: Manage Cache-Control headers
+      type: boolean
+    - collapsible: true
+      default: null
+      description: Cache-Control header for HTML responses, routes without file extensions, dotted paths, and configured HTML path overrides. Steers browser caching only. Defaults to public, max-age=0, must-revalidate so browsers pick up new deploys on the next navigation.
+      id: html_cache_control
+      label: HTML Cache-Control
+      show_when:
+        cache_control_enabled: true
+      type: string
+    - collapsible: true
+      description: Cache-Control header for versioned static assets such as JavaScript, CSS, images, and fonts. Defaults to public, max-age=31536000, immutable
+      id: assets_cache_control
+      label: Asset Cache-Control
+      show_when:
+        cache_control_enabled: true
+      type: string
+    - add_button_label: Add path override
+      collapsible: true
+      description: Exact viewer paths that should receive the HTML Cache-Control header even when they have a file extension.
+      id: html_path_overrides
+      label: HTML cache path overrides
+      show_when:
+        cache_control_enabled: true
+      type: string_array
+    - default:
+        - security_headers
+      description: AWS managed response header sets applied when no custom response headers policy is configured. Selections combine into a single AWS managed policy.
+      id: response_headers_presets
+      collapsible: true
+      label: Managed response headers
+      type: string_array
+      values:
+        - description: HSTS, nosniff, X-Frame-Options SAMEORIGIN, and Referrer-Policy on every response. Remove if the site must be embeddable in cross-origin iframes.
+          label: Security headers
+          value: security_headers
+        - description: Allow simple CORS requests from any origin.
+          label: CORS
+          value: cors
+        - description: Allow CORS requests from any origin, including OPTIONS preflight.
+          label: CORS with preflight
+          value: cors_preflight
+    - collapsible: true
+      description: Optional externally managed CloudFront response headers policy ID for security headers, CORS, or custom headers. Replaces the default security headers policy.
+      id: response_headers_policy_id
+      label: Response headers policy ID
+      required: false
+      type: string
+    - collapsible: true
+      description: Optional module-managed CloudFront response headers policy for security headers, CORS, custom headers, and removed headers.
+      id: response_headers_policy
+      label: Managed response headers policy
+      required: false
+      type: object
+    - collapsible: true
+      description: CloudFront cache policy ID for the default behavior. By default the module manages a policy that caches at the edge for up to a year, which is safe because every deploy changes the cache key.
+      id: cache_policy_id
+      label: Cache policy ID
+      type: string
+    - collapsible: true
+      description: CloudFront origin request policy ID. Defaults to AWS managed CORS-S3Origin.
+      id: origin_request_policy_id
+      label: Origin request policy ID
+      type: string
+    - collapsible: true
+      default: []
+      description: Path patterns that should bypass CloudFront caching. Versioned deploys usually do not need this.
+      id: no_cache_paths
+      label: No-cache path patterns
+      type: string_array
+    - id: section_logging
+      label: Access logging
+      type: section
+    - default: true
+      description: Enable CloudFront access logging. Logs are delivered to CloudWatch Logs by default and can be viewed in Ravion.
+      id: logging_enabled
+      label: CloudFront access logging
+      type: boolean
+    - default: cloudwatch
+      description: Where CloudFront delivers access logs.
+      id: logging_destination
+      label: Logging destination
+      show_when:
+        logging_enabled: true
+      type: string
+      values:
+        - description: View access logs directly in Ravion. Ingestion costs more at very high traffic.
+          label: CloudWatch Logs
+          value: cloudwatch
+        - description: Deliver compressed log files to an automatically created S3 bucket. Cheapest for high traffic.
+          label: S3 bucket
+          value: s3
+    - default: 90
+      description: Days to retain CloudFront access logs in CloudWatch Logs or the automatically created S3 logging bucket.
+      id: logging_retention_days
+      label: Logging retention days
+      min: 1
+      show_when:
+        logging_enabled: true
+      type: number
+    - $template: ../../partials/templates/builder-infrastructure-inputs.yml
+      with:
+        no_options_message: Select an AWS account and region to load available EC2 instance types.
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
+    - id: section_deploy
+      label: Deploy config
+      type: section
+    - add_button_label: Add invalidation path
+      collapsible: true
+      default: []
+      description: CloudFront paths to invalidate after promotion. Normal deploys need none, every promotion switches to a fresh edge cache automatically. Add /* if you overwrite files in an already-promoted S3 directory instead of deploying a new one, such as manual S3 uploads to a fixed directory.
+      id: cloudfront_invalidation_paths
+      label: CloudFront invalidation paths
+      type: string_array
+    - collapsible: true
+      default: 20
+      description: Old deploys are automatically removed from the s3 bucket based on this config.
+      id: keep_latest_successful_deploy_count
+      label: Successful deploys to retain
+      min: 0
+      type: number
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $include: ../../partials/inputs/execution-environment.yml
+    - $merge:
+        - ../../partials/inputs/tags.yml
+      collapsible: true
+  readme: |
+    Static file hosting for S3-backed sites and assets delivered through CloudFront.
+
+    ## Overview
+
+    The Static Hosting module creates an AWS S3 hosting bucket, a CloudFront distribution, CloudFront KeyValueStore version routing, and the supporting edge functions needed to serve versioned static files.
+
+    Use it for single-page apps, generated documentation, static marketing sites, downloadable assets, or any static file tree that should be served through CloudFront. Ravion can build files from a Git repository with Railpack or a Dockerfile, or you can disable builds and promote an existing S3 directory at deploy time.
+
+    Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
+
+    Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/hosting/static_site)
+
+    ## Use cases
+
+    | Scenario | Static Hosting helps by... |
+    | --- | --- |
+    | Hosting a SPA | Rewriting client-side routes to the active version's root object |
+    | Hosting docs or generated static files | Serving filesystem-style paths from S3 through CloudFront |
+    | Using custom domains | Attaching CloudFront aliases and an ACM certificate |
+    | Tuning cache behavior | Managing HTML and asset Cache-Control headers separately |
+    | Custom 404 pages | Serving your build's 404.html with a proper 404 status |
+    | Protecting the site | Attaching a WAF web ACL and default security headers |
+    | Serving high traffic | Enabling Origin Shield to boost cache hit ratio |
+    | Auditing access | Viewing CloudFront access logs in Ravion or delivering them to S3 |
+
+    ## Hosting and routing
+
+    Choose an AWS account and Region for the S3 bucket. CloudFront and the CloudFront KeyValueStore are global services and use us-east-1 behind the scenes; the Region field controls the hosting bucket region.
+
+    Name slug is required and is used for the bucket name and resource prefixes. Because S3 bucket names are globally unique, use a stable slug that is unlikely to collide with another AWS account.
+
+    Routing mode controls how viewer paths resolve inside the active version prefix.
+
+    | Routing mode | Use it for | Behavior |
+    | --- | --- | --- |
+    | Single page app | React, Vue, TanStack Router, and other client-side routers | Non-asset routes resolve to the active version's root object |
+    | Filesystem | Astro, Hugo, MkDocs, and static file trees | Clean paths resolve to matching files or index files |
+
+    Default root object defaults to index.html. Default version prefix defaults to main and is used before any deploy has promoted a different active version.
+
+    ## Error pages
+
+    Requests for files that do not exist return a proper 404 status. A genuine 403 always means the request was blocked (for example by WAF), never that a file is missing.
+
+    When a requested file does not exist, CloudFront serves your 404.html with a 404 status — never a 200, so search engines do not index error pages. Emit 404.html at the root of your build output (the default convention in Astro, Hugo, Eleventy, SvelteKit, and most static site generators). If no 404.html exists, viewers get a correct plain 404 response.
+
+    In Single page app routing mode, paths without a file extension are rewritten to the app shell, so the 404 page only applies to missing files such as assets. Client-side routes handle their own not-found views.
+
+    The 404 page is served through a no-cache behavior, so an updated 404.html is served immediately for URLs that do not yet have a cached 404 response. URLs that already have a cached 404 response refresh after the error caching TTL (default 1 day) or when that path is invalidated.
+
+    ## Build options
+
+    | Build source | When to use it |
+    | --- | --- |
+    | Railpack | Let Ravion detect the static app stack and run the build with Railpack |
+    | Dockerfile | Build static files with a Dockerfile in the selected repository |
+    | Manual upload to S3 | Build or upload files outside Ravion, then promote the uploaded S3 directory |
+
+    For Railpack and Dockerfile builds, select a Git repository, optional Base path, and output directory. The output directory is the folder Ravion uploads to the hosting bucket after the build.
+
+    Railpack settings let you optionally pin the Railpack version and override install and build commands. Leave them blank to use Railpack defaults and autodetection.
+
+    Docker settings let you choose the Dockerfile path and Docker build context. Inject environment variables in Dockerfile passes build environment variables as Docker build arguments.
+
+    Build environment variables are available to static builds and can be plain values or references loaded from Parameter Store or Secrets Manager.
+
+    ## CloudFront distribution
+
+    The module exposes one CloudFront distribution. Domain aliases are optional. Leave them empty to use the default cloudfront.net domain. If you set domain aliases, select an ACM certificate module created in us-east-1.
+
+    The first domain alias is used as the CloudFront distribution comment. The distribution is always created enabled.
+
+    The module UI links to the site's primary domain: the first domain alias when aliases are configured, otherwise the default cloudfront.net domain.
+
+    Price class controls the CloudFront edge location footprint. PriceClass_All uses all edge locations. PriceClass_200 and PriceClass_100 can reduce edge coverage for cost-sensitive workloads.
+
+    Geo restriction can be none, whitelist, or blacklist. When whitelist or blacklist is selected, provide ISO country codes in Geo restriction country codes.
+
+    WAF web ACL ARN optionally associates a global (CloudFront) WAFv2 web ACL with the distribution.
+
+    Origin Shield adds an extra CloudFront caching layer in front of the S3 bucket. For high-traffic sites this improves the cache hit ratio and reduces origin load. The Origin Shield region is chosen automatically: the bucket region when CloudFront offers Origin Shield there, otherwise the nearest supported region per the AWS mapping.
+
+    ## Cache and headers
+
+    Caching happens at two independent layers, controlled by two different settings:
+
+    1. CloudFront edge caching is controlled by the Cache policy. It decides how long CloudFront keeps responses fetched from S3 at its edge locations. The default module-managed policy caches objects for up to a year with compression enabled. Long edge caching is safe here because every deploy is promoted under a new version prefix: the prefix is part of the CDN cache key, so a promotion switches CloudFront to fresh cache entries immediately and old entries simply stop being requested. You rarely need to change this policy.
+
+    2. Browser caching is controlled by the Cache-Control headers from Manage Cache-Control headers, which is enabled by default. A CloudFront Function writes these headers onto responses as they leave CloudFront for the viewer. By that point CloudFront has already made its own caching decision, so these headers are used only by the browser and never affect edge caching.
+
+    The browser headers split responses into two groups:
+
+    | Setting | Default | Purpose |
+    | --- | --- | --- |
+    | HTML Cache-Control | Blank | Blank applies public, max-age=0, must-revalidate, so browsers store HTML but revalidate on every navigation with a cheap conditional request that CloudFront answers from its edge cache, and a new deploy is visible on the next page load |
+    | Asset Cache-Control | Blank | Blank applies public, max-age=31536000, immutable, because hashed assets never change at a given URL across versions, so browsers cache them for a year and skip revalidation entirely |
+    | HTML cache path overrides | Blank | Blank covers service workers, manifests, favicon, robots, and sitemap, treating stable root files as HTML-like responses instead of immutable assets |
+    | No-cache path patterns | [] | Bypasses CloudFront edge caching for selected path patterns |
+    | Cache policy ID | Blank | Blank uses a module-managed 1-year policy; controls how CloudFront caches responses from S3 at the edge |
+    | Origin request policy ID | Blank | Blank uses the AWS managed CORS-S3Origin policy; controls what CloudFront forwards to S3 |
+
+    Managed response headers selects AWS managed response header sets. Security headers is selected by default and adds HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, and Referrer-Policy to every response; remove it if the site must be embeddable in cross-origin iframes. Add CORS or CORS with preflight to allow cross-origin requests from any origin. CloudFront allows one response headers policy per distribution behavior, so the selections combine into the single matching AWS managed policy (CORS with preflight supersedes CORS when both are selected).
+
+    Use Response headers policy ID to attach an existing CloudFront response headers policy. Use Managed response headers policy when this module should create one for security headers, CORS, custom headers, or removed headers. Either option replaces the Managed response headers selection, so carry equivalent security headers in your own policy. Avoid putting Cache-Control into a response headers policy unless you intentionally want to override the cache-control function.
+
+    ## Monitoring
+
+    The module dashboard shows the default CloudFront distribution metrics: requests, total error rate, 4xx error rate, 5xx error rate, bytes downloaded, and bytes uploaded. CloudFront publishes these at no additional CloudWatch cost. A 4xx spike usually means missing files or newly broken links; because missing files return real 404s and blocked requests return 403s, the two are distinguishable in the access logs.
+
+    ## Access logging
+
+    CloudFront access logging is on by default, delivered to CloudWatch Logs and viewable in Ravion. Choose where logs are delivered:
+
+    | Destination | How it works |
+    | --- | --- |
+    | CloudWatch Logs (default) | CloudFront standard logging v2 delivers access logs to a module-managed CloudWatch Logs group, and the module UI shows them in the Logs panel. Log ingestion costs more than S3 at very high traffic. |
+    | S3 bucket | Legacy standard logging delivers compressed log files to an automatically created S3 bucket. Cheapest for high-traffic sites; not viewable in Ravion. |
+
+    Logging retention days defaults to 90 and controls the CloudWatch log group retention or the S3 bucket lifecycle expiry, depending on the destination. CloudWatch retention must be one of the standard CloudWatch Logs retention values (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, and larger).
+
+    ## Deploy behavior
+
+    The deploy step uses an S3 directory value. For Ravion builds, use the directory produced by the build/upload flow. For Manual upload to S3, enter the S3 prefix you uploaded that contains the files to promote.
+
+    CloudFront invalidation paths defaults to empty, and normal deploys do not need any. Every promotion switches CloudFront to a fresh set of edge cache entries because the version prefix is part of the cache key, and the custom 404 page is served from a no-cache behavior, so new deploys are visible immediately without invalidation. Skipping invalidation also makes promotions complete faster.
+
+    Add /* when files change inside an already-promoted S3 directory instead of arriving in a new one: manual S3 uploads to a fixed directory, re-syncing the default version prefix, or patching files inside a version you roll back to. In those cases the cache key does not change and the edge would otherwise keep serving old content. /* counts as one path toward CloudFront's free invalidation tier (1,000 paths per month).
+
+    Successful deploys to retain defaults to 20. Older deploy directories are pruned from the hosting bucket based on this setting.
+
+    ## Builder config
+
+    Builder config is only used for Railpack and Dockerfile builds.
+
+    | Field | Default | Purpose |
+    | --- | --- | --- |
+    | Builder instance type | EC2 | Choose EC2 or EC2 Spot for build runners |
+    | Builder instance size | c7a.4xlarge | Select the EC2 size used for builds |
+    | Builder execution environment | unset | Override where build runners execute |
+    | Builder AMI | unset | Use a custom build runner AMI |
+
+    EC2 Spot can reduce build cost, but builds may wait longer or be interrupted. Start with the default builder size, then adjust based on build resource usage.
+
+    ## Configuration
+
+    | Section | Field | Required | Default | Notes |
+    | --- | --- | --- | --- | --- |
+    | AWS account & region | AWS account | Yes | none | Account where S3 and supporting resources are created |
+    | AWS account & region | Region | Yes | us-east-1 | Region for the S3 bucket |
+    | Static hosting | Name slug | Yes | Generated from project, environment, and module IDs | Must be globally unique as an S3 bucket name |
+    | Static hosting | Routing mode | Yes | Single page app | Choose SPA or filesystem URL handling |
+    | Static hosting | Default root object | No | index.html | Root object for distribution root requests |
+    | Static hosting | Default version prefix | Yes | main | Initial and fallback version prefix |
+    | Build config | Build source | Yes | Railpack | Railpack, Dockerfile, or Manual upload to S3 |
+    | Build config | Git repository | Required for Railpack and Dockerfile | none | Source repository for builds |
+    | Build config | Source base path | No | . | Path from repository root to source code |
+    | Build config | Output directory | Required for Railpack and Dockerfile | dist | Directory uploaded to S3 after build |
+    | Build config | Railpack version | No | Ravion default | Optional version for Railpack builds |
+    | CloudFront settings | ACM certificate | Required when using aliases | none | Certificate module must be in us-east-1 |
+    | CloudFront settings | Domain aliases | No | [] | Custom CloudFront aliases |
+    | CloudFront settings | Price class | No | PriceClass_All | Edge location coverage |
+    | CloudFront settings | Geo restriction | No | none | Optional country allow or deny list |
+    | CloudFront settings | WAF web ACL ARN | No | none | Global WAFv2 web ACL for the distribution |
+    | CloudFront settings | Origin Shield | No | false | Extra caching layer; region chosen automatically |
+    | Cache and headers | Manage Cache-Control headers | No | true | Attaches the cache-control function |
+    | Cache and headers | Managed response headers | No | Security headers | AWS managed header sets; add CORS or CORS with preflight |
+    | Access logging | CloudFront access logging | No | true | Delivers logs to CloudWatch Logs or S3 |
+    | Access logging | Logging destination | No | CloudWatch Logs | Visible when logging is enabled; CloudWatch shows logs in Ravion |
+    | Access logging | Logging retention days | No | 90 | Visible when logging is enabled; CloudWatch retention or S3 lifecycle expiry |
+    | Deploy config | CloudFront invalidation paths | No | [] | Only needed when overwriting an already-promoted S3 directory |
+    | Deploy config | Successful deploys to retain | No | 20 | Old S3 deploy prefixes to retain |
+    | Terraform settings | Terraform execution environment | No | unset | Override Terraform runner environment |
+    | Terraform settings | OpenTofu version | No | first available version | OpenTofu version for infrastructure changes |
+    | Terraform settings | Ravion Terraform workspace name | No | Generated from project, environment, and module IDs | Override state backend workspace name |
+    | Terraform settings | Advanced Terraform variables | No | {} | Escape hatch for uncommon Terraform inputs |
+    | Terraform settings | Tags | No | none | Additional tags; Ravion also adds standard ownership tags |
+
+    ## Design decisions
+
+    The module exposes one CloudFront distribution instead of the full Terraform distributions map. This keeps the Ravion form focused on the common case while still supporting custom domains and certificate configuration.
+
+    The CloudFront distribution is always enabled. If traffic should not yet use the distribution, leave DNS records pointed elsewhere until ready.
+
+    Access logging manages its own delivery infrastructure when enabled — a CloudWatch log group for the default destination, or an automatically created logging bucket for S3. This avoids requiring users to pre-create and wire log storage for the common audit trail use case.
+
+    CloudFront and KVS behavior is intentionally versioned. Promotions change which S3 prefix is active rather than overwriting files in place.
+
+    Missing files return real 404s instead of the S3 default 403. The bucket policy lets CloudFront distinguish a missing key from a denied request, which keeps 403 meaningful as "blocked" and makes monitoring and SEO behave correctly.
+
+    The custom 404 page is served with a 404 status, not a 200. Search engines should never index error pages, and missing assets should fail loudly rather than receive HTML.
+
+    ## Learn more
+
+    - [Amazon CloudFront documentation](https://docs.aws.amazon.com/cloudfront/)
+    - [CloudFront KeyValueStore](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/kvs-with-functions.html)
+    - [Serving static websites with S3 and CloudFront](https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteHosting.html)
+    - [CloudFront response headers policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/understanding-response-headers-policies.html)
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: hosting/static_site
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        assets_cache_control: << module.input.assets_cache_control >>
+        cache_policy_id: << module.input.cache_policy_id >>
+        logging_bucket_creation_enabled: << module.input.logging_enabled >>
+        default_root_object: << module.input.default_root_object >>
+        default_version: << module.input.default_version >>
+        distributions:
+          main:
+            acm_certificate_arn: << module.input.distribution_acm_certificate_arn || nil >>
+            aliases: << module.input.distribution_aliases >>
+            comment: >-
+              << module.input.distribution_aliases != nil && module.input.distribution_aliases != [] ?
+              module.input.distribution_aliases[0] : nil >>
+            enabled: true
+        logging_enabled: << module.input.logging_enabled >>
+        geo_restriction_locations: << module.input.geo_restriction_locations >>
+        geo_restriction_type: << module.input.geo_restriction_type >>
+        html_cache_control: << module.input.html_cache_control >>
+        html_path_overrides: << module.input.html_path_overrides >>
+        logging_bucket_domain_name: null
+        logging_destination: << module.input.logging_destination >>
+        logging_prefix: ""
+        logging_retention_days: << module.input.logging_retention_days >>
+        cache_control_enabled: << module.input.cache_control_enabled >>
+        name: << module.input.name >>
+        no_cache_paths: << module.input.no_cache_paths >>
+        origin_request_policy_id: << module.input.origin_request_policy_id >>
+        origin_shield_enabled: << module.input.origin_shield_enabled >>
+        price_class: << module.input.price_class >>
+        region: << module.input.aws_region >>
+        response_headers_presets: << module.input.response_headers_presets >>
+        response_headers_policy: >-
+          << module.input.response_headers_policy != nil && module.input.response_headers_policy != {} ?
+          module.input.response_headers_policy : nil >>
+        response_headers_policy_id: << module.input.response_headers_policy_id || nil >>
+        routing: << module.input.routing >>
+        tags:
+          $include: ../stack/ravion-tags.yml
+        web_acl_id: << module.input.web_acl_id || nil >>
+  ui:
+    logs: |-
+      <<
+      module.input.logging_enabled && module.input.logging_destination == "cloudwatch" ?
+      [{"id": "cloudfront_access_logs", "name": "CloudFront access logs", "source": {"type": "cloudwatch", "aws_account_id": module.input.aws_account_id, "region": "us-east-1", "log_group": stack.output.access_log_group_name}}] :
+      []
+      >>
+    links: |-
+      <<
+      stack.output.primary_domain ?
+      [{"name": stack.output.primary_domain, "href": "https://" + stack.output.primary_domain}] :
+      []
+      >>
+    metrics:
+      - id: requests
+        name: Requests
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: Requests
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Sum
+      - id: error_rate_total
+        name: Total error rate (%)
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: TotalErrorRate
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Average
+      - id: error_rate_4xx
+        name: 4xx error rate (%)
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: 4xxErrorRate
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Average
+      - id: error_rate_5xx
+        name: 5xx error rate (%)
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: 5xxErrorRate
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Average
+      - id: bytes_downloaded
+        name: Bytes downloaded
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: BytesDownloaded
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Sum
+      - id: bytes_uploaded
+        name: Bytes uploaded
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DistributionId: << stack.output.primary_distribution_id >>
+            Region: Global
+          name: BytesUploaded
+          namespace: AWS/CloudFront
+          region: us-east-1
+          statistic: Sum

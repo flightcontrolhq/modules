@@ -21,7 +21,7 @@ variable "tags" {
 variable "engine" {
   type        = string
   description = "The cache engine to use: redis, valkey, or memcached."
-  default     = "redis"
+  default     = "valkey"
 
   validation {
     condition     = contains(["redis", "valkey", "memcached"], var.engine)
@@ -29,10 +29,24 @@ variable "engine" {
   }
 }
 
-variable "engine_version" {
+variable "engine_major_version" {
   type        = string
-  description = "The version number of the cache engine. If not specified, the latest available version will be used."
-  default     = null
+  description = "The major version number of the cache engine. Current latest major versions include Valkey 9, Redis OSS 7, and Memcached 1.6."
+
+  validation {
+    condition     = length(var.engine_major_version) > 0
+    error_message = "The engine_major_version must not be empty."
+  }
+}
+
+variable "engine_minor_version" {
+  type        = string
+  description = "Minor or patch version appended to the major version."
+
+  validation {
+    condition     = length(var.engine_minor_version) > 0
+    error_message = "The engine_minor_version must not be empty."
+  }
 }
 
 ################################################################################
@@ -90,7 +104,7 @@ variable "ip_discovery" {
 # Security Group
 ################################################################################
 
-variable "create_security_group" {
+variable "security_group_creation_enabled" {
   type        = bool
   description = "Whether to create a security group for the ElastiCache cluster."
   default     = true
@@ -98,7 +112,7 @@ variable "create_security_group" {
 
 variable "security_group_id" {
   type        = string
-  description = "The ID of an existing security group to use. Required if create_security_group is false."
+  description = "The ID of an existing security group to use. Required if security_group_creation_enabled is false."
   default     = null
 
   validation {
@@ -211,7 +225,7 @@ variable "port" {
 
 variable "auth_token" {
   type        = string
-  description = "The password used to access a password protected Redis/Valkey server. Can be specified only if transit_encryption_enabled is true. Takes precedence over generate_auth_token."
+  description = "The password used to access a password protected Redis/Valkey server. Can be specified only if transit_encryption_enabled is true. Takes precedence over auth_token_enabled."
   default     = null
   sensitive   = true
 
@@ -221,7 +235,7 @@ variable "auth_token" {
   }
 }
 
-variable "generate_auth_token" {
+variable "auth_token_enabled" {
   type        = bool
   description = "Auto-generate an AUTH token for Redis/Valkey when auth_token is not provided. Requires transit_encryption_enabled=true. No effect on Memcached."
   default     = true
@@ -229,7 +243,7 @@ variable "generate_auth_token" {
 
 variable "auth_token_length" {
   type        = number
-  description = "Length of the auto-generated AUTH token when generate_auth_token is true."
+  description = "Length of the auto-generated AUTH token when auth_token_enabled is true."
   default     = 32
 
   validation {
@@ -353,13 +367,13 @@ variable "maintenance_window" {
   }
 }
 
-variable "apply_immediately" {
+variable "immediate_apply_enabled" {
   type        = bool
   description = "Whether to apply changes immediately or during the next maintenance window."
   default     = false
 }
 
-variable "auto_minor_version_upgrade" {
+variable "minor_version_auto_upgrade_enabled" {
   type        = bool
   description = "Enable automatic minor version upgrades during the maintenance window."
   default     = true
@@ -403,7 +417,7 @@ variable "notification_topic_arn" {
 # CloudWatch Alarms
 ################################################################################
 
-variable "create_cloudwatch_alarms" {
+variable "cloudwatch_alarms_creation_enabled" {
   type        = bool
   description = "Create CloudWatch alarms for CPU, memory, and connections."
   default     = false
@@ -491,7 +505,7 @@ variable "cloudwatch_ok_actions" {
 # Secrets Manager
 ################################################################################
 
-variable "create_secret" {
+variable "secret_creation_enabled" {
   type        = bool
   description = "Create a Secrets Manager secret containing the cache connection string. A secret is also created when secret_name is set, regardless of this flag."
   default     = true
@@ -499,7 +513,7 @@ variable "create_secret" {
 
 variable "secret_name" {
   type        = string
-  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'. Providing a value implies create_secret=true."
+  description = "The name of the Secrets Manager secret. If not specified, defaults to '<name>/connection-string'. Providing a value implies secret_creation_enabled=true."
   default     = null
 }
 

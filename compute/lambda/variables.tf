@@ -39,18 +39,18 @@ variable "package_type" {
   }
 }
 
-variable "architectures" {
-  type        = list(string)
+variable "architecture" {
+  type        = string
   description = "Instruction set architecture for the Lambda function."
-  default     = ["x86_64"]
+  default     = "x86_64"
 
   validation {
-    condition     = length(var.architectures) > 0 && alltrue([for a in var.architectures : contains(["x86_64", "arm64"], a)])
-    error_message = "The architectures must contain one or more values from: 'x86_64', 'arm64'."
+    condition     = contains(["x86_64", "arm64"], var.architecture)
+    error_message = "The architecture must be either 'x86_64' or 'arm64'."
   }
 }
 
-variable "publish" {
+variable "version_publishing_enabled" {
   type        = bool
   description = "Whether to publish a new Lambda version on each update."
   default     = false
@@ -92,19 +92,13 @@ variable "s3_key" {
   default     = null
 }
 
-variable "s3_object_version" {
-  type        = string
-  description = "S3 object version containing the deployment package."
-  default     = null
-}
-
 variable "code_bucket_name" {
   type        = string
   description = "Name for the auto-created S3 bucket used to store the deployment package. Only used when package_type is 'Zip' and neither filename nor s3_bucket is provided. Defaults to '<name>-code-<account_id>'."
   default     = null
 }
 
-variable "code_bucket_force_destroy" {
+variable "code_bucket_force_destroy_enabled" {
   type        = bool
   description = "Whether the auto-created code bucket should be force-destroyed. Use with caution."
   default     = false
@@ -112,8 +106,8 @@ variable "code_bucket_force_destroy" {
 
 variable "placeholder_object_key" {
   type        = string
-  description = "S3 key for the placeholder deployment package uploaded to the auto-created code bucket."
-  default     = "placeholder.zip"
+  description = "S3 key for the bootstrap package uploaded to the auto-created code bucket."
+  default     = "bootstrap-package.zip"
 }
 
 variable "image_uri" {
@@ -130,6 +124,51 @@ variable "image_config" {
   })
   description = "Container image configuration overrides."
   default     = null
+}
+
+################################################################################
+# ECR Repository
+################################################################################
+
+variable "ecr_repository_creation_enabled" {
+  type        = bool
+  description = "Create an ECR repository for built container image package deployments."
+  default     = false
+}
+
+variable "ecr_repository_name" {
+  type        = string
+  description = "Name of the ECR repository. If null, defaults to var.name."
+  default     = null
+}
+
+variable "ecr_image_tag_mutability" {
+  type        = string
+  description = "Tag mutability setting for the ECR repository."
+  default     = "MUTABLE"
+
+  validation {
+    condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
+    error_message = "The ecr_image_tag_mutability must be 'MUTABLE' or 'IMMUTABLE'."
+  }
+}
+
+variable "ecr_scan_on_push_enabled" {
+  type        = bool
+  description = "Scan images for vulnerabilities on push."
+  default     = true
+}
+
+variable "ecr_force_deletion_enabled" {
+  type        = bool
+  description = "Allow the ECR repository to be deleted even when it contains images."
+  default     = false
+}
+
+variable "ecr_default_lifecycle_policy_enabled" {
+  type        = bool
+  description = "Apply the submodule's built-in lifecycle policy for untagged and older tagged images."
+  default     = false
 }
 
 ################################################################################
@@ -268,7 +307,7 @@ variable "code_signing_config_arn" {
 # IAM Role
 ################################################################################
 
-variable "create_role" {
+variable "role_creation_enabled" {
   type        = bool
   description = "Whether to create an IAM role for the Lambda function."
   default     = true
@@ -276,7 +315,7 @@ variable "create_role" {
 
 variable "role_arn" {
   type        = string
-  description = "Existing IAM role ARN to use when create_role is false."
+  description = "Existing IAM role ARN to use when role_creation_enabled is false."
   default     = null
 
   validation {
@@ -287,7 +326,7 @@ variable "role_arn" {
 
 variable "role_name" {
   type        = string
-  description = "Custom IAM role name. If null and create_role is true, defaults to '<name>-lambda-role'."
+  description = "Custom IAM role name. If null and role_creation_enabled is true, defaults to '<name>-lambda-role'."
   default     = null
 }
 
@@ -303,13 +342,13 @@ variable "role_permissions_boundary" {
   default     = null
 }
 
-variable "attach_basic_execution_policy" {
+variable "basic_execution_policy_enabled" {
   type        = bool
   description = "Attach AWSLambdaBasicExecutionRole when creating the role."
   default     = true
 }
 
-variable "attach_vpc_execution_policy" {
+variable "vpc_execution_policy_enabled" {
   type        = bool
   description = "Attach AWSLambdaVPCAccessExecutionRole when creating the role and vpc_config is set."
   default     = true
@@ -331,7 +370,7 @@ variable "role_inline_policies" {
 # CloudWatch Logs
 ################################################################################
 
-variable "create_log_group" {
+variable "log_group_creation_enabled" {
   type        = bool
   description = "Whether to create the CloudWatch log group for the function."
   default     = true
@@ -478,7 +517,7 @@ variable "function_url_cors" {
 # Lambda@Edge
 ################################################################################
 
-variable "is_lambda_at_edge" {
+variable "lambda_at_edge_enabled" {
   type        = bool
   description = "Enable Lambda@Edge compatibility validations."
   default     = false

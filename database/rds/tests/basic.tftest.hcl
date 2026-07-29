@@ -538,15 +538,15 @@ run "test_security_group_id_invalid" {
   command = plan
 
   variables {
-    name                  = "test-db"
-    engine                = "postgres"
-    instance_class        = "db.t3.micro"
-    allocated_storage     = 20
-    vpc_id                = "vpc-12345678"
-    subnet_ids            = ["subnet-11111111", "subnet-22222222"]
-    username              = "admin"
-    create_security_group = false
-    security_group_id     = "invalid-sg"
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    security_group_creation_enabled = false
+    security_group_id               = "invalid-sg"
   }
 
   expect_failures = [
@@ -837,8 +837,8 @@ run "test_backup_retention_period_invalid" {
 # Security-First Default Tests
 #-------------------------------------------------------------------------------
 
-# Test: storage_encrypted defaults to true
-run "test_storage_encrypted_default" {
+# Test: storage_encryption_enabled defaults to true
+run "test_storage_encryption_enabled_default" {
   command = plan
 
   variables {
@@ -852,12 +852,12 @@ run "test_storage_encrypted_default" {
   }
 
   assert {
-    condition     = var.storage_encrypted == true
-    error_message = "storage_encrypted should default to true."
+    condition     = var.storage_encryption_enabled == true
+    error_message = "storage_encryption_enabled should default to true."
   }
 }
 
-# Test: deletion_protection defaults to true
+# Test: deletion_protection_enabled defaults to true
 run "test_deletion_protection_default" {
   command = plan
 
@@ -872,8 +872,8 @@ run "test_deletion_protection_default" {
   }
 
   assert {
-    condition     = var.deletion_protection == true
-    error_message = "deletion_protection should default to true."
+    condition     = var.deletion_protection_enabled == true
+    error_message = "deletion_protection_enabled should default to true."
   }
 }
 
@@ -897,8 +897,8 @@ run "test_backup_retention_period_default" {
   }
 }
 
-# Test: manage_master_user_password defaults to true
-run "test_manage_master_user_password_default" {
+# Test: master_user_password_management_enabled defaults to true
+run "test_master_user_password_management_enabled_default" {
   command = plan
 
   variables {
@@ -912,8 +912,8 @@ run "test_manage_master_user_password_default" {
   }
 
   assert {
-    condition     = var.manage_master_user_password == true
-    error_message = "manage_master_user_password should default to true."
+    condition     = var.master_user_password_management_enabled == true
+    error_message = "master_user_password_management_enabled should default to true."
   }
 }
 
@@ -937,8 +937,8 @@ run "test_performance_insights_enabled_default" {
   }
 }
 
-# Test: publicly_accessible defaults to false
-run "test_publicly_accessible_default" {
+# Test: public_access_enabled defaults to false
+run "test_public_access_enabled_default" {
   command = plan
 
   variables {
@@ -952,13 +952,13 @@ run "test_publicly_accessible_default" {
   }
 
   assert {
-    condition     = var.publicly_accessible == false
-    error_message = "publicly_accessible should default to false."
+    condition     = var.public_access_enabled == false
+    error_message = "public_access_enabled should default to false."
   }
 }
 
-# Test: skip_final_snapshot defaults to false
-run "test_skip_final_snapshot_default" {
+# Test: final_snapshot_creation_enabled defaults to true
+run "test_final_snapshot_creation_enabled_default" {
   command = plan
 
   variables {
@@ -972,8 +972,8 @@ run "test_skip_final_snapshot_default" {
   }
 
   assert {
-    condition     = var.skip_final_snapshot == false
-    error_message = "skip_final_snapshot should default to false."
+    condition     = var.final_snapshot_creation_enabled == true
+    error_message = "final_snapshot_creation_enabled should default to true."
   }
 }
 
@@ -1128,6 +1128,33 @@ run "test_sqlserver_port_default" {
   }
 }
 
+# Test: SQL Server integer major version is normalized for parameter and option groups
+run "test_sqlserver_integer_major_version" {
+  command = plan
+
+  variables {
+    name                 = "test-db"
+    engine               = "sqlserver-se"
+    engine_major_version = "15"
+    license_model        = "license-included"
+    instance_class       = "db.t3.micro"
+    allocated_storage    = 20
+    vpc_id               = "vpc-12345678"
+    subnet_ids           = ["subnet-11111111", "subnet-22222222"]
+    username             = "admin"
+  }
+
+  assert {
+    condition     = local.default_parameter_group_family == "sqlserver-se-15.0"
+    error_message = "SQL Server parameter group family should normalize integer major versions."
+  }
+
+  assert {
+    condition     = local.default_option_group_engine_version == "15.00"
+    error_message = "SQL Server option group engine version should normalize integer major versions."
+  }
+}
+
 # Test: Custom port overrides default
 run "test_custom_port_override" {
   command = plan
@@ -1173,25 +1200,25 @@ run "test_security_group_created_by_default" {
   }
 }
 
-# Test: Security group is not created when create_security_group is false
+# Test: Security group is not created when security_group_creation_enabled is false
 run "test_security_group_not_created" {
   command = plan
 
   variables {
-    name                  = "test-db"
-    engine                = "postgres"
-    instance_class        = "db.t3.micro"
-    allocated_storage     = 20
-    vpc_id                = "vpc-12345678"
-    subnet_ids            = ["subnet-11111111", "subnet-22222222"]
-    username              = "admin"
-    create_security_group = false
-    security_group_id     = "sg-12345678"
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    security_group_creation_enabled = false
+    security_group_id               = "sg-12345678"
   }
 
   assert {
     condition     = local.create_security_group == false
-    error_message = "Security group should not be created when create_security_group is false."
+    error_message = "Security group should not be created when security_group_creation_enabled is false."
   }
 }
 
@@ -1220,15 +1247,15 @@ run "test_option_group_created_for_oracle" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "oracle-ee"
-    license_model       = "bring-your-own-license"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_option_group = true
+    name                          = "test-db"
+    engine                        = "oracle-ee"
+    license_model                 = "bring-your-own-license"
+    instance_class                = "db.t3.micro"
+    allocated_storage             = 20
+    vpc_id                        = "vpc-12345678"
+    subnet_ids                    = ["subnet-11111111", "subnet-22222222"]
+    username                      = "admin"
+    option_group_creation_enabled = true
   }
 
   assert {
@@ -1242,15 +1269,15 @@ run "test_option_group_created_for_sqlserver" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "sqlserver-se"
-    license_model       = "license-included"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_option_group = true
+    name                          = "test-db"
+    engine                        = "sqlserver-se"
+    license_model                 = "license-included"
+    instance_class                = "db.t3.micro"
+    allocated_storage             = 20
+    vpc_id                        = "vpc-12345678"
+    subnet_ids                    = ["subnet-11111111", "subnet-22222222"]
+    username                      = "admin"
+    option_group_creation_enabled = true
   }
 
   assert {
@@ -1264,14 +1291,14 @@ run "test_option_group_not_created_for_postgres" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_option_group = true
+    name                          = "test-db"
+    engine                        = "postgres"
+    instance_class                = "db.t3.micro"
+    allocated_storage             = 20
+    vpc_id                        = "vpc-12345678"
+    subnet_ids                    = ["subnet-11111111", "subnet-22222222"]
+    username                      = "admin"
+    option_group_creation_enabled = true
   }
 
   assert {
@@ -1356,15 +1383,15 @@ run "test_read_replicas_created_when_enabled" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_read_replica = true
-    read_replica_count  = 2
+    name                          = "test-db"
+    engine                        = "postgres"
+    instance_class                = "db.t3.micro"
+    allocated_storage             = 20
+    vpc_id                        = "vpc-12345678"
+    subnet_ids                    = ["subnet-11111111", "subnet-22222222"]
+    username                      = "admin"
+    read_replica_creation_enabled = true
+    read_replica_count            = 2
   }
 
   assert {
@@ -1383,14 +1410,14 @@ run "test_read_replica_instance_class_default" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.r6g.large"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    create_read_replica = true
+    name                          = "test-db"
+    engine                        = "postgres"
+    instance_class                = "db.r6g.large"
+    allocated_storage             = 20
+    vpc_id                        = "vpc-12345678"
+    subnet_ids                    = ["subnet-11111111", "subnet-22222222"]
+    username                      = "admin"
+    read_replica_creation_enabled = true
   }
 
   assert {
@@ -1404,15 +1431,15 @@ run "test_read_replica_instance_class_override" {
   command = plan
 
   variables {
-    name                        = "test-db"
-    engine                      = "postgres"
-    instance_class              = "db.r6g.large"
-    allocated_storage           = 20
-    vpc_id                      = "vpc-12345678"
-    subnet_ids                  = ["subnet-11111111", "subnet-22222222"]
-    username                    = "admin"
-    create_read_replica         = true
-    read_replica_instance_class = "db.t3.medium"
+    name                          = "test-db"
+    engine                        = "postgres"
+    instance_class                = "db.r6g.large"
+    allocated_storage             = 20
+    vpc_id                        = "vpc-12345678"
+    subnet_ids                    = ["subnet-11111111", "subnet-22222222"]
+    username                      = "admin"
+    read_replica_creation_enabled = true
+    read_replica_instance_class   = "db.t3.medium"
   }
 
   assert {
@@ -1540,19 +1567,19 @@ run "test_db_name_null_for_sqlserver" {
 # Final Snapshot Identifier Tests
 #-------------------------------------------------------------------------------
 
-# Test: Final snapshot identifier is auto-generated when skip_final_snapshot is false
+# Test: Final snapshot identifier is auto-generated when final_snapshot_creation_enabled is true
 run "test_final_snapshot_identifier_auto_generated" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    skip_final_snapshot = false
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    final_snapshot_creation_enabled = true
   }
 
   assert {
@@ -1561,24 +1588,24 @@ run "test_final_snapshot_identifier_auto_generated" {
   }
 }
 
-# Test: Final snapshot identifier is null when skip_final_snapshot is true
-run "test_final_snapshot_identifier_null_when_skipped" {
+# Test: Final snapshot identifier is null when final_snapshot_creation_enabled is false
+run "test_final_snapshot_identifier_null_when_disabled" {
   command = plan
 
   variables {
-    name                = "test-db"
-    engine              = "postgres"
-    instance_class      = "db.t3.micro"
-    allocated_storage   = 20
-    vpc_id              = "vpc-12345678"
-    subnet_ids          = ["subnet-11111111", "subnet-22222222"]
-    username            = "admin"
-    skip_final_snapshot = true
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    final_snapshot_creation_enabled = false
   }
 
   assert {
     condition     = local.final_snapshot_identifier == null
-    error_message = "Final snapshot identifier should be null when skip_final_snapshot is true."
+    error_message = "Final snapshot identifier should be null when final_snapshot_creation_enabled is false."
   }
 }
 
@@ -1587,15 +1614,15 @@ run "test_final_snapshot_identifier_custom" {
   command = plan
 
   variables {
-    name                      = "test-db"
-    engine                    = "postgres"
-    instance_class            = "db.t3.micro"
-    allocated_storage         = 20
-    vpc_id                    = "vpc-12345678"
-    subnet_ids                = ["subnet-11111111", "subnet-22222222"]
-    username                  = "admin"
-    skip_final_snapshot       = false
-    final_snapshot_identifier = "my-custom-snapshot"
+    name                            = "test-db"
+    engine                          = "postgres"
+    instance_class                  = "db.t3.micro"
+    allocated_storage               = 20
+    vpc_id                          = "vpc-12345678"
+    subnet_ids                      = ["subnet-11111111", "subnet-22222222"]
+    username                        = "admin"
+    final_snapshot_creation_enabled = true
+    final_snapshot_identifier       = "my-custom-snapshot"
   }
 
   assert {
@@ -1772,7 +1799,7 @@ run "test_rds_instance_deletion_protection" {
 }
 
 # Test: RDS instance has multi_az disabled by default
-run "test_rds_instance_multi_az_default" {
+run "test_rds_instance_multi_az_enabled_default" {
   command = plan
 
   variables {
@@ -1803,7 +1830,7 @@ run "test_rds_instance_multi_az_enabled" {
     vpc_id            = "vpc-12345678"
     subnet_ids        = ["subnet-11111111", "subnet-22222222"]
     username          = "admin"
-    multi_az          = true
+    multi_az_enabled  = true
   }
 
   assert {

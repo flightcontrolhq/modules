@@ -11,7 +11,7 @@ module "security_group" {
   vpc_id      = var.vpc_id
   tags        = var.tags
 
-  allow_all_egress = true
+  all_egress_enabled = true
 
   ingress_rules = concat(
     # HTTP ingress (IPv4)
@@ -26,7 +26,7 @@ module "security_group" {
     ] : [],
     # HTTP ingress (IPv6)
     local.create_http_listener ? [
-      for cidr in var.ingress_ipv6_cidr_blocks : {
+      for cidr in local.ingress_ipv6_cidr_blocks : {
         description = "Allow HTTP traffic from ${cidr}"
         from_port   = var.http_listener_port
         to_port     = var.http_listener_port
@@ -46,7 +46,7 @@ module "security_group" {
     ] : [],
     # HTTPS ingress (IPv6)
     local.create_https_listener ? [
-      for cidr in var.ingress_ipv6_cidr_blocks : {
+      for cidr in local.ingress_ipv6_cidr_blocks : {
         description = "Allow HTTPS traffic from ${cidr}"
         from_port   = var.https_listener_port
         to_port     = var.https_listener_port

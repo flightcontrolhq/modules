@@ -5,6 +5,29 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # Bucket policy granting CloudFront (via OAC) read access to the hosting bucket.
+#
+# s3:ListBucket is deliberately included alongside s3:GetObject: without it,
+# S3 answers requests for missing keys with 403 AccessDenied (it can't reveal
+# whether the key exists), and viewers get 403s for what are really 404s.
+# With ListBucket, missing keys return proper 404s — and a genuine 403 can
+# only mean the request was blocked (e.g. WAF), never "file missing".
+#
+# Why there is no s3:prefix condition: S3's implicit 404-vs-403 check on a
+# missing GetObject evaluates ListBucket WITHOUT s3:prefix in the request
+# context, so any prefix condition fails closed and reintroduces 403s —
+# defeating the purpose. (CDK's AccessLevel.LIST grants the same
+# unconditioned permission for the same reason.)
+#
+# Listing exposure instead relies on two guarantees that hold even if the
+# viewer-request rewrite function is disabled, bypassed, or errors:
+#   1. default_root_object rewrites "/" at the distribution level — before
+#      any function runs — so a bare bucket GET (the only request shape that
+#      returns a listing) never reaches S3.
+#   2. The origin request policy (CORS-S3Origin by default) forwards no
+#      query strings, so ListObjects parameters (prefix, list-type, ...)
+#      can never reach S3 on any path.
+# Every other URI maps to a GetObject, which this policy scopes to object
+# ARNs. Keep both guarantees in place if you customize the distribution.
 data "aws_iam_policy_document" "hosting_bucket_policy" {
   statement {
     sid       = local.oac_policy_sid
@@ -23,12 +46,30 @@ data "aws_iam_policy_document" "hosting_bucket_policy" {
       values   = [for k, v in module.cdn.distribution_arns : v]
     }
   }
+
+  statement {
+    sid       = "AllowCloudFrontServicePrincipalList"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [local.hosting_bucket_arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [for k, v in module.cdn.distribution_arns : v]
+    }
+  }
 }
 
 # Deploy role policy: sync to the hosting bucket, update the KVS active pointer,
 # and (optionally) create CloudFront invalidations.
 data "aws_iam_policy_document" "deploy_role_policy" {
-  count = var.create_deploy_role ? 1 : 0
+  count = var.deploy_role_creation_enabled ? 1 : 0
 
   statement {
     sid       = "ListBucket"

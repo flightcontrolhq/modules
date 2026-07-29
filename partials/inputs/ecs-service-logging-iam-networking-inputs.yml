@@ -1,0 +1,372 @@
+- id: section_logging
+  label: Logging
+  type: section
+  description: CloudWatch logging is enabled by default. Enable FireLens to route app stdout/stderr to additional destinations with Fluent Bit.
+- id: firelens_enabled
+  label: FireLens log routing
+  type: boolean
+  description: Routes the app container logs through a Fluent Bit sidecar. CloudWatch output stays enabled by default so Ravion runtime logs continue to work.
+  default: false
+- id: firelens_image
+  label: FireLens image
+  type: string
+  description: Container image for the Fluent Bit log router sidecar.
+  placeholder: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
+  required: true
+  show_when:
+    firelens_enabled: true
+  default: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
+- id: firelens_config
+  label: Additional Fluent Bit config
+  type: text
+  description: Optional Fluent Bit config appended after the generated [SERVICE] block. Add [OUTPUT] blocks here for destinations such as Datadog, Splunk, Firehose, OpenSearch, or S3.
+  placeholder: |-
+    [OUTPUT]
+        Name firehose
+        Match *
+        region us-east-1
+        delivery_stream my-stream
+  required: false
+  show_when:
+    firelens_enabled: true
+  default: ""
+- id: firelens_cloudwatch_output_enabled
+  label: Keep CloudWatch output enabled
+  type: boolean
+  description: Recommended. Sends FireLens-routed app logs to the service CloudWatch log group so Ravion runtime logs continue to work. Disable only if all app logs should go exclusively to external destinations.
+  show_when:
+    firelens_enabled: true
+  default: true
+- id: firelens_ecs_metadata_enabled
+  label: Add ECS log metadata
+  type: boolean
+  description: Adds ECS cluster, task, and container metadata to FireLens log records.
+  show_when:
+    firelens_enabled: true
+  default: true
+- id: firelens_environment_variables
+  label: FireLens environment variables
+  type: array
+  description: Environment variables passed to the log router sidecar. Use these for non-secret destination options.
+  placeholder: |-
+    - name: DD_SITE
+      value: datadoghq.com
+  required: false
+  show_when:
+    firelens_enabled: true
+  default: []
+- id: firelens_secrets
+  label: FireLens secrets
+  type: array
+  description: Secrets injected into the log router sidecar as an array of {name, value_from} objects. Use these for API keys or tokens stored in SSM Parameter Store or Secrets Manager.
+  placeholder: |-
+    - name: DD_API_KEY
+      valueFrom: arn:aws:ssm:us-east-1:123456789012:parameter/datadog-api-key
+  required: false
+  show_when:
+    firelens_enabled: true
+  default: []
+- id: section_iam
+  label: IAM roles and policies
+  type: section
+- id: execution_role_arn
+  label: Execution role ARN override
+  type: string
+  description: Optional existing ECS task execution role ARN. Leave blank to let the module create and manage the execution role used for pulling images and writing logs.
+  collapsible: true
+  required: false
+- id: task_role_arn
+  label: Task role ARN override
+  type: string
+  description: Optional existing ECS task role ARN for application AWS permissions. Leave blank to let the module create a task role and attach the policies configured below.
+  collapsible: true
+  required: false
+- id: task_role_policies
+  label: Task role policy ARNs
+  type: string_array
+  description: Additional managed IAM policy ARNs to attach to the generated task role. Only used when task role ARN override is blank.
+  collapsible: true
+  required: false
+  default: []
+- id: task_role_inline_policies
+  label: Task role inline policies
+  type: object
+  description: Inline IAM policy documents keyed by policy name.
+  collapsible: true
+  placeholder: |-
+    {
+      "read-app-bucket": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject"
+            ],
+            "Resource": "arn:aws:s3:::my-app-bucket/*"
+          }
+        ]
+      }
+    }
+  required: false
+  default: {}
+- id: execution_role_policies
+  label: Execution role policy ARNs
+  type: string_array
+  description: Additional managed IAM policy ARNs to attach to the generated execution role. Only used when execution role ARN override is blank.
+  collapsible: true
+  required: false
+  default: []
+- id: section_runtime_networking
+  label: Networking and deployment
+  type: section
+  description: Configure deployment rollout limits, task network access, and sidecars.
+- id: deployment_minimum_healthy_percent
+  label: Minimum healthy percent
+  type: number
+  description: Minimum percentage of desired tasks that must stay healthy during rolling deployments. Keep 100 for zero-downtime deploys. Lower it only when the cluster does not have enough spare capacity to start replacement tasks first, since lowering it can reduce availability during deploys.
+  collapsible: true
+  max: 200
+  min: 0
+  default: 100
+- id: deployment_maximum_percent
+  label: Maximum percent
+  type: number
+  description: Maximum temporary task count during rolling deployments. Keep 200 for fast replacement capacity. Lower it when cluster capacity, IP availability, or burst cost should limit how many extra tasks ECS can start.
+  collapsible: true
+  max: 400
+  min: 100
+  default: 200
+- id: security_group_ids
+  label: Additional security groups
+  type: string_array
+  description: Additional security group IDs to attach to ECS tasks.
+  collapsible: true
+  required: false
+  default: []
+- id: allowed_cidr_blocks
+  label: Allowed CIDR blocks
+  type: string_array
+  description: CIDR blocks allowed direct access to the service in addition to load balancer traffic.
+  collapsible: true
+  required: false
+  default: []
+- id: sidecars
+  label: Sidecars
+  type: object_array
+  description: Optional containers that run in the same ECS task as the app container. Use sidecars for agents, local proxies, lightweight workers, or helper processes that should share task networking and lifecycle with the app.
+  item_inputs:
+    - id: name
+      label: Container name
+      type: string
+      description: Unique name for this sidecar container within the task.
+      placeholder: datadog-agent
+      required: true
+      patterns:
+        - message: "Use 1-255 characters: letters, numbers, hyphens, and underscores only."
+          pattern: ^[A-Za-z0-9_-]{1,255}$
+    - id: image
+      label: Container image
+      type: string
+      description: Container image URI or registry reference for the sidecar.
+      placeholder: public.ecr.aws/datadog/agent:latest
+      required: true
+    - id: essential
+      label: Essential container
+      type: boolean
+      description: When enabled, ECS stops the whole task if this sidecar exits. Leave disabled for optional agents or helpers that should not take down the app.
+      default: false
+    - id: cpu
+      label: CPU units
+      type: number
+      description: Optional CPU units reserved for this sidecar. Increase the task size if sidecars need dedicated CPU.
+      min: 0
+      placeholder: "128"
+      required: false
+    - id: memory
+      label: Memory limit in MiB
+      type: number
+      description: Optional hard memory limit for this sidecar. ECS stops the container if it exceeds this limit.
+      min: 0
+      placeholder: "256"
+      required: false
+    - id: memory_reservation
+      label: Memory reservation in MiB
+      type: number
+      description: Optional soft memory reservation for this sidecar. Useful for agents that can burst above their normal memory use.
+      min: 0
+      placeholder: "128"
+      required: false
+    - id: environment
+      label: Environment variables
+      type: object_array
+      description: Environment variables passed to this sidecar container.
+      item_inputs:
+        - id: name
+          label: Name
+          type: string
+          description: Environment variable name.
+          placeholder: DD_ENV
+          required: true
+          patterns:
+            - message: Use a valid environment variable name.
+              pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+        - id: value
+          label: Value
+          type: string
+          description: Environment variable value.
+          placeholder: production
+          required: true
+      item_label: Environment variable
+      required: false
+      default: []
+    - id: secrets
+      label: Secrets
+      type: object_array
+      description: Secrets injected into this sidecar from SSM Parameter Store or Secrets Manager.
+      item_inputs:
+        - id: name
+          label: Name
+          type: string
+          description: Environment variable name exposed to the sidecar.
+          placeholder: API_KEY
+          required: true
+          patterns:
+            - message: Use a valid environment variable name.
+              pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+        - id: value_from
+          label: Value from
+          type: string
+          description: SSM parameter or Secrets Manager ARN containing the secret value.
+          placeholder: arn:aws:ssm:us-east-1:123456789012:parameter/my-secret
+          required: true
+      item_label: Secret
+      required: false
+      default: []
+    - id: port_mappings
+      label: Port mappings
+      type: object_array
+      description: Optional ports exposed by this sidecar inside the task. Most helper sidecars do not need port mappings.
+      item_inputs:
+        - id: container_port
+          label: Container port
+          type: number
+          description: Port exposed by the sidecar container.
+          max: 65535
+          min: 1
+          placeholder: "8126"
+          required: true
+        - id: host_port
+          label: Host port
+          type: number
+          description: Optional host port for EC2 networking modes. Leave empty for awsvpc tasks unless you need a fixed host port.
+          max: 65535
+          min: 1
+          placeholder: "8126"
+          required: false
+        - id: protocol
+          label: Protocol
+          type: string
+          description: Network protocol for this port mapping.
+          required: false
+          default: tcp
+          values:
+            - label: TCP
+              value: tcp
+            - label: UDP
+              value: udp
+        - id: app_protocol
+          label: Application protocol
+          type: string
+          description: Optional application protocol used by service connect integrations.
+          required: false
+          values:
+            - label: HTTP
+              value: http
+            - label: HTTP/2
+              value: http2
+            - label: gRPC
+              value: grpc
+      item_label: Port mapping
+      required: false
+      default: []
+    - id: mount_points
+      label: Mount points
+      type: object_array
+      description: Optional task volume mounts for this sidecar. Use the volume name `efs` to mount the EFS file system when the EFS file system setting is enabled.
+      item_inputs:
+        - id: source_volume
+          label: Source volume
+          type: string
+          description: Task volume name to mount into the sidecar. Use `efs` for the EFS file system volume.
+          placeholder: efs
+          required: true
+        - id: container_path
+          label: Container path
+          type: string
+          description: Path inside the sidecar container where the volume is mounted.
+          placeholder: /data
+          required: true
+          patterns:
+            - message: Use an absolute container path.
+              pattern: ^/
+        - id: read_only
+          label: Read only
+          type: boolean
+          description: Mount the volume as read-only inside the sidecar.
+          default: false
+      item_label: Mount point
+      required: false
+      default: []
+    - id: depends_on
+      label: Container dependencies
+      type: object_array
+      description: Optional startup dependencies for this sidecar. Use this when the sidecar should wait for another container to start or become healthy.
+      item_inputs:
+        - id: container_name
+          label: Container name
+          type: string
+          description: Container this sidecar depends on.
+          placeholder: app
+          required: true
+        - id: condition
+          label: Condition
+          type: string
+          description: Startup condition to wait for before starting this sidecar.
+          required: true
+          default: START
+          values:
+            - label: Start
+              value: START
+            - label: Healthy
+              value: HEALTHY
+            - label: Complete
+              value: COMPLETE
+            - label: Success
+              value: SUCCESS
+      item_label: Dependency
+      required: false
+      default: []
+    - id: command
+      label: Command
+      type: string_array
+      description: Optional command arguments that override the image default command.
+      placeholder: "--config"
+      required: false
+      default: []
+    - id: entry_point
+      label: Entry point
+      type: string_array
+      description: Optional entry point arguments that override the image default entry point.
+      placeholder: /bin/sh
+      required: false
+      default: []
+    - id: working_directory
+      label: Working directory
+      type: string
+      description: Optional working directory inside the sidecar container.
+      placeholder: /app
+      required: false
+  item_label: Sidecar
+  required: false
+  default: []

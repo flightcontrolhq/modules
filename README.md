@@ -16,13 +16,13 @@ This repository contains reusable infrastructure modules designed for enterprise
 | Category      | Module            | Description                                                            | Status  |
 | ------------- | ----------------- | ---------------------------------------------------------------------- | ------- |
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
-| `cdn/`        | `cloudfront`      | AWS CloudFront distributions                                           | v1.0.0  |
+| `cdn/`        | `cloudfront`      | AWS CloudFront distributions with origins, cache behaviors, and edge redirects (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
-| `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
-| `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs | v1.0.0  |
-| `compute/`    | `ecs_service`     | AWS ECS services with task definitions, load balancing, and auto scaling | v1.0.0  |
+| `compute/`    | `ec2_service`     | Supervised EC2 workloads with configurable rolling deploys, standalone or ECS-cluster ALB routing, target tuning, and deployment-scoped CloudWatch logs | v1.0.0  |
+| `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
+| `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
-| `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) | v1.0.0  |
+| `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.0.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
 | `database/`   | `rds`             | AWS RDS instances                                                      | v1.0.0  |
 | `hosting/`    | `static_site`     | Composite static site hosting (S3 + CloudFront + OAC, optional CloudFront Function / Lambda@Edge) | v1.0.0  |
@@ -33,19 +33,21 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
-| `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
+| `networking/` | `alb`             | Standalone AWS Application Load Balancer with shared HTTP/HTTPS listeners | v1.0.0  |
 | `networking/` | `eips`            | AWS Elastic IP pool with deterministic Name tags and `/32` CIDR outputs | v1.0.0  |
 | `networking/` | `nlb`             | AWS Network Load Balancers                                             | v1.0.0  |
 | `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | v1.0.0  |
 | `networking/` | `security-groups` | AWS Security Groups                                                    | v1.0.0  |
-| `networking/` | `vpc`             | AWS VPC and subnets                                                    | v1.0.0  |
-| `security/`   | `acm_certificate` | AWS ACM public certificates (DNS validation, optional Route53, optional wait) | v1.0.0  |
+| `networking/` | `vpc`             | AWS VPC with adaptive public and private subnets                       | v1.0.0  |
+| `security/`   | `acm_certificate` | AWS ACM public certificates with ordered domains, DNS validation, optional Route53, and optional wait | v1.0.0  |
 | `security/`   | `iam`             | AWS IAM roles and policies                                             | v1.0.0  |
+| `security/`   | `iam_policy`      | Reusable customer-managed AWS IAM policies                             | v1.0.0  |
 | `security/`   | `kms`             | AWS KMS keys (symmetric or asymmetric: signing, encryption, MAC, key agreement) | v1.0.0  |
 | `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
+| `stack/`      | `terraform`       | Ravion Terraform/OpenTofu stack workflows with git triggers and managed state (includes `rvn-stack` module definition) | v1.2.3  |
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
-| `storage/`    | `efs`             | AWS EFS file systems                                                   | Planned |
-| `storage/`    | `s3`              | AWS S3 buckets                                                         | v1.0.0  |
+| `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
+| `storage/`    | `s3`              | AWS S3 buckets with encryption, SSE-C blocking, lifecycle rules, CORS, and bucket policies | v1.0.0  |
 
 ## Usage
 
@@ -95,6 +97,193 @@ Each module in this repository follows a consistent structure:
 - Security best practices must be followed (no hardcoded secrets, least privilege IAM)
 
 ## Contributing
+
+## Module Definitions
+
+Flightcontrol/Ravion module definitions are authored in this repository beside the Terraform
+module they publish. Each definition source file is named `<definition.type>-definition.yml` and
+lives in an existing module directory, for example `networking/vpc/rvn-aws-network-definition.yml`.
+
+The definition file has three top-level sections:
+
+```yaml
+definition:
+  type: ravion-aws-vpc
+  name: AWS VPC
+  description: AWS VPC and subnets
+
+release:
+  version: 1.2.0
+  description: |
+    Add VPC flow log options and support S3 flow log destinations.
+
+module:
+  inputs:
+    - id: region
+      type: string
+      label: AWS Region
+      required: true
+  stack:
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+```
+
+`definition` contains repo-owned module identity and display metadata. `release` contains the
+next module version to publish and the curated changelog description for that version. `module`
+contains the canonical Flightcontrol module config that is compiled, validated, and published.
+
+### Authoring Rules
+
+- Create module definitions only as colocated `<definition.type>-definition.yml` files beside existing Terraform modules.
+- Keep `definition.type` stable once published. It is the module identity used for versioning.
+- Set `release.version` to a valid semantic version whenever a new module version should publish.
+- Write `release.description` as the human-readable changelog entry for that published version.
+- Keep Ravion runtime templates such as `<< module.given_id >>` inside `module`; they pass through unchanged.
+- Use `$local.module_tag` only where the compiled definition should reference this module release tag.
+
+### Composition Directives
+
+Definitions support explicit composition at the exact insertion point. Shared fragments should live
+under `partials/` when reuse is useful, but use the directive where the content should appear rather
+than relying on inheritance.
+
+| Directive | Where it is used | Behavior |
+| --------- | ---------------- | -------- |
+| `$include` in an array item | `inputs`, arrays, ordered blocks | Splices the included array or single item into that position. |
+| `$include` as a map value | Object properties or config values | Replaces that value with the included file content. |
+| `$merge` in a map | Stack, deploy, settings, or object maps | Merges one or more maps into the current map. Later keys override earlier keys. |
+| `$template` in an array item or map value | Parameterized repeated fragments | Loads a fragment and renders it with values from `with`. |
+| `$local.module_tag` in a scalar | Source refs and docs | Resolves to `<definition.type>@<release.version>`. |
+
+Directive paths are resolved relative to the file that contains the directive. Cycles fail during
+compile, and compiled output must not contain repo-only metadata, composition directives, or
+unresolved `$local.*` tokens.
+
+Example directive usage:
+
+```yaml
+module:
+  inputs:
+    - $include: ../../partials/inputs/name.yml
+    - id: networking
+      type: section
+      label: Networking
+    - $template: ../../partials/templates/ref-input.yml
+      with:
+        id: vpc
+        type: stack
+        label: VPC
+
+  stack:
+    $merge:
+      - ../../partials/stack/pipelines.yml
+      - ravion_state_backend_workspace: "<< module.given_id >>"
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+```
+
+### Validation And Status
+
+The module definition tooling lives in `tools/ravion-modules`.
+
+```bash
+cd tools/ravion-modules
+npm install
+npm run typecheck
+npm test
+node dist/src/cli.js validate ../../networking/vpc/rvn-aws-network-definition.yml
+node dist/src/cli.js compile
+node dist/src/cli.js status
+```
+
+`validate` checks an authored definition, compiles it, and validates the canonical module config.
+`compile` compiles all colocated definitions and verifies local release metadata. `status` reports
+each local release version and can compare it with remote inventory when run with
+`--inventory <inventory.json>`.
+
+### Publishing
+
+Publishing is handled after merge on `main`. The publish workflow compiles all definitions, compares
+local releases with existing Ravion module versions, creates any missing module-scoped tags, and
+publishes missing versions through the Ravion API.
+
+Pull requests run the same publish comparison in dry-run mode and post a PR comment with the
+planned creates, patches, skips, and config diffs. The dry run uses `https://api.ravion.com` and
+requires `RAVION_API_TOKEN`; when the token is missing, CI fails with an explicit credential error.
+
+Manual dry runs use the same commands:
+
+```bash
+cd tools/ravion-modules
+node dist/src/cli.js tags --api
+node dist/src/cli.js publish
+```
+
+Mutation commands are explicit:
+
+```bash
+node dist/src/cli.js tags --api --create
+node dist/src/cli.js publish --apply
+```
+
+`publish` creates missing definitions, patches changed definition metadata, creates missing module
+versions, and skips already-published identical versions. It fails if the same `release.version`
+already exists remotely with different compiled config.
+
+Local development publishes can target a local API server and apply by default:
+
+```bash
+cd tools/ravion-modules
+node dist/src/cli.js publish ../../networking/vpc/rvn-aws-network-definition.yml --local-dev
+```
+
+From the repository root, use the Makefile shortcuts:
+
+```bash
+make publish-local-dev MODULE=rvn-aws-network
+make publish-local-dev MODULE=rvn-aws-network DRY_RUN=1
+make publish-local-dev MODULE=rvn-aws-network SOURCE_REF=my-pushed-branch
+```
+
+The Makefile publish command automatically loads `.env.local` for that command when the file exists.
+Use standard dotenv syntax:
+
+```bash
+RAVION_API_URL=http://localhost:8080
+RAVION_API_TOKEN=dev-token
+```
+
+To load `.env.local` into the current terminal session, run the helper for your shell:
+
+```bash
+eval "$(make env-local-sh)"
+```
+
+```fish
+eval (make env-local-fish)
+```
+
+`--local-dev` defaults to `http://localhost:8080`, or `RAVION_API_URL` when set. It always publishes
+a numeric prerelease suffix from the authored `release.version`, for example `0.1.0-1`, `0.1.0-2`,
+and so on. The module's GitHub source ref uses the current branch when that branch exists on
+`origin`; otherwise it uses `main`. Set `SOURCE_REF` or `RAVION_LOCAL_DEV_SOURCE_REF` to override
+that source ref. Use `--dry-run` with `--local-dev` to dry-run without API mutations.
+
+### Module Release Tags
+
+Published definitions use module-scoped annotated Git tags as source refs, for example
+`ravion-aws-vpc@1.2.0`. Tags are created only after merge because pre-merge commit SHAs are not the
+stable commits that will exist on `main`. Branch refs are mutable, so they are not suitable for
+published module source pins.
+
+Release tags are immutable. If a published module version is wrong, publish a new patch version
+instead of moving or replacing the existing tag.
 
 ### Adding a New Module
 

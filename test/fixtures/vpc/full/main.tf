@@ -52,14 +52,14 @@ module "vpc" {
   subnet_count = 3
 
   # High availability NAT Gateways (one per AZ)
-  enable_nat_gateway            = true
-  nat_gateway_high_availability = true
+  nat_gateway_enabled                   = true
+  nat_gateway_high_availability_enabled = true
 
   # IPv6 support
-  enable_ipv6 = true
+  ipv6_enabled = true
 
   # VPC Flow Logs to CloudWatch
-  enable_flow_logs         = true
+  flow_logs_enabled        = true
   flow_logs_destination    = "cloudwatch"
   flow_logs_retention_days = 7
 

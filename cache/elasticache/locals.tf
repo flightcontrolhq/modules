@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -22,6 +22,9 @@ locals {
   # Redis and Valkey share the same resource types
   is_redis_compatible = local.is_redis || local.is_valkey
 
+  # Engine version
+  engine_version = var.engine_minor_version != null && var.engine_minor_version != "" ? "${var.engine_major_version}.${var.engine_minor_version}" : var.engine_major_version
+
   # Resource creation flags
   is_serverless            = var.serverless_enabled && local.is_redis_compatible
   create_replication_group = local.is_redis_compatible && !local.is_serverless
@@ -29,7 +32,7 @@ locals {
   create_serverless_cache  = local.is_serverless
 
   # Security group
-  create_security_group = var.create_security_group
+  create_security_group = var.security_group_creation_enabled
   security_group_id     = local.create_security_group ? module.security_group[0].security_group_id : var.security_group_id
 
   # Port defaults
@@ -39,13 +42,14 @@ locals {
   # Parameter group family detection
   # If not provided, derive from engine and version
   default_parameter_group_family = local.is_redis ? (
-    var.engine_version != null ? "redis${split(".", var.engine_version)[0]}" : "redis7"
+    "redis${var.engine_major_version}"
     ) : local.is_valkey ? (
-    var.engine_version != null ? "valkey${split(".", var.engine_version)[0]}" : "valkey8"
+    "valkey${var.engine_major_version}"
     ) : (
-    var.engine_version != null ? "memcached${replace(var.engine_version, "/\\.[0-9]+$/", "")}" : "memcached1.6"
+    "memcached${var.engine_major_version}"
   )
   parameter_group_family = coalesce(var.parameter_group_family, local.default_parameter_group_family)
+  parameter_group_name   = "elasticache-${var.name}"
 
   # Cluster mode
   cluster_mode_enabled = var.cluster_mode_enabled && local.is_redis_compatible && !local.is_serverless
@@ -66,10 +70,10 @@ locals {
   multi_az_enabled = var.multi_az_enabled && local.automatic_failover_enabled
 
   # CloudWatch alarm creation
-  create_cloudwatch_alarms = var.create_cloudwatch_alarms && !local.is_serverless
+  create_cloudwatch_alarms = var.cloudwatch_alarms_creation_enabled && !local.is_serverless
 
   # Resource identifier for CloudWatch (used in dimensions)
-  cloudwatch_dimension_value = local.create_replication_group ? aws_elasticache_replication_group.this[0].id : (
+  cloudwatch_dimension_value = local.create_replication_group ? tolist(aws_elasticache_replication_group.this[0].member_clusters)[0] : (
     local.create_cluster ? aws_elasticache_cluster.this[0].cluster_id : null
   )
 
@@ -89,7 +93,7 @@ locals {
   # Auth token handling — generate_auth_token takes effect only when the user did not
   # supply one, and only for Redis/Valkey with transit encryption (serverless always has TLS).
   generate_auth_token = (
-    var.generate_auth_token
+    var.auth_token_enabled
     && local.is_redis_compatible
     && var.auth_token == null
     && (var.transit_encryption_enabled || local.is_serverless)
@@ -106,6 +110,6 @@ locals {
   connection_string = "${local.connection_scheme}://${local.connection_auth_segment}${local.connection_host}:${local.port}"
 
   # A secret is created when explicitly enabled OR when a secret_name is provided.
-  create_secret = var.create_secret || var.secret_name != null
+  create_secret = var.secret_creation_enabled || var.secret_name != null
   secret_name   = coalesce(var.secret_name, "${var.name}/connection-string")
 }

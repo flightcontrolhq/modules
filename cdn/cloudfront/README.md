@@ -8,10 +8,13 @@ Creates and manages AWS CloudFront distributions with support for multiple distr
 - **Multiple Origins**: Support for S3 and custom (ALB, API Gateway, HTTP) origins with per-origin configuration
 - **Modern Cache Policies**: Uses cache policies and origin request policies (no legacy `forwarded_values`)
 - **Origin Access Control**: Automatic OAC creation for S3 origins (recommended over legacy OAI)
+- **Signed URL Enforcement**: Trusted key group wiring for signed URLs and signed cookies
 - **SSL/TLS**: Custom ACM certificates with configurable minimum TLS version, SNI support
 - **WAF Integration**: Associate a WAFv2 Web ACL (global scope) for edge protection
-- **Access Logging**: Optional S3 logging bucket with lifecycle management, per-distribution log prefixes
+- **Access Logging**: On by default via CloudFront standard logging v2 into a module-managed CloudWatch Logs group (us-east-1); legacy S3 delivery with lifecycle management and per-distribution log prefixes remains available
+- **Monitoring**: Optional CloudFront additional metrics subscription for cache hit rate, origin latency, and per-status error rates
 - **Edge Functions**: Support for CloudFront Functions and Lambda@Edge associations
+- **Edge Redirects**: Ordered URL-pattern redirects with named segments, catch-all paths, and optional query preservation
 - **Custom Error Pages**: Configurable error response handling with custom pages
 - **Geo Restrictions**: Whitelist or blacklist countries using ISO 3166-1-alpha-2 codes
 - **HTTP/3 Support**: HTTP/2 and HTTP/3 enabled by default
@@ -35,7 +38,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -82,6 +85,38 @@ module "cdn" {
 }
 ```
 
+### Private S3 Origin with Signed URLs
+
+```hcl
+module "cdn" {
+  source = "git::https://github.com/user/ravion-modules.git//cdn/cloudfront?ref=v1.0.0"
+
+  name = "private-attachments"
+
+  distributions = {
+    main = {}
+  }
+
+  origins = [
+    {
+      origin_id         = "attachments"
+      domain_name       = "private-attachments.s3.us-east-1.amazonaws.com"
+      s3_origin_enabled = true
+    }
+  ]
+
+  default_cache_behavior = {
+    target_origin_id       = "attachments"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+    trusted_key_groups     = ["K123456789EXAMPLE"]
+  }
+}
+```
+
+For private S3 origins, the bucket policy must allow the CloudFront service principal to read objects, scoped to the distribution ARN. If the bucket is managed by `storage/s3`, use the `cloudfront_oac_read` policy template with `cloudfront_distribution_arns = [module.cdn.distribution_arn]`.
+
 ### Multi-Origin (S3 + ALB) with Ordered Cache Behaviors
 
 ```hcl
@@ -101,7 +136,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-assets.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     },
     {
       origin_id              = "alb-api"
@@ -154,7 +189,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-assets.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -200,10 +235,11 @@ module "cdn" {
   # WAF
   web_acl_id = "arn:aws:wafv2:us-east-1:123456789012:global/webacl/my-acl/abc-123"
 
-  # Logging
-  enable_logging        = true
-  create_logging_bucket = true
-  logging_prefix        = "cloudfront/"
+  # Logging (CloudWatch Logs is the default; opt into legacy S3 delivery)
+  logging_enabled                 = true
+  logging_destination             = "s3"
+  logging_bucket_creation_enabled = true
+  logging_prefix                  = "cloudfront/"
 
   tags = {
     Environment = "production"
@@ -230,7 +266,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -278,7 +314,7 @@ module "cdn" {
     {
       origin_id   = "s3-assets"
       domain_name = "my-bucket.s3.us-east-1.amazonaws.com"
-      s3_origin   = true
+      s3_origin_enabled   = true
     }
   ]
 
@@ -294,12 +330,129 @@ module "cdn" {
 }
 ```
 
+### With Additional CloudFront Metrics
+
+```hcl
+module "cdn" {
+  source = "git::https://github.com/user/ravion-modules.git//cdn/cloudfront?ref=v1.0.0"
+
+  name = "my-app"
+
+  distributions = {
+    main = {}
+  }
+
+  origins = [
+    {
+      origin_id              = "alb"
+      domain_name            = "my-alb-123456.us-east-1.elb.amazonaws.com"
+      origin_protocol_policy = "https-only"
+    }
+  ]
+
+  default_cache_behavior = {
+    target_origin_id       = "alb"
+    viewer_protocol_policy = "redirect-to-https"
+  }
+
+  additional_metrics_enabled = true
+}
+```
+
+CloudFront publishes default distribution metrics at no additional CloudWatch metric cost. Enabling `additional_metrics_enabled` creates a monitoring subscription for each distribution and turns on all 8 CloudFront additional metrics: `CacheHitRate`, `OriginLatency`, `401ErrorRate`, `403ErrorRate`, `404ErrorRate`, `502ErrorRate`, `503ErrorRate`, and `504ErrorRate`. CloudWatch bills these as a flat per-metric monthly charge per distribution, regardless of request volume.
+
+### Hostname Redirect with Path Preservation
+
+Redirect rules run at viewer request time before CloudFront contacts an origin. Rules are evaluated in order and the first match wins. The managed redirect function is attached to the default behavior and every ordered behavior so redirects cover every request path.
+
+```hcl
+module "cdn" {
+  source = "git::https://github.com/flightcontrolhq/modules.git//cdn/cloudfront?ref=rvn-cloudfront@0.3.0"
+
+  name = "marketing"
+
+  distributions = {
+    main = {
+      aliases             = ["www.example.com", "docs.example.com"]
+      acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+    }
+  }
+
+  origins = [
+    {
+      origin_id              = "website"
+      domain_name            = "website-origin.example.com"
+      origin_protocol_policy = "https-only"
+    }
+  ]
+
+  default_cache_behavior = {
+    target_origin_id       = "website"
+    viewer_protocol_policy = "redirect-to-https"
+  }
+
+  redirect_rules = [
+    {
+      source                = "https://docs.example.com/:path*"
+      destination           = "https://www.example.com/docs/:path*"
+      preserve_query_string = true
+      status_code           = 308
+    }
+  ]
+}
+```
+
+This redirects `https://docs.example.com/quickstart?source=nav` to `https://www.example.com/docs/quickstart?source=nav`. A `:name` parameter captures one path segment, while a final `:name*` captures zero or more remaining segments. Parameters can be reordered, omitted, or repeated in the destination. A path-only source matches every distribution alias, and a path-only destination keeps the request host. Redirects always use HTTPS.
+
+Enabling `redirect_rules` is incompatible with caller-supplied CloudFront Function or Lambda@Edge `viewer-request` associations because CloudFront allows only one viewer-request association per behavior.
+
+The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
+
+#### Avoid Overlapping Same-Host Rules
+
+Before returning a redirect, the edge function checks whether the destination would match the same source pattern on the same host. If it would, the function skips that rule and evaluates the next rule. If no later rule matches, CloudFront sends the original request to the configured origin. This prevents an infinite loop, but it can make an overlapping rule appear inactive.
+
+This rule does not redirect because `/docs/guide` still matches the broad `/:path*` source and would become `/docs/docs/guide` on the next request:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://d111111abcdef8.cloudfront.net/:path*"
+    destination = "https://d111111abcdef8.cloudfront.net/docs/:path*"
+  }
+]
+```
+
+Use different source and destination hosts when migrating a domain:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://docs.example.com/:path*"
+    destination = "https://www.example.com/docs/:path*"
+  }
+]
+```
+
+For same-host testing, use a source namespace that does not overlap the destination:
+
+```hcl
+redirect_rules = [
+  {
+    source      = "https://d111111abcdef8.cloudfront.net/old/:path*"
+    destination = "https://d111111abcdef8.cloudfront.net/docs/:path*"
+  }
+]
+```
+
+The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only the root, use the exact source `https://d111111abcdef8.cloudfront.net` without a path parameter. Redirect patterns do not currently support exclusions such as "all paths except `/docs`".
+
 ## Requirements
 
 | Name               | Version   |
 | ------------------ | --------- |
 | opentofu/terraform | >= 1.10.0 |
-| aws                | >= 5.0    |
+| aws                | >= 6.0    |
 
 ## Inputs
 
@@ -339,7 +492,7 @@ module "cdn" {
 | origins[].connection_timeout | Connection timeout in seconds (1-10). | `number` | `null` | no |
 | origins[].custom_headers | List of custom headers to send to the origin. | `list(object({name, value}))` | `[]` | no |
 | origins[].origin_shield | Origin Shield configuration. | `object({enabled, origin_shield_region})` | `null` | no |
-| origins[].s3_origin | Whether this is an S3 origin (creates OAC). | `bool` | `false` | no |
+| origins[].s3_origin_enabled | Whether this is an S3 origin (creates OAC). | `bool` | `false` | no |
 
 ### Default Cache Behavior
 
@@ -350,12 +503,13 @@ module "cdn" {
 | default_cache_behavior.viewer_protocol_policy | Viewer protocol policy: `allow-all`, `https-only`, `redirect-to-https`. | `string` | n/a | yes |
 | default_cache_behavior.allowed_methods | HTTP methods to allow. | `list(string)` | `["GET", "HEAD"]` | no |
 | default_cache_behavior.cached_methods | HTTP methods to cache. | `list(string)` | `["GET", "HEAD"]` | no |
-| default_cache_behavior.compress | Whether to compress content. | `bool` | `true` | no |
+| default_cache_behavior.compression_enabled | Whether to compression_enabled content. | `bool` | `true` | no |
 | default_cache_behavior.cache_policy_id | Cache policy ID. | `string` | `null` | no |
 | default_cache_behavior.origin_request_policy_id | Origin request policy ID. | `string` | `null` | no |
 | default_cache_behavior.response_headers_policy_id | Response headers policy ID. | `string` | `null` | no |
+| default_cache_behavior.trusted_key_groups | CloudFront key group IDs trusted for signed URLs or signed cookies. | `list(string)` | `[]` | no |
 | default_cache_behavior.function_associations | CloudFront Function associations. | `list(object({event_type, function_arn}))` | `[]` | no |
-| default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, include_body}))` | `[]` | no |
+| default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, body_inclusion_enabled}))` | `[]` | no |
 | default_cache_behavior.realtime_log_config_arn | Real-time log configuration ARN. | `string` | `null` | no |
 
 ### Ordered Cache Behaviors
@@ -364,16 +518,28 @@ module "cdn" {
 |------|-------------|------|---------|----------|
 | ordered_cache_behaviors | An ordered list of cache behaviors with path patterns. Same fields as default_cache_behavior plus `path_pattern`. | `list(object({...}))` | `[]` | no |
 
+### Edge Redirects
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| redirect_rules | Ordered URL-pattern redirects handled before CloudFront contacts an origin. | `list(object({...}))` | `[]` | no |
+| redirect_rules[].source | Absolute HTTPS URL or host-agnostic path containing literal segments, `:name` parameters, and optionally one final `:name*` catch-all. | `string` | n/a | yes |
+| redirect_rules[].destination | Absolute HTTPS URL or host-agnostic path using parameters captured by the source. | `string` | n/a | yes |
+| redirect_rules[].preserve_query_string | Append query parameters to the redirect location. | `bool` | `false` | no |
+| redirect_rules[].redirect_non_read_methods | Redirect methods other than GET and HEAD. | `bool` | `false` | no |
+| redirect_rules[].status_code | Redirect status: `301`, `302`, `307`, or `308`. | `number` | `308` | no |
+
 ### Distribution Settings
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | price_class | Price class: `PriceClass_100`, `PriceClass_200`, `PriceClass_All`. | `string` | `"PriceClass_100"` | no |
 | http_version | Maximum HTTP version: `http1.1`, `http2`, `http2and3`. | `string` | `"http2and3"` | no |
-| is_ipv6_enabled | Whether IPv6 is enabled. | `bool` | `true` | no |
+| ipv6_enabled | Whether IPv6 is enabled. | `bool` | `true` | no |
 | default_root_object | Object returned for root URL requests (e.g., `index.html`). | `string` | `null` | no |
-| retain_on_delete | Retain (disable) the distribution on delete instead of removing it. | `bool` | `false` | no |
-| wait_for_deployment | Wait for the distribution to deploy before completing. | `bool` | `true` | no |
+| retain_on_delete_enabled | Retain (disable) the distribution on delete instead of removing it. | `bool` | `false` | no |
+| deployment_wait_enabled | Wait for the distribution to deploy before completing. | `bool` | `true` | no |
+| additional_metrics_enabled | Enable CloudFront additional metrics in CloudWatch. This enables all 8 additional metrics for each distribution and incurs a fixed per-metric CloudWatch charge. | `bool` | `false` | no |
 
 ### SSL/TLS
 
@@ -407,20 +573,23 @@ module "cdn" {
 
 ### Logging
 
+Access logging is enabled by default. The default destination is CloudWatch Logs: CloudFront standard logging v2 delivers access logs into a module-managed log group `/aws/cloudfront/<name>` via a per-distribution delivery source, a shared delivery destination (JSON output), and a per-distribution delivery. CloudFront is a global service, so the whole delivery chain is pinned to `us-east-1` with the per-resource `region` argument (AWS provider >= 6.0). Set `logging_destination = "s3"` for legacy standard logging to an S3 bucket, or `logging_enabled = false` to turn logging off.
+
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_logging | Enable access logging. | `bool` | `false` | no |
-| logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. | `string` | `null` | no |
-| logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. | `string` | `""` | no |
-| logging_include_cookies | Include cookies in access logs. | `bool` | `false` | no |
-| create_logging_bucket | Create a new S3 bucket for logging. | `bool` | `false` | no |
-| logging_bucket_retention_days | Days to retain logs in the created bucket. | `number` | `90` | no |
+| logging_enabled | Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see `logging_destination`. | `bool` | `true` | no |
+| logging_destination | Where access logs are delivered: `cloudwatch` (standard logging v2 into a module-managed CloudWatch Logs group) or `s3` (legacy standard logging). | `string` | `"cloudwatch"` | no |
+| logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. Only applies when `logging_destination = "s3"`. | `string` | `null` | no |
+| logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. Only applies when `logging_destination = "s3"`. | `string` | `""` | no |
+| logging_cookies_enabled | Include cookies in access logs. Only applies when `logging_destination = "s3"`. | `bool` | `false` | no |
+| logging_bucket_creation_enabled | Create a new S3 bucket for logging. Only applies when `logging_destination = "s3"`. | `bool` | `false` | no |
+| logging_bucket_retention_days | Days to retain logs: CloudWatch log group retention (`cloudwatch`, must be a valid CloudWatch retention value) or S3 lifecycle expiry on the module-created bucket (`s3`). | `number` | `90` | no |
 
 ### Origin Access Control
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| create_origin_access_control | Create OAC resources for S3 origins. | `bool` | `true` | no |
+| origin_access_control_creation_enabled | Create OAC resources for S3 origins. | `bool` | `true` | no |
 | origin_access_control_origin_type | OAC origin type: `s3`, `mediastore`, `mediapackagev2`, `lambda`. | `string` | `"s3"` | no |
 | origin_access_control_signing_behavior | OAC signing behavior: `always`, `never`, `no-override`. | `string` | `"always"` | no |
 | origin_access_control_signing_protocol | OAC signing protocol. | `string` | `"sigv4"` | no |
@@ -435,10 +604,18 @@ module "cdn" {
 | distribution_hosted_zone_ids | A map of distribution key to Route 53 zone ID for alias records. |
 | distribution_statuses | A map of distribution key to current distribution status. |
 | distribution_etags | A map of distribution key to current distribution ETag. |
+| distribution_id | The distribution ID when exactly one distribution is created (null otherwise). |
+| distribution_arn | The distribution ARN when exactly one distribution is created (null otherwise). |
+| distribution_domain_name | The distribution domain name when exactly one distribution is created (null otherwise). |
+| distribution_hosted_zone_id | The Route 53 hosted zone ID when exactly one distribution is created (null otherwise). |
+| redirect_function_arn | The managed redirect function ARN (null when redirects are disabled). |
+| redirect_function_name | The managed redirect function name (null when redirects are disabled). |
 | origin_access_control_ids | A map of origin_id to OAC ID for S3 origins. |
 | logging_bucket_id | The ID of the logging S3 bucket (null if not created). |
 | logging_bucket_arn | The ARN of the logging S3 bucket (null if not created). |
 | logging_bucket_domain_name | The domain name of the logging S3 bucket (null if not created). |
+| access_log_group_name | Name of the CloudWatch Logs group receiving CloudFront access logs (null unless CloudWatch logging is active). |
+| access_log_group_arn | ARN of the CloudWatch Logs access-log group (null unless CloudWatch logging is active). |
 
 ## Architecture
 
@@ -490,7 +667,7 @@ module "cdn" {
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • name (required)           │   │ • distributions (required)      │   │ • origins (required)                    │  ║
 ║  │ • tags                      │   │   └─ aliases                    │   │   └─ origin_id, domain_name             │  ║
-║  └─────────────────────────────┘   │   └─ acm_certificate_arn        │   │   └─ s3_origin, origin_path             │  ║
+║  └─────────────────────────────┘   │   └─ acm_certificate_arn        │   │   └─ s3_origin_enabled, origin_path             │  ║
 ║                                    │   └─ comment, enabled           │   │   └─ protocol, ports, timeouts          │  ║
 ║                                    └─────────────────────────────────┘   │   └─ custom_headers, origin_shield      │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
@@ -500,10 +677,10 @@ module "cdn" {
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────────────────────────┤  ║
 ║  │ • target_origin_id          │   │ • path_pattern                  │   │ • price_class                           │  ║
 ║  │ • viewer_protocol_policy    │   │ • target_origin_id              │   │ • http_version                          │  ║
-║  │ • allowed/cached_methods    │   │ • viewer_protocol_policy        │   │ • is_ipv6_enabled                       │  ║
+║  │ • allowed/cached_methods    │   │ • viewer_protocol_policy        │   │ • ipv6_enabled                       │  ║
 ║  │ • cache_policy_id           │   │ • cache_policy_id               │   │ • default_root_object                   │  ║
-║  │ • origin_request_policy_id  │   │ • origin_request_policy_id      │   │ • retain_on_delete                      │  ║
-║  │ • function_associations     │   │ • function_associations         │   │ • wait_for_deployment                   │  ║
+║  │ • origin_request_policy_id  │   │ • origin_request_policy_id      │   │ • retain_on_delete_enabled                      │  ║
+║  │ • function_associations     │   │ • function_associations         │   │ • deployment_wait_enabled                   │  ║
 ║  │ • lambda_fn_associations    │   │ • lambda_fn_associations        │   └─────────────────────────────────────────┘  ║
 ║  └─────────────────────────────┘   └─────────────────────────────────┘                                                 ║
 ║                                                                                                                        ║
@@ -517,11 +694,11 @@ module "cdn" {
 ║  ┌─────────────────────────────┐   ┌─────────────────────────────────┐                                                 ║
 ║  │       LOGGING               │   │   ORIGIN ACCESS CONTROL         │                                                 ║
 ║  ├─────────────────────────────┤   ├─────────────────────────────────┤                                                 ║
-║  │ • enable_logging            │   │ • create_origin_access_control  │                                                 ║
-║  │ • create_logging_bucket     │   │ • oac_origin_type               │                                                 ║
+║  │ • logging_enabled            │   │ • origin_access_control_creation_enabled  │                                                 ║
+║  │ • logging_bucket_creation_enabled     │   │ • oac_origin_type               │                                                 ║
 ║  │ • logging_bucket_domain_name│   │ • oac_signing_behavior          │                                                 ║
 ║  │ • logging_prefix            │   │ • oac_signing_protocol          │                                                 ║
-║  │ • logging_include_cookies   │   └─────────────────────────────────┘                                                 ║
+║  │ • logging_cookies_enabled   │   └─────────────────────────────────┘                                                 ║
 ║  │ • logging_bucket_retention  │                                                                                       ║
 ║  └─────────────────────────────┘                                                                                       ║
 ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
@@ -533,7 +710,7 @@ module "cdn" {
 ║                                                                                                                        ║
 ║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
 ║    │                           aws_cloudfront_origin_access_control.this                                          │    ║
-║    │  • for_each over S3 origins (where s3_origin = true)                                                        │    ║
+║    │  • for_each over S3 origins (where s3_origin_enabled = true)                                                        │    ║
 ║    │  • SigV4 signing, configurable behavior and origin type                                                     │    ║
 ║    └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘    ║
 ║                                                           │                                                            ║
@@ -566,7 +743,7 @@ module "cdn" {
 ║    ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐    ║
 ║    │                                    Logging S3 Bucket (Optional)                                              │    ║
 ║    ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤    ║
-║    │  aws_s3_bucket.logging[0]                    (count = create_logging_bucket ? 1 : 0)                        │    ║
+║    │  aws_s3_bucket.logging[0]                    (count = logging_bucket_creation_enabled ? 1 : 0)                        │    ║
 ║    │  aws_s3_bucket_ownership_controls.logging[0] (BucketOwnerPreferred for CF logging)                          │    ║
 ║    │  aws_s3_bucket_acl.logging[0]                (log-delivery-write)                                           │    ║
 ║    │  aws_s3_bucket_lifecycle_configuration[0]    (expiration after N days)                                       │    ║
@@ -600,8 +777,13 @@ module "cdn" {
 | Resource | Count Logic | Purpose |
 |----------|-------------|---------|
 | `aws_cloudfront_distribution` | 1 per entry in `var.distributions` | CloudFront distribution per domain group |
+| `aws_cloudfront_monitoring_subscription` | 0 or 1 per distribution | CloudFront additional metrics subscription when enabled |
 | `aws_cloudfront_origin_access_control` | 0 to N | OAC per S3 origin (shared across distributions) |
-| `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if `create_logging_bucket = true`) |
+| `aws_cloudwatch_log_group` (access logs) | 0 or 1 | CloudWatch access-log group in us-east-1 (if CloudWatch logging active) |
+| `aws_cloudwatch_log_delivery_source` | 0 or 1 per distribution | Standard logging v2 delivery source (if CloudWatch logging active) |
+| `aws_cloudwatch_log_delivery_destination` | 0 or 1 | Standard logging v2 delivery destination, JSON output (if CloudWatch logging active) |
+| `aws_cloudwatch_log_delivery` | 0 or 1 per distribution | Connects each delivery source to the destination (if CloudWatch logging active) |
+| `aws_s3_bucket` (logging) | 0 or 1 | Access logs bucket (if S3 logging active and `logging_bucket_creation_enabled = true`) |
 | `aws_s3_bucket_ownership_controls` | 0 or 1 | Logging bucket ownership (if logging bucket created) |
 | `aws_s3_bucket_acl` | 0 or 1 | Logging bucket ACL (if logging bucket created) |
 | `aws_s3_bucket_lifecycle_configuration` | 0 or 1 | Log retention (if logging bucket created) |
@@ -620,6 +802,7 @@ module "cdn" {
 - **Modern Cache Policies Only**: This module uses cache policies and origin request policies instead of legacy `forwarded_values`. Reference AWS managed policies by ID or create custom policies outside this module.
 - **OAC Only (No OAI)**: Only Origin Access Control is supported. OAI is legacy and does not work with S3 bucket policies using KMS encryption or S3 Object Lambda.
 - **Multi-Distribution**: All distributions share the same origins, cache behaviors, and settings. Each distribution gets its own aliases, ACM certificate, and logging prefix. Use this for serving the same content under different domain groups.
+- **Additional Metrics Cost**: CloudFront additional metrics are all-or-nothing per distribution. Enabling them turns on all 8 metrics and incurs a fixed CloudWatch per-metric monthly charge per distribution, independent of traffic volume.
 - **Logging Prefixes**: When logging is enabled, each distribution logs under `<logging_prefix><distribution_key>/` to keep logs separated.
 - **Route53 Records**: Create Route53 alias records externally using the `distribution_domain_names` and `distribution_hosted_zone_ids` outputs.
 - **ACM Certificates**: CloudFront requires ACM certificates in `us-east-1` regardless of where other resources are deployed. Provision certificates externally and pass the ARN.

@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -24,22 +24,30 @@ locals {
   # EC2 capacity provider name
   ec2_capacity_provider_name = local.enable_ec2 ? "${var.name}-ec2" : null
 
-  # Build capacity provider strategy based on enabled providers
-  capacity_provider_strategy = concat(
-    var.enable_fargate ? [{
+  # Family used for the cluster default strategy. AWS rejects default
+  # strategies that mix Fargate and EC2 (ASG) capacity providers, so the
+  # default strategy must commit to a single family.
+  capacity_provider_default = coalesce(
+    var.capacity_provider_default,
+    local.enable_ec2 ? "ec2" : var.fargate_enabled ? "fargate" : "fargate_spot"
+  )
+
+  # Build the default capacity provider strategy from the selected family.
+  # FARGATE and FARGATE_SPOT may share a strategy; EC2 must stand alone.
+  capacity_provider_strategy = local.capacity_provider_default == "ec2" ? [{
+    capacity_provider = aws_ecs_capacity_provider.ec2[0].name
+    weight            = var.ec2_weight
+    base              = var.ec2_base
+    }] : concat(
+    local.capacity_provider_default == "fargate" && var.fargate_enabled ? [{
       capacity_provider = "FARGATE"
       weight            = var.fargate_weight
       base              = var.fargate_base
     }] : [],
-    var.enable_fargate_spot ? [{
+    var.fargate_spot_enabled ? [{
       capacity_provider = "FARGATE_SPOT"
       weight            = var.fargate_spot_weight
       base              = var.fargate_spot_base
-    }] : [],
-    local.enable_ec2 ? [{
-      capacity_provider = aws_ecs_capacity_provider.ec2[0].name
-      weight            = var.ec2_weight
-      base              = var.ec2_base
     }] : []
   )
 
@@ -58,5 +66,3 @@ locals {
     var.ec2_spot_instance_types
   ) : []
 }
-
-

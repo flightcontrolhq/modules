@@ -40,8 +40,8 @@ variable "default_version" {
   default     = "main"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9._/-]+$", var.default_version))
-    error_message = "The default_version must contain only letters, numbers, '.', '_', '-', '/'."
+    condition     = can(regex("^[A-Za-z0-9._-]+$", var.default_version))
+    error_message = "The default_version must contain only letters, numbers, '.', '_', '-'. Multi-segment versions (containing '/') are not supported: the cache-control function strips exactly one leading path segment to recover the viewer-facing path."
   }
 }
 
@@ -112,7 +112,7 @@ variable "web_acl_id" {
   }
 }
 
-variable "wait_for_deployment" {
+variable "deployment_wait_enabled" {
   type        = bool
   description = "Whether to wait for each distribution to be deployed before completing apply."
   default     = true
@@ -122,13 +122,13 @@ variable "wait_for_deployment" {
 # Hosting Bucket
 ################################################################################
 
-variable "bucket_versioning" {
+variable "bucket_versioning_enabled" {
   type        = bool
   description = "Enable versioning on the hosting bucket. Disable only if you know what you're doing — this is independent of the per-deploy version prefix and protects against accidental overwrites."
   default     = true
 }
 
-variable "bucket_force_destroy" {
+variable "bucket_force_destroy_enabled" {
   type        = bool
   description = "Allow `tofu destroy` to delete the hosting bucket even if it is not empty. Useful for ephemeral environments; dangerous in production."
   default     = false
@@ -188,9 +188,15 @@ variable "kms_key_arn" {
 # Origin
 ################################################################################
 
+variable "origin_shield_enabled" {
+  type        = bool
+  description = "Enable CloudFront Origin Shield in front of the hosting bucket. Reduces origin load and improves cache hit ratio for high-traffic sites. The Origin Shield region is derived automatically from the bucket region: same region when CloudFront offers Origin Shield there, otherwise the nearest supported region per the AWS mapping table. Set origin_shield_region to override."
+  default     = false
+}
+
 variable "origin_shield_region" {
   type        = string
-  description = "Optional AWS region to enable CloudFront Origin Shield in. Reduces origin load and improves cache hit ratio for global distributions."
+  description = "Override the automatically derived Origin Shield region. Only used when origin_shield_enabled is true. Leave null to derive from the bucket region."
   default     = null
 }
 
@@ -209,8 +215,8 @@ variable "additional_origin_headers" {
 
 variable "cache_policy_id" {
   type        = string
-  description = "CloudFront cache policy ID for the default behavior. Defaults to AWS-managed CachingOptimized (long-cache, suitable for hashed assets)."
-  default     = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  description = "CloudFront cache policy ID for the default behavior. When null (the default), the module creates a cache policy identical to AWS-managed CachingOptimized but with a 1-year default TTL — safe because versioned deploys change the cache key on every promotion, and S3 objects carry no Cache-Control of their own. Set to a policy ID (e.g. CachingOptimized 658327ea-f89d-4fab-a63d-7e88639e58f6) to use your own."
+  default     = null
 }
 
 variable "origin_request_policy_id" {
@@ -219,9 +225,29 @@ variable "origin_request_policy_id" {
   default     = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
 }
 
+variable "response_headers_presets" {
+  type        = list(string)
+  description = <<-EOT
+    AWS-managed response-header sets to attach when neither `response_headers_policy_id` nor `response_headers_policy` is set. CloudFront allows exactly one response-headers policy per cache behavior, so the selection maps onto the single AWS-managed policy that covers the combination:
+
+      - "security_headers": HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, X-XSS-Protection. Remove it if the site must be embeddable in cross-origin iframes (SAMEORIGIN blocks that).
+      - "cors": Access-Control-Allow-Origin: * for simple CORS requests (SimpleCORS).
+      - "cors_preflight": CORS from any origin including OPTIONS preflight (Allow-Methods/Expose-Headers). Supersedes "cors" when both are selected.
+
+    Pass an empty list to attach no response-headers policy.
+  EOT
+  default     = ["security_headers"]
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for p in var.response_headers_presets : contains(["security_headers", "cors", "cors_preflight"], p)])
+    error_message = "The response_headers_presets entries must be 'security_headers', 'cors', or 'cors_preflight'."
+  }
+}
+
 variable "response_headers_policy_id" {
   type        = string
-  description = "ID of an externally-managed CloudFront response-headers policy to attach to the default behavior. Use when you have a centrally-managed policy (e.g. an org-wide CSP) you want to share across distributions. Mutually exclusive with `response_headers_policy` — when both are set, this caller-supplied id wins. Note: do NOT put `Cache-Control` in this policy with override=true; it will fight the cache-control function."
+  description = "ID of an externally-managed CloudFront response-headers policy to attach to the default behavior. Use when you have a centrally-managed policy (e.g. an org-wide CSP) you want to share across distributions. Takes precedence over `response_headers_policy` and the `response_headers_presets` default. Note: do NOT put `Cache-Control` in this policy with override=true; it will fight the cache-control function."
   default     = null
 }
 
@@ -280,7 +306,7 @@ variable "response_headers_policy" {
 
     Coexists with the cache-control function: the function writes Cache-Control on every response in viewer-response, then the response-headers policy applies. Don't put Cache-Control in `custom_headers` with override=true unless you intentionally want to overwrite what the function set.
 
-    Mutually exclusive with `response_headers_policy_id` — when both are set, the caller-supplied id wins on the default behavior. Set to null (default) to skip creating any module-managed policy.
+    Precedence on the default behavior: caller-supplied `response_headers_policy_id` > this module-managed policy > AWS-managed policy selected by `response_headers_presets`. Set to null (default) to fall through to the presets default.
   EOT
   default     = null
 
@@ -290,6 +316,37 @@ variable "response_headers_policy" {
       contains(["DENY", "SAMEORIGIN"], try(var.response_headers_policy.security_headers_config.frame_options.frame_option, ""))
     )
     error_message = "frame_options.frame_option must be either 'DENY' or 'SAMEORIGIN'."
+  }
+}
+
+variable "error_document" {
+  type        = string
+  description = <<-EOT
+    Bucket key (without leading slash) of the custom error page served with a 404 status when a requested object does not exist, e.g. '404.html'. Set to an empty string to disable and serve plain 404 responses (passing null applies the default instead — null means "use default" in Terraform).
+
+    CloudFront fetches this page directly from the origin without running the viewer-request rewrite function, so the key is resolved at the BUCKET ROOT, outside version prefixes. To source it from build assets, emit '404.html' at the root of the build output (the default convention in Astro, Hugo, Eleventy, SvelteKit, etc.) and have the deploy copy '<version>/404.html' to '/404.html' at promotion time:
+
+      aws s3 cp s3://<bucket>/<version>/404.html s3://<bucket>/404.html
+
+    If the key does not exist, viewers still receive a correct 404 status (missing objects return real 404s because the bucket policy grants CloudFront s3:ListBucket), just without the custom body.
+  EOT
+  default     = "404.html"
+  nullable    = false
+
+  validation {
+    condition     = var.error_document == "" || can(regex("^[^/]", var.error_document))
+    error_message = "The error_document must be a bucket key without a leading slash (e.g. '404.html'), or an empty string to disable."
+  }
+}
+
+variable "error_caching_min_ttl" {
+  type        = number
+  description = "Seconds CloudFront caches 404 error responses at the edge before re-checking the origin. Applies whether or not error_document is set. Defaults to 1 day: versioned deploys make cached 404s safe because every promotion produces fresh cache keys. Lower this if you overwrite files inside already-promoted S3 directories and need missing-then-uploaded files to appear quickly."
+  default     = 86400
+
+  validation {
+    condition     = var.error_caching_min_ttl >= 0 && var.error_caching_min_ttl <= 31536000
+    error_message = "The error_caching_min_ttl must be between 0 and 31536000 seconds."
   }
 }
 
@@ -322,7 +379,7 @@ variable "default_root_object" {
 # where HTML vs asset is unambiguous from the file extension.
 ################################################################################
 
-variable "manage_cache_control" {
+variable "cache_control_enabled" {
   type        = bool
   description = "Whether the module attaches a viewer-response CloudFront Function that writes Cache-Control on every response. Disable to delegate Cache-Control to S3 object metadata or to a caller-supplied response_headers_policy_id."
   default     = true
@@ -330,8 +387,8 @@ variable "manage_cache_control" {
 
 variable "html_cache_control" {
   type        = string
-  description = "Cache-Control header value emitted by the cache-control function for HTML responses (URI has no extension, ends in .html/.htm, contains a dotted segment, or matches html_path_overrides). Defaults to a short CDN s-maxage with a long stale-while-revalidate window so version flips propagate within seconds without blocking on a cache miss, and so browsers never store HTML as immutable."
-  default     = "s-maxage=5, stale-while-revalidate=31536000"
+  description = "Cache-Control header value emitted by the cache-control function for HTML responses (URI has no extension, ends in .html/.htm, contains a dotted segment, or matches html_path_overrides). Because this header is written in viewer-response, CloudFront never uses it for edge TTLs — edge freshness comes from the versioned cache key, which changes on every promotion. The only real consumer is the browser (and any intercepting proxy), so the default forces revalidation on every navigation: the browser stores the HTML, sends a conditional GET, and the CloudFront edge answers 304 from cache. Fresh HTML on the first navigation after a version flip, at the cost of one cheap conditional request."
+  default     = "public, max-age=0, must-revalidate"
 }
 
 variable "assets_cache_control" {
@@ -360,49 +417,70 @@ variable "html_path_overrides" {
 
 variable "kvs_initial_data" {
   type        = map(string)
-  description = "Optional seed entries for the KeyValueStore. Use `host -> version` to pin specific aliases (e.g. {\"staging.example.com\" = \"v_staging\"}) or `\"active\" -> version` to override the default_version seed. Subsequent edits should happen via `aws cloudfront-keyvaluestore put-key` from CI to avoid Terraform churn for ephemeral previews."
+  description = "Optional seed entries for the KeyValueStore. Use `host -> version` to pin specific aliases (e.g. {\"staging.example.com\" = \"v_staging\"}) or `\"active\" -> version` to override the default_version seed. Version values must be single path segments (no '/') — the cache-control function strips exactly one leading segment to recover the viewer-facing path. Subsequent edits should happen via `aws cloudfront-keyvaluestore put-key` from CI to avoid Terraform churn for ephemeral previews."
   default     = {}
+
+  validation {
+    condition     = alltrue([for k, v in var.kvs_initial_data : can(regex("^[A-Za-z0-9._-]+$", v))])
+    error_message = "The kvs_initial_data version values must contain only letters, numbers, '.', '_', '-' (single path segment, no '/')."
+  }
 }
 
 ################################################################################
 # Logging
 ################################################################################
 
-variable "enable_logging" {
+variable "logging_enabled" {
   type        = bool
-  description = "Enable CloudFront access logging."
-  default     = false
+  description = "Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see logging_destination."
+  default     = true
 }
 
-variable "create_logging_bucket" {
+variable "logging_destination" {
+  type        = string
+  description = "Where CloudFront delivers access logs when logging_enabled is true. 'cloudwatch' uses CloudFront standard logging v2 into a module-managed CloudWatch Logs group (viewable in the Ravion UI; ingestion costs more at very high traffic). 's3' uses legacy standard logging into an S3 bucket (cheapest for high traffic)."
+  default     = "cloudwatch"
+
+  validation {
+    condition     = contains(["cloudwatch", "s3"], var.logging_destination)
+    error_message = "The logging_destination must be 'cloudwatch' or 's3'."
+  }
+}
+
+variable "logging_bucket_creation_enabled" {
   type        = bool
-  description = "Whether to create a new S3 bucket for CloudFront access logs. Ignored if enable_logging is false."
+  description = "Whether to create a new S3 bucket for CloudFront access logs. Only applies when logging_enabled is true and logging_destination is 's3'."
   default     = false
 }
 
 variable "logging_bucket_domain_name" {
   type        = string
-  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when enable_logging is true and create_logging_bucket is false."
+  description = "Domain name of an existing S3 bucket for access logs (e.g. 'mybucket.s3.amazonaws.com'). Used when logging_enabled is true, logging_destination is 's3', and logging_bucket_creation_enabled is false."
   default     = null
 }
 
 variable "logging_prefix" {
   type        = string
-  description = "Base S3 key prefix for access logs. Each distribution logs under '<logging_prefix><distribution_key>/'."
+  description = "Base S3 key prefix for access logs. Each distribution logs under '<logging_prefix><distribution_key>/'. Only applies when logging_destination is 's3'."
   default     = ""
 }
 
 variable "logging_retention_days" {
   type        = number
-  description = "Days to retain CloudFront access logs (only applies to the bucket created when create_logging_bucket = true)."
+  description = "Days to retain CloudFront access logs — the CloudWatch log group retention when logging_destination is 'cloudwatch', or the S3 lifecycle expiry when logging_destination is 's3' with a module-created bucket."
   default     = 90
+
+  validation {
+    condition     = var.logging_destination != "cloudwatch" || contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.logging_retention_days)
+    error_message = "When logging_destination is 'cloudwatch', logging_retention_days must be a valid CloudWatch Logs retention value (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, or 3653)."
+  }
 }
 
 ################################################################################
 # Deploy Role (optional)
 ################################################################################
 
-variable "create_deploy_role" {
+variable "deploy_role_creation_enabled" {
   type        = bool
   description = "Whether to create an IAM role that CI can assume to upload to the hosting bucket and flip the active version in KVS."
   default     = false
@@ -410,7 +488,7 @@ variable "create_deploy_role" {
 
 variable "deploy_role_trust_policy" {
   type        = string
-  description = "Trust policy JSON for the deploy role. Required when create_deploy_role = true. Typically grants sts:AssumeRoleWithWebIdentity to a GitHub OIDC provider or sts:AssumeRole to a CI account."
+  description = "Trust policy JSON for the deploy role. Required when deploy_role_creation_enabled = true. Typically grants sts:AssumeRoleWithWebIdentity to a GitHub OIDC provider or sts:AssumeRole to a CI account."
   default     = null
 
   validation {

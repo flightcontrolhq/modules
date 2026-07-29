@@ -3,7 +3,7 @@
 ################################################################################
 
 module "public_alb" {
-  count = var.enable_public_alb ? 1 : 0
+  count = var.public_alb_enabled ? 1 : 0
 
   source = "../../networking/alb"
 
@@ -11,8 +11,8 @@ module "public_alb" {
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.public_subnet_ids
-  internal   = false
+  subnet_ids                     = var.public_subnet_ids
+  internal_load_balancer_enabled = false
 
   # Listener configuration. ecs_cluster ALWAYS owns the HTTPS listener (in
   # ravion_domains.tf) so toggling use_ravion_managed_domains is an in-place
@@ -20,24 +20,25 @@ module "public_alb" {
   # submodule therefore never creates its own HTTPS listener nor holds cert
   # ARNs; force_http_to_https_redirect keeps the HTTP listener redirecting to
   # the parent-owned 443 listener.
-  enable_http_listener         = true
-  enable_https_listener        = false
-  http_to_https_redirect       = var.public_alb_enable_https
-  force_http_to_https_redirect = var.public_alb_enable_https
+  http_listener_enabled          = true
+  https_listener_enabled         = false
+  http_to_https_redirect_enabled = var.public_alb_https_enabled
+  force_http_to_https_redirect   = var.public_alb_https_enabled
 
   # SSL/TLS
   certificate_arns = []
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings
-  idle_timeout        = var.public_alb_idle_timeout
-  deletion_protection = var.deletion_protection
+  idle_timeout                = var.public_alb_idle_timeout
+  deletion_protection_enabled = var.load_balancer_deletion_protection_enabled
 
   # Security
-  ingress_cidr_blocks = var.public_alb_ingress_cidr_blocks
+  ingress_cidr_blocks      = var.public_alb_ingress_cidr_blocks
+  ingress_ipv6_cidr_blocks = var.public_alb_ingress_ipv6_cidr_blocks
 
   # Access logs
-  enable_access_logs     = var.public_alb_enable_access_logs
+  access_logs_enabled    = var.public_alb_access_logs_enabled
   access_logs_bucket_arn = var.public_alb_access_logs_bucket_arn
 
   # WAF
@@ -49,7 +50,7 @@ module "public_alb" {
 ################################################################################
 
 module "private_alb" {
-  count = var.enable_private_alb ? 1 : 0
+  count = var.private_alb_enabled ? 1 : 0
 
   source = "../../networking/alb"
 
@@ -57,8 +58,8 @@ module "private_alb" {
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.private_subnet_ids
-  internal   = true
+  subnet_ids                     = var.private_subnet_ids
+  internal_load_balancer_enabled = true
 
   # Listener configuration. ecs_cluster ALWAYS owns the HTTPS listener (in
   # ravion_domains.tf) so toggling use_ravion_managed_domains is an in-place
@@ -66,24 +67,25 @@ module "private_alb" {
   # submodule therefore never creates its own HTTPS listener nor holds cert
   # ARNs; force_http_to_https_redirect keeps the HTTP listener redirecting to
   # the parent-owned 443 listener.
-  enable_http_listener         = true
-  enable_https_listener        = false
-  http_to_https_redirect       = var.private_alb_enable_https
-  force_http_to_https_redirect = var.private_alb_enable_https
+  http_listener_enabled          = true
+  https_listener_enabled         = false
+  http_to_https_redirect_enabled = var.private_alb_https_enabled
+  force_http_to_https_redirect   = var.private_alb_https_enabled
 
   # SSL/TLS
   certificate_arns = []
   ssl_policy       = var.private_alb_ssl_policy
 
   # ALB settings
-  idle_timeout        = var.private_alb_idle_timeout
-  deletion_protection = var.deletion_protection
+  idle_timeout                = var.private_alb_idle_timeout
+  deletion_protection_enabled = var.load_balancer_deletion_protection_enabled
 
   # Security
-  ingress_cidr_blocks = var.private_alb_ingress_cidr_blocks
+  ingress_cidr_blocks      = var.private_alb_ingress_cidr_blocks
+  ingress_ipv6_cidr_blocks = var.private_alb_ingress_ipv6_cidr_blocks
 
   # Access logs
-  enable_access_logs     = var.private_alb_enable_access_logs
+  access_logs_enabled    = var.private_alb_access_logs_enabled
   access_logs_bucket_arn = var.private_alb_access_logs_bucket_arn
 }
 
@@ -92,30 +94,30 @@ module "private_alb" {
 ################################################################################
 
 module "public_nlb" {
-  count = var.enable_public_nlb ? 1 : 0
+  count = var.public_nlb_enabled ? 1 : 0
 
   source = "../../networking/nlb"
 
-  name   = "${var.name}-pub"
+  name   = "${var.name}-pub-nlb"
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.public_subnet_ids
-  internal   = false
+  subnet_ids                     = var.public_subnet_ids
+  internal_load_balancer_enabled = false
 
   # NLB settings
-  deletion_protection              = var.deletion_protection
-  enable_cross_zone_load_balancing = var.public_nlb_enable_cross_zone_load_balancing
+  deletion_protection_enabled       = var.load_balancer_deletion_protection_enabled
+  cross_zone_load_balancing_enabled = var.public_nlb_cross_zone_load_balancing_enabled
 
   # Security groups
   additional_security_group_ids = var.public_nlb_security_group_ids
 
   # Access logs
-  enable_access_logs     = var.public_nlb_enable_access_logs
+  access_logs_enabled    = var.public_nlb_access_logs_enabled
   access_logs_bucket_arn = var.public_nlb_access_logs_bucket_arn
 
   # Elastic IPs
-  enable_elastic_ips        = var.public_nlb_enable_elastic_ips
+  elastic_ips_enabled       = var.public_nlb_elastic_ips_enabled
   elastic_ip_allocation_ids = var.public_nlb_elastic_ip_allocation_ids
 }
 
@@ -124,30 +126,29 @@ module "public_nlb" {
 ################################################################################
 
 module "private_nlb" {
-  count = var.enable_private_nlb ? 1 : 0
+  count = var.private_nlb_enabled ? 1 : 0
 
   source = "../../networking/nlb"
 
-  name   = "${var.name}-priv"
+  name   = "${var.name}-priv-nlb"
   tags   = var.tags
   vpc_id = var.vpc_id
 
-  subnet_ids = var.private_subnet_ids
-  internal   = true
+  subnet_ids                     = var.private_subnet_ids
+  internal_load_balancer_enabled = true
 
   # NLB settings
-  deletion_protection              = var.deletion_protection
-  enable_cross_zone_load_balancing = var.private_nlb_enable_cross_zone_load_balancing
+  deletion_protection_enabled       = var.load_balancer_deletion_protection_enabled
+  cross_zone_load_balancing_enabled = var.private_nlb_cross_zone_load_balancing_enabled
 
   # Security groups
   additional_security_group_ids = var.private_nlb_security_group_ids
 
   # Access logs
-  enable_access_logs     = var.private_nlb_enable_access_logs
+  access_logs_enabled    = var.private_nlb_access_logs_enabled
   access_logs_bucket_arn = var.private_nlb_access_logs_bucket_arn
 
   # Elastic IPs
-  enable_elastic_ips        = var.private_nlb_enable_elastic_ips
+  elastic_ips_enabled       = var.private_nlb_elastic_ips_enabled
   elastic_ip_allocation_ids = var.private_nlb_elastic_ip_allocation_ids
 }
-

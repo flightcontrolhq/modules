@@ -144,15 +144,15 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   # Basic HTTP-only configuration
-  enable_http_listener  = true
-  enable_https_listener = false
+  http_listener_enabled  = true
+  https_listener_enabled = false
 
   # Associate WAF WebACL
-  enable_waf_association = true
-  web_acl_arn            = aws_wafv2_web_acl.this.arn
+  waf_association_enabled = true
+  web_acl_arn             = aws_wafv2_web_acl.this.arn
 
   # Disable deletion protection for test cleanup
-  deletion_protection = false
+  deletion_protection_enabled = false
 
   tags = local.common_tags
 }

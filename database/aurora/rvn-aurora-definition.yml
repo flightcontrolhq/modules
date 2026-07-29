@@ -1,0 +1,1324 @@
+definition:
+  type: rvn-aurora
+  name: Aurora Database
+  description: Creates and manages an Amazon Aurora cluster. Supports Aurora PostgreSQL and Aurora MySQL with provisioned or Serverless v2 capacity.
+
+release:
+  version: 0.1.1
+  description: Handle disabled CloudWatch alarm inputs safely.
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      mapped_inputs:
+        - id: section_aws
+          label: AWS account & region
+          type: section
+        - default: << ref.input.aws_account_id >>
+          id: aws_account_id
+          immutable: true
+          label: AWS account
+          type: string
+          values: $values:ravion/aws_accounts
+        - default: << ref.input.aws_region >>
+          id: aws_region
+          immutable: true
+          label: Region
+          type: string
+          values: $values:aws/regions
+        - collapsible: true
+          default: << ref.input.execution_environment_id >>
+          description: Override the VPC, subnet, and security group for Pipeline Terraform runners. Must use the same AWS account as selected above.
+          id: execution_environment_id
+          label: Terraform execution environment
+          type: string
+          values: $values:ravion/execution_environments
+        - id: section_vpc
+          label: VPC
+          type: section
+        - default: <<ref.stack.output.vpc_id>>
+          id: vpc_id
+          immutable: true
+          label: VPC ID
+          required: true
+          type: string
+        - add_button_label: Add private subnet ID
+          default: <<ref.stack.output.private_subnet_ids>>
+          description: Used for the Aurora DB subnet group when the database is not publicly accessible. Use at least two subnets in different Availability Zones.
+          id: private_subnet_ids
+          immutable: true
+          label: Private subnet IDs
+          required: true
+          type: string_array
+        - add_button_label: Add public subnet ID
+          default: <<ref.stack.output.public_subnet_ids>>
+          description: Used for the Aurora DB subnet group when Publicly accessible is enabled. AWS requires public subnets for public database access.
+          id: public_subnet_ids
+          immutable: true
+          label: Public subnet IDs
+          placeholder: subnet-...
+          show_when:
+            public_access_enabled: true
+          type: string_array
+      required: true
+      type: $ref:rvn-aws-network
+    - id: section_database
+      label: Database
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>
+      description: Name of the Aurora cluster and prefix for related resources.
+      id: name
+      immutable: true
+      label: Name slug
+      patterns:
+        - message: 1-63 lowercase letters, numbers, and hyphens. Start with a letter and end with a letter or number.
+          pattern: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$
+      required: true
+      type: string
+    - default: none
+      id: restore_mode
+      immutable: true
+      label: Create or restore
+      required: true
+      type: string
+      values:
+        - label: New empty database
+          value: none
+        - label: Restore from snapshot
+          value: snapshot
+        - label: Point-in-time restore
+          value: point_in_time
+    - collapsible: true
+      description: Name for an automatically created database on the cluster.
+      id: database_name
+      immutable: true
+      label: Database name
+      patterns:
+        - message: 1-64 letters, numbers, and underscores. Start with a letter.
+          pattern: ^[A-Za-z][A-Za-z0-9_]{0,63}$
+      placeholder: myapp_prod
+      required: false
+      show_when:
+        restore_mode: none
+      type: string
+    - collapsible: true
+      default: dbadmin
+      id: master_username
+      immutable: true
+      label: Username
+      patterns:
+        - message: Invalid Aurora master username. Start with a letter. Letters, numbers, and underscores only.
+          pattern: ^[A-Za-z][A-Za-z0-9_]{0,62}$
+      required: true
+      show_when:
+        restore_mode: none
+      type: string
+    - description: Snapshot identifier or ARN to restore into this new Aurora cluster.
+      id: snapshot_identifier
+      immutable: true
+      label: Snapshot to restore
+      required: true
+      show_when:
+        restore_mode: snapshot
+      type: string
+    - description: Source Aurora cluster identifier to restore from.
+      id: point_in_time_source_cluster_identifier
+      immutable: true
+      label: Source cluster identifier
+      placeholder: my-aurora-cluster
+      required: true
+      show_when:
+        restore_mode: point_in_time
+      type: string
+    - collapsible: true
+      default: full-copy
+      id: point_in_time_restore_type
+      immutable: true
+      label: Restore type
+      required: true
+      show_when:
+        restore_mode: point_in_time
+      type: string
+      values:
+        - label: Full copy
+          value: full-copy
+        - label: Copy on write
+          value: copy-on-write
+    - default: true
+      description: Restore to the latest time AWS can recover from the selected source cluster backup.
+      id: point_in_time_use_latest_restorable_time
+      immutable: true
+      label: Use latest restorable time
+      show_when:
+        restore_mode: point_in_time
+      type: boolean
+    - description: Restore to this UTC timestamp instead of the latest restorable time.
+      id: point_in_time_restore_time
+      immutable: true
+      label: Restore time
+      placeholder: 2026-06-11T15:04:05Z
+      required: false
+      show_when:
+        restore_mode: point_in_time
+        point_in_time_use_latest_restorable_time: false
+      type: string
+    - id: section_version
+      label: Version
+      type: section
+    - default: aurora-postgresql
+      id: engine
+      immutable: true
+      label: Engine
+      required: true
+      type: string
+      values:
+        - label: Aurora PostgreSQL
+          value: aurora-postgresql
+        - label: Aurora MySQL
+          value: aurora-mysql
+    - description: "Examples: 16 for Aurora PostgreSQL or 8.0 for Aurora MySQL."
+      id: engine_major_version
+      label: Engine major version
+      placeholder: "16"
+      required: true
+      type: string
+    - collapsible: true
+      description: "Optional minor engine version appended to the major version. Example: 4 becomes 16.4 for Aurora PostgreSQL; 3.08.0 becomes 8.0.mysql_aurora.3.08.0 for Aurora MySQL."
+      id: engine_minor_version
+      label: Engine minor version
+      placeholder: "4"
+      required: false
+      type: string
+    - collapsible: true
+      default: true
+      description: Enable automatic minor engine version upgrades during the configured maintenance window.
+      id: minor_version_auto_upgrade_enabled
+      label: Auto minor version upgrades
+      type: boolean
+    - id: section_capacity
+      label: Capacity
+      type: section
+    - default: provisioned
+      description: Choose fixed DB instances or Aurora Serverless v2 capacity.
+      id: capacity_mode
+      label: Capacity mode
+      required: true
+      type: string
+      values:
+        - label: Provisioned instances
+          value: provisioned
+        - label: Serverless v2
+          value: serverless_v2
+    - default: db.t4g.medium
+      description: Aurora writer instance size, such as db.t4g.medium or db.r6g.large.
+      id: instance_class
+      label: Instance class
+      placeholder: db.r6g.large
+      required: true
+      show_when:
+        capacity_mode: provisioned
+      type: string
+    - default: 1
+      description: Minimum Aurora Serverless v2 capacity units. Must not exceed max capacity.
+      id: serverless_min_capacity
+      label: Min capacity (ACUs)
+      max: 256
+      min: 1
+      required: true
+      show_when:
+        capacity_mode: serverless_v2
+      type: number
+    - default: 4
+      description: Maximum Aurora Serverless v2 capacity units. Must be at least min capacity.
+      id: serverless_max_capacity
+      label: Max capacity (ACUs)
+      max: 256
+      min: 1
+      required: true
+      show_when:
+        capacity_mode: serverless_v2
+      type: number
+    - id: section_storage
+      label: Storage & cluster
+      type: section
+    - collapsible: true
+      default: aurora
+      id: storage_type
+      label: Storage type
+      type: string
+      values:
+        - label: Aurora Standard
+          value: aurora
+        - label: Aurora I/O-Optimized
+          value: aurora-iopt1
+    - collapsible: true
+      id: kms_key_id
+      immutable: true
+      label: Storage KMS key ARN
+      placeholder: arn:aws:kms:...
+      required: false
+      type: string
+    - collapsible: true
+      id: ca_certificate_identifier
+      label: CA certificate identifier
+      required: false
+      type: string
+    - collapsible: true
+      default: IPV4
+      id: network_type
+      label: Network type
+      type: string
+      values:
+        - label: IPv4
+          value: IPV4
+        - label: Dual-stack
+          value: DUAL
+    - id: section_access
+      label: Network access
+      type: section
+    - default: false
+      description: Keep disabled for production databases unless public access is intentional.
+      id: public_access_enabled
+      label: Publicly accessible
+      type: boolean
+    - collapsible: true
+      description: "Leave blank to use the engine default port: 5432 for PostgreSQL or 3306 for MySQL."
+      id: port
+      label: Port
+      max: 65535
+      min: 1
+      required: false
+      type: number
+    - collapsible: true
+      default: true
+      id: security_group_creation_enabled
+      immutable: true
+      label: Security group creation
+      type: boolean
+    - collapsible: true
+      id: security_group_id
+      label: Existing security group ID
+      placeholder: sg-...
+      required: false
+      show_when:
+        security_group_creation_enabled: false
+      type: string
+    - add_button_label: Add security group ID
+      collapsible: true
+      id: allowed_security_group_ids
+      label: Allowed security groups
+      placeholder: sg-...
+      required: false
+      show_when:
+        security_group_creation_enabled: true
+      type: string_array
+    - add_button_label: Add CIDR block
+      collapsible: true
+      id: allowed_cidr_blocks
+      label: Allowed CIDR blocks
+      placeholder: 10.0.0.0/16
+      required: false
+      show_when:
+        security_group_creation_enabled: true
+      type: string_array
+    - id: section_readers
+      label: Readers
+      type: section
+    - default: 0
+      description: Number of reader instances to create.
+      id: reader_count
+      label: Reader count
+      max: 15
+      min: 0
+      type: number
+    - collapsible: true
+      description: Reader instance class. Leave blank to use the writer instance class.
+      id: reader_instance_class
+      label: Reader instance class
+      placeholder: db.r6g.large
+      required: false
+      show_when:
+        capacity_mode: provisioned
+      type: string
+    - collapsible: true
+      description: Default failover priority for instances. Lower values have higher priority.
+      id: promotion_tier
+      label: Promotion tier
+      max: 15
+      min: 0
+      required: false
+      type: number
+    - default: false
+      id: autoscaling_enabled
+      label: Reader autoscaling
+      type: boolean
+    - collapsible: true
+      default: 1
+      description: Must not exceed max reader capacity.
+      id: autoscaling_min_capacity
+      label: Min reader capacity
+      min: 0
+      show_when:
+        autoscaling_enabled: true
+      type: number
+    - collapsible: true
+      default: 3
+      description: Must be at least min reader capacity.
+      id: autoscaling_max_capacity
+      label: Max reader capacity
+      min: 1
+      show_when:
+        autoscaling_enabled: true
+      type: number
+    - collapsible: true
+      default: 70
+      id: autoscaling_target_cpu
+      label: Target CPU utilization (%)
+      max: 100
+      min: 1
+      show_when:
+        autoscaling_enabled: true
+      type: number
+    - collapsible: true
+      id: autoscaling_target_connections
+      label: Target connections
+      min: 1
+      required: false
+      show_when:
+        autoscaling_enabled: true
+      type: number
+    - collapsible: true
+      default: 300
+      id: autoscaling_scale_in_cooldown
+      label: Scale-in cooldown seconds
+      min: 0
+      show_when:
+        autoscaling_enabled: true
+      type: number
+    - collapsible: true
+      default: 300
+      id: autoscaling_scale_out_cooldown
+      label: Scale-out cooldown seconds
+      min: 0
+      show_when:
+        autoscaling_enabled: true
+      type: number
+    - id: section_auth
+      label: Credentials & authentication
+      type: section
+    - collapsible: true
+      id: master_user_secret_kms_key_id
+      label: Secrets Manager KMS key ARN
+      placeholder: arn:aws:kms:...
+      required: false
+      show_when:
+        restore_mode: none
+      type: string
+    - collapsible: true
+      default: false
+      id: iam_database_authentication_enabled
+      label: IAM database authentication
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Enable the Aurora Data API HTTP endpoint.
+      id: http_endpoint_enabled
+      label: Data API (HTTP endpoint)
+      type: boolean
+    - id: section_mysql_settings
+      label: MySQL settings
+      show_when:
+        engine: aurora-mysql
+      type: section
+    - collapsible: true
+      default: 0
+      description: Target backtrack window in seconds. Set 0 to disable.
+      id: backtrack_window
+      label: Backtrack window (seconds)
+      max: 259200
+      min: 0
+      show_when:
+        engine: aurora-mysql
+      type: number
+    - collapsible: true
+      default: false
+      id: local_write_forwarding_enabled
+      label: Local write forwarding
+      show_when:
+        engine: aurora-mysql
+      type: boolean
+    - id: section_backup
+      label: Backups
+      type: section
+    - collapsible: true
+      default: 7
+      id: backup_retention_period
+      label: Backup retention days
+      max: 35
+      min: 1
+      type: number
+    - collapsible: true
+      id: preferred_backup_window
+      label: Backup window
+      placeholder: 03:00-04:00
+      required: false
+      type: string
+    - collapsible: true
+      default: true
+      id: snapshot_tag_copying_enabled
+      label: Copy tags to snapshots
+      type: boolean
+    - collapsible: true
+      default: true
+      id: final_snapshot_creation_enabled
+      label: Create final snapshot
+      type: boolean
+    - collapsible: true
+      id: final_snapshot_identifier
+      label: Final snapshot identifier
+      required: false
+      show_when:
+        final_snapshot_creation_enabled: true
+      type: string
+    - default: true
+      id: deletion_protection_enabled
+      label: Deletion protection
+      type: boolean
+    - id: section_maintenance
+      label: Maintenance
+      type: section
+    - collapsible: true
+      id: preferred_maintenance_window
+      label: Maintenance window
+      placeholder: sun:04:00-sun:05:00
+      required: false
+      type: string
+    - collapsible: true
+      default: false
+      id: major_version_upgrade_enabled
+      label: Allow major version upgrades
+      type: boolean
+    - collapsible: true
+      default: false
+      id: immediate_apply_enabled
+      label: Apply changes immediately
+      type: boolean
+    - id: section_parameter_groups
+      description: Aurora uses a cluster parameter group for cluster-level settings and a DB parameter group for instance-level settings.
+      label: Parameter groups
+      type: section
+    - collapsible: true
+      default: true
+      description: Create a cluster parameter group for this database. Disable this only when you want to attach an existing parameter group.
+      id: cluster_parameter_group_creation_enabled
+      immutable: true
+      label: Cluster parameter group creation
+      type: boolean
+    - collapsible: true
+      description: Name of an existing cluster parameter group to attach when this module is not creating one.
+      id: cluster_parameter_group_name
+      immutable: true
+      label: Existing cluster parameter group name
+      required: false
+      show_when:
+        cluster_parameter_group_creation_enabled: false
+      type: string
+    - collapsible: true
+      description: Cluster parameter group family. Leave blank to derive it from the selected engine version.
+      id: cluster_parameter_group_family
+      immutable: true
+      label: Cluster parameter group family
+      placeholder: aurora-postgresql16
+      required: false
+      show_when:
+        cluster_parameter_group_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: []
+      description: Custom cluster parameters to apply to the created cluster parameter group.
+      id: cluster_parameters
+      item_inputs:
+        - description: Engine parameter name, such as rds.force_ssl.
+          id: name
+          label: Name
+          required: true
+          type: string
+        - description: Parameter value to set.
+          id: value
+          label: Value
+          required: true
+          type: string
+        - default: immediate
+          description: Apply immediately when supported, or wait until the next database reboot.
+          id: apply_method
+          label: Apply method
+          type: string
+          values:
+            - label: immediate
+              value: immediate
+            - label: pending-reboot
+              value: pending-reboot
+      item_label: Cluster parameter
+      label: Cluster parameters
+      required: false
+      show_when:
+        cluster_parameter_group_creation_enabled: true
+      type: object_array
+    - collapsible: true
+      default: true
+      description: Create a DB parameter group for cluster instances. Disable this only when you want to attach an existing parameter group.
+      id: db_parameter_group_creation_enabled
+      immutable: true
+      label: DB parameter group creation
+      type: boolean
+    - collapsible: true
+      description: Name of an existing DB parameter group to attach when this module is not creating one.
+      id: db_parameter_group_name
+      immutable: true
+      label: Existing DB parameter group name
+      required: false
+      show_when:
+        db_parameter_group_creation_enabled: false
+      type: string
+    - collapsible: true
+      description: DB parameter group family. Leave blank to derive it from the selected engine version.
+      id: db_parameter_group_family
+      immutable: true
+      label: DB parameter group family
+      placeholder: aurora-postgresql16
+      required: false
+      show_when:
+        db_parameter_group_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: []
+      description: Custom instance parameters to apply to the created DB parameter group.
+      id: db_parameters
+      item_inputs:
+        - description: Engine parameter name, such as shared_preload_libraries.
+          id: name
+          label: Name
+          required: true
+          type: string
+        - description: Parameter value to set.
+          id: value
+          label: Value
+          required: true
+          type: string
+        - default: immediate
+          description: Apply immediately when supported, or wait until the next database reboot.
+          id: apply_method
+          label: Apply method
+          type: string
+          values:
+            - label: immediate
+              value: immediate
+            - label: pending-reboot
+              value: pending-reboot
+      item_label: DB parameter
+      label: DB parameters
+      required: false
+      show_when:
+        db_parameter_group_creation_enabled: true
+      type: object_array
+    - id: section_monitoring
+      label: Monitoring
+      type: section
+    - add_button_label: Add log type
+      collapsible: true
+      description: Engine logs exported to CloudWatch. Each enabled log type is shown on the module Logs tab.
+      id: enabled_cloudwatch_logs_exports
+      label: CloudWatch log exports
+      required: false
+      type: string_array
+      values:
+        - label: postgresql
+          show_when:
+            engine: aurora-postgresql
+          value: postgresql
+        - label: audit
+          show_when:
+            engine: aurora-mysql
+          value: audit
+        - label: error
+          show_when:
+            engine: aurora-mysql
+          value: error
+        - label: general
+          show_when:
+            engine: aurora-mysql
+          value: general
+        - label: slowquery
+          show_when:
+            engine: aurora-mysql
+          value: slowquery
+    - collapsible: true
+      default: 0
+      id: monitoring_interval
+      label: Enhanced monitoring interval
+      type: number
+      values:
+        - label: "0"
+          value: 0
+        - label: "1"
+          value: 1
+        - label: "5"
+          value: 5
+        - label: "10"
+          value: 10
+        - label: "15"
+          value: 15
+        - label: "30"
+          value: 30
+        - label: "60"
+          value: 60
+    - collapsible: true
+      default: true
+      id: monitoring_role_creation_enabled
+      immutable: true
+      label: Monitoring IAM role creation
+      show_when:
+        monitoring_interval:
+          not: 0
+      type: boolean
+    - collapsible: true
+      id: monitoring_role_arn
+      label: Monitoring IAM role ARN
+      placeholder: arn:aws:iam::...
+      required: false
+      show_when:
+        monitoring_role_creation_enabled: false
+        monitoring_interval:
+          not: 0
+      type: string
+    - collapsible: true
+      default: true
+      id: performance_insights_enabled
+      label: Performance insights
+      type: boolean
+    - collapsible: true
+      default: 7
+      description: AWS supports 7 days, multiples of 31 days up to 23 months, or 731 days.
+      id: performance_insights_retention_period
+      label: Performance insights retention days
+      show_when:
+        performance_insights_enabled: true
+      type: number
+      values:
+        - label: 7 days
+          value: 7
+        - label: 1 month (31 days)
+          value: 31
+        - label: 2 months (62 days)
+          value: 62
+        - label: 3 months (93 days)
+          value: 93
+        - label: 6 months (186 days)
+          value: 186
+        - label: 12 months (372 days)
+          value: 372
+        - label: 24 months (731 days)
+          value: 731
+    - collapsible: true
+      id: performance_insights_kms_key_id
+      label: Performance insights KMS key ARN
+      required: false
+      show_when:
+        performance_insights_enabled: true
+      type: string
+    - id: section_cloudwatch_alarms
+      label: CloudWatch alarms
+      type: section
+    - default: true
+      id: cloudwatch_alarms_creation_enabled
+      label: Create CloudWatch alarms
+      type: boolean
+    - collapsible: true
+      default: 80
+      id: cloudwatch_alarm_cpu_threshold
+      label: CPU alarm threshold (%)
+      max: 100
+      min: 0
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 256
+      description: Displayed in MiB. Ravion converts this to bytes for Terraform.
+      id: cloudwatch_alarm_memory_threshold_mib
+      label: Freeable memory alarm threshold (MiB)
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 100
+      id: cloudwatch_alarm_connections_threshold
+      label: Connections alarm threshold
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 2
+      id: cloudwatch_alarm_evaluation_periods
+      label: Alarm evaluation periods
+      min: 1
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 300
+      id: cloudwatch_alarm_period
+      label: Alarm period seconds
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: number
+      values:
+        - label: "10"
+          value: 10
+        - label: "30"
+          value: 30
+        - label: "60"
+          value: 60
+        - label: "300"
+          value: 300
+        - label: "900"
+          value: 900
+        - label: "3600"
+          value: 3600
+    - add_button_label: Add action ARN
+      collapsible: true
+      id: cloudwatch_alarm_actions
+      label: Alarm action ARNs
+      required: false
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: string_array
+    - add_button_label: Add action ARN
+      collapsible: true
+      id: cloudwatch_ok_actions
+      label: OK action ARNs
+      required: false
+      show_when:
+        cloudwatch_alarms_creation_enabled: true
+      type: string_array
+    - id: section_global_database
+      label: Global database
+      type: section
+    - collapsible: true
+      default: false
+      id: global_cluster_creation_enabled
+      immutable: true
+      label: Global cluster creation
+      type: boolean
+    - collapsible: true
+      description: Global cluster identifier. Set this to create a new global cluster or join an existing global cluster.
+      id: global_cluster_identifier
+      immutable: true
+      label: Global cluster identifier
+      required: false
+      type: string
+    - collapsible: true
+      description: Source region for cross-region replication in a global database.
+      id: source_region
+      immutable: true
+      label: Source region
+      required: false
+      type: string
+      values: $values:aws/regions
+    - collapsible: true
+      default: false
+      id: global_write_forwarding_enabled
+      label: Global write forwarding
+      show_when:
+        engine: aurora-postgresql
+      type: boolean
+    - $include: ../../partials/inputs/misc-section.yml
+    - collapsible: true
+      default: false
+      description: Enable Database Activity Streams for the cluster.
+      id: activity_stream_enabled
+      label: Activity stream
+      type: boolean
+    - collapsible: true
+      default: async
+      id: activity_stream_mode
+      label: Activity stream mode
+      show_when:
+        activity_stream_enabled: true
+      type: string
+      values:
+        - label: async
+          value: async
+        - label: sync
+          value: sync
+    - collapsible: true
+      id: activity_stream_kms_key_id
+      label: Activity stream KMS key ARN
+      placeholder: arn:aws:kms:...
+      required: true
+      show_when:
+        activity_stream_enabled: true
+      type: string
+    - collapsible: true
+      default: {}
+      description: Custom Aurora cluster endpoints for reader or any-instance routing.
+      id: custom_endpoints
+      item_inputs:
+        - default: READER
+          id: type
+          label: Type
+          required: true
+          type: string
+          values:
+            - label: Reader
+              value: READER
+            - label: Any instance
+              value: ANY
+        - add_button_label: Add static member
+          description: Instance identifiers to include. Do not combine with excluded members.
+          id: static_members
+          label: Static members
+          required: false
+          type: string_array
+        - add_button_label: Add excluded member
+          description: Instance identifiers to exclude. Do not combine with static members.
+          id: excluded_members
+          label: Excluded members
+          required: false
+          type: string_array
+        - id: tags
+          label: Tags
+          required: false
+          type: keyvalue
+      item_label: Custom endpoint
+      key:
+        label: Endpoint key
+        placeholder: reporting
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+      label: Custom endpoints
+      required: false
+      type: object_map
+    - collapsible: true
+      default: {}
+      description: IAM roles associated with the Aurora cluster for features such as S3_IMPORT, S3_EXPORT, or LAMBDA_INVOKE.
+      id: iam_role_associations
+      item_inputs:
+        - id: role_arn
+          label: Role ARN
+          placeholder: arn:aws:iam::...
+          required: true
+          type: string
+        - id: feature_name
+          label: Feature name
+          placeholder: S3_IMPORT
+          required: true
+          type: string
+      item_label: IAM role association
+      key:
+        label: Association key
+        placeholder: s3-import
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+      label: IAM role associations
+      required: false
+      type: object_map
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: database/aurora
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        activity_stream_enabled: << module.input.activity_stream_enabled >>
+        activity_stream_kms_key_id: << module.input.activity_stream_kms_key_id >>
+        activity_stream_mode: << module.input.activity_stream_mode >>
+        allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
+        allowed_security_group_ids: << module.input.allowed_security_group_ids >>
+        autoscaling_enabled: << module.input.autoscaling_enabled >>
+        autoscaling_max_capacity: << module.input.autoscaling_max_capacity >>
+        autoscaling_min_capacity: << module.input.autoscaling_min_capacity >>
+        autoscaling_scale_in_cooldown: << module.input.autoscaling_scale_in_cooldown >>
+        autoscaling_scale_out_cooldown: << module.input.autoscaling_scale_out_cooldown >>
+        autoscaling_target_connections: << module.input.autoscaling_target_connections >>
+        autoscaling_target_cpu: << module.input.autoscaling_target_cpu >>
+        backup_retention_period: << module.input.backup_retention_period >>
+        backtrack_window: << module.input.backtrack_window >>
+        ca_certificate_identifier: << module.input.ca_certificate_identifier >>
+        cloudwatch_alarm_actions: << module.input.cloudwatch_alarm_actions >>
+        cloudwatch_alarm_connections_threshold: << module.input.cloudwatch_alarm_connections_threshold >>
+        cloudwatch_alarm_cpu_threshold: << module.input.cloudwatch_alarm_cpu_threshold >>
+        cloudwatch_alarm_evaluation_periods: << module.input.cloudwatch_alarm_evaluation_periods >>
+        cloudwatch_alarm_memory_threshold: '<< module.input.cloudwatch_alarm_memory_threshold_mib != null ? int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) : 268435456 >>'
+        cloudwatch_alarm_period: << module.input.cloudwatch_alarm_period >>
+        cloudwatch_alarms_creation_enabled: << module.input.cloudwatch_alarms_creation_enabled >>
+        cloudwatch_ok_actions: << module.input.cloudwatch_ok_actions >>
+        cluster_parameter_group_creation_enabled: << module.input.cluster_parameter_group_creation_enabled >>
+        cluster_parameter_group_family: << module.input.cluster_parameter_group_family >>
+        cluster_parameter_group_name: << module.input.cluster_parameter_group_name >>
+        cluster_parameters: << module.input.cluster_parameters >>
+        custom_endpoints: << module.input.custom_endpoints >>
+        database_name: '<< module.input.restore_mode == "none" ? module.input.database_name : null >>'
+        db_parameter_group_creation_enabled: << module.input.db_parameter_group_creation_enabled >>
+        db_parameter_group_family: << module.input.db_parameter_group_family >>
+        db_parameter_group_name: << module.input.db_parameter_group_name >>
+        db_parameters: << module.input.db_parameters >>
+        deletion_protection_enabled: << module.input.deletion_protection_enabled >>
+        enabled_cloudwatch_logs_exports: << module.input.enabled_cloudwatch_logs_exports >>
+        engine: << module.input.engine >>
+        engine_version: '<< module.input.engine_minor_version ? (module.input.engine == "aurora-mysql" ? module.input.engine_major_version + ".mysql_aurora." + module.input.engine_minor_version : module.input.engine_major_version + "." + module.input.engine_minor_version) : module.input.engine_major_version >>'
+        final_snapshot_creation_enabled: << module.input.final_snapshot_creation_enabled >>
+        final_snapshot_identifier: << module.input.final_snapshot_identifier >>
+        global_cluster_creation_enabled: << module.input.global_cluster_creation_enabled >>
+        global_cluster_identifier: << module.input.global_cluster_identifier >>
+        global_write_forwarding_enabled: << module.input.global_write_forwarding_enabled >>
+        http_endpoint_enabled: << module.input.http_endpoint_enabled >>
+        iam_database_authentication_enabled: << module.input.iam_database_authentication_enabled >>
+        iam_role_associations: << module.input.iam_role_associations >>
+        immediate_apply_enabled: << module.input.immediate_apply_enabled >>
+        instance_class: '<< module.input.capacity_mode == "serverless_v2" ? "db.serverless" : module.input.instance_class >>'
+        kms_key_id: << module.input.kms_key_id >>
+        local_write_forwarding_enabled: << module.input.local_write_forwarding_enabled >>
+        major_version_upgrade_enabled: << module.input.major_version_upgrade_enabled >>
+        master_password: null
+        master_user_password_management_enabled: true
+        master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
+        master_username: << module.input.master_username >>
+        minor_version_auto_upgrade_enabled: << module.input.minor_version_auto_upgrade_enabled >>
+        monitoring_interval: << module.input.monitoring_interval >>
+        monitoring_role_arn: << module.input.monitoring_role_arn >>
+        monitoring_role_creation_enabled: << module.input.monitoring_role_creation_enabled >>
+        name: << module.input.name >>
+        network_type: << module.input.network_type >>
+        performance_insights_enabled: << module.input.performance_insights_enabled >>
+        performance_insights_kms_key_id: << module.input.performance_insights_kms_key_id >>
+        performance_insights_retention_period: << module.input.performance_insights_retention_period >>
+        port: << module.input.port >>
+        preferred_backup_window: << module.input.preferred_backup_window >>
+        preferred_maintenance_window: << module.input.preferred_maintenance_window >>
+        promotion_tier: << module.input.promotion_tier >>
+        public_access_enabled: << module.input.public_access_enabled >>
+        reader_count: << module.input.reader_count >>
+        reader_instance_class: << module.input.reader_instance_class >>
+        region: << module.input.aws_region >>
+        restore_to_point_in_time: '<< module.input.restore_mode == "point_in_time" ? { source_cluster_identifier: module.input.point_in_time_source_cluster_identifier, restore_type: module.input.point_in_time_restore_type, use_latest_restorable_time: module.input.point_in_time_use_latest_restorable_time, restore_to_time: module.input.point_in_time_use_latest_restorable_time ? null : module.input.point_in_time_restore_time } : null >>'
+        security_group_creation_enabled: << module.input.security_group_creation_enabled >>
+        security_group_id: << module.input.security_group_id >>
+        serverless_v2_scaling: '<< module.input.capacity_mode == "serverless_v2" ? { min_capacity: module.input.serverless_min_capacity, max_capacity: module.input.serverless_max_capacity } : null >>'
+        snapshot_identifier: '<< module.input.restore_mode == "snapshot" ? module.input.snapshot_identifier : null >>'
+        snapshot_tag_copying_enabled: << module.input.snapshot_tag_copying_enabled >>
+        source_region: << module.input.source_region >>
+        storage_type: << module.input.storage_type >>
+        subnet_ids: '<< module.input.public_access_enabled ? module.input.public_subnet_ids : module.input.private_subnet_ids >>'
+        tags:
+          $include: ../stack/ravion-tags.yml
+        vpc_id: << module.input.vpc_id >>
+  ui:
+    logs: |-
+      <<
+      module.input.enabled_cloudwatch_logs_exports != nil && module.input.enabled_cloudwatch_logs_exports != [] ? map(module.input.enabled_cloudwatch_logs_exports, {
+        "id":"aurora_" + # + "_logs",
+        "name":"Aurora " + # + " logs",
+        "source":{
+          "type":"cloudwatch",
+          "aws_account_id":module.input.aws_account_id,
+          "region":stack.output.region,
+          "log_group":"/aws/rds/cluster/" + stack.output.cluster_identifier + "/" + #
+        }
+      }) : []
+      >>
+    metrics:
+      - id: cpu_utilization
+        name: CPU utilization
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: CPUUtilization
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: freeable_memory
+        name: Freeable memory
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: FreeableMemory
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: database_connections
+        name: Database connections
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: DatabaseConnections
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: serverless_capacity
+        name: Serverless capacity
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: ServerlessDatabaseCapacity
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: acu_utilization
+        name: ACU utilization
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: ACUUtilization
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: volume_bytes_used
+        name: Storage used
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: VolumeBytesUsed
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: read_latency
+        name: Read latency
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: ReadLatency
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: write_latency
+        name: Write latency
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: WriteLatency
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: replica_lag_maximum
+        name: Replica lag (max)
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: AuroraReplicaLagMaximum
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Maximum
+          type: cloudwatch
+        type: line
+      - id: buffer_cache_hit_ratio
+        name: Buffer cache hit ratio
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: BufferCacheHitRatio
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: commit_latency
+        name: Commit latency
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: CommitLatency
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: deadlocks
+        name: Deadlocks
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: Deadlocks
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: network_throughput
+        name: Network throughput
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: NetworkThroughput
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: volume_read_iops
+        name: Volume read IOPS
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: VolumeReadIOPs
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+      - id: volume_write_iops
+        name: Volume write IOPS
+        source:
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            DBClusterIdentifier: << stack.output.cluster_identifier >>
+          name: VolumeWriteIOPs
+          namespace: AWS/RDS
+          region: << stack.output.region >>
+          statistic: Average
+          type: cloudwatch
+        type: line
+  readme: |-
+    Creates and manages an Amazon Aurora cluster. Supports Aurora PostgreSQL and Aurora MySQL with provisioned or Serverless v2 capacity.
+
+    ## Overview
+
+    Use this module when an application needs a managed, highly available relational database cluster in AWS. It provisions an Aurora cluster with writer and reader instances, subnet placement, security group access, backups, monitoring, optional reader autoscaling, and optional advanced Aurora features.
+
+    Aurora PostgreSQL and Aurora MySQL are supported. Choose the engine major version and, when needed, a minor version for exact engine pinning. Choose provisioned instances for predictable capacity or Serverless v2 when the workload needs capacity that scales in Aurora Capacity Units.
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Application database | Create a private Aurora cluster attached to an existing Ravion VPC network. |
+    | Production database | Enable deletion protection, automated backups, final snapshots, Performance Insights, and CloudWatch alarms. |
+    | Read-heavy workload | Add reader instances and optionally scale them with reader autoscaling. |
+    | Variable workload | Use Serverless v2 capacity to scale compute between configured ACU limits. |
+    | Cross-region database | Configure global database settings and write forwarding where supported by the selected engine. |
+
+    ## Networking
+
+    Select a VPC network first. Ravion maps the network's AWS account, region, VPC ID, and private and public subnet IDs into this module. Aurora requires at least two subnets in different Availability Zones, and private subnets are the normal choice for application databases. AWS places cluster instances across the Availability Zones of the selected subnets.
+
+    Public access is disabled by default, and the DB subnet group uses the private subnet IDs. When Publicly accessible is enabled, the DB subnet group switches to the public subnet IDs because AWS requires public subnets for public database access. Changing this setting after creation replaces the DB subnet group and the cluster.
+
+    Keep public access disabled for production databases and allow access through security group IDs from application services or controlled CIDR blocks. You can create a module-managed security group or attach an existing one.
+
+    ## Capacity modes
+
+    Provisioned capacity uses a fixed DB instance class for the writer and, by default, for readers. Serverless v2 uses Aurora Capacity Units; set the minimum and maximum ACUs to control the scaling range. The module uses `db.serverless` for cluster instances when Serverless v2 is selected.
+
+    ## Availability and readers
+
+    Reader settings live together in the Readers section. Choose the number of reader instances, an optional separate reader instance class, and an optional default failover promotion tier. Readers default to 0; add at least one reader in another Availability Zone for production failover.
+
+    Reader autoscaling can adjust the number of read replicas based on CPU utilization and, optionally, database connections. Configure min and max reader capacity carefully because autoscaling can increase cost.
+
+    ## Credentials and security
+
+    Master password management in AWS Secrets Manager is enabled by default, so AWS creates and stores the master password for the cluster. Provide a Secrets Manager KMS key ARN when you need a customer-managed key for that secret.
+
+    Storage encryption is enabled by the Terraform module. Provide a storage KMS key ARN when you need a customer-managed key for cluster storage. IAM database authentication and the Aurora Data API HTTP endpoint are optional.
+
+    ## Availability, backups, and maintenance
+
+    Aurora creates a writer instance and the configured number of reader instances. Backup retention defaults to 7 days and must be at least 1 day for Aurora. Final snapshots and deletion protection are enabled by default to reduce accidental data loss.
+
+    Maintenance windows, automatic minor upgrades, major version upgrades, and immediate apply are configurable. Major version upgrades and immediate changes are opt-in because they can affect database availability.
+
+    Aurora MySQL exposes backtrack and local write forwarding settings. Aurora PostgreSQL exposes global write forwarding according to this module's Terraform validation.
+
+    ## Observability
+
+    Performance Insights is enabled by default with 7 days of retention. Enhanced monitoring can be enabled by setting a monitoring interval.
+
+    CloudWatch alarms can monitor CPU utilization, freeable memory, and database connections. The freeable memory alarm threshold is entered in MiB in Ravion and converted to bytes for Terraform.
+
+    CloudWatch log exports offer engine-specific log types: postgresql for Aurora PostgreSQL, or audit, error, general, and slowquery for Aurora MySQL. Each enabled log type is shown on the module Logs tab.
+
+    The Ravion UI charts Aurora CloudWatch metrics for CPU utilization, freeable memory, database connections, serverless capacity and ACU utilization, storage used, read and write latency, replica lag, buffer cache hit ratio, commit latency, deadlocks, network throughput, and volume IOPS.
+
+    ## Configuration
+
+    | Field | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | VPC network | Yes | None | Supplies AWS account, region, VPC ID, and private and public subnet IDs. |
+    | Name slug | Yes | Project and environment given IDs | Name of the Aurora cluster and prefix for related resources. |
+    | Engine | Yes | Aurora PostgreSQL | Aurora PostgreSQL and Aurora MySQL are supported. |
+    | Engine major version | Yes | None | Use values such as 16 for Aurora PostgreSQL or 8.0 for Aurora MySQL. |
+    | Engine minor version | No | Blank | For PostgreSQL, 4 becomes 16.4. For MySQL, 3.08.0 becomes 8.0.mysql_aurora.3.08.0. |
+    | Capacity mode | Yes | Provisioned instances | Choose provisioned instances or Serverless v2. |
+    | Instance class | Yes for provisioned | db.t4g.medium | Writer DB instance class for provisioned capacity. |
+    | Min and max capacity | Yes for Serverless v2 | 1 to 4 ACUs | Serverless v2 scaling bounds. |
+    | Reader count | No | 0 | Number of reader instances. Add readers for high availability and read scaling. |
+    | Database name | No | Blank | Creates an initial database on new clusters when provided. |
+    | Username | Yes for new clusters | dbadmin | Master database user. |
+    | Publicly accessible | No | false | Switches the DB subnet group to public subnets. Leave disabled unless public database access is intentional. |
+    | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
+    | Backup retention days | No | 7 | Aurora requires at least 1 day. |
+    | Deletion protection | No | true | Helps prevent accidental deletion. |
+    | Performance insights | No | true | Enables AWS Performance Insights. |
+    | CloudWatch alarms | No | true | Adds CPU, memory, and connection alarms. |
+    | Global database | No | false | Create or join an Aurora global database. |
+    | Activity stream | No | false | Enables Database Activity Streams with a required KMS key. |
+    | Tags | No | Blank | Merged with Ravion standard tags. |
+
+    ## Advanced configuration
+
+    Use cluster parameter groups for cluster-level engine settings and DB parameter groups for instance-level engine settings. The Misc section holds less common cluster features: Database Activity Streams, custom endpoints for reader or any-instance routing, and IAM role associations that attach feature-specific IAM roles for capabilities such as S3 import, S3 export, or Lambda invocation.
+
+    Use advanced Terraform variables for one-off overrides not represented directly in the UI. Values in advanced Terraform variables override generated variables.
+
+    Terraform settings let you override the OpenTofu version, Terraform execution environment inherited from the VPC network, and Ravion state backend workspace name.
+
+    ## Design decisions
+
+    Aurora clusters are placed in private subnets by default through the VPC network reference. Secrets Manager password management, encryption at rest, Performance Insights, final snapshots, and deletion protection default on because they are safer defaults for long-lived databases.
+
+    The module keeps primary database, capacity, networking, backup, and monitoring choices visible while placing engine-specific, autoscaling, parameter group, global database, activity stream, custom endpoint, IAM association, and Terraform settings behind focused advanced controls.
+
+    ## Learn more
+
+    - [Amazon Aurora documentation](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_AuroraOverview.html)
+    - [Aurora DB instance classes](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html)
+    - [Aurora Serverless v2](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html)
+    - [Aurora global databases](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html)
+    - [Aurora monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_Monitoring.html)
+    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/aurora)

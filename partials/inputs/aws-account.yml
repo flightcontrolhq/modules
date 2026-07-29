@@ -1,0 +1,9 @@
+- id: section_aws
+  label: AWS account & region
+  type: section
+- id: aws_account_id
+  immutable: true
+  label: AWS account
+  required: true
+  type: string
+  values: $values:ravion/aws_accounts

@@ -6,7 +6,7 @@
 ################################################################################
 
 module "ebs_csi_role" {
-  count = var.enable_ebs_csi_driver ? 1 : 0
+  count = var.ebs_csi_driver_enabled ? 1 : 0
 
   source = "../../security/iam"
 
@@ -23,7 +23,7 @@ module "ebs_csi_role" {
 }
 
 resource "aws_eks_pod_identity_association" "ebs_csi" {
-  count = var.enable_ebs_csi_driver ? 1 : 0
+  count = var.ebs_csi_driver_enabled ? 1 : 0
 
   cluster_name    = aws_eks_cluster.this.name
   namespace       = "kube-system"

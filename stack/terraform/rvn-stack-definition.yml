@@ -1,0 +1,295 @@
+definition:
+  type: rvn-stack
+  name: Terraform Stack
+  description: Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
+release:
+  version: 1.2.4
+  description: Make the stack backend settings immutable
+module:
+  inputs:
+    - id: section_aws
+      label: Where to run Terraform plan & apply
+      type: section
+    - description: Where to execute the Terraform plan & apply steps
+      id: aws_account_id
+      label: AWS Account
+      required: true
+      show_when:
+        default_networking: true
+      type: string
+      values: $values:ravion/aws_accounts
+    - default: true
+      id: default_networking
+      label: Use default VPC, subnet and security group
+      type: boolean
+    - description: Where to execute the Terraform plan & apply steps
+      id: aws_region
+      label: Region
+      required: true
+      show_when:
+        default_networking: true
+      type: string
+      values: $values:aws/regions
+    - description: Specify the VPC, subnet, and security group for Pipeline Terraform runners. Defaults to the Environment's default Execution Environment
+      id: execution_environment_id
+      label: Execution environment
+      required: false
+      show_when:
+        default_networking: false
+      type: string
+      values: $values:ravion/execution_environments
+    - id: section_source
+      label: Source code
+      type: section
+    - id: repo
+      label: Git repository
+      placeholder: https://github.com/org/repo.git
+      required: true
+      type: gitrepo
+    - default: main
+      id: primary_branch
+      label: Primary branch
+      required: true
+      type: string
+    - description: Folder containing your Terraform files (relative to repo root)
+      id: base_path
+      label: Base path
+      placeholder: terraform
+      type: string
+    - add_button_label: Add path
+      default:
+        - <<module.input.base_path>>/**
+      description: File paths glob patterns (e.g., `src/**`) that trigger a pipeline run when changed. Defaults to `**`
+      id: watch_paths
+      label: Watch paths
+      placeholder: path/to/watch
+      type: string_array
+    - id: section_inputs
+      label: Stack inputs
+      type: section
+    - add_button_label: Add variable file
+      description: Relative paths from base path to `.tfvars` or `.tfvars.json` files (equivalent to -var-file flags)
+      id: terraform_variable_files
+      label: Terraform variable files
+      placeholder: prod.tfvars
+      type: string_array
+    - description: Variables passed to Terraform/OpenTofu (equivalent to -var flags)
+      id: tf_variables
+      label: Terraform variables
+      placeholder: key/value format
+      type: object
+    - id: env_variables
+      label: Environment variables
+      placeholder: key/value format with support for from_parameter_store and from_secrets_manager
+      type: object
+    - id: section_iac
+      label: IaC tool
+      type: section
+    - default: opentofu
+      description: Terraform is no longer free open source. OpenTofu is the popular community fork with full Terraform compatibility.
+      id: tool
+      label: Tool
+      required: true
+      type: string
+      values:
+        - label: OpenTofu (Recommended)
+          value: opentofu
+        - label: Terraform (FOSS, limited < v1.6.0)
+          value: terraform
+    - collapsible: true
+      default: $values:first
+      id: terraform_version
+      label: Terraform version
+      required: true
+      show_when:
+        tool: terraform
+      type: string
+      values: $values:terraform/versions
+    - collapsible: true
+      default: $values:first
+      id: opentofu_version
+      label: OpenTofu version
+      required: true
+      show_when:
+        tool: opentofu
+      type: string
+      values: $values:opentofu/versions
+    - default: true
+      description: Use Ravion-managed state. Your Terraform configuration must include an empty `terraform { cloud {} }` block; Ravion supplies the workspace configuration. Disable to use your own backend, including S3 or Terraform Cloud.
+      id: use_ravion_state_backend
+      label: Use Ravion for your Terraform state
+      type: boolean
+      immutable: true
+    - collapsible: true
+      description: Override Terraform state backend workspace name. Defaults to project + environment + module given ids.
+      id: ravion_state_backend_workspace
+      label: Ravion Terraform workspace name
+      show_when:
+        use_ravion_state_backend: true
+      type: string
+      immutable: true
+  stack:
+    pipelines:
+      change:
+        pipeline_id: "<< defaults.change_pipeline_id >>"
+        triggers:
+          - event: push
+            filter:
+              branch: "<< module.input.primary_branch >>"
+              paths: "<< module.input.watch_paths >>"
+            id: git-push
+            repo: "<< module.input.repo >>"
+            run:
+              standard:
+                input:
+                  ref: "<<trigger.payload.commit>>"
+            type: webhook:github
+          - event: pull_request
+            filter:
+              action:
+                - opened
+                - synchronize
+                - reopened
+              paths: "<< module.input.watch_paths >>"
+              payload:
+                - not:
+                    equals: "<< module.input.primary_branch >>"
+                  path: pull_request.head.ref
+            id: git-pr
+            repo: "<< module.input.repo >>"
+            run:
+              standard:
+                input:
+                  branch: "<< trigger.payload.branch >>"
+                  ref: "<<trigger.payload.commit>>"
+            type: webhook:github
+      defaults:
+        input:
+          aws_account_id: "<< module.input.default_networking ? module.input.aws_account_id : null >>"
+          aws_region: "<< module.input.default_networking ? module.input.aws_region : null >>"
+          base_path: "<< module.input.base_path >>"
+          branch: "<< module.input.primary_branch >>"
+          environment_variables: "<< module.input.env_variables >>"
+          execution_environment_id: "<< module.input.default_networking ? null : (module.input.execution_environment_id || defaults.execution_environment_id) >>"
+          repo: "<< module.input.repo >>"
+          stack_id: "<<stack.id>>"
+          terraform_variable_files: "<< module.input.terraform_variable_files >>"
+          terraform_variables: "<< module.input.tf_variables >>"
+          tool: "<< module.input.tool >>"
+          tool_version: "<< module.input.terraform_version || module.input.opentofu_version >>"
+        variant: standard
+      destroy:
+        pipeline_id: "<< defaults.destroy_pipeline_id >>"
+    ravion_state_backend_workspace: '<< module.input.use_ravion_state_backend ? (module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-" + module.given_id + "-" + stack.id) : null >>'
+    type: "<< module.input.tool >>"
+  readme: |
+    Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
+
+    ## Overview
+
+    A Stack represents a single Terraform or OpenTofu project connected to a git repository. Ravion monitors your repository for changes and automatically executes infrastructure workflows when code is pushed or pull requests are opened.
+
+    Stacks provide:
+
+    - **Automated plan/apply** on git push to your primary branch or via pull requests
+    - **Manual execution** for ad-hoc plans, applies, and destroys on the primary branch
+    - **Managed state backend** (optional) for configurations that declare an empty `cloud {}` block
+
+    ## Use cases
+
+    | Scenario                         | Stack helps by...                                 |
+    | -------------------------------- | ------------------------------------------------- |
+    | Deploying cloud infrastructure   | Running plan/apply when you push changes          |
+    | Reviewing infrastructure changes | Running plans from pull requests before merge       |
+    | Managing multiple environments   | Creating separate stacks per environment          |
+    | Team collaboration               | Centralizing execution with audit trails          |
+    | Drift detection                  | Running manual plans to compare state vs. reality |
+
+    ## Workflow types
+
+    ### Git-triggered workflows
+
+    Ravion automatically responds to repository events:
+
+    | Event                  | Action                 |
+    | ---------------------- | ---------------------- |
+    | Push to primary branch | Plan → Approve → Apply |
+    | Pull request opened    | Plan → Approve → Apply |
+    | Pull request updated   | Plan → Approve → Apply |
+
+    **Watch paths** control which file changes trigger workflows. By default, any file change (`**/*`) triggers a run. Configure specific paths or patterns to limit triggers to relevant files.
+
+    ### Manual workflows
+
+    Execute workflows on-demand from the Ravion dashboard or API:
+
+    | Action  | Description                                      |
+    | ------- | ------------------------------------------------ |
+    | Plan    | Preview changes without modifying infrastructure |
+    | Apply   | Execute the most recent plan                     |
+    | Destroy | Remove all resources managed by this stack       |
+
+    ## Pipeline integration
+
+    Stacks execute using your organization's **default pipelines**. Pipelines are configured separately and define:
+
+    - Execution steps (init, plan, apply)
+    - Approval requirements (default pipelines require manual approval before apply)
+    - Environment and runner settings
+    - Pre/post hooks
+
+    When you create a Stack, it automatically inherits the default change pipeline (for plan/apply) and destroy pipeline. This ensures consistent workflow behavior across all stacks in your organization.
+
+    ## Configuration
+
+    | Source Code Fields          | Required | Description                                            |
+    | -------------- | -------- | ------------------------------------------------------ |
+    | Git repository | Yes      | Repository containing your Terraform/OpenTofu files    |
+    | Primary branch | Yes      | Branch that triggers apply workflows (default: `main`) |
+    | Base path      | No       | Subdirectory containing `.tf` files                    |
+    | Watch paths    | No       | Glob patterns controlling which changes trigger runs   |
+
+    | Stack Fields                 | Description                                                                                     |
+    | --------------------- | ----------------------------------------------------------------------------------------------- |
+    | Terraform variables   | Key/value pairs passed as `-var` flags to Terraform/OpenTofu                                    |
+    | Environment variables | Available during workflow execution; supports `from_parameter_store` and `from_secrets_manager` |
+
+    | Iac Fields                | Description                                                              |
+    | -------------------- | ------------------------------------------------------------------------ |
+    | Infrastructure tool  | Terraform or OpenTofu                                                    |
+    | Version              | Specific tool version to use                                             |
+    | Ravion state backend | Enable managed state storage for configurations with an empty `cloud {}` block |
+
+    ## State management
+
+    Terraform and OpenTofu track infrastructure in a state file. Ravion offers two options:
+
+    - **Managed state (default):** Ravion stores and manages your state file. Add an empty `cloud {}` block to your Terraform configuration; Ravion supplies the workspace configuration at runtime.
+    - **Self-managed state:** Disable the Ravion backend and configure your own (S3, GCS, Azure Storage, etc.) in your Terraform configuration.
+
+    For Ravion-managed state, include:
+
+    ```hcl
+    terraform {
+      cloud {}
+    }
+    ```
+
+    ## Terraform vs OpenTofu
+
+    **OpenTofu is recommended.** In 2023, HashiCorp changed Terraform's license from open-source to BSL. The open-source Terraform versions are limited to < 1.6.0. OpenTofu is the community fork that continues active development under a true open-source license (MPL 2.0).
+
+    ## Learn more
+
+    [Curated list of Terraform resources and learning material](https://github.com/shuaibiyy/awesome-tf)
+
+    **OpenTofu**
+
+    - [OpenTofu Documentation](https://opentofu.org/docs/) — Official docs
+    - [Getting Started](https://opentofu.org/docs/intro/) — Installation and first steps
+    - [Migration from Terraform](https://opentofu.org/docs/intro/migration/) — Switching guide
+
+    **Terraform** (limited to < 1.6.0)
+
+    - [HashiCorp Developer Docs](https://developer.hashicorp.com/terraform/docs) — Official documentation
+    - [Terraform Tutorials](https://developer.hashicorp.com/terraform/tutorials) — Hands-on learning

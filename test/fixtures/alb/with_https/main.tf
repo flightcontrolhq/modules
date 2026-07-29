@@ -125,17 +125,17 @@ module "alb" {
   subnet_ids = module.vpc.public_subnet_ids
 
   # Enable both HTTP and HTTPS listeners
-  enable_http_listener  = true
-  enable_https_listener = true
+  http_listener_enabled  = true
+  https_listener_enabled = true
 
   # Certificate for HTTPS
   certificate_arns = [aws_acm_certificate.this.arn]
 
   # Enable HTTP to HTTPS redirect
-  http_to_https_redirect = true
+  http_to_https_redirect_enabled = true
 
   # Disable deletion protection for test cleanup
-  deletion_protection = false
+  deletion_protection_enabled = false
 
   tags = local.common_tags
 }

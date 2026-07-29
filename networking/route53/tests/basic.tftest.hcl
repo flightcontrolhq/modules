@@ -92,8 +92,8 @@ run "private_zone_with_vpcs" {
   command = plan
 
   variables {
-    name         = "internal.example.com"
-    private_zone = true
+    name                 = "internal.example.com"
+    private_zone_enabled = true
     vpc_associations = {
       primary = {
         vpc_id     = "vpc-12345678"
@@ -121,32 +121,53 @@ run "existing_zone_with_records" {
   command = plan
 
   variables {
-    create_zone = false
-    zone_id     = "Z1EXISTING00000000"
-    records = {
-      www = {
+    zone_creation_enabled = false
+    zone_id               = "Z1EXISTING00000000"
+    records = [
+      {
         name    = "www.existing.example.com"
         type    = "A"
         ttl     = 300
         records = ["192.0.2.1"]
-      }
-      txt = {
+      },
+      {
         name    = "existing.example.com"
         type    = "TXT"
         ttl     = 300
         records = ["v=spf1 -all"]
       }
-    }
+    ]
   }
 
   assert {
     condition     = length(aws_route53_zone.public) == 0
-    error_message = "No zone should be created when create_zone = false"
+    error_message = "No zone should be created when zone_creation_enabled = false"
   }
 
   assert {
     condition     = length(aws_route53_record.this) == 2
     error_message = "Two records should be created"
+  }
+}
+
+run "record_value_for_standard_record" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name         = "www.example.com"
+        type         = "A"
+        standard_ttl = 300
+        record_value = "192.0.2.1"
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_route53_record.this["A-www.example.com"].records == toset(["192.0.2.1"])
+    error_message = "record_value should be used for standard non-alias records"
   }
 }
 
@@ -159,8 +180,8 @@ run "alias_record" {
 
   variables {
     name = "example.com"
-    records = {
-      apex = {
+    records = [
+      {
         name = "example.com"
         type = "A"
         alias = {
@@ -169,13 +190,92 @@ run "alias_record" {
           evaluate_target_health = true
         }
       }
-    }
+    ]
   }
 
   assert {
     condition     = length(aws_route53_record.this) == 1
     error_message = "The alias record should be created"
   }
+}
+
+################################################################################
+# Non-simple routing policies
+################################################################################
+
+run "weighted_records_with_set_identifiers" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name                           = "www.example.com"
+        type                           = "A"
+        ttl                            = 300
+        records                        = ["192.0.2.1"]
+        routing_policy                 = "weighted"
+        set_identifier                 = "blue"
+        weighted_routing_policy_weight = 10
+      },
+      {
+        name           = "www.example.com"
+        type           = "A"
+        ttl            = 300
+        records        = ["192.0.2.2"]
+        set_identifier = "green"
+        weighted_routing_policy = {
+          weight = 90
+        }
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_route53_record.this) == 2
+    error_message = "Weighted records with different set identifiers should create separate records"
+  }
+}
+
+run "routing_policy_requires_set_identifier" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name                           = "www.example.com"
+        type                           = "A"
+        ttl                            = 300
+        records                        = ["192.0.2.1"]
+        routing_policy                 = "weighted"
+        weighted_routing_policy_weight = 10
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
+run "nested_routing_policy_requires_set_identifier" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "www.example.com"
+        type    = "A"
+        ttl     = 300
+        records = ["192.0.2.1"]
+        weighted_routing_policy = {
+          weight = 10
+        }
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
 }
 
 ################################################################################
@@ -186,9 +286,9 @@ run "query_logging" {
   command = plan
 
   variables {
-    name                 = "example.com"
-    enable_query_logging = true
-    query_log_group_arn  = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/route53/example.com:*"
+    name                  = "example.com"
+    query_logging_enabled = true
+    query_log_group_arn   = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/route53/example.com:*"
   }
 
   assert {
@@ -206,7 +306,7 @@ run "dnssec" {
 
   variables {
     name               = "example.com"
-    enable_dnssec      = true
+    dnssec_enabled     = true
     dnssec_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/11111111-2222-3333-4444-555555555555"
   }
 

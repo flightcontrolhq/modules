@@ -3,7 +3,7 @@
 ################################################################################
 
 resource "aws_appautoscaling_target" "this" {
-  count = local.enable_auto_scaling ? 1 : 0
+  count = local.auto_scaling_enabled ? 1 : 0
 
   max_capacity       = var.auto_scaling.max_capacity
   min_capacity       = var.auto_scaling.min_capacity
@@ -19,7 +19,7 @@ resource "aws_appautoscaling_target" "this" {
 ################################################################################
 
 resource "aws_appautoscaling_policy" "target_tracking" {
-  for_each = local.enable_auto_scaling ? {
+  for_each = local.auto_scaling_enabled ? {
     for idx, policy in var.auto_scaling.target_tracking : policy.policy_name => policy
   } : {}
 
@@ -33,7 +33,7 @@ resource "aws_appautoscaling_policy" "target_tracking" {
     target_value       = each.value.target_value
     scale_in_cooldown  = each.value.scale_in_cooldown
     scale_out_cooldown = each.value.scale_out_cooldown
-    disable_scale_in   = each.value.disable_scale_in
+    disable_scale_in   = !each.value.scale_in_enabled
 
     # Predefined metric
     dynamic "predefined_metric_specification" {
@@ -71,7 +71,7 @@ resource "aws_appautoscaling_policy" "target_tracking" {
 ################################################################################
 
 resource "aws_appautoscaling_scheduled_action" "this" {
-  for_each = local.enable_auto_scaling && var.auto_scaling.scheduled != null ? {
+  for_each = local.auto_scaling_enabled && var.auto_scaling.scheduled != null ? {
     for action in var.auto_scaling.scheduled : action.name => action
   } : {}
 
@@ -96,9 +96,6 @@ resource "aws_appautoscaling_scheduled_action" "this" {
 ################################################################################
 
 locals {
-  primary_target_group_arn_suffix = local.enable_load_balancer ? (
-    var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn_suffix : aws_lb_target_group.tg_1[0].arn_suffix
-  ) : ""
+  primary_target_group_arn_suffix = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn_suffix : ""
 }
-
 

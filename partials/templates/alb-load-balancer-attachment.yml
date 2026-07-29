@@ -1,0 +1,16 @@
+$merge:
+  - $with.additional_fields
+  - $with.attachment_control
+listener_rules:
+  - conditions:
+      - >-
+        ...<< module.input.host_header_values != nil && module.input.host_header_values !=
+        [] ? [{type: "host-header", values: module.input.host_header_values}] : [] >>
+      - >-
+        ...<< module.input.path_pattern_values != nil && module.input.path_pattern_values !=
+        [] ? [{type: "path-pattern", values: module.input.path_pattern_values}] :
+        module.input.host_header_values != nil && module.input.host_header_values != [] ? []
+        : [{type: "path-pattern", values: ["/*"]}] >>
+    listener_arn: $with.listener_arn
+    priority: << module.input.listener_rule_priority >>
+target_group: $with.target_group

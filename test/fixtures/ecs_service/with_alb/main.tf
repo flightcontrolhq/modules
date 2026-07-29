@@ -60,8 +60,8 @@ module "vpc" {
   subnet_count = 2
 
   # Enable NAT Gateway so Fargate tasks in private subnets can pull container images
-  enable_nat_gateway            = true
-  nat_gateway_high_availability = false
+  nat_gateway_enabled                   = true
+  nat_gateway_high_availability_enabled = false
 
   tags = local.common_tags
 }
@@ -79,16 +79,16 @@ module "ecs_cluster" {
   public_subnet_ids  = module.vpc.public_subnet_ids
 
   # Enable Fargate capacity provider
-  enable_fargate      = true
-  enable_fargate_spot = false
+  fargate_enabled      = true
+  fargate_spot_enabled = false
 
   # Enable public ALB
-  enable_public_alb       = true
-  public_alb_enable_https = false
-  deletion_protection     = false
+  public_alb_enabled                        = true
+  public_alb_https_enabled                  = false
+  load_balancer_deletion_protection_enabled = false
 
   # Disable Container Insights to reduce costs for testing
-  enable_container_insights = false
+  container_insights = "disabled"
 
   tags = local.common_tags
 }
@@ -117,7 +117,7 @@ module "ecs_service" {
   container_port = 80
 
   # Don't wait for steady state to speed up tests
-  wait_for_steady_state = false
+  steady_state_wait_enabled = false
 
   # Disable circuit breaker for testing (placeholder container won't be healthy)
   deployment_circuit_breaker = {
@@ -226,6 +226,26 @@ output "alb_dns_name" {
 output "target_group_arn" {
   description = "The ARN of the target group."
   value       = module.ecs_service.target_group_arn
+}
+
+output "alternate_target_group_arn" {
+  description = "The ARN of the alternate target group ECS shifts traffic to during native traffic-shift deployments."
+  value       = module.ecs_service.alternate_target_group_arn
+}
+
+output "ecs_infrastructure_role_arn" {
+  description = "The ARN of the IAM role ECS assumes to manage load-balancer wiring during native traffic-shift deployments."
+  value       = module.ecs_service.ecs_infrastructure_role_arn
+}
+
+output "production_listener_rule_arn" {
+  description = "The ARN of the production listener rule wired into the service's advanced_configuration."
+  value       = module.ecs_service.production_listener_rule_arn
+}
+
+output "test_listener_rule_arn" {
+  description = "The ARN of the test listener rule wired into the service's advanced_configuration."
+  value       = module.ecs_service.test_listener_rule_arn
 }
 
 output "alb_security_group_id" {

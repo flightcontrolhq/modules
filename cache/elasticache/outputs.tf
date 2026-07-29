@@ -12,6 +12,11 @@ output "replication_group_arn" {
   value       = local.create_replication_group ? aws_elasticache_replication_group.this[0].arn : null
 }
 
+output "replication_group_member_cluster_id" {
+  description = "The ID of the first member cache cluster in the replication group."
+  value       = local.create_replication_group ? tolist(aws_elasticache_replication_group.this[0].member_clusters)[0] : null
+}
+
 output "primary_endpoint_address" {
   description = "The address of the primary endpoint for the replication group (non-cluster mode)."
   value       = local.create_replication_group && !local.cluster_mode_enabled ? aws_elasticache_replication_group.this[0].primary_endpoint_address : null
@@ -92,7 +97,7 @@ output "engine" {
 output "engine_version" {
   description = "The version of the cache engine."
   value = local.create_replication_group ? aws_elasticache_replication_group.this[0].engine_version_actual : (
-    local.create_cluster ? aws_elasticache_cluster.this[0].engine_version_actual : var.engine_version
+    local.create_cluster ? aws_elasticache_cluster.this[0].engine_version_actual : local.engine_version
   )
 }
 
@@ -129,7 +134,7 @@ output "subnet_group_arn" {
 ################################################################################
 
 output "parameter_group_name" {
-  description = "The name of the ElastiCache parameter group."
+  description = "The name of the ElastiCache parameter group. Managed groups are named with the elasticache- prefix."
   value       = local.is_serverless ? null : aws_elasticache_parameter_group.this[0].name
 }
 

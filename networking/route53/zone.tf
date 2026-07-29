@@ -7,7 +7,7 @@ resource "aws_route53_zone" "public" {
 
   name              = var.name
   comment           = var.comment
-  force_destroy     = var.force_destroy
+  force_destroy     = var.record_force_destroy_enabled
   delegation_set_id = var.delegation_set_id
 
   tags = local.tags
@@ -15,7 +15,7 @@ resource "aws_route53_zone" "public" {
   lifecycle {
     precondition {
       condition     = var.name != null
-      error_message = "var.name is required when create_zone is true."
+      error_message = "var.name is required when zone_creation_enabled is true."
     }
   }
 }
@@ -25,11 +25,11 @@ resource "aws_route53_zone" "public" {
 ################################################################################
 
 resource "aws_route53_zone" "private" {
-  count = var.create_zone && var.private_zone ? 1 : 0
+  count = var.zone_creation_enabled && var.private_zone_enabled ? 1 : 0
 
   name          = var.name
   comment       = var.comment
-  force_destroy = var.force_destroy
+  force_destroy = var.record_force_destroy_enabled
 
   dynamic "vpc" {
     for_each = var.vpc_associations
@@ -44,7 +44,7 @@ resource "aws_route53_zone" "private" {
   lifecycle {
     precondition {
       condition     = var.name != null
-      error_message = "var.name is required when create_zone is true."
+      error_message = "var.name is required when zone_creation_enabled is true."
     }
     precondition {
       condition     = length(var.vpc_associations) > 0

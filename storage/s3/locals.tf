@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -20,9 +20,12 @@ locals {
   # Lifecycle configuration - create only when rules are provided
   create_lifecycle_configuration = length(var.lifecycle_rules) > 0
 
+  # CORS configuration - create only when rules are provided
+  create_cors_configuration = length(var.cors_rules) > 0
+
   # Bucket policy configuration
   # Create bucket policy when either policy templates are specified or custom policy is provided.
-  # Callers can override via var.create_bucket_policy when custom_policy is known-after-apply
-  # (otherwise the boolean cannot be determined at plan time).
-  create_bucket_policy = var.create_bucket_policy != null ? var.create_bucket_policy : (length(var.policy_templates) > 0 || var.custom_policy != null)
+  # Callers can override when custom_policy is known-after-apply (otherwise the
+  # boolean cannot be determined at plan time).
+  create_bucket_policy = var.bucket_policy_creation_override_enabled != null ? var.bucket_policy_creation_override_enabled : (length(var.policy_templates) > 0 || var.custom_policy != null)
 }

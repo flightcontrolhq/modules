@@ -11,23 +11,16 @@
 # back to the customer-supplied certificate ARNs.
 
 locals {
-  enable_ravion_domain = var.use_ravion_managed_domains && (var.enable_public_alb || var.enable_private_alb)
+  enable_ravion_domain = var.use_ravion_managed_domains && (var.public_alb_enabled || var.private_alb_enabled)
 }
 
-# Plan-time guard against two clusters claiming the same wildcard apex. The
-# backend resolves the bare name leaf to the managed wildcard (*.<name>.<apex>)
-# and reports collides=true ONLY when a DIFFERENT module instance already owns
-# that domain — a re-apply of THIS cluster does not collide with itself. The
-# allocator enforces the same rule server-side as an apply-time backstop.
-data "ravion_dns_collision_check" "cluster" {
-  count       = local.enable_ravion_domain ? 1 : 0
-  domain_name = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
-}
-
+# Plan-time guards (wildcard-apex collision against another cluster, and
+# dependents on teardown) run automatically inside the provider's ModifyPlan —
+# no data source + precondition wiring needed. The allocator enforces the same
+# rules server-side as an apply-time backstop.
 resource "ravion_aws_acm_certificate" "cluster" {
   count = local.enable_ravion_domain ? 1 : 0
 
-  role               = "shared_wildcard"
   wildcard           = true
   name               = coalesce(var.ravion_cluster_name, var.module_instance_given_id, var.name)
   module_instance_id = var.module_instance_id
@@ -38,8 +31,8 @@ resource "ravion_aws_acm_certificate" "cluster" {
   # (<svc>.<apex>) resolve under the cluster wildcard. Public ALB if present,
   # else private. (A single wildcard record serves one ALB; mixed public+private
   # clusters route to the public one.)
-  target_dns_name = var.enable_public_alb ? module.public_alb[0].alb_dns_name : (var.enable_private_alb ? module.private_alb[0].alb_dns_name : null)
-  target_zone_id  = var.enable_public_alb ? module.public_alb[0].alb_zone_id : (var.enable_private_alb ? module.private_alb[0].alb_zone_id : null)
+  target_dns_name = var.public_alb_enabled ? module.public_alb[0].alb_dns_name : (var.private_alb_enabled ? module.private_alb[0].alb_dns_name : null)
+  target_zone_id  = var.public_alb_enabled ? module.public_alb[0].alb_zone_id : (var.private_alb_enabled ? module.private_alb[0].alb_zone_id : null)
 
   lifecycle {
     # Rotating the cluster wildcard cert (any RequiresReplace change, e.g. a
@@ -51,28 +44,12 @@ resource "ravion_aws_acm_certificate" "cluster" {
     create_before_destroy = true
 
     precondition {
-      condition     = !var.use_ravion_managed_domains || var.enable_public_alb || var.enable_private_alb
-      error_message = "use_ravion_managed_domains requires at least one ALB (enable_public_alb or enable_private_alb)."
+      condition     = !var.use_ravion_managed_domains || var.public_alb_enabled || var.private_alb_enabled
+      error_message = "use_ravion_managed_domains requires at least one ALB (public_alb_enabled or private_alb_enabled)."
     }
     precondition {
       condition     = !var.use_ravion_managed_domains || (var.ravion_aws_account_id != null && var.ravion_aws_account_id != "")
       error_message = "ravion_aws_account_id (aws_*) is required when use_ravion_managed_domains = true."
     }
-    precondition {
-      condition     = !coalesce(one(data.ravion_dns_collision_check.cluster[*].collides), false)
-      error_message = "Cluster wildcard apex is already claimed by another cluster: a managed *.<ravion_cluster_name>.<apex> domain owned by a different module instance already exists. Pick a unique ravion_cluster_name."
-    }
   }
-}
-
-# Live service domains nested under this cluster's wildcard apex (they ride its
-# cert + `*.<apex>` ALIAS). Surfaced via the ravion_cluster_dependent_domains
-# output for the UI / safe-teardown orchestration. NOT used as a precondition:
-# a cluster legitimately has dependents during normal operation and Terraform
-# can't scope a precondition to destroy-time, so it would block every apply.
-# The control plane already refuses a teardown while dependents exist
-# (Dns:CERT_APEX_IN_USE), which is the real backstop.
-data "ravion_apex_dependents" "cluster" {
-  count = local.enable_ravion_domain ? 1 : 0
-  apex  = ravion_aws_acm_certificate.cluster[0].domain_name
 }

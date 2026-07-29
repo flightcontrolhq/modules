@@ -12,7 +12,7 @@ variable "tags" {
 # Hosted Zone
 ################################################################################
 
-variable "create_zone" {
+variable "zone_creation_enabled" {
   type        = bool
   description = "If true, create a new Route53 hosted zone. If false, reference an existing zone via zone_id."
   default     = true
@@ -20,7 +20,7 @@ variable "create_zone" {
 
 variable "zone_id" {
   type        = string
-  description = "The ID of an existing Route53 hosted zone to manage records in. Required when create_zone is false."
+  description = "The ID of an existing Route53 hosted zone to manage records in. Required when zone_creation_enabled is false."
   default     = null
 
   validation {
@@ -31,7 +31,7 @@ variable "zone_id" {
 
 variable "name" {
   type        = string
-  description = "The fully qualified domain name for the hosted zone (e.g. example.com). Required when create_zone is true."
+  description = "The fully qualified domain name for the hosted zone (e.g. example.com). Required when zone_creation_enabled is true."
   default     = null
 
   validation {
@@ -46,7 +46,7 @@ variable "comment" {
   default     = "Managed by Terraform"
 }
 
-variable "force_destroy" {
+variable "record_force_destroy_enabled" {
   type        = bool
   description = "If true, destroy all records in the hosted zone when the zone is destroyed. Only applies to created zones."
   default     = false
@@ -62,7 +62,7 @@ variable "delegation_set_id" {
 # Private Zone
 ################################################################################
 
-variable "private_zone" {
+variable "private_zone_enabled" {
   type        = bool
   description = "If true, the created hosted zone is private and must be associated with one or more VPCs."
   default     = false
@@ -87,7 +87,7 @@ variable "vpc_associations" {
 ################################################################################
 
 variable "records" {
-  type = map(object({
+  type = list(object({
     name            = string
     type            = string
     ttl             = optional(number)
@@ -95,6 +95,21 @@ variable "records" {
     set_identifier  = optional(string)
     health_check_id = optional(string)
     allow_overwrite = optional(bool, false)
+
+    target_type                            = optional(string, "standard")
+    record_value                           = optional(string)
+    record_values                          = optional(list(string))
+    standard_ttl                           = optional(number)
+    alias_name                             = optional(string)
+    alias_zone_id                          = optional(string)
+    alias_evaluate_target_health           = optional(bool, false)
+    routing_policy                         = optional(string, "simple")
+    weighted_routing_policy_weight         = optional(number)
+    failover_routing_policy_type           = optional(string)
+    latency_routing_policy_region          = optional(string)
+    geolocation_routing_policy_continent   = optional(string)
+    geolocation_routing_policy_country     = optional(string)
+    geolocation_routing_policy_subdivision = optional(string)
 
     alias = optional(object({
       name                   = string
@@ -122,12 +137,12 @@ variable "records" {
 
     multivalue_answer_routing_policy = optional(bool)
   }))
-  description = "A map of DNS records to create in the hosted zone, keyed by a unique identifier. Each record must have either `records` + `ttl` or `alias` set."
-  default     = {}
+  description = "A list of DNS records to create in the hosted zone. Terraform derives stable resource keys from each record type, name, and optional set identifier."
+  default     = []
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
       contains(["A", "AAAA", "CNAME", "CAA", "MX", "NAPTR", "NS", "PTR", "SOA", "SPF", "SRV", "TXT", "DS"], v.type)
     ])
     error_message = "Each record type must be one of: A, AAAA, CNAME, CAA, MX, NAPTR, NS, PTR, SOA, SPF, SRV, TXT, DS."
@@ -135,18 +150,46 @@ variable "records" {
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
-      (v.alias != null) != (v.records != null && v.ttl != null)
+      for v in var.records :
+      (
+        v.alias != null || (v.target_type == "alias" && v.alias_name != null && v.alias_zone_id != null)
+        ) != (
+        (v.records != null || v.record_value != null || v.record_values != null) &&
+        (v.ttl != null || v.standard_ttl != null)
+      )
     ])
     error_message = "Each record must have either `alias` set, or both `records` and `ttl` set (but not both)."
   }
 
   validation {
     condition = alltrue([
-      for k, v in var.records :
+      for v in var.records :
+      !contains(["CNAME", "SOA"], v.type) || v.records == null || length(v.records) == 1
+    ])
+    error_message = "CNAME and SOA records must have exactly one record value."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
       v.failover_routing_policy == null || contains(["PRIMARY", "SECONDARY"], coalesce(try(v.failover_routing_policy.type, null), "PRIMARY"))
     ])
     error_message = "failover_routing_policy.type must be PRIMARY or SECONDARY."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
+      (
+        v.routing_policy == "simple" &&
+        v.weighted_routing_policy == null &&
+        v.failover_routing_policy == null &&
+        v.latency_routing_policy == null &&
+        v.geolocation_routing_policy == null &&
+        coalesce(v.multivalue_answer_routing_policy, false) != true
+      ) || try(length(v.set_identifier) > 0, false)
+    ])
+    error_message = "set_identifier is required when using weighted, failover, latency, geolocation, or multivalue routing policies."
   }
 }
 
@@ -154,15 +197,54 @@ variable "records" {
 # Query Logging
 ################################################################################
 
-variable "enable_query_logging" {
+variable "query_logging_enabled" {
   type        = bool
   description = "Enable query logging for the hosted zone. Requires a CloudWatch log group ARN in us-east-1 for public zones."
   default     = false
 }
 
+variable "query_log_group_creation_enabled" {
+  type        = bool
+  description = "If true, create a CloudWatch Logs log group and Route53 resource policy in us-east-1 for query logs."
+  default     = true
+}
+
+variable "query_log_group_name" {
+  type        = string
+  description = "Name for the created CloudWatch Logs log group. Defaults to /aws/route53/<hosted-zone-name>."
+  default     = null
+
+  validation {
+    condition     = var.query_log_group_name == null || length(var.query_log_group_name) > 0
+    error_message = "The query_log_group_name must not be empty."
+  }
+}
+
+variable "query_log_group_retention_days" {
+  type        = number
+  description = "Number of days to retain query logs. Use 0 to retain logs indefinitely."
+  default     = 90
+
+  validation {
+    condition     = contains([0, 1, 3, 5, 7, 14, 30, 60, 90, 180, 365, 731, 1827, 3653], var.query_log_group_retention_days)
+    error_message = "The query_log_group_retention_days must be 0, 1, 3, 5, 7, 14, 30, 60, 90, 180, 365, 731, 1827, or 3653."
+  }
+}
+
+variable "query_log_resource_policy_name" {
+  type        = string
+  description = "Name for the CloudWatch Logs resource policy that allows Route53 to write query logs. Defaults to a hosted-zone-derived name."
+  default     = null
+
+  validation {
+    condition     = var.query_log_resource_policy_name == null || length(var.query_log_resource_policy_name) > 0
+    error_message = "The query_log_resource_policy_name must not be empty."
+  }
+}
+
 variable "query_log_group_arn" {
   type        = string
-  description = "The ARN of an existing CloudWatch log group to stream Route53 query logs to. Required when enable_query_logging is true."
+  description = "The ARN of an existing CloudWatch log group to stream Route53 query logs to. Required when query_logging_enabled is true."
   default     = null
 
   validation {
@@ -175,7 +257,7 @@ variable "query_log_group_arn" {
 # DNSSEC
 ################################################################################
 
-variable "enable_dnssec" {
+variable "dnssec_enabled" {
   type        = bool
   description = "Enable DNSSEC signing for the hosted zone. Requires dnssec_kms_key_arn (a KMS key in us-east-1 with the correct key policy)."
   default     = false
@@ -183,7 +265,7 @@ variable "enable_dnssec" {
 
 variable "dnssec_kms_key_arn" {
   type        = string
-  description = "The ARN of a customer-managed KMS key used for DNSSEC signing. The key must be in us-east-1. Required when enable_dnssec is true."
+  description = "The ARN of a customer-managed KMS key used for DNSSEC signing. The key must be in us-east-1. Required when dnssec_enabled is true."
   default     = null
 
   validation {

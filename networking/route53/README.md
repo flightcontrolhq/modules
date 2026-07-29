@@ -39,8 +39,8 @@ module "dns" {
 
   name = "example.com"
 
-  records = {
-    apex = {
+  records = [
+    {
       name = "example.com"
       type = "A"
       alias = {
@@ -48,23 +48,23 @@ module "dns" {
         zone_id                = module.alb.alb_zone_id
         evaluate_target_health = true
       }
-    }
+    },
 
-    www = {
+    {
       name    = "www.example.com"
       type    = "CNAME"
       ttl     = 300
       records = ["example.com"]
-    }
+    },
 
-    spf = {
+    {
       name    = "example.com"
       type    = "TXT"
       ttl     = 300
       records = ["v=spf1 -all"]
-    }
+    },
 
-    mx = {
+    {
       name = "example.com"
       type = "MX"
       ttl  = 300
@@ -72,7 +72,7 @@ module "dns" {
         "10 inbound-smtp.us-east-1.amazonaws.com",
       ]
     }
-  }
+  ]
 }
 ```
 
@@ -82,17 +82,17 @@ module "dns" {
 module "app_dns" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
 
-  create_zone = false
+  zone_creation_enabled = false
   zone_id     = "Z1234567890ABC"
 
-  records = {
-    api = {
+  records = [
+    {
       name    = "api.example.com"
       type    = "A"
       ttl     = 60
       records = ["192.0.2.10"]
     }
-  }
+  ]
 }
 ```
 
@@ -102,8 +102,8 @@ module "app_dns" {
 module "internal_dns" {
   source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
 
-  name         = "internal.example.com"
-  private_zone = true
+  name         = "internal_load_balancer_enabled.example.com"
+  private_zone_enabled = true
 
   vpc_associations = {
     primary = {
@@ -112,14 +112,14 @@ module "internal_dns" {
     }
   }
 
-  records = {
-    db = {
-      name    = "db.internal.example.com"
+  records = [
+    {
+      name    = "db.internal_load_balancer_enabled.example.com"
       type    = "CNAME"
       ttl     = 60
       records = [module.rds.endpoint]
     }
-  }
+  ]
 }
 ```
 
@@ -131,8 +131,8 @@ module "dns" {
 
   name = "example.com"
 
-  records = {
-    api_blue = {
+  records = [
+    {
       name           = "api.example.com"
       type           = "A"
       set_identifier = "blue"
@@ -144,9 +144,9 @@ module "dns" {
         zone_id                = module.alb_blue.alb_zone_id
         evaluate_target_health = true
       }
-    }
+    },
 
-    api_green = {
+    {
       name           = "api.example.com"
       type           = "A"
       set_identifier = "green"
@@ -159,23 +159,37 @@ module "dns" {
         evaluate_target_health = true
       }
     }
-  }
+  ]
 }
 ```
 
 ### Query logging
 
-Query logging requires a pre-existing CloudWatch log group. For public zones
-the log group **must** be in `us-east-1` and have a resource policy permitting
-Route53 to write to it.
+Query logging is supported for public hosted zones. By default, the module
+creates the CloudWatch log group and resource policy in `us-east-1`, where
+Route53 requires query logging destinations and permissions.
 
 ```hcl
 module "dns" {
   source = "..."
 
   name                 = "example.com"
-  enable_query_logging = true
-  query_log_group_arn  = aws_cloudwatch_log_group.dns_queries.arn
+  query_logging_enabled = true
+}
+```
+
+To reuse an existing `us-east-1` log group, disable log group creation and pass
+its ARN. The module still creates the resource policy that allows Route53 to
+write logs.
+
+```hcl
+module "dns" {
+  source = "..."
+
+  name                             = "example.com"
+  query_logging_enabled            = true
+  query_log_group_creation_enabled = false
+  query_log_group_arn              = aws_cloudwatch_log_group.dns_queries.arn
 }
 ```
 
@@ -190,7 +204,7 @@ module "dns" {
   source = "..."
 
   name               = "example.com"
-  enable_dnssec      = true
+  dnssec_enabled      = true
   dnssec_kms_key_arn = aws_kms_key.dnssec.arn
 }
 
@@ -204,7 +218,7 @@ output "ds_record" {
 | Name               | Version   |
 | ------------------ | --------- |
 | opentofu/terraform | >= 1.10.0 |
-| aws                | >= 5.0    |
+| aws                | >= 6.0    |
 
 ## Inputs
 
@@ -218,18 +232,18 @@ output "ds_record" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| create_zone | If true, create a new hosted zone; if false, reference an existing zone via `zone_id` | `bool` | `true` | no |
-| zone_id | ID of an existing hosted zone to manage records in (required when `create_zone = false`) | `string` | `null` | conditional |
-| name | FQDN for the hosted zone (required when `create_zone = true`) | `string` | `null` | conditional |
+| zone_creation_enabled | If true, create a new hosted zone; if false, reference an existing zone via `zone_id` | `bool` | `true` | no |
+| zone_id | ID of an existing hosted zone to manage records in (required when `zone_creation_enabled = false`) | `string` | `null` | conditional |
+| name | FQDN for the hosted zone (required when `zone_creation_enabled = true`) | `string` | `null` | conditional |
 | comment | Comment for the hosted zone | `string` | `"Managed by Terraform"` | no |
-| force_destroy | Destroy all records when the zone is destroyed | `bool` | `false` | no |
+| record_force_destroy_enabled | Destroy all records when the zone is destroyed | `bool` | `false` | no |
 | delegation_set_id | Reusable delegation set ID (public zones only) | `string` | `null` | no |
 
 ### Private Zone
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| private_zone | Whether the created zone is private | `bool` | `false` | no |
+| private_zone_enabled | Whether the created zone is private | `bool` | `false` | no |
 | vpc_associations | Map of VPCs to associate with the private zone | `map(object)` | `{}` | no |
 
 Each entry in `vpc_associations` supports:
@@ -243,7 +257,7 @@ Each entry in `vpc_associations` supports:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| records | Map of DNS records to manage, keyed by a stable identifier | `map(object)` | `{}` | no |
+| records | List of DNS records to manage | `list(object)` | `[]` | no |
 
 Each record supports:
 
@@ -252,8 +266,8 @@ Each record supports:
 | name | The record name (FQDN or relative to the zone) | `string` | yes |
 | type | Record type: `A`, `AAAA`, `CNAME`, `CAA`, `MX`, `NAPTR`, `NS`, `PTR`, `SOA`, `SPF`, `SRV`, `TXT`, `DS` | `string` | yes |
 | ttl | TTL in seconds (required unless using `alias`) | `number` | conditional |
-| records | Record values (required unless using `alias`) | `list(string)` | conditional |
-| alias | Alias target `{ name, zone_id, evaluate_target_health }` (use instead of `ttl`/`records`) | `object` | conditional |
+| records | Record values (required unless using `alias`). CNAME and SOA records must have exactly one value. | `list(string)` | conditional |
+| alias | Alias target `{ name, zone_id, evaluate_target_health }` (use instead of `ttl`/`records`). `name` is the AWS target DNS name. `zone_id` is the AWS target resource hosted zone ID, not this domain's hosted zone ID. For ALB/NLB use the load balancer canonical hosted zone ID; for CloudFront use `Z2FDTNDATAQYW2`; API Gateway and S3 website endpoints use service and region-specific IDs. | `object` | conditional |
 | set_identifier | Unique ID for routing-policy records | `string` | no |
 | health_check_id | Route53 health check ID | `string` | no |
 | allow_overwrite | Allow creation to overwrite an existing record | `bool` | no |
@@ -267,14 +281,18 @@ Each record supports:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_query_logging | Enable Route53 query logging | `bool` | `false` | no |
-| query_log_group_arn | ARN of the destination CloudWatch log group | `string` | `null` | conditional |
+| query_logging_enabled | Enable Route53 query logging | `bool` | `false` | no |
+| query_log_group_creation_enabled | Create the CloudWatch Logs log group and resource policy in `us-east-1` | `bool` | `true` | no |
+| query_log_group_name | Name for the created CloudWatch Logs log group | `string` | `null` | no |
+| query_log_group_retention_days | Number of days to retain query logs; use `0` to retain indefinitely | `number` | `90` | no |
+| query_log_resource_policy_name | Name for the CloudWatch Logs resource policy | `string` | `null` | no |
+| query_log_group_arn | ARN of an existing destination CloudWatch log group when creation is disabled | `string` | `null` | conditional |
 
 ### DNSSEC
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| enable_dnssec | Enable DNSSEC signing | `bool` | `false` | no |
+| dnssec_enabled | Enable DNSSEC signing | `bool` | `false` | no |
 | dnssec_kms_key_arn | KMS key ARN in `us-east-1` used for signing | `string` | `null` | conditional |
 | dnssec_signing_status | `SIGNING` or `NOT_SIGNING` | `string` | `"SIGNING"` | no |
 
@@ -293,6 +311,8 @@ Each record supports:
 | dnssec_key_signing_key_id | The ID of the KSK (null when DNSSEC disabled) |
 | dnssec_ds_record | The DS record to publish to the parent zone |
 | query_log_id | The ID of the query log configuration |
+| query_log_group_arn | The ARN of the CloudWatch Logs log group used for query logs |
+| query_log_group_name | The name of the CloudWatch Logs log group used for query logs |
 
 ## Notes
 
@@ -303,6 +323,6 @@ Each record supports:
   resource directly. To associate additional VPCs (including cross-account
   VPCs), use the `aws_route53_vpc_association_authorization` /
   `aws_route53_zone_association` resources outside the module.
-- When using `create_zone = false`, `force_destroy` has no effect and the
+- When using `zone_creation_enabled = false`, `record_force_destroy_enabled` has no effect and the
   upstream zone is not managed.
 - Alias records cannot specify a TTL; TTLs are inherited from the target.

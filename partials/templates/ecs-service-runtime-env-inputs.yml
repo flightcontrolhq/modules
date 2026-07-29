@@ -1,0 +1,19 @@
+- id: section_app_config
+  label: Environment variables
+  type: section
+- $include: ../inputs/build-environment-variables.yml
+- $include: ../inputs/dockerfile-env-injection.yml
+- id: environment_variables
+  label: Runtime environment variables
+  type: array
+  description: $with.environment_variables_description
+  placeholder: |-
+    - name: NODE_ENV
+      value: production
+- id: secrets
+  label: Runtime secrets
+  type: array
+  description: Secrets injected into the ECS task at runtime as an array of {name, value_from} objects. value_from can be an SSM parameter or Secrets Manager ARN.
+  placeholder: |-
+    - name: DATABASE_URL
+      valueFrom: arn:aws:ssm:...

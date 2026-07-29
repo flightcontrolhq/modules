@@ -1,0 +1,809 @@
+definition:
+  type: rvn-ecs-web
+  name: ECS Web Service
+  description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
+release:
+  version: 0.8.4
+  description: Improve build source, Railpack command, and builder instance guidance.
+module:
+  inputs:
+    - id: section_cluster
+      label: ECS cluster
+      type: section
+    - id: cluster
+      immutable: true
+      label: ECS cluster
+      type: $ref:rvn-ecs-cluster
+      mapped_inputs:
+        - $include: ../../partials/inputs/ecs-service-cluster-common-mapped-inputs.yml
+        - $include: ../../partials/inputs/ecs-service-cluster-alb-mapped-inputs.yml
+      required: true
+    - id: section_service
+      label: Web service
+      type: section
+    - id: name
+      immutable: true
+      label: Service name
+      type: string
+      description: Name for the ECS service and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: Use 1-255 letters, numbers, underscores, or hyphens, starting with a letter or number.
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,254}$
+    - id: public_web_service_enabled
+      label: Public web service
+      type: boolean
+      description: Expose this service through the public ALB. Turn off to use the private ALB.
+      default: true
+    - $include: ../../partials/inputs/private-subnet-placement.yml
+    - $include: ../../partials/inputs/ecs-service-build-inputs.yml
+    - id: section_deployment
+      label: Deployment
+      type: section
+    - id: deployment_strategy
+      label: Deployment strategy
+      type: string
+      description: Choose how traffic moves from the current deployment to the new deployment.
+      required: true
+      default: rolling
+      values:
+        - label: Rolling
+          description: Replace tasks in place while the service keeps serving from the production target group.
+          value: rolling
+        - label: Blue/green
+          description: Start the new deployment on the alternate target group, then shift production traffic after test validation.
+          value: blue_green
+        - label: Linear
+          description: Shift production traffic to the new deployment in equal percentage steps with a wait between steps.
+          value: linear
+        - label: Canary
+          description: Send a small percentage of production traffic to the new deployment first, then shift the rest after the canary bake time.
+          value: canary
+    - id: deployment_bake_time_in_minutes
+      label: Bake time in minutes
+      type: number
+      description: Minutes to keep the current and new deployments running after production traffic has fully shifted, before the old deployment is removed.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default: 10
+    - id: linear_step_percentage
+      label: Linear step percentage
+      type: number
+      description: Percentage of production traffic to move to the new deployment at each linear step.
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: linear
+      default: 20
+    - id: linear_step_bake_time_in_minutes
+      label: Linear step bake time in minutes
+      type: number
+      description: Minutes to wait between linear traffic steps before shifting the next percentage.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: linear
+      default: 5
+    - id: canary_percent
+      label: Canary percent
+      type: number
+      description: Percentage of production traffic to send to the new deployment during the canary phase.
+      max: 100
+      min: 1
+      show_when:
+        deployment_strategy: canary
+      default: 5
+    - id: canary_bake_time_in_minutes
+      label: Canary bake time in minutes
+      type: number
+      description: Minutes to hold canary traffic before shifting the remaining production traffic to the new deployment.
+      max: 1440
+      min: 0
+      show_when:
+        deployment_strategy: canary
+      default: 10
+    - id: deployment_pause_stages
+      label: Manual approval gates
+      type: object_array
+      description: Optional gates that pause the deployment at chosen lifecycle stages until you approve it. Applies only to the blue/green, linear, and canary strategies.
+      collapsible: true
+      item_inputs:
+        - id: stage
+          label: Stage
+          type: string
+          description: Deployment lifecycle stage at which to pause and wait for manual approval.
+          default: POST_TEST_TRAFFIC_SHIFT
+          values:
+            - label: Reconcile service
+              description: Pause during service reconciliation, before ECS finalizes the deployment.
+              value: RECONCILE_SERVICE
+            - label: Pre scale up
+              description: Pause before the new task set scales up.
+              value: PRE_SCALE_UP
+            - label: Post scale up
+              description: Pause after the new task set has scaled up and become healthy.
+              value: POST_SCALE_UP
+            - label: Post test traffic shift
+              description: Pause after test traffic is shifted to the new (green) tasks, so you can validate them before production traffic moves.
+              value: POST_TEST_TRAFFIC_SHIFT
+            - label: Pre production traffic shift
+              description: Pause before production traffic begins shifting to the new tasks.
+              value: PRE_PRODUCTION_TRAFFIC_SHIFT
+            - label: Post production traffic shift
+              description: Pause after production traffic has fully shifted to the new tasks, before the old tasks are removed.
+              value: POST_PRODUCTION_TRAFFIC_SHIFT
+        - id: timeout_in_minutes
+          label: Timeout (minutes)
+          type: number
+          description: Minutes to wait for manual approval before the timeout action runs. Matches the AWS default of 1,440 minutes (24 hours).
+          max: 20160
+          min: 1
+          required: true
+          default: 1440
+        - id: timeout_action
+          label: On timeout
+          type: string
+          description: Action to take if approval is not given before the timeout elapses. Defaults to rolling back.
+          required: true
+          default: ROLLBACK
+          values:
+            - label: Roll back
+              description: Roll the deployment back to the previous revision.
+              value: ROLLBACK
+            - label: Continue
+              description: Proceed with the deployment as if it were approved.
+              value: CONTINUE
+      item_label: Pause stage
+      item_title:
+        template: "{stage}"
+      item_description: "Timeout: {timeout_in_minutes} minutes / {timeout_action}"
+      show_when:
+        deployment_strategy:
+          - blue_green
+          - linear
+          - canary
+      default:
+        - stage: POST_TEST_TRAFFIC_SHIFT
+          timeout_in_minutes: 1440
+          timeout_action: ROLLBACK
+    - id: section_health
+      label: Health check
+      type: section
+    - id: container_port
+      immutable: true
+      label: Container port
+      type: number
+      description: Port the web container listens on.
+      max: 65535
+      min: 1
+      required: true
+      default: 80
+    - id: health_check_path
+      label: Health check path
+      type: string
+      description: HTTP path the load balancer calls to verify the web server is healthy. Use a lightweight endpoint that does not require authentication.
+      required: true
+      default: /
+    - id: health_check_matcher
+      label: Success codes
+      type: string
+      description: HTTP status code matcher for successful health checks. Defaults to 200-399 so redirects and common successful responses are accepted.
+      collapsible: true
+      placeholder: 200-399
+      required: true
+      default: 200-399
+    - id: health_check_interval
+      label: Interval (secs)
+      type: number
+      description: Seconds between load balancer health checks. Lower values detect failures faster but send more health-check traffic.
+      collapsible: true
+      max: 300
+      min: 5
+      default: 5
+    - id: health_check_timeout
+      label: Timeout (secs)
+      type: number
+      description: Seconds to wait for the health-check response before marking that check as failed. Must be lower than the interval.
+      collapsible: true
+      max: 120
+      min: 2
+      default: 4
+    - id: healthy_threshold
+      label: Healthy threshold
+      type: number
+      description: Number of consecutive successful checks required before an unhealthy target is considered healthy.
+      collapsible: true
+      max: 10
+      min: 2
+      default: 2
+    - id: unhealthy_threshold
+      label: Unhealthy threshold
+      type: number
+      description: Number of consecutive failed checks required before a target is considered unhealthy.
+      collapsible: true
+      max: 10
+      min: 2
+      default: 2
+    - id: health_check_grace_period_seconds
+      label: Health check grace period (secs)
+      type: number
+      description: Seconds ECS ignores failing load balancer health checks after a task starts. Increase this for apps with slow boot times.
+      collapsible: true
+      min: 0
+      default: 0
+    - id: target_group_slow_start
+      label: Slow start duration (secs)
+      type: number
+      description: Gradually ramps traffic to newly registered targets. Use 0 to disable.
+      collapsible: true
+      max: 900
+      min: 0
+      default: 0
+    - id: target_group_stickiness_enabled
+      label: Sticky sessions
+      type: boolean
+      description: Enable load balancer cookie stickiness so repeat requests are routed to the same task when possible. When enabled, traffic-shift deployments also keep clients on the first production or alternate target group they reach.
+      collapsible: true
+      default: true
+    - id: target_group_stickiness_type
+      label: Stickiness type
+      type: string
+      collapsible: true
+      show_when:
+        target_group_stickiness_enabled: true
+      default: lb_cookie
+      values:
+        - label: Load balancer cookie
+          value: lb_cookie
+        - label: Application cookie
+          value: app_cookie
+    - id: target_group_stickiness_cookie_duration
+      label: Stickiness cookie duration (secs)
+      type: number
+      collapsible: true
+      max: 604800
+      min: 1
+      show_when:
+        target_group_stickiness_enabled: true
+      default: 86400
+    - id: target_group_stickiness_cookie_name
+      label: Application cookie name
+      type: string
+      collapsible: true
+      required: false
+      show_when:
+        target_group_stickiness_type: app_cookie
+    - $template: ../../partials/templates/alb-listener-rule-inputs.yml
+      with:
+        field_overrides: {}
+    - $include: ../../partials/inputs/ecs-service-capacity-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-autoscaling-inputs.yml
+    - $template: ../../partials/templates/ecs-service-runtime-env-inputs.yml
+      with:
+        environment_variables_description: Runtime environment variables passed to the app container. PORT is added automatically from the container port setting.
+    - $include: ../../partials/inputs/ecs-service-deploy-command-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-logging-iam-networking-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-efs-inputs.yml
+    - $include: ../../partials/inputs/ecs-service-builder-ecr-misc-inputs.yml
+  stack:
+    type: opentofu
+    ravion_state_backend_workspace: >-
+      << module.input.ravion_state_backend_workspace || project.given_id + "-" + environment.given_id + "-"
+      + module.given_id + "-" + stack.id>>
+    pipelines:
+      defaults:
+        input:
+          aws_account_id: "<< module.input.execution_environment_id ? null : module.input.aws_account_id >>"
+          aws_region: "<< module.input.execution_environment_id ? null : module.input.aws_region >>"
+          base_path: compute/ecs_service
+          branch: main
+          execution_environment_id: << module.input.execution_environment_id >>
+          ref: $local.module_tag
+          repo: https://github.com/flightcontrolhq/modules
+          stack_id: <<stack.id>>
+          terraform_variables:
+            $merge:
+              - ../../partials/stack/ecs-service-common-terraform-variables.yml
+              - container_port: << module.input.container_port >>
+                health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
+                load_balancer_attachment:
+                  $template: ../../partials/templates/alb-load-balancer-attachment.yml
+                  with:
+                    additional_fields:
+                      container_port: << module.input.container_port >>
+                    attachment_control:
+                      enabled: true
+                    listener_arn: >-
+                      << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
+                      module.input.public_alb_http_listener_arn) :
+                      (module.input.private_alb_https_listener_arn ||
+                      module.input.private_alb_http_listener_arn) >>
+                    target_group:
+                      health_check:
+                        enabled: true
+                        healthy_threshold: << module.input.healthy_threshold >>
+                        interval: << module.input.health_check_interval >>
+                        matcher: << module.input.health_check_matcher >>
+                        path: << module.input.health_check_path >>
+                        timeout: << module.input.health_check_timeout >>
+                        unhealthy_threshold: << module.input.unhealthy_threshold >>
+                      port: << module.input.container_port >>
+                      protocol: HTTP
+                      slow_start: << module.input.target_group_slow_start >>
+                      stickiness:
+                        cookie_duration: << module.input.target_group_stickiness_cookie_duration >>
+                        cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
+                        enabled: << module.input.target_group_stickiness_enabled >>
+                        # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
+                        # (show_when) and renders null, but the Terraform variable validation and the
+                        # aws_lb_target_group stickiness block both require a non-null type.
+                        type: '<< module.input.target_group_stickiness_enabled ? module.input.target_group_stickiness_type : "lb_cookie" >>'
+                      target_type: ip
+                load_balancer_security_group_id: >-
+                  << module.input.public_web_service_enabled ? module.input.public_alb_security_group_id :
+                  module.input.private_alb_security_group_id >>
+          tool: opentofu
+          tool_version: << module.input.opentofu_version || defaults.opentofu_version >>
+        variant: standard
+      change:
+        pipeline_id: << defaults.change_pipeline_id >>
+      destroy:
+        pipeline_id: << defaults.destroy_pipeline_id >>
+  build:
+    $include: ../../partials/build/ecs-service-image-build.yml
+  deploy:
+    $merge:
+      - ../../partials/deploy/ecs-service-deploy-common.yml
+    strategy: |
+      <<
+      module.input.deployment_strategy == "rolling" ? nil :
+      module.input.deployment_strategy == "blue_green" ? {
+        "type": "blue_green",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages
+      } :
+      module.input.deployment_strategy == "linear" ? {
+        "type": "linear",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "linear": {
+          "step_percentage": module.input.linear_step_percentage,
+          "step_bake_time_in_minutes": module.input.linear_step_bake_time_in_minutes
+        }
+      } : {
+        "type": "canary",
+        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
+        "pause_stages": module.input.deployment_pause_stages,
+        "canary": {
+          "canary_percent": module.input.canary_percent,
+          "canary_bake_time_in_minutes": module.input.canary_bake_time_in_minutes
+        }
+      }
+      >>
+    infrastructure:
+      $merge:
+        - ../../partials/deploy/ecs-service-deploy-infrastructure-common.yml
+        - ecs_target_group_arn: <<stack.output.target_group_arn>>
+          # Load-balancer advanced configuration for native traffic-shift
+          # strategies (blue_green / linear / canary). The deploy manager
+          # attaches these to UpdateService loadBalancers[].advancedConfiguration
+          # so ECS can shift traffic between the production and alternate target
+          # groups. Null/absent for non-load-balanced services (rolling only).
+          ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
+          ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
+          ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
+          ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
+    task_definition:
+      $merge:
+        - ../../partials/deploy/ecs-service-task-definition-common.yml
+      container_definitions: >-
+        << (module.input.firelens_enabled ? [{"command": (len(module.input.image_start_command)
+        > 0 ? module.input.image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
+        int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
+        "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment": ([{name:
+        "PORT", value: string(module.input.container_port)}] | concat(module.input.environment_variables !=
+        nil ? module.input.environment_variables : [])), "essential": true, "image":
+        (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains
+        "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref :
+        module.input.image_repository + ":" + deploy.input.image_ref) : (deploy.input.image_ref contains
+        "sha256:" ? stack.output.ecr_repository_url + "@" + deploy.input.image_ref :
+        stack.output.ecr_repository_url + ":" + deploy.input.image_ref)), "linux_parameters":
+        {"init_process_enabled": true}, "log_configuration": {"log_driver": "awsfirelens"}, "memory":
+        (module.input.capacity_provider == "ec2" ? int(float(module.input.task_memory) * 1024) :
+        int(float(module.input.fargate_size.memory_gb) * 1024)), "mount_points":
+        (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
+        (stack.output.container_name),
+        "port_mappings": [{"app_protocol": "http", "container_port": (module.input.container_port),
+        "protocol": "tcp"}], "readonly_root_filesystem": false, "repository_credentials":
+        (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
+        module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
+        "stop_timeout": 30}, {"name": "log_router", "image": module.input.firelens_image, "cpu": 0,
+        "memory_reservation": 51, "essential": true, "environment": ([{name: "FIRELENS_CONFIG_CONTENT",
+        value: "[SERVICE]\n    Flush 1\n    Grace 30\n\n" + (module.input.firelens_config ?
+        module.input.firelens_config + "\n" : "") + (module.input.firelens_cloudwatch_output_enabled ?
+        "\n[OUTPUT]\n    Name cloudwatch\n    Match *\n    region " + stack.output.region +
+        "\n    log_group_name " + stack.output.log_group_name +
+        "\n    auto_create_group true\n    log_stream_prefix " + stack.output.log_stream_prefix +
+        "/\n    retry_limit 2\n    log_key log\n    log_format json/emf\n" : "")}] |
+        concat(module.input.firelens_environment_variables != nil ?
+        module.input.firelens_environment_variables : [])), "secrets": module.input.firelens_secrets != nil
+        ? module.input.firelens_secrets : [], "command": ["/bin/sh", "-c",
+        "printf '%s' \"$FIRELENS_CONFIG_CONTENT\" > /flightcontrol-firelens.conf && exec /entrypoint.sh"],
+        "user": "0", "log_configuration": {"log_driver": "awslogs", "options": {"awslogs-group":
+        stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
+        stack.output.log_stream_prefix + "/firelens"}}, "firelens_configuration": {"type": "fluentbit",
+        "options": {"config-file-type": "file", "config-file-value": "/flightcontrol-firelens.conf",
+        "enable-ecs-log-metadata": string(module.input.firelens_ecs_metadata_enabled)}}}] : [{"command":
+        (len(module.input.image_start_command) > 0 ? module.input.image_start_command : nil), "cpu":
+        (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
+        int(float(module.input.fargate_size.vcpu) * 1024)), "environment": ([{name: "PORT", value:
+        string(module.input.container_port)}] | concat(module.input.environment_variables != nil ?
+        module.input.environment_variables : [])), "essential": true, "image": (module.input.build_source ==
+        "image_registry" ? (deploy.input.image_ref contains "sha256:" ?
+        module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
+        ":" + deploy.input.image_ref) : (deploy.input.image_ref contains "sha256:" ?
+        stack.output.ecr_repository_url + "@" + deploy.input.image_ref : stack.output.ecr_repository_url +
+        ":" + deploy.input.image_ref)), "linux_parameters": {"init_process_enabled": true},
+        "log_configuration": {"log_driver": "awslogs", "options": {"awslogs-group":
+        stack.output.log_group_name, "awslogs-region": stack.output.region, "awslogs-stream-prefix":
+        stack.output.log_stream_prefix}}, "memory": (module.input.capacity_provider == "ec2" ?
+        int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
+        1024)), "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
+        module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
+        (stack.output.container_name), "port_mappings": [{"app_protocol": "http",
+        "container_port": (module.input.container_port), "protocol": "tcp"}], "readonly_root_filesystem":
+        false, "repository_credentials": (module.input.image_registry_credentials_secret_arn ?
+        {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), "secrets":
+        (module.input.secrets), "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars
+        : []) >>
+  ui:
+    logs:
+      - id: ecs_service_logs
+        name: ECS service logs
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          region: << stack.output.region >>
+          log_group: << stack.output.log_group_name >>
+          log_stream_prefix: << stack.output.log_stream_prefix >>
+    metrics:
+      - $include: ../../partials/ui/ecs-service-common-metrics.yml
+      - id: request_count
+        name: Request count
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: RequestCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_5xx_errors
+        name: 5xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HTTPCode_Target_5XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_4xx_errors
+        name: 4xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HTTPCode_Target_4XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_response_time
+        name: Target response time
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: TargetResponseTime
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: healthy_hosts
+        name: Healthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: HealthyHostCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: unhealthy_hosts
+        name: Unhealthy hosts
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            TargetGroup: << stack.output.target_group_arn_suffix >>
+          name: UnHealthyHostCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+  readme: |
+    Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
+
+    ## Overview
+
+    The ECS Web Server module creates an ECS service for HTTP traffic in an existing Ravion ECS cluster. Select an ECS cluster, choose how the container image is built or supplied, configure routing and health checks, and Ravion provisions the service, target group, listener rule, IAM roles, security group, ECR repository when needed, and autoscaling settings.
+
+    The module is intentionally focused on web services behind an Application Load Balancer. It uses the selected ECS cluster to inherit AWS account, region, VPC, subnets, capacity providers, load balancer listeners, and load balancer security groups.
+
+    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+
+    ## Use cases
+
+    | Scenario                         | ECS Web Server helps by...                                      |
+    | -------------------------------- | --------------------------------------------------------------- |
+    | Deploying a public web app       | Routing host or path traffic through the public cluster ALB      |
+    | Hosting an internal HTTP service | Routing private traffic through the private cluster ALB          |
+    | Building from source             | Creating images with Railpack or a Dockerfile and pushing to ECR |
+    | Bringing an existing image       | Deploying a public or private registry image by tag or digest    |
+    | Tuning production capacity       | Combining Fargate, Fargate Spot, or EC2 with autoscaling         |
+    | Running release tasks            | Running pre-deploy or post-deploy ECS tasks with the app image   |
+    | Debugging running tasks          | Enabling ECS Exec when shell access is needed                    |
+
+    ## Cluster and networking
+
+    An ECS cluster is required. The cluster reference supplies the cluster ARN, VPC ID, public and private subnet IDs, load balancer listeners, load balancer security groups, capacity provider names, AWS account, region, and execution environment.
+
+    Use Public web service when the service should be reachable through the public Application Load Balancer. Turn it off for internal services that should use the private Application Load Balancer.
+
+    Use Run in private subnets for most production services. Private subnets keep tasks off the public internet and route outbound traffic through NAT or equivalent egress. Turning it off runs tasks in public subnets and assigns public IPs.
+
+    ## Build and image options
+
+    | Build source    | When to use it                                                    |
+    | --------------- | ----------------------------------------------------------------- |
+    | Railpack        | Let Ravion detect the app stack and build an image from source with Railpack |
+    | Dockerfile      | Build from a Dockerfile in the selected repository                |
+    | Pull from image registry | Deploy an existing image from Docker Hub, GHCR, ECR, or registry |
+
+    For Railpack and Dockerfile builds, provide Git repository, Git branch, and optionally Base path. Ravion pushes built images to the service ECR repository and deploys by image digest.
+
+    Railpack settings let you optionally pin the Railpack version and override install, build, and start commands. Leave them blank to use Railpack defaults and autodetection.
+
+    For Pull from image registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials. Use Start command to override the image default CMD when the image needs a different service command.
+
+    ## Routing and health checks
+
+    The service always attaches to an Application Load Balancer target group. Route traffic with Domain host rules, Path rules, or both.
+
+    If both host and path rules are empty, Ravion creates a default /* path rule so the listener rule has a valid condition. Use Listener rule priority only when you need a specific ALB rule order; otherwise AWS assigns the next available priority.
+
+    Health check settings control when the load balancer considers tasks healthy:
+
+    | Field                            | Default | Description                                                    |
+    | -------------------------------- | ------- | -------------------------------------------------------------- |
+    | Container port                   | 80      | Port the container listens on; PORT is added automatically     |
+    | Health check path                | /       | Lightweight HTTP endpoint the load balancer checks             |
+    | Success codes                    | 200-399 | Status codes treated as healthy                                |
+    | Interval (secs)                  | 5       | Seconds between checks                                         |
+    | Timeout (secs)                   | 4       | Seconds to wait for a response                                 |
+    | Healthy threshold                | 2       | Successful checks needed to mark a target healthy              |
+    | Unhealthy threshold              | 2       | Failed checks needed to mark a target unhealthy                |
+    | Health check grace period (secs) | 0       | Startup window where ECS ignores load balancer health failures |
+
+    Increase the grace period for apps with slow boot times. Keep health check endpoints lightweight and unauthenticated.
+
+    ## Capacity and runtime
+
+    Choose one primary Capacity provider:
+
+    | Capacity provider | Best for                                                       |
+    | ----------------- | -------------------------------------------------------------- |
+    | Fargate           | Simple serverless containers and predictable web services      |
+    | Fargate spot      | Lower-cost services that can tolerate task interruption        |
+    | EC2               | Workloads that need cluster EC2 capacity or host-level control |
+
+    You can add secondary providers with Also use Fargate, Also use Fargate spot, and Also use EC2. Mixed strategies can reduce cost or increase placement flexibility, but each enabled provider must exist on the selected cluster.
+
+    For Fargate and Fargate Spot, App size defaults to 2 vCPU and 4 GB memory. App ephemeral storage uses the AWS default of 20 GiB unless you increase it to 21-200 GiB. For EC2 capacity, App vCPU defaults to 1.5 and App memory in GB defaults to 3.5; leave spare CPU and memory on each EC2 instance for the ECS agent and system processes.
+
+    CPU architecture defaults to x86_64 for broad compatibility. Choose ARM64 only when the image and native dependencies support it.
+
+    ## Autoscaling
+
+    Autoscaling is enabled by default with one minimum task and three maximum tasks. For production, start with at least two minimum tasks when availability matters. When autoscaling is disabled, Desired tasks controls how many web tasks the ECS service keeps running.
+
+    | Field                    | Default | Description                                    |
+    | ------------------------ | ------- | ---------------------------------------------- |
+    | Autoscaling              | true    | Enables ECS service target tracking            |
+    | Minimum tasks            | 1       | Lower bound for running tasks                  |
+    | Maximum tasks            | 3       | Upper bound for running tasks                  |
+    | Desired tasks            | 1       | Running tasks when autoscaling is disabled     |
+    | CPU target (%)           | 70      | Average CPU utilization target                 |
+    | Memory target (%)        | 80      | Average memory utilization target              |
+    | Scale-in cooldown (secs) | 300     | Delay before another scale-in action           |
+    | Scale-out cooldown (secs)| 300     | Delay before another scale-out action          |
+    | Scale-in disabled        | false   | Prevents autoscaling from reducing task count  |
+
+    ## Application configuration
+
+    Use Runtime environment variables for plain container environment values. Ravion also sets PORT from Container port.
+
+    Use Runtime secrets for sensitive values. Secrets are injected into the ECS task from SSM Parameter Store or Secrets Manager using name and value_from objects.
+
+    Use Build environment variables for values needed during image builds. Values can be plain strings or references loaded from Parameter Store or Secrets Manager. For Dockerfile builds, enable Inject environment variables in Dockerfile to pass those values as Docker build arguments.
+
+    ## Persistent storage
+
+    Enable the EFS file system setting, select a Ravion EFS module, and set the EFS mount path. Ravion adds the task volume, mounts it into the app container, attaches the file system's client security group to the service so NFS traffic is allowed, and mounts through the file system's access point when one is enabled. Sidecars mount the same file system through their Mount points setting with `efs` as the source volume.
+
+    EFS volumes work with Fargate and EC2 Linux tasks and keep data across task replacement. Transit encryption is enabled by default. Enable EFS IAM authorization to authorize file system access with the task role; the task role must allow elasticfilesystem:ClientMount, plus elasticfilesystem:ClientWrite or elasticfilesystem:ClientRootAccess as needed.
+
+    ## Deployment
+
+    Deployment strategy defaults to Rolling. Blue/green, Linear, and Canary use the native ECS traffic-shift controller with production and alternate target groups. The deployment strategy can change between deploys without changing Terraform infrastructure.
+
+    Deployments update the ECS service task definition with the selected image, generated container definition, awslogs configuration, runtime platform, environment variables, secrets, and capacity-provider-compatible task settings.
+
+    The deploy-time Image value depends on the build source:
+
+    | Build source           | Deploy image value                                  |
+    | ---------------------- | --------------------------------------------------- |
+    | Railpack or Dockerfile | Image digest such as sha256:...            |
+    | Pull from image registry | Tag for the configured repository, such as latest   |
+    | Disabled               | Full image URI, ideally pinned by digest            |
+
+    Run pre-deploy command and Run post-deploy command start optional one-off ECS tasks before or after each deployment. These commands use the deployed app image, the app container name, the configured task role and execution role, the selected capacity provider strategy, service subnets, service security groups, runtime environment variables, and runtime secrets. Leave either toggle disabled to skip that hook and hide its settings.
+
+    Use pre-deploy commands for work that must complete before the service updates, such as database migrations. Use post-deploy commands for work that should happen after a successful deployment, such as cache warming. Commands are ECS command argument arrays. For shell behavior, use `/bin/sh`, `-lc`, and your shell command as separate arguments.
+
+    Hook-specific environment variables are appended to the app container override for the one-off task. Optional hook CPU, memory, ephemeral storage, and timeout settings let release tasks use different resources from the web service without changing the steady-state app task.
+
+    ## Standby validation traffic
+
+    For Blue/green, Linear, and Canary deployments, Ravion creates a test listener rule on the same Application Load Balancer listener as the production rule. During the test traffic stage, requests that match the service's normal Domain host rules and Path rules and include the standby selector route to the standby, or green, task set on the alternate target group.
+
+    By default, the standby selector is the query parameter `__x-rvn-test__=1`. For example, if production traffic uses `https://app.example.com/health`, validate the standby service with:
+
+    ```text
+    https://app.example.com/health?__x-rvn-test__=1
+    ```
+
+    The alternate target group only has registered targets while ECS is running a traffic-shift deployment. Outside that window, the standby route may have no healthy targets.
+
+    Use Advanced Terraform variables to override the standby selector. Values in Advanced Terraform variables override the generated Terraform variables for the service.
+
+    To use a different query parameter:
+
+    ```json
+    {
+      "test_query_string_key": "preview",
+      "test_query_string_value": "green"
+    }
+    ```
+
+    Then validate standby traffic with `?preview=green`.
+
+    To use an HTTP header instead of a query parameter:
+
+    ```json
+    {
+      "test_traffic_condition_type": "header",
+      "test_header_name": "X-Ravion-Test",
+      "test_header_value": "1"
+    }
+    ```
+
+    Then send requests with `X-Ravion-Test: 1`. A service can use either the query-string selector or the header selector, not both at once.
+
+    ## Sticky sessions and traffic shifts
+
+    The module definition sets Sticky sessions to true by default. When that setting is enabled, Ravion configures target-group stickiness for the service's production and alternate target groups, so the load balancer keeps repeat requests on the same task when possible. With the default Load balancer cookie stickiness type, the target-level cookie is `AWSALB`; AWS may also set `AWSALBCORS` for CORS support. With Application cookie stickiness, the target-level cookie is the configured Application cookie name, and AWS may also set `AWSALBAPP-*` cookies.
+
+    During Blue/green, Linear, and Canary deployments, Ravion also enables ALB group stickiness on the production and standby listener rule forward actions when Sticky sessions is enabled. A client that first reaches the production target group or the alternate target group keeps using that same group for the stickiness cookie duration, even while the deployment's weighted traffic shift changes for new clients.
+
+    The ALB group stickiness cookie is `AWSALBTG`. For CORS requests, AWS may also set `AWSALBTGCORS`. Application cookie name applies only to `app_cookie` stickiness inside the selected target group; the ALB group stickiness cookie name is managed by AWS and cannot be changed.
+
+    To clear stickiness for a browser, open the browser developer tools, go to Application or Storage > Cookies for the service domain, and delete the relevant cookies: `AWSALBTG` and `AWSALBTGCORS` for ALB group stickiness; `AWSALB` and `AWSALBCORS` for the default target-level stickiness; and the configured Application cookie name plus any `AWSALBAPP-*` cookies when Application cookie stickiness is selected. For API clients, remove those cookie names from the cookie jar or stop sending them in the `Cookie` header. The next request can then enter the current traffic split like a new client. If Sticky sessions is turned off, Ravion does not enable target-group stickiness or ALB group stickiness for this behavior.
+
+    ## Builder settings
+
+    Builder settings apply to Railpack and Dockerfile builds.
+
+    | Field                         | Default       | Description                                          |
+    | ----------------------------- | ------------- | ---------------------------------------------------- |
+    | Builder instance type         | ec2           | Use EC2 for normal builds or EC2 spot for lower cost |
+    | Builder instance size         | c7a.4xlarge   | EC2 instance size used for builds                    |
+    | Builder execution environment | Cluster value | Optional override for where image builds run         |
+    | Builder AMI                   | Default image | Optional AMI override for build runners              |
+
+    Start with the default builder size, then adjust based on build duration and resource usage.
+
+    ## Configuration
+
+    | Field                           | Required | Default                    | Description                                        |
+    | ------------------------------- | -------- | -------------------------- | -------------------------------------------------- |
+    | Public web service              | No       | true                       | Use the public ALB; turn off for the private ALB   |
+    | Run in private subnets          | No       | true                       | Run tasks in private subnets without public IPs    |
+    | Service name                    | Yes      | {project}-{env}-{module}   | Name for the ECS service and related resources     |
+    | ECS cluster                     | Yes      | -                          | Existing rvn-ecs-cluster module instance           |
+    | Build source                    | Yes      | dockerfile                 | Dockerfile, Railpack, Pull from image registry, or Disabled |
+    | Git repository                  | Yes*     | -                          | Required for Railpack and Dockerfile builds |
+    | Git branch                      | Yes*     | -                          | Required for Railpack and Dockerfile builds |
+    | Source base path                | No       | .                          | Path from repository root to source code           |
+    | Railpack version                | No       | Ravion default             | Optional version for Railpack builds               |
+    | Image repository                | Yes*     | nginx                      | Required for image registry deployments            |
+    | Start command                   | No       | []                         | Command arguments that override an image default CMD |
+    | Container port                  | Yes      | 80                         | Port exposed by the app container                  |
+    | Health check path               | Yes      | /                          | HTTP path used by the target group health check    |
+    | Sticky sessions                 | No       | true                       | Keep clients on the same task, and on the same traffic-shift target group when enabled |
+    | Domain host rules               | No       | -                          | Hostnames such as app.example.com or *.example.com |
+    | Path rules                      | No       | -                          | Path patterns such as /*, /api/*, or /app/*        |
+    | Capacity provider               | Yes      | fargate                    | Primary service capacity provider                  |
+    | App size                        | No       | 2 vCPU, 4 GB               | Fargate task CPU and memory                        |
+    | App ephemeral storage (GiB)     | No       | 20                         | Fargate task ephemeral storage                     |
+    | App vCPU                        | Yes*     | 1.5                        | Required for EC2 capacity                          |
+    | App memory in GB                | Yes*     | 3.5                        | Required for EC2 capacity                          |
+    | CPU architecture                | No       | X86_64                     | x86_64 compatibility or ARM64 cost optimization    |
+    | ECS exec                        | No       | false                      | Enable ECS Exec for debugging containers           |
+    | Run pre-deploy command          | No       | false                      | Enable a task before each deployment               |
+    | Pre-deploy command arguments    | Yes*     | []                         | Command arguments run before each deployment       |
+    | Pre-deploy environment variables| No       | []                         | Extra environment variables for the pre-deploy task |
+    | Pre-deploy CPU units            | No       | App task CPU               | CPU override for the pre-deploy task               |
+    | Pre-deploy memory (MiB)         | No       | App task memory            | Memory override for the pre-deploy task            |
+    | Pre-deploy ephemeral storage    | No       | Task definition default    | Ephemeral storage override for the pre-deploy task |
+    | Pre-deploy timeout (secs)       | No       | 1800                       | Maximum pre-deploy task wait time                  |
+    | Run post-deploy command         | No       | false                      | Enable a task after each successful deployment     |
+    | Post-deploy command arguments   | Yes*     | []                         | Command arguments run after each successful deployment |
+    | Post-deploy environment variables| No      | []                         | Extra environment variables for the post-deploy task |
+    | Post-deploy CPU units           | No       | App task CPU               | CPU override for the post-deploy task              |
+    | Post-deploy memory (MiB)        | No       | App task memory            | Memory override for the post-deploy task           |
+    | Post-deploy ephemeral storage   | No       | Task definition default    | Ephemeral storage override for the post-deploy task |
+    | Post-deploy timeout (secs)      | No       | 1800                       | Maximum post-deploy task wait time                 |
+    | Autoscaling                     | No       | true                       | Enable CPU and optional memory target tracking     |
+    | Desired tasks                   | Yes*     | 1                          | Number of web tasks when autoscaling is disabled   |
+    | Deployment strategy             | Yes      | rolling                    | Rolling, Blue/green, Linear, or Canary             |
+    | EFS file system                 | No       | false                      | Mount an EFS file system into the app container   |
+    | EFS mount path                  | Yes*     | /mnt/efs                   | App container path for the referenced file system  |
+    | Tags                            | No       | Standard Ravion tags       | Additional tags applied to resources               |
+    | Advanced Terraform variables    | No       | {}                         | Raw lower-level overrides for exceptional cases    |
+    | OpenTofu version override       | No       | Ravion default             | Override the OpenTofu version for the stack        |
+    | Ravion Terraform workspace name | No       | {project}-{env}-{module}   | Override the state backend workspace name          |
+
+    *Conditionally required based on the selected build source or capacity provider.
+
+    ## Design decisions
+
+    - The module always models an HTTP web service behind an Application Load Balancer. NLB, worker, and service discovery patterns are intentionally outside this module definition.
+    - Tasks default to private subnets even for public web services. The ALB is public; the tasks remain private when the VPC has NAT or equivalent egress.
+    - Built images are pushed to an ECR repository created with the service stack. Pull from image registry lets teams bring their own image pipeline.
+    - Desired count uses the autoscaling minimum when autoscaling is enabled and the Desired tasks input when autoscaling is disabled.
+    - Advanced Terraform variables exist for exceptional lower-level overrides. Prefer the typed Ravion fields whenever possible.
+
+    ## Learn more
+
+    - [Amazon ECS services](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_services.html)
+    - [Application Load Balancer listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html)
+    - [Amazon ECS capacity providers](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cluster-capacity-providers.html)
+    - [Amazon ECS service auto scaling](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html)
+    - [Railpack documentation](https://railpack.com/)

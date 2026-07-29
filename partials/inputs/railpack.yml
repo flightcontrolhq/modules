@@ -1,0 +1,26 @@
+- id: section_railpack
+  label: Railpack
+  show_when: $with.show_when
+  type: section
+- collapsible: true
+  description: Optional Railpack version to use for the build. Leave blank to use the Ravion default.
+  id: railpack_version
+  label: Railpack version
+  patterns:
+    - message: Leave blank, use latest, a semantic version like 0.29.0, or a v-prefixed version like v0.29.0.
+      pattern: ^(|latest|v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)$
+  placeholder: 0.29.0
+  show_when: $with.show_when
+  type: string
+- id: railpack_install_cmd
+  label: Install command
+  description: Optional dependency installation command. Leave blank to use Railpack detection.
+  placeholder: Railpack default
+  show_when: $with.show_when
+  type: string
+- id: railpack_build_cmd
+  label: Build command
+  description: Optional application build command. Leave blank to use Railpack detection.
+  placeholder: Railpack default
+  show_when: $with.show_when
+  type: string

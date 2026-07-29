@@ -1,0 +1,68 @@
+name: Terraform Static Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Terraform Modules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.10.0
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
+      - name: Check formatting
+        run: tofu fmt -check -recursive
+
+      - name: Initialize TFLint plugins
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Validate module syntax
+        run: |
+          set -euo pipefail
+
+          modules=$(find . -mindepth 2 -maxdepth 2 -name versions.tf -exec dirname {} \; | sort)
+
+          for module in $modules; do
+            echo "Validating ${module}"
+            tofu -chdir="${module}" init -backend=false
+            tofu -chdir="${module}" validate
+          done
+
+      - name: Test CloudFront module
+        run: |
+          tofu -chdir=cdn/cloudfront init -backend=false
+          tofu -chdir=cdn/cloudfront test
+
+      - name: Test CloudFront redirect function
+        run: node --test cdn/cloudfront/functions/redirect.test.js
+
+      - name: Lint modules
+        run: tflint --recursive
+
+      - name: Scan Terraform configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL

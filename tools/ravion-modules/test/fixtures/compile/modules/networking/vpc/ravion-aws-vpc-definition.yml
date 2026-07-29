@@ -1,0 +1,42 @@
+definition:
+  type: ravion-aws-vpc
+  name: AWS VPC
+  description: AWS VPC and subnets
+release:
+  version: 1.2.3
+  description: Add subnet options.
+module:
+  inputs:
+    - $include: ../../partials/inputs/base.yml
+    - id: networking
+      type: section
+      label: Networking
+    - $template: ../../partials/templates/ref-input.yml
+      with:
+        id: vpc
+        type: stack
+        label: VPC
+        outputs:
+          vpc_id: VPC ID
+    - id: advanced
+      type: object
+      label: Advanced
+      properties:
+        $include: ../../partials/inputs/advanced-properties.yml
+  stack:
+    $merge:
+      - ../../partials/stack/pipelines.yml
+      - ravion_state_backend_workspace: "<< module.given_id >>"
+    type: opentofu
+    source:
+      repo: https://github.com/flightcontrolhq/modules
+      ref: $local.module_tag
+      base_path: networking/vpc
+  deploy:
+    $include: ../../partials/deploy/defaults.yml
+  readme: Terraform source https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc
+  settings:
+    $merge:
+      - ../../partials/settings/base.yml
+      - advanced:
+          retries: 2

@@ -5,7 +5,7 @@
 resource "aws_elasticache_parameter_group" "this" {
   count = local.is_serverless ? 0 : 1
 
-  name        = var.name
+  name        = local.parameter_group_name
   family      = local.parameter_group_family
   description = "Parameter group for ${var.name} ElastiCache cluster"
 
@@ -23,5 +23,9 @@ resource "aws_elasticache_parameter_group" "this" {
 
   lifecycle {
     create_before_destroy = true
+
+    ignore_changes = [
+      name,
+    ]
   }
 }

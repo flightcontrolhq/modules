@@ -1,0 +1,15 @@
+description: Environment variables available during builds. Values can be plain strings or references loaded from Parameter Store or Secrets Manager.
+id: build_environment_variables
+label: Build environment variables
+placeholder: |-
+  {
+    "NODE_ENV": "production",
+    "API_URL": {
+      "fromParameterStore": "my-secret"
+    },
+    "NPM_TOKEN": {
+      "fromSecretManager": "arn:..."
+    }
+  }
+required: false
+type: object

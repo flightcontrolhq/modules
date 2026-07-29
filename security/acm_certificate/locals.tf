@@ -1,5 +1,5 @@
 locals {
-  region = coalesce(var.region, data.aws_region.current.id)
+  region = coalesce(var.region, data.aws_region.current.region)
 }
 
 ################################################################################
@@ -14,5 +14,5 @@ locals {
 
   tags = merge(local.default_tags, var.tags)
 
-  create_route53_records = var.create_route53_validation_records && var.route53_zone_id != null
+  create_route53_records = var.route53_validation_records_creation_enabled && var.route53_zone_id != null
 }

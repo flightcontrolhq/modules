@@ -7,7 +7,7 @@ resource "aws_db_instance" "this" {
 
   # Engine
   engine         = var.engine
-  engine_version = var.engine_version
+  engine_version = local.engine_version
   license_model  = var.license_model
 
   # Instance
@@ -19,25 +19,25 @@ resource "aws_db_instance" "this" {
   storage_throughput    = var.storage_throughput
 
   # Encryption
-  storage_encrypted = var.storage_encrypted
+  storage_encrypted = var.storage_encryption_enabled
   kms_key_id        = var.kms_key_id
 
   # Network
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [local.create_security_group ? module.security_group[0].security_group_id : var.security_group_id]
   port                   = local.port
-  publicly_accessible    = var.publicly_accessible
-  availability_zone      = var.multi_az ? null : var.availability_zone
+  publicly_accessible    = var.public_access_enabled
+  availability_zone      = var.multi_az_enabled ? null : var.availability_zone
   ca_cert_identifier     = var.ca_cert_identifier
 
   # High Availability
-  multi_az = var.multi_az
+  multi_az = var.multi_az_enabled
 
   # Authentication
   username                            = var.username
-  password                            = var.manage_master_user_password ? null : var.password
-  manage_master_user_password         = var.manage_master_user_password
-  master_user_secret_kms_key_id       = var.manage_master_user_password ? var.master_user_secret_kms_key_id : null
+  password                            = var.master_user_password_management_enabled ? null : var.password
+  manage_master_user_password         = var.master_user_password_management_enabled
+  master_user_secret_kms_key_id       = var.master_user_password_management_enabled ? var.master_user_secret_kms_key_id : null
   iam_database_authentication_enabled = local.iam_database_authentication_enabled
 
   # Database
@@ -54,11 +54,11 @@ resource "aws_db_instance" "this" {
   # Backup
   backup_retention_period   = var.backup_retention_period
   backup_window             = var.backup_window
-  copy_tags_to_snapshot     = var.copy_tags_to_snapshot
-  delete_automated_backups  = var.delete_automated_backups
+  copy_tags_to_snapshot     = var.snapshot_tag_copying_enabled
+  delete_automated_backups  = var.automated_backups_deletion_enabled
   snapshot_identifier       = var.snapshot_identifier
   final_snapshot_identifier = local.final_snapshot_identifier
-  skip_final_snapshot       = var.skip_final_snapshot
+  skip_final_snapshot       = !var.final_snapshot_creation_enabled
 
   # Point-in-time recovery
   dynamic "restore_to_point_in_time" {
@@ -74,10 +74,10 @@ resource "aws_db_instance" "this" {
 
   # Maintenance
   maintenance_window          = var.maintenance_window
-  auto_minor_version_upgrade  = var.auto_minor_version_upgrade
-  allow_major_version_upgrade = var.allow_major_version_upgrade
-  apply_immediately           = var.apply_immediately
-  deletion_protection         = var.deletion_protection
+  auto_minor_version_upgrade  = var.minor_version_auto_upgrade_enabled
+  allow_major_version_upgrade = var.major_version_upgrade_enabled
+  apply_immediately           = var.immediate_apply_enabled
+  deletion_protection         = var.deletion_protection_enabled
 
   # Monitoring
   enabled_cloudwatch_logs_exports       = var.enabled_cloudwatch_logs_exports
@@ -101,23 +101,23 @@ resource "aws_db_instance" "this" {
 
   lifecycle {
     precondition {
-      condition     = var.create_security_group || var.security_group_id != null
-      error_message = "security_group_id is required when create_security_group is false."
+      condition     = var.security_group_creation_enabled || var.security_group_id != null
+      error_message = "security_group_id is required when security_group_creation_enabled is false."
     }
 
     precondition {
-      condition     = var.manage_master_user_password || var.password != null
-      error_message = "password is required when manage_master_user_password is false."
+      condition     = var.master_user_password_management_enabled || var.password != null
+      error_message = "password is required when master_user_password_management_enabled is false."
     }
 
     precondition {
       condition     = local.create_parameter_group || var.parameter_group_name != null
-      error_message = "parameter_group_name is required when create_parameter_group is false."
+      error_message = "parameter_group_name is required when parameter_group_creation_enabled is false."
     }
 
     precondition {
       condition     = var.monitoring_interval == 0 || local.create_monitoring_role || var.monitoring_role_arn != null
-      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and create_monitoring_role is false."
+      error_message = "monitoring_role_arn is required when monitoring_interval > 0 and monitoring_role_creation_enabled is false."
     }
 
     precondition {
@@ -155,7 +155,7 @@ resource "aws_db_instance" "read_replica" {
   # Network
   vpc_security_group_ids = [local.create_security_group ? module.security_group[0].security_group_id : var.security_group_id]
   port                   = local.port
-  publicly_accessible    = var.publicly_accessible
+  publicly_accessible    = var.public_access_enabled
   availability_zone      = length(var.read_replica_availability_zones) > count.index ? var.read_replica_availability_zones[count.index] : null
   ca_cert_identifier     = var.ca_cert_identifier
 
@@ -171,14 +171,14 @@ resource "aws_db_instance" "read_replica" {
 
   # Backup (read replicas have their own backup settings)
   backup_retention_period  = 0 # Disable automated backups for replicas by default
-  copy_tags_to_snapshot    = var.copy_tags_to_snapshot
-  delete_automated_backups = var.delete_automated_backups
+  copy_tags_to_snapshot    = var.snapshot_tag_copying_enabled
+  delete_automated_backups = var.automated_backups_deletion_enabled
   skip_final_snapshot      = true # No final snapshot for replicas
 
   # Maintenance
   maintenance_window         = var.maintenance_window
-  auto_minor_version_upgrade = var.auto_minor_version_upgrade
-  apply_immediately          = var.apply_immediately
+  auto_minor_version_upgrade = var.minor_version_auto_upgrade_enabled
+  apply_immediately          = var.immediate_apply_enabled
   deletion_protection        = false # Easier to manage replica lifecycle
 
   # Monitoring

@@ -1,0 +1,4 @@
+id: $with.id
+type: $with.type
+label: $with.label
+outputs: $with.outputs

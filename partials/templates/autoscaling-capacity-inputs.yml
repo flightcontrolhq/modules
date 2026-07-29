@@ -1,0 +1,14 @@
+- $merge:
+    - id: min_capacity
+      label: Minimum capacity
+      type: number
+      min: 0
+      default: 1
+    - $with.min_capacity_overrides
+- $merge:
+    - id: max_capacity
+      label: Maximum capacity
+      type: number
+      min: 1
+      default: 3
+    - $with.max_capacity_overrides

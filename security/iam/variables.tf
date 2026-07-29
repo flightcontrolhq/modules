@@ -52,7 +52,7 @@ variable "max_session_duration" {
   }
 }
 
-variable "force_detach_policies" {
+variable "policy_force_detach_enabled" {
   type        = bool
   description = "Whether to force detaching any policies the role has before destroying it."
   default     = true
@@ -321,7 +321,7 @@ variable "permission_boundary_arn" {
 # Instance Profile
 ################################################################################
 
-variable "create_instance_profile" {
+variable "instance_profile_creation_enabled" {
   type        = bool
   description = "Whether to create an IAM instance profile for this role."
   default     = false

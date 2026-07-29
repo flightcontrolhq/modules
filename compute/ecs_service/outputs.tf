@@ -85,62 +85,66 @@ output "security_group_arn" {
 }
 
 ################################################################################
-# Target Groups - Rolling Deployment
+# Target Groups
+#
+# A production (tg-1) + alternate (tg-2) pair exists for attachments that
+# support traffic shifting. Rolling-only multi-listener NLB attachments
+# create one production target group per listener and no alternate.
 ################################################################################
 
 output "target_group_arn" {
-  description = "The ARN of the target group (null if load balancer disabled or blue/green deployment)."
-  value       = local.enable_load_balancer && var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn : null
+  description = "The ARN of the production target group the service serves from (alias of production_target_group_arn; null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn : null
 }
 
 output "target_group_arn_suffix" {
-  description = "The ARN suffix of the target group for CloudWatch metrics."
-  value       = local.enable_load_balancer && var.deployment_type == "rolling" ? aws_lb_target_group.this[0].arn_suffix : null
+  description = "The ARN suffix of the production target group for CloudWatch metrics."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn_suffix : null
 }
 
 output "target_group_name" {
-  description = "The name of the target group."
-  value       = local.enable_load_balancer && var.deployment_type == "rolling" ? aws_lb_target_group.this[0].name : null
+  description = "The name of the production target group the service serves from (alias of production_target_group_name; null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].name : null
 }
 
-################################################################################
-# Target Groups - Blue/Green Deployment
-################################################################################
-
-output "blue_target_group_arn" {
-  description = "The ARN of the blue target group (null if not blue/green deployment)."
-  value       = local.enable_load_balancer && var.deployment_type == "blue_green" ? aws_lb_target_group.tg_1[0].arn : null
+output "production_target_group_arn" {
+  description = "The ARN of the production target group (null if load balancer disabled)."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].arn : null
 }
 
-output "blue_target_group_name" {
-  description = "The name of the blue target group."
-  value       = local.enable_load_balancer && var.deployment_type == "blue_green" ? aws_lb_target_group.tg_1[0].name : null
+output "production_target_group_name" {
+  description = "The name of the production target group."
+  value       = local.enable_load_balancer ? aws_lb_target_group.tg_1[0].name : null
 }
 
-output "green_target_group_arn" {
-  description = "The ARN of the green target group (null if not blue/green deployment)."
-  value       = local.enable_load_balancer && var.deployment_type == "blue_green" ? aws_lb_target_group.tg_2[0].arn : null
+output "alternate_target_group_arn" {
+  description = "The ARN of the alternate target group ECS shifts traffic to during native traffic-shift deployments (null if load balancer disabled)."
+  value       = local.traffic_shift_infrastructure_enabled ? aws_lb_target_group.tg_2[0].arn : null
 }
 
-output "green_target_group_name" {
-  description = "The name of the green target group."
-  value       = local.enable_load_balancer && var.deployment_type == "blue_green" ? aws_lb_target_group.tg_2[0].name : null
+output "alternate_target_group_name" {
+  description = "The name of the alternate target group."
+  value       = local.traffic_shift_infrastructure_enabled ? aws_lb_target_group.tg_2[0].name : null
 }
-
-################################################################################
-# Combined Target Group Outputs (for convenience)
-################################################################################
 
 output "target_group_arns" {
   description = "Map of all target group ARNs created by this module."
-  value = local.enable_load_balancer ? (
-    var.deployment_type == "rolling" ? {
-      primary = aws_lb_target_group.this[0].arn
-      } : {
-      blue  = aws_lb_target_group.tg_1[0].arn
-      green = aws_lb_target_group.tg_2[0].arn
-    }
+  value = local.enable_load_balancer ? merge(
+    {
+      production = aws_lb_target_group.tg_1[0].arn
+    },
+    local.traffic_shift_infrastructure_enabled ? { alternate = aws_lb_target_group.tg_2[0].arn } : {},
+    { for port, target_group in aws_lb_target_group.nlb_additional : "listener-${port}" => target_group.arn },
   ) : {}
+}
+
+################################################################################
+# ECS Infrastructure Role
+################################################################################
+
+output "ecs_infrastructure_role_arn" {
+  description = "The ARN of the IAM role ECS assumes to manage load-balancer wiring during native traffic-shift deployments (null if load balancer disabled)."
+  value       = local.traffic_shift_infrastructure_enabled ? aws_iam_role.ecs_infrastructure[0].arn : null
 }
 
 ################################################################################
@@ -153,8 +157,55 @@ output "listener_arns" {
 }
 
 output "nlb_listener_arn" {
-  description = "The ARN of the NLB listener created by this module (null if not using NLB)."
+  description = "The ARN of the primary NLB listener created by this module (null if not using NLB)."
   value       = local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : null
+}
+
+output "nlb_listener_arns" {
+  description = "Map of NLB listener ports to listener ARNs created by this module."
+  value = local.enable_nlb_listener ? merge(
+    { tostring(local.primary_nlb_listener.port) = aws_lb_listener.nlb[0].arn },
+    { for port, listener in aws_lb_listener.nlb_additional : port => listener.arn },
+  ) : {}
+}
+
+output "nlb_target_group_arns" {
+  description = "Map of NLB listener ports to production target group ARNs."
+  value = local.enable_nlb_listener ? merge(
+    { tostring(local.primary_nlb_listener.port) = aws_lb_target_group.tg_1[0].arn },
+    { for port, target_group in aws_lb_target_group.nlb_additional : port => target_group.arn },
+  ) : {}
+}
+
+output "production_listener_rule_arn" {
+  description = "ARN of the production ALB listener rule or primary NLB listener. The ECS deployment controller rewrites this value only for ALB traffic-shift deployments (null if load balancer disabled)."
+  value = local.enable_load_balancer ? (
+    local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : aws_lb_listener_rule.alb["0"].arn
+  ) : null
+}
+
+output "test_listener_rule_arn" {
+  description = "ARN of the test listener rule the ECS deployment controller rewrites during the TEST_TRAFFIC_SHIFT lifecycle stages, routing test traffic to the green revision before the production cutover. The deploy manager passes it as advanced_configuration.test_listener_rule on UpdateService. Null when no module-created or externally-managed test listener rule is configured."
+  value       = local.test_listener_rule_arn
+}
+
+################################################################################
+# Load Balancer
+################################################################################
+
+output "load_balancer_arn" {
+  description = "The ARN of the load balancer the service is attached to (null if no load balancer attachment)."
+  value       = length(data.aws_lb.attached) > 0 ? data.aws_lb.attached[0].arn : null
+}
+
+output "load_balancer_dns_name" {
+  description = "The DNS name of the load balancer the service is attached to. Useful as a CloudFront or DNS origin (null if no load balancer attachment)."
+  value       = length(data.aws_lb.attached) > 0 ? data.aws_lb.attached[0].dns_name : null
+}
+
+output "load_balancer_zone_id" {
+  description = "The canonical hosted zone ID of the load balancer the service is attached to, for Route53 alias records (null if no load balancer attachment)."
+  value       = length(data.aws_lb.attached) > 0 ? data.aws_lb.attached[0].zone_id : null
 }
 
 ################################################################################
@@ -163,12 +214,12 @@ output "nlb_listener_arn" {
 
 output "autoscaling_target_arn" {
   description = "The ARN of the Application Auto Scaling target (null if auto scaling disabled)."
-  value       = local.enable_auto_scaling ? aws_appautoscaling_target.this[0].id : null
+  value       = local.auto_scaling_enabled ? aws_appautoscaling_target.this[0].id : null
 }
 
 output "autoscaling_policies" {
   description = "Map of auto scaling policy ARNs."
-  value = local.enable_auto_scaling ? {
+  value = local.auto_scaling_enabled ? {
     for name, policy in aws_appautoscaling_policy.target_tracking : name => policy.arn
   } : {}
 }
@@ -198,7 +249,7 @@ output "container_name" {
 
 output "container_port" {
   description = "The port of the primary container (dummy value of 3000 if load balancer disabled)."
-  value       = local.enable_load_balancer ? local.lb_container_port : 3000
+  value       = local.enable_load_balancer ? local.primary_load_balancer_container_port : 3000
 }
 
 ################################################################################
@@ -206,8 +257,13 @@ output "container_port" {
 ################################################################################
 
 output "log_group_name" {
-  description = "The name of the CloudWatch log group used by the task (auto-created by ECS)."
-  value       = "/ecs/${var.name}"
+  description = "The name of the CloudWatch log group used by the task."
+  value       = aws_cloudwatch_log_group.this.name
+}
+
+output "log_group_arn" {
+  description = "The ARN of the CloudWatch log group used by the task."
+  value       = aws_cloudwatch_log_group.this.arn
 }
 
 output "log_stream_prefix" {
@@ -221,17 +277,17 @@ output "log_stream_prefix" {
 
 output "ecr_repository_arn" {
   description = "The ARN of the ECR repository (null if disabled)."
-  value       = var.enable_ecr ? module.ecr[0].repository_arn : null
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_arn : null
 }
 
 output "ecr_repository_name" {
   description = "The name of the ECR repository (null if disabled)."
-  value       = var.enable_ecr ? module.ecr[0].repository_name : null
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_name : null
 }
 
 output "ecr_repository_url" {
   description = "The URL of the ECR repository (null if disabled)."
-  value       = var.enable_ecr ? module.ecr[0].repository_url : null
+  value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_url : null
 }
 
 ################################################################################
@@ -247,8 +303,6 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
-
-
 
 ################################################################################
 # Ravion-managed domains
