@@ -109,7 +109,10 @@ resource "aws_ecs_service" "this" {
             ? aws_lb_listener.nlb[0].arn
             : (
               local.ravion_managed
-              ? aws_lb_listener_rule.ravion["0"].arn
+              # Absent only when the cluster exposes no HTTPS listener, which the
+              # precondition below reports; null keeps that message readable
+              # instead of failing here with "Invalid index".
+              ? (length(aws_lb_listener_rule.ravion) > 0 ? aws_lb_listener_rule.ravion["0"].arn : null)
               : aws_lb_listener_rule.alb["0"].arn
             )
           )

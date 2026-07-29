@@ -43,9 +43,18 @@ resource "ravion_aws_acm_certificate" "cluster" {
     # makes it new -> listener in-place swap -> delete old (now detached).
     create_before_destroy = true
 
+    # HTTPS is not optional for managed domains: the wildcard cert is served as
+    # the default certificate of the cluster's 443 listener (listeners.tf, gated
+    # on *_alb_https_enabled). Without it the cert is issued with nothing to
+    # attach it to, the *_alb_https_listener_arn outputs stay null, and every
+    # service nesting under the apex has no listener to put its rules on.
     precondition {
-      condition     = !var.use_ravion_managed_domains || var.public_alb_enabled || var.private_alb_enabled
-      error_message = "use_ravion_managed_domains requires at least one ALB (public_alb_enabled or private_alb_enabled)."
+      condition = (
+        !var.use_ravion_managed_domains
+        || (var.public_alb_enabled && var.public_alb_https_enabled)
+        || (var.private_alb_enabled && var.private_alb_https_enabled)
+      )
+      error_message = "use_ravion_managed_domains requires an ALB with HTTPS enabled: set public_alb_enabled + public_alb_https_enabled (or the private equivalents). The Ravion wildcard certificate is served as the default certificate on the cluster's HTTPS listener, so without one there is nothing to attach it to and services cannot route."
     }
     precondition {
       condition     = !var.use_ravion_managed_domains || (var.ravion_aws_account_id != null && var.ravion_aws_account_id != "")
