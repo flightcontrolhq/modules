@@ -135,8 +135,12 @@ resource "ravion_domain" "custom" {
 
 # One listener rule per chunk of <=5 host headers (AWS ALB's per-condition value
 # quota), together routing all of this service's hostnames to its target group.
-# Each chunk gets its own priority (base + chunk index). Blue/green controllers
-# flip the action externally.
+# Each chunk gets its own priority (base + chunk index). Chunk "0" doubles as
+# the production listener rule handed to ECS advanced_configuration, whose
+# deployment controller rewrites its forward action during native traffic-shift
+# deploys (hence ignore_changes on action); an ecs_service precondition caps
+# traffic-shift services at one chunk so no rule is left behind on the old
+# revision.
 resource "aws_lb_listener_rule" "ravion" {
   for_each = local.ravion_managed && var.cluster_https_listener_arn != null && length(local.ravion_host_headers) > 0 ? {
     for idx, chunk in local.ravion_host_header_chunks : idx => chunk

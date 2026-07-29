@@ -178,9 +178,11 @@ output "nlb_target_group_arns" {
 }
 
 output "production_listener_rule_arn" {
-  description = "ARN of the production ALB listener rule or primary NLB listener. The ECS deployment controller rewrites this value only for ALB traffic-shift deployments (null if load balancer disabled)."
+  description = "ARN of the production ALB listener rule or primary NLB listener. The ECS deployment controller rewrites this value only for ALB traffic-shift deployments (null if load balancer disabled). For a Ravion-managed service this is the first module-created host-header rule on the cluster HTTPS listener."
   value = local.enable_load_balancer ? (
-    local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : aws_lb_listener_rule.alb["0"].arn
+    local.enable_nlb_listener ? aws_lb_listener.nlb[0].arn : (
+      local.ravion_managed ? aws_lb_listener_rule.ravion["0"].arn : aws_lb_listener_rule.alb["0"].arn
+    )
   ) : null
 }
 
