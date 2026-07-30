@@ -561,3 +561,43 @@ run "waf_fail_open" {
     error_message = "ALB should have WAF fail open enabled"
   }
 }
+
+# Test 29: Ingress rules referencing source security groups
+run "ingress_security_groups" {
+  command = plan
+
+  variables {
+    https_listener_enabled     = true
+    certificate_arns           = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    ingress_security_group_ids = ["sg-0123456789abcdef0"]
+  }
+
+  assert {
+    condition = length([
+      for rule in module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id == "sg-0123456789abcdef0"
+    ]) == 2
+    error_message = "Should create HTTP and HTTPS ingress rules referencing the source security group"
+  }
+
+  assert {
+    condition = length([
+      for rule in module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id == "sg-0123456789abcdef0" && rule.from_port == 443
+    ]) == 1
+    error_message = "Should create an HTTPS ingress rule referencing the source security group"
+  }
+}
+
+# Test 30: No security group referenced ingress rules by default
+run "no_ingress_security_groups_by_default" {
+  command = plan
+
+  assert {
+    condition = length([
+      for rule in module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id != null
+    ]) == 0
+    error_message = "Should not create security group referenced ingress rules by default"
+  }
+}

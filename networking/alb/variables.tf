@@ -243,6 +243,17 @@ variable "ingress_ipv6_cidr_blocks" {
   default     = null
 }
 
+variable "ingress_security_group_ids" {
+  type        = list(string)
+  description = "A list of security group IDs whose members are allowed to access the ALB. Ingress rules are created on each enabled listener port."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.ingress_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All ingress_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
+}
+
 ################################################################################
 # Access Logs
 ################################################################################

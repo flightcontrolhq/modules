@@ -747,6 +747,47 @@ run "private_alb_custom_settings" {
   }
 }
 
+# Test 28b: Private ALB ingress rules referencing source security groups
+run "private_alb_ingress_security_groups" {
+  command = plan
+
+  variables {
+    private_alb_enabled                    = true
+    private_alb_https_enabled              = true
+    private_alb_certificate_arns           = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    private_alb_ingress_security_group_ids = ["sg-0123456789abcdef0"]
+  }
+
+  assert {
+    condition = length([
+      for rule in module.private_alb[0].module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id == "sg-0123456789abcdef0"
+    ]) == 2
+    error_message = "Private ALB should have HTTP and HTTPS ingress rules referencing the source security group"
+  }
+}
+
+# Test 28c: Public ALB ingress rules referencing source security groups
+run "public_alb_ingress_security_groups" {
+  command = plan
+
+  variables {
+    public_alb_enabled                    = true
+    public_alb_https_enabled              = true
+    public_alb_certificate_arns           = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    public_subnet_ids                     = ["subnet-public1", "subnet-public2"]
+    public_alb_ingress_security_group_ids = ["sg-0123456789abcdef0"]
+  }
+
+  assert {
+    condition = length([
+      for rule in module.public_alb[0].module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id == "sg-0123456789abcdef0"
+    ]) == 2
+    error_message = "Public ALB should have HTTP and HTTPS ingress rules referencing the source security group"
+  }
+}
+
 ################################################################################
 # Combined Configuration Tests
 ################################################################################
