@@ -9,7 +9,7 @@ Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> v
 - **Versioned-by-default**: every deploy lands at `s3://<bucket>/<version>/`, the KVS `active` key points at the live one.
 - **Instant rollback**: flip `active` (or any per-host KVS entry) — KVS reads at the edge propagate within seconds.
 - **No CloudFront invalidations needed**: the rewriter changes the rewritten URI, which is part of the cache key, so each promotion is automatically a fresh cache key.
-- **Two routing styles**: `spa` (every non-asset path serves `<version>/index.html` for client-side routers) and `filesystem` (clean URLs, `/foo` → `<version>/foo/index.html`).
+- **Three routing styles**: `spa` (every non-asset path serves `<version>/index.html` for client-side routers), `filesystem` (clean URLs, `/foo` → `<version>/foo/index.html`), and `raw` (verbatim, `/foo` → `<version>/foo`, for protocol-defined trees of extensionless documents).
 - **Per-host overrides**: pin staging to a specific version, run PR previews on `pr-*.preview.example.com` subdomains, gradual cutovers — all via KVS keys.
 - **Origin Access Control (OAC)** by default — no public buckets, no legacy OAI.
 - **Multiple distributions** sharing one origin (e.g., a production domain group + staging domain group).
@@ -192,6 +192,11 @@ It then rewrites the URI by routing style:
 |---|---|---|---|
 | `spa` | `/<v>/index.html` | `/<v>/foo.js` | `/<v>/index.html` |
 | `filesystem` | `/<v>/index.html` | `/<v>/foo.js` | `/<v>/foo/index.html` |
+| `raw` | `/<v>/index.html` | `/<v>/foo.js` | `/<v>/foo` |
+
+Paths with a file extension, and paths containing a dotted segment (`/.well-known/…`), are always served verbatim regardless of style.
+
+`raw` is for trees whose URLs are dictated by a protocol rather than by pages — every key is exact and extensionless, so clean-URL rewriting would 404 it. The Terraform provider registry is the motivating case: it addresses `/v1/providers/<ns>/<type>/versions` and `…/download/<os>/<arch>`, which `filesystem` would send to `<path>/index.html` and `spa` would answer with `index.html`. Prefer `filesystem` for anything page-shaped: `raw` gives up clean URLs, so `/about` resolves only if that exact key exists.
 
 Because CloudFront's cache key incorporates the rewritten URI, two different versions never collide in cache.
 
@@ -362,7 +367,7 @@ No external apply-time tools required.
 
 | Name | Description | Type | Default |
 |---|---|---|---|
-| routing | URI rewrite style: `spa` or `filesystem`. | `string` | `"spa"` |
+| routing | URI rewrite style: `spa`, `filesystem`, or `raw`. | `string` | `"spa"` |
 | default_version | Fallback version prefix when KVS has neither host nor `active` entries. Also seeds `active` on first apply. | `string` | `"main"` |
 | distributions | Map of CloudFront distributions sharing the same origin. | `map(object)` | `{ main = {} }` |
 | tags | Tags to apply to all resources. | `map(string)` | `{}` |

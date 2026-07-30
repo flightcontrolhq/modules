@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.5
-  description: Document cache header defaults as the blank module inputs they are, with the applied value explained.
+  version: 0.3.6
+  description: 'Add a Verbatim routing mode that serves every path exactly as requested, for protocol-defined trees such as a Terraform provider registry whose documents are extensionless.'
 module:
   build:
     builder: >-
@@ -67,7 +67,7 @@ module:
       required: true
       type: string
     - default: spa
-      description: Use single page app for client-side routers, or Filesystem for static file trees where paths map to index files.
+      description: Use single page app for client-side routers, Filesystem for static file trees where paths map to index files, or Verbatim to serve every path exactly as requested.
       id: routing
       label: Routing mode
       required: true
@@ -79,6 +79,9 @@ module:
         - description: Each path has its own file
           label: Filesystem
           value: filesystem
+        - description: Serve every path exactly as requested, with no clean-URL rewriting. For trees whose paths are fixed by a protocol and have no file extension, such as a Terraform provider registry.
+          label: Verbatim
+          value: raw
     - collapsible: true
       default: index.html
       description: Object name resolved when a viewer requests the distribution root.

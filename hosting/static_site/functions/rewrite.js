@@ -26,6 +26,19 @@
 //     /.well-known/foo
 //                   -> /<v>/.well-known/foo       (dotted seg)
 //     /foo[/]       -> /<v>/foo/<index>           (clean URLs)
+//   raw routing:
+//     /             -> /<v>/<index>
+//     /foo          -> /<v>/foo                   (NO clean-URL rewrite)
+//     /a/b/c        -> /<v>/a/b/c
+//
+// `raw` exists for trees whose URLs are dictated by a protocol rather than by
+// pages, where every key is exact and extensionless. The Terraform provider
+// registry is the motivating case: it addresses documents at
+// /v1/providers/<ns>/<type>/versions and .../download/<os>/<arch>, which
+// `filesystem` would rewrite to <path>/index.html and 404, and `spa` would
+// answer with index.html. Prefer `filesystem` for anything page-shaped —
+// `raw` gives up clean URLs, so /about only works if the key is exactly
+// /about.
 //
 // Tokens substituted at apply time via templatefile():
 //   ${kvs_id}, ${default_version}, ${index_document}, ${routing}
@@ -71,7 +84,9 @@ async function handler(event) {
 
     if (uri === '/') {
         request.uri = '/' + version + '/' + INDEX_DOCUMENT;
-    } else if (hasExtension || hasDottedSegment) {
+    } else if (hasExtension || hasDottedSegment || ROUTING === 'raw') {
+        // `raw` joins the verbatim branch: every key is served exactly as
+        // requested, only version-prefixed.
         request.uri = '/' + version + uri;
     } else if (ROUTING === 'spa') {
         request.uri = '/' + version + '/' + INDEX_DOCUMENT;

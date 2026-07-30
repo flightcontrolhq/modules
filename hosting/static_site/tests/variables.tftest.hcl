@@ -121,6 +121,19 @@ run "routing_accepts_filesystem" {
   }
 }
 
+run "routing_accepts_raw" {
+  command = plan
+
+  variables {
+    routing = "raw"
+  }
+
+  assert {
+    condition     = var.routing == "raw"
+    error_message = "routing should accept 'raw'."
+  }
+}
+
 run "routing_rejects_unknown" {
   command = plan
 
