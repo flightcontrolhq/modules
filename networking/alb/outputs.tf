@@ -41,6 +41,11 @@ output "https_listener_arn" {
   value       = local.create_https_listener ? aws_lb_listener.https[0].arn : null
 }
 
+output "https_listener_certificate_arn" {
+  description = "The default certificate ARN on the HTTPS listener (null if disabled)."
+  value       = local.create_https_listener ? aws_lb_listener.https[0].certificate_arn : null
+}
+
 ################################################################################
 # Security Group
 ################################################################################

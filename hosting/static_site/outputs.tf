@@ -179,13 +179,3 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
-
-output "ravion_certificate_arn" {
-  description = "ACM ARN of the Ravion-managed viewer cert (null unless use_ravion_managed_domains)."
-  value       = var.use_ravion_managed_domains ? ravion_aws_acm_certificate.site[0].arn : null
-}
-
-output "ravion_fqdn" {
-  description = "Primary FQDN Ravion manages for the site."
-  value       = var.use_ravion_managed_domains ? ravion_aws_acm_certificate.site[0].domain_name : null
-}

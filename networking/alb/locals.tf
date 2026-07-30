@@ -24,14 +24,7 @@ locals {
   create_http_listener  = var.http_listener_enabled
   create_https_listener = var.https_listener_enabled
 
-  # The HTTP listener redirects to HTTPS when redirect is requested and either
-  # this module owns the HTTPS listener OR a parent module owns 443
-  # (force_http_to_https_redirect). Otherwise the HTTP listener returns the
-  # fixed response.
-  redirect_http_to_https = var.http_to_https_redirect_enabled && (local.create_https_listener || var.force_http_to_https_redirect)
-
   # IPv6 ingress defaults depend on visibility: internet-facing allows all IPv6
   # sources, internal allows none (RFC1918 has no IPv6 equivalent).
   ingress_ipv6_cidr_blocks = var.ingress_ipv6_cidr_blocks != null ? var.ingress_ipv6_cidr_blocks : (var.internal_load_balancer_enabled ? [] : ["::/0"])
 }
-

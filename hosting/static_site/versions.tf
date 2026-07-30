@@ -8,9 +8,5 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
-    ravion = {
-      source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"
-      version = ">= 1.0.0"
-    }
   }
 }

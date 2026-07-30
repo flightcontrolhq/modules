@@ -269,7 +269,6 @@ spec:
 | http_listener_port | The port for the HTTP listener | `number` | `80` | no |
 | https_listener_port | The port for the HTTPS listener | `number` | `443` | no |
 | http_to_https_redirect_enabled | Redirect HTTP traffic to HTTPS (when both listeners enabled) | `bool` | `true` | no |
-| force_http_to_https_redirect | Redirect HTTP->HTTPS even when this module does not own the HTTPS listener (used when a parent module owns port 443) | `bool` | `false` | no |
 
 ### SSL/TLS
 

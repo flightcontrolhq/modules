@@ -120,8 +120,8 @@ output "public_alb_http_listener_arn" {
 }
 
 output "public_alb_https_listener_arn" {
-  description = "The ARN of the public ALB HTTPS listener (ecs_cluster-owned; null if HTTPS disabled)."
-  value       = (var.public_alb_enabled && var.public_alb_https_enabled) ? aws_lb_listener.public_https[0].arn : null
+  description = "The ARN of the public ALB HTTPS listener (null if HTTPS disabled)."
+  value       = var.public_alb_enabled && var.public_alb_https_enabled ? module.public_alb[0].https_listener_arn : null
 }
 
 ################################################################################
@@ -164,8 +164,8 @@ output "private_alb_http_listener_arn" {
 }
 
 output "private_alb_https_listener_arn" {
-  description = "The ARN of the private ALB HTTPS listener (ecs_cluster-owned; null if HTTPS disabled)."
-  value       = (var.private_alb_enabled && var.private_alb_https_enabled) ? aws_lb_listener.private_https[0].arn : null
+  description = "The ARN of the private ALB HTTPS listener (null if HTTPS disabled)."
+  value       = var.private_alb_enabled && var.private_alb_https_enabled ? module.private_alb[0].https_listener_arn : null
 }
 
 ################################################################################
@@ -281,6 +281,6 @@ output "ravion_aws_region" {
 }
 
 output "ravion_managed_domains_enabled" {
-  description = "True when the cluster owns a Ravion wildcard cert + HTTPS listener (use_ravion_managed_domains AND at least one ALB). Services read this to show/hide managed-domain fields."
+  description = "True when the cluster owns a Ravion wildcard certificate for its selected HTTPS-enabled ALB. Services read this to show/hide managed-domain fields."
   value       = local.enable_ravion_domain
 }

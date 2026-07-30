@@ -628,8 +628,9 @@ variable "load_balancer_attachment" {
       !var.load_balancer_attachment.enabled
       || length(var.load_balancer_attachment.listener_rules) > 0
       || length(var.load_balancer_attachment.nlb_listeners) > 0
+      || (var.cluster_parent_fqdn != null && var.cluster_parent_fqdn != "")
     )
-    error_message = "An enabled load_balancer_attachment requires listener_rules for ALB or nlb_listeners for NLB."
+    error_message = "An enabled load_balancer_attachment requires listener_rules for ALB, nlb_listeners for NLB, or cluster_parent_fqdn for Ravion-managed routing."
   }
 
   validation {

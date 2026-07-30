@@ -9,11 +9,10 @@ resource "aws_lb_listener" "http" {
   port              = var.http_listener_port
   protocol          = "HTTP"
 
-  # Redirect to HTTPS when local.redirect_http_to_https (this module owns the
-  # HTTPS listener, or a parent owns 443 via force_http_to_https_redirect);
-  # otherwise return a fixed response.
+  # If HTTPS is enabled and redirect is enabled, redirect to HTTPS
+  # Otherwise, return a fixed response
   dynamic "default_action" {
-    for_each = local.redirect_http_to_https ? [1] : []
+    for_each = var.http_to_https_redirect_enabled && local.create_https_listener ? [1] : []
     content {
       type = "redirect"
       redirect {
@@ -25,7 +24,7 @@ resource "aws_lb_listener" "http" {
   }
 
   dynamic "default_action" {
-    for_each = local.redirect_http_to_https ? [] : [1]
+    for_each = !var.http_to_https_redirect_enabled || !local.create_https_listener ? [1] : []
     content {
       type = "fixed-response"
       fixed_response {
@@ -52,7 +51,7 @@ resource "aws_lb_listener" "https" {
   port              = var.https_listener_port
   protocol          = "HTTPS"
   ssl_policy        = var.ssl_policy
-  certificate_arn   = var.certificate_arns[0]
+  certificate_arn   = try(var.certificate_arns[0], null)
 
   default_action {
     type = "fixed-response"
@@ -66,6 +65,13 @@ resource "aws_lb_listener" "https" {
   tags = merge(local.tags, {
     Name = "${var.name}-https"
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(var.certificate_arns) > 0
+      error_message = "At least one entry in certificate_arns is required when https_listener_enabled is true."
+    }
+  }
 }
 
 ################################################################################
@@ -78,6 +84,3 @@ resource "aws_lb_listener_certificate" "additional" {
   listener_arn    = aws_lb_listener.https[0].arn
   certificate_arn = each.value
 }
-
-
-

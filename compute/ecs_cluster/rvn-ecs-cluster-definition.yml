@@ -493,7 +493,7 @@ module:
       label: Managed domains
       type: section
     - default: false
-      description: Have Ravion issue and manage a shared wildcard TLS certificate and DNS for this cluster. The cluster ALB HTTPS listener serves the wildcard certificate, and services in this cluster get automatic domains under the cluster apex. Requires at least one ALB.
+      description: Have Ravion issue and manage a shared wildcard TLS certificate and DNS for this cluster. The selected ALB HTTPS listener serves the wildcard certificate, and services get automatic domains under the cluster apex. Requires exactly one HTTPS-enabled ALB.
       id: use_ravion_managed_domains
       label: Ravion-managed domains
       type: boolean

@@ -14,19 +14,14 @@ module "public_alb" {
   subnet_ids                     = var.public_subnet_ids
   internal_load_balancer_enabled = false
 
-  # Listener configuration. ecs_cluster ALWAYS owns the HTTPS listener (in
-  # ravion_domains.tf) so toggling use_ravion_managed_domains is an in-place
-  # cert swap rather than a destroy+create across TF addresses. The alb
-  # submodule therefore never creates its own HTTPS listener nor holds cert
-  # ARNs; force_http_to_https_redirect keeps the HTTP listener redirecting to
-  # the parent-owned 443 listener.
+  # Listener configuration. Keep listener ownership in the ALB module so
+  # enabling managed domains changes only the default certificate in place.
   http_listener_enabled          = true
-  https_listener_enabled         = false
+  https_listener_enabled         = var.public_alb_https_enabled
   http_to_https_redirect_enabled = var.public_alb_https_enabled
-  force_http_to_https_redirect   = var.public_alb_https_enabled
 
   # SSL/TLS
-  certificate_arns = []
+  certificate_arns = local.enable_ravion_domain ? [ravion_aws_acm_certificate.cluster[0].arn] : var.public_alb_certificate_arns
   ssl_policy       = var.public_alb_ssl_policy
 
   # ALB settings
@@ -61,19 +56,14 @@ module "private_alb" {
   subnet_ids                     = var.private_subnet_ids
   internal_load_balancer_enabled = true
 
-  # Listener configuration. ecs_cluster ALWAYS owns the HTTPS listener (in
-  # ravion_domains.tf) so toggling use_ravion_managed_domains is an in-place
-  # cert swap rather than a destroy+create across TF addresses. The alb
-  # submodule therefore never creates its own HTTPS listener nor holds cert
-  # ARNs; force_http_to_https_redirect keeps the HTTP listener redirecting to
-  # the parent-owned 443 listener.
+  # Listener configuration. Keep listener ownership in the ALB module so
+  # enabling managed domains changes only the default certificate in place.
   http_listener_enabled          = true
-  https_listener_enabled         = false
+  https_listener_enabled         = var.private_alb_https_enabled
   http_to_https_redirect_enabled = var.private_alb_https_enabled
-  force_http_to_https_redirect   = var.private_alb_https_enabled
 
   # SSL/TLS
-  certificate_arns = []
+  certificate_arns = local.enable_ravion_domain ? [ravion_aws_acm_certificate.cluster[0].arn] : var.private_alb_certificate_arns
   ssl_policy       = var.private_alb_ssl_policy
 
   # ALB settings

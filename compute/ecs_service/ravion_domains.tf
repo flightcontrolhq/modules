@@ -15,8 +15,7 @@
 #
 # When `domains` is empty the service still gets an auto-FQDN
 # `<given-id>.<apex>` (a wildcard-covered entry), so a service with no custom
-# domains is reachable out of the box. The frontend pre-fills this same value
-# into the domains list as the default; clearing it opts out.
+# domains is reachable out of the box.
 
 locals {
   ravion_managed = var.cluster_parent_fqdn != null && var.cluster_parent_fqdn != ""
@@ -171,11 +170,4 @@ resource "aws_lb_listener_rule" "ravion" {
     }
     ignore_changes = [action]
   }
-}
-
-# Earlier revisions created a single count-based rule; migrate that instance to
-# the first for_each chunk so adopting the chunked layout is not a destroy+create.
-moved {
-  from = aws_lb_listener_rule.ravion[0]
-  to   = aws_lb_listener_rule.ravion["0"]
 }

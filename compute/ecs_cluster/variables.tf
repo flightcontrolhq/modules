@@ -693,7 +693,7 @@ variable "region" {
 
 variable "use_ravion_managed_domains" {
   type        = bool
-  description = "Allocate a Ravion-managed wildcard domain for the cluster and have Ravion own the public ALB HTTPS listener cert. Requires enable_public_alb = true."
+  description = "Allocate a Ravion-managed wildcard domain for the cluster and serve its certificate from the selected ALB's existing HTTPS listener. Requires exactly one HTTPS-enabled ALB."
   default     = false
 }
 
