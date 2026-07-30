@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.6.0
-  description: "Add Ravion-managed domains: an opt-in shared wildcard TLS certificate + DNS owned by Ravion, served from the cluster ALB HTTPS listener with an optional cluster subdomain."
+  version: 0.6.1
+  description: "Add Ravion-managed domains: an opt-in shared wildcard TLS certificate + DNS owned by Ravion, served from the selected ALB's existing HTTPS listener. The Managed domains section sits right after the cluster basics."
 module:
   inputs:
     - id: network
@@ -51,6 +51,25 @@ module:
           value: enabled
         - label: Disabled
           value: disabled
+    - id: section_managed_domains
+      label: Managed domains
+      type: section
+    - default: false
+      description: Have Ravion issue and manage a shared wildcard TLS certificate and DNS for this cluster. The selected ALB HTTPS listener serves the wildcard certificate, and services get automatic domains under the cluster apex. Requires exactly one HTTPS-enabled ALB.
+      id: use_ravion_managed_domains
+      label: Ravion-managed domains
+      type: boolean
+    - description: Subdomain for the cluster's wildcard domain. Defaults to the module given ID when empty.
+      id: ravion_cluster_name
+      label: Cluster subdomain
+      patterns:
+        - message: The subdomain must contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+      required: false
+      show_when:
+        use_ravion_managed_domains: true
+      suffix: ".<< platform.apex >>"
+      type: string
     - id: section_capacity
       label: Capacity providers
       type: section
@@ -488,25 +507,6 @@ module:
       show_when:
         private_nlb_enabled: true
         private_nlb_access_logs_enabled: true
-      type: string
-    - id: section_managed_domains
-      label: Managed domains
-      type: section
-    - default: false
-      description: Have Ravion issue and manage a shared wildcard TLS certificate and DNS for this cluster. The selected ALB HTTPS listener serves the wildcard certificate, and services get automatic domains under the cluster apex. Requires exactly one HTTPS-enabled ALB.
-      id: use_ravion_managed_domains
-      label: Ravion-managed domains
-      type: boolean
-    - description: Subdomain for the cluster's wildcard domain. Defaults to the module given ID when empty.
-      id: ravion_cluster_name
-      label: Cluster subdomain
-      patterns:
-        - message: The subdomain must contain only lowercase letters, numbers, and hyphens, and start and end with a letter or number.
-          pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
-      required: false
-      show_when:
-        use_ravion_managed_domains: true
-      suffix: ".<< platform.apex >>"
       type: string
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml

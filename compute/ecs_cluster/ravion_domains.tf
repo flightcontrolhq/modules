@@ -61,5 +61,9 @@ resource "ravion_aws_acm_certificate" "cluster" {
       condition     = !var.use_ravion_managed_domains || (var.ravion_aws_account_id != null && var.ravion_aws_account_id != "")
       error_message = "ravion_aws_account_id (aws_*) is required when use_ravion_managed_domains = true."
     }
+    precondition {
+      condition     = !var.use_ravion_managed_domains || (var.module_instance_id != null && var.module_instance_id != "")
+      error_message = "module_instance_id (minst_*) is required when use_ravion_managed_domains = true. Inside a stack run the runner injects TF_VAR_module_instance_id; set it explicitly for external runs."
+    }
   }
 }

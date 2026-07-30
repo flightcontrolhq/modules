@@ -89,6 +89,13 @@ resource "ravion_domain" "wildcard" {
   name               = trimsuffix(each.value, ".${local.apex}")
   module_instance_id = var.module_instance_id
   parent_domain_name = local.apex
+
+  lifecycle {
+    precondition {
+      condition     = var.module_instance_id != null && var.module_instance_id != ""
+      error_message = "module_instance_id (minst_*) is required for Ravion-managed domains. Inside a stack run the runner injects TF_VAR_module_instance_id; set it explicitly for external runs."
+    }
+  }
 }
 
 # Per-service certificate covering the custom (non-wildcard) domains (<=10 SANs),
@@ -119,6 +126,10 @@ resource "ravion_aws_acm_certificate" "svc" {
       condition     = length(local.custom_domains) <= 10
       error_message = "A service may declare at most 10 custom (non-wildcard) domains (one cert per service)."
     }
+    precondition {
+      condition     = length(local.custom_domains) == 0 || (var.module_instance_id != null && var.module_instance_id != "")
+      error_message = "module_instance_id (minst_*) is required when the domains list includes a custom (non-wildcard) domain. Inside a stack run the runner injects TF_VAR_module_instance_id; set it explicitly for external runs."
+    }
   }
 }
 
@@ -130,6 +141,20 @@ resource "ravion_domain" "custom" {
   module_instance_id = var.module_instance_id
   target_dns_name    = var.cluster_alb_dns_name
   target_zone_id     = var.cluster_alb_zone_id
+
+  lifecycle {
+    # Mirror of the sibling cert's cluster_https_listener_arn guard: without a
+    # routing target the API happily creates a domain row that never resolves —
+    # a silent production failure instead of a plan-time message.
+    precondition {
+      condition     = var.cluster_alb_dns_name != null && var.cluster_alb_dns_name != "" && var.cluster_alb_zone_id != null && var.cluster_alb_zone_id != ""
+      error_message = "cluster_alb_dns_name and cluster_alb_zone_id are required when the domains list includes a custom (non-wildcard) domain — they are the routing target its CNAME points at."
+    }
+    precondition {
+      condition     = var.module_instance_id != null && var.module_instance_id != ""
+      error_message = "module_instance_id (minst_*) is required for Ravion-managed domains. Inside a stack run the runner injects TF_VAR_module_instance_id; set it explicitly for external runs."
+    }
+  }
 }
 
 # One listener rule per chunk of <=5 host headers (AWS ALB's per-condition value
@@ -154,9 +179,28 @@ resource "aws_lb_listener_rule" "ravion" {
     }
   }
 
+  # Same group-stickiness requirement as the BYO production rule: ECS rewrites
+  # chunk "0" to a weighted two-target-group forward during native traffic-shift
+  # deploys, and ELBv2 rejects that rewrite when a sticky target group is
+  # referenced without group-level stickiness on the action ("You must enable
+  # group stickiness on a rule if you enabled target stickiness on one of its
+  # target groups").
   action {
     type             = "forward"
-    target_group_arn = local.ravion_target_group_arn
+    target_group_arn = local.alb_group_stickiness_enabled ? null : local.ravion_target_group_arn
+
+    dynamic "forward" {
+      for_each = local.alb_group_stickiness_enabled ? [1] : []
+      content {
+        target_group {
+          arn = local.ravion_target_group_arn
+        }
+        stickiness {
+          enabled  = true
+          duration = local.alb_group_stickiness_duration
+        }
+      }
+    }
   }
 
   lifecycle {

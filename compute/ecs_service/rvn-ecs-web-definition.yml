@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.9.0
-  description: "Add Ravion-managed domains: service domains ride the cluster wildcard certificate automatically, and custom domains get a dedicated certificate with DNS validation, when the selected cluster has managed domains enabled."
+  version: 0.9.1
+  description: "Add Ravion-managed domains: service domains ride the cluster wildcard certificate automatically, and custom domains get a dedicated certificate with DNS validation, when the selected cluster has managed domains enabled. The Domains section sits right after the service basics."
 module:
   inputs:
     - id: section_cluster
@@ -78,6 +78,20 @@ module:
       description: Expose this service through the public ALB. Turn off to use the private ALB.
       default: true
     - $include: ../../partials/inputs/private-subnet-placement.yml
+    - id: section_domains
+      label: Domains
+      show_when:
+        ravion_managed_domains_enabled: true
+      type: section
+    - add_button_label: Add domain
+      description: Fully-qualified domains for this service. A name one label under the cluster apex rides the cluster wildcard certificate automatically; any other name gets a dedicated certificate with DNS validation records you add at your DNS host. Empty = an automatic <service>.<cluster apex> domain.
+      id: domains
+      label: Domains
+      max_length: 10
+      placeholder: app.example.com
+      show_when:
+        ravion_managed_domains_enabled: true
+      type: string_array
     - $include: ../../partials/inputs/ecs-service-build-inputs.yml
     - id: section_deployment
       label: Deployment
@@ -327,20 +341,6 @@ module:
         field_overrides:
           show_when:
             ravion_managed_domains_enabled: false
-    - id: section_domains
-      label: Domains
-      show_when:
-        ravion_managed_domains_enabled: true
-      type: section
-    - add_button_label: Add domain
-      description: Fully-qualified domains for this service. A name one label under the cluster apex rides the cluster wildcard certificate automatically; any other name gets a dedicated certificate with DNS validation records you add at your DNS host. Empty = an automatic <service>.<cluster apex> domain.
-      id: domains
-      label: Domains
-      max_length: 10
-      placeholder: app.example.com
-      show_when:
-        ravion_managed_domains_enabled: true
-      type: string_array
     - $include: ../../partials/inputs/ecs-service-capacity-inputs.yml
     - $include: ../../partials/inputs/ecs-service-autoscaling-inputs.yml
     - $template: ../../partials/templates/ecs-service-runtime-env-inputs.yml
