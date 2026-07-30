@@ -156,6 +156,39 @@ run "managed_public_swaps_certificate_in_place" {
   }
 }
 
+run "managed_toggle_keeps_byo_certificates_attached" {
+  command = plan
+
+  variables {
+    public_alb_enabled         = true
+    public_alb_https_enabled   = true
+    use_ravion_managed_domains = true
+    ravion_aws_account_id      = "aws_testaccount"
+    public_alb_certificate_arns = [
+      "arn:aws:acm:us-east-1:123456789012:certificate/byo-default",
+      "arn:aws:acm:us-east-1:123456789012:certificate/byo-extra",
+    ]
+  }
+
+  # The wildcard becomes the DEFAULT certificate...
+  assert {
+    condition     = module.public_alb[0].https_listener_certificate_arn == ravion_aws_acm_certificate.cluster[0].arn
+    error_message = "Managed mode must make the Ravion wildcard the default certificate"
+  }
+
+  # ...and every BYO certificate stays attached via SNI, so hostnames served
+  # off them keep their TLS through and after the migration.
+  assert {
+    condition     = length(module.public_alb[0].additional_certificate_arns) == 2
+    error_message = "Both BYO certificates must remain attached via SNI in managed mode"
+  }
+
+  assert {
+    condition     = contains(module.public_alb[0].additional_certificate_arns, "arn:aws:acm:us-east-1:123456789012:certificate/byo-default") && contains(module.public_alb[0].additional_certificate_arns, "arn:aws:acm:us-east-1:123456789012:certificate/byo-extra")
+    error_message = "The SNI set must contain exactly the BYO certificates"
+  }
+}
+
 run "managed_private_uses_existing_listener" {
   command = plan
 

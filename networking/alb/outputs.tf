@@ -87,3 +87,8 @@ output "region" {
   description = "The AWS region where the resources are deployed."
   value       = local.region
 }
+
+output "additional_certificate_arns" {
+  description = "Certificate ARNs attached to the HTTPS listener via SNI (certificate_arns[1..]). Empty when at most one certificate is configured."
+  value       = [for c in aws_lb_listener_certificate.additional : c.certificate_arn]
+}

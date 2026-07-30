@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.6.1
-  description: "Add Ravion-managed domains: an opt-in shared wildcard TLS certificate + DNS owned by Ravion, served from the selected ALB's existing HTTPS listener. The Managed domains section sits right after the cluster basics."
+  version: 0.6.2
+  description: "Managed domains keeps every BYO certificate attached via SNI when the Ravion wildcard takes over as the default certificate, so enabling it never drops TLS for existing custom hostnames."
 module:
   inputs:
     - id: network
