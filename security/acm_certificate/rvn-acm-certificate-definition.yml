@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: Requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.4.0
-  description: "BREAKING: Replace `domain_name` and `subject_alternative_names` with `domains`. Put the primary domain first and all subject alternative names after it."
+  version: 0.4.1
+  description: Allow existing certificates to upgrade to the `domains` input without being recreated.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -28,6 +28,9 @@ module:
       id: domains
       immutable: true
       label: Domains
+      moved_from:
+        - domain_name
+        - subject_alternative_names
       placeholder: api.example.com
       required: true
       type: string_array

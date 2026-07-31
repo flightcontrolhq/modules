@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.3.1
-  description: Improve build source, Railpack command, and builder instance guidance.
+  version: 0.3.2
+  description: Allow existing services to upgrade to the `listeners` input without being recreated.
 module:
   inputs:
     - id: section_cluster
@@ -48,6 +48,14 @@ module:
     - id: listeners
       immutable: true
       label: Listeners
+      moved_from:
+        - listener_port
+        - listener_protocol
+        - container_port
+        - tls_certificate
+        - tls_ssl_policy
+        - tls_alpn_policy
+        - tls_target_protocol
       type: object_array
       description: One to five NLB listeners and the unique container port each listener targets.
       required: true
