@@ -1,9 +1,9 @@
 # .kodiak.toml
-# Kodiak merges a PR once its branch protection requirements are met:
-# required approvals and passing checks. See https://kodiakhq.com/docs/config-reference
+# Kodiak merges a PR labeled "0 - automerge 🚀" once its branch protection
+# requirements are met. See https://kodiakhq.com/docs/config-reference
 version = 1
 merge.method = "merge"
-merge.require_automerge_label = false
+merge.automerge_label = "0 - automerge 🚀"
 merge.block_on_reviews_requested = true
 merge.delete_branch_on_merge = true
 
