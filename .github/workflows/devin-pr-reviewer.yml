@@ -1,0 +1,41 @@
+name: Request Devin session creator review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request-review:
+    if: github.event.pull_request.user.login == 'devin-ai-integration[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request review from the session creator
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            const match = (pr.body ?? "").match(/^Requested by:\s*@([A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38})\s*$/m)
+            if (!match) {
+              core.warning("No `Requested by: @user` line in the PR body; leaving reviewers unchanged")
+              return
+            }
+            const reviewer = match[1]
+            const alreadyRequested = (pr.requested_reviewers ?? []).some(
+              (user) => user.login.toLowerCase() === reviewer.toLowerCase(),
+            )
+            if (alreadyRequested) {
+              return
+            }
+            try {
+              await github.rest.pulls.requestReviewers({
+                ...context.repo,
+                pull_number: pr.number,
+                reviewers: [reviewer],
+              })
+              core.info(`Requested review from @${reviewer}`)
+            } catch (error) {
+              core.warning(`Could not request review from @${reviewer}: ${error.message}`)
+            }
