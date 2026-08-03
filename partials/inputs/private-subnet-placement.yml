@@ -1,0 +1,5 @@
+id: private_subnet_placement_enabled
+label: Run in private subnets
+type: boolean
+description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
+default: true

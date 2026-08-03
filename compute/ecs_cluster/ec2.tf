@@ -182,7 +182,7 @@ module "ecs_autoscaling" {
   # Note: the autoscaling submodule already ignores desired_capacity changes
   # unconditionally, so no toggle is needed for ECS managed scaling.
   ecs_managed_tag_enabled     = true
-  scale_in_protection_enabled = var.ec2_managed_termination_protection == "ENABLED"
+  scale_in_protection_enabled = var.ec2_managed_termination_protection_enabled
 
   # Instance refresh
   instance_refresh = {

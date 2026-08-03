@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.8.2
-  description: "Accept mixed IAM policy document shapes for task role inline policies."
+  version: 0.8.4
+  description: Improve build source, Railpack command, and builder instance guidance.
 module:
   inputs:
     - id: section_cluster
@@ -36,11 +36,7 @@ module:
       type: boolean
       description: Expose this service through the public ALB. Turn off to use the private ALB.
       default: true
-    - id: private_subnet_placement_enabled
-      label: Run in private subnets
-      type: boolean
-      description: Recommended. Requires a NAT gateway or equivalent for internet access and a static IP.
-      default: true
+    - $include: ../../partials/inputs/private-subnet-placement.yml
     - $include: ../../partials/inputs/ecs-service-build-inputs.yml
     - id: section_deployment
       label: Deployment
@@ -283,33 +279,9 @@ module:
       required: false
       show_when:
         target_group_stickiness_type: app_cookie
-    - id: section_routing
-      label: HTTP listener rules
-      type: section
-      description: Add at least one domain host rule or path rule.
-    - id: host_header_values
-      label: Domain host rules
-      type: string_array
-      description: Hostnames that should route to this service, such as app.example.com or *.example.com. Leave empty to use path-based routing.
-      add_button_label: Add domain host
-      placeholder: app.example.com
-      required: false
-      default: null
-    - id: path_pattern_values
-      label: Path rules
-      type: string_array
-      description: Path patterns that should route to this service, such as /*, /api/*, or /app/*. If both domain host rules and path rules are empty, the service routes all paths with /*.
-      add_button_label: Add path pattern
-      collapsible: true
-      required: false
-      default: null
-    - id: listener_rule_priority
-      label: Listener rule priority
-      type: number
-      description: Optional ALB listener rule priority. Leave blank to let AWS assign the next available priority.
-      collapsible: true
-      max: 50000
-      min: 1
+    - $template: ../../partials/templates/alb-listener-rule-inputs.yml
+      with:
+        field_overrides: {}
     - $include: ../../partials/inputs/ecs-service-capacity-inputs.yml
     - $include: ../../partials/inputs/ecs-service-autoscaling-inputs.yml
     - $template: ../../partials/templates/ecs-service-runtime-env-inputs.yml
@@ -341,42 +313,38 @@ module:
               - container_port: << module.input.container_port >>
                 health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
                 load_balancer_attachment:
-                  container_port: << module.input.container_port >>
-                  enabled: true
-                  listener_rules:
-                    - conditions:
-                        - >-
-                          ...<< module.input.host_header_values != nil && module.input.host_header_values !=
-                          [] ? [{type: "host-header", values: module.input.host_header_values}] : [] >>
-                        - >-
-                          ...<< module.input.path_pattern_values != nil && module.input.path_pattern_values !=
-                          [] ? [{type: "path-pattern", values: module.input.path_pattern_values}] :
-                          module.input.host_header_values != nil && module.input.host_header_values != [] ? []
-                          : [{type: "path-pattern", values: ["/*"]}] >>
-                      listener_arn: >-
-                        << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
-                        module.input.public_alb_http_listener_arn) :
-                        (module.input.private_alb_https_listener_arn ||
-                        module.input.private_alb_http_listener_arn) >>
-                      priority: << module.input.listener_rule_priority >>
-                  target_group:
-                    health_check:
+                  $template: ../../partials/templates/alb-load-balancer-attachment.yml
+                  with:
+                    additional_fields:
+                      container_port: << module.input.container_port >>
+                    attachment_control:
                       enabled: true
-                      healthy_threshold: << module.input.healthy_threshold >>
-                      interval: << module.input.health_check_interval >>
-                      matcher: << module.input.health_check_matcher >>
-                      path: << module.input.health_check_path >>
-                      timeout: << module.input.health_check_timeout >>
-                      unhealthy_threshold: << module.input.unhealthy_threshold >>
-                    port: << module.input.container_port >>
-                    protocol: HTTP
-                    slow_start: << module.input.target_group_slow_start >>
-                    stickiness:
-                      cookie_duration: << module.input.target_group_stickiness_cookie_duration >>
-                      cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
-                      enabled: << module.input.target_group_stickiness_enabled >>
-                      type: << module.input.target_group_stickiness_type >>
-                    target_type: ip
+                    listener_arn: >-
+                      << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
+                      module.input.public_alb_http_listener_arn) :
+                      (module.input.private_alb_https_listener_arn ||
+                      module.input.private_alb_http_listener_arn) >>
+                    target_group:
+                      health_check:
+                        enabled: true
+                        healthy_threshold: << module.input.healthy_threshold >>
+                        interval: << module.input.health_check_interval >>
+                        matcher: << module.input.health_check_matcher >>
+                        path: << module.input.health_check_path >>
+                        timeout: << module.input.health_check_timeout >>
+                        unhealthy_threshold: << module.input.unhealthy_threshold >>
+                      port: << module.input.container_port >>
+                      protocol: HTTP
+                      slow_start: << module.input.target_group_slow_start >>
+                      stickiness:
+                        cookie_duration: << module.input.target_group_stickiness_cookie_duration >>
+                        cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
+                        enabled: << module.input.target_group_stickiness_enabled >>
+                        # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
+                        # (show_when) and renders null, but the Terraform variable validation and the
+                        # aws_lb_target_group stickiness block both require a non-null type.
+                        type: '<< module.input.target_group_stickiness_enabled ? module.input.target_group_stickiness_type : "lb_cookie" >>'
+                      target_type: ip
                 load_balancer_security_group_id: >-
                   << module.input.public_web_service_enabled ? module.input.public_alb_security_group_id :
                   module.input.private_alb_security_group_id >>

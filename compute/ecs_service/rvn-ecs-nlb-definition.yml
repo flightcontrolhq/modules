@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.2.2
-  description: "Accept mixed IAM policy document shapes for task role inline policies."
+  version: 0.3.2
+  description: Allow existing services to upgrade to the `listeners` input without being recreated.
 module:
   inputs:
     - id: section_cluster
@@ -42,220 +42,114 @@ module:
       description: Recommended. Requires a NAT gateway or equivalent for internet access and keeps tasks off public subnets.
       default: true
     - $include: ../../partials/inputs/ecs-service-build-inputs.yml
-    - id: section_deployment
-      label: Deployment
+    - id: section_listener
+      label: Network listeners
       type: section
-    - id: deployment_strategy
-      label: Deployment strategy
-      type: string
-      description: Choose how traffic moves from the current deployment to the new deployment.
-      required: true
-      default: rolling
-      values:
-        - label: Rolling
-          description: Replace tasks in place while the service keeps serving from the production target group.
-          value: rolling
-        - label: Blue/green
-          description: Start the new deployment on the alternate target group, then shift production traffic after test validation.
-          value: blue_green
-        - label: Linear
-          description: Shift production traffic to the new deployment in equal percentage steps with a wait between steps.
-          value: linear
-        - label: Canary
-          description: Send a small percentage of production traffic to the new deployment first, then shift the rest after the canary bake time.
-          value: canary
-    - id: deployment_bake_time_in_minutes
-      label: Bake time in minutes
-      type: number
-      description: Minutes to keep the current and new deployments running after production traffic has fully shifted, before the old deployment is removed.
-      max: 1440
-      min: 0
-      show_when:
-        deployment_strategy:
-          - blue_green
-          - linear
-          - canary
-      default: 10
-    - id: linear_step_percentage
-      label: Linear step percentage
-      type: number
-      description: Percentage of production traffic to move to the new deployment at each linear step.
-      max: 100
-      min: 1
-      show_when:
-        deployment_strategy: linear
-      default: 20
-    - id: linear_step_bake_time_in_minutes
-      label: Linear step bake time in minutes
-      type: number
-      description: Minutes to wait between linear traffic steps before shifting the next percentage.
-      max: 1440
-      min: 0
-      show_when:
-        deployment_strategy: linear
-      default: 5
-    - id: canary_percent
-      label: Canary percent
-      type: number
-      description: Percentage of production traffic to send to the new deployment during the canary phase.
-      max: 100
-      min: 1
-      show_when:
-        deployment_strategy: canary
-      default: 5
-    - id: canary_bake_time_in_minutes
-      label: Canary bake time in minutes
-      type: number
-      description: Minutes to hold canary traffic before shifting the remaining production traffic to the new deployment.
-      max: 1440
-      min: 0
-      show_when:
-        deployment_strategy: canary
-      default: 10
-    - id: deployment_pause_stages
-      label: Manual approval gates
+    - id: listeners
+      immutable: true
+      label: Listeners
+      moved_from:
+        - listener_port
+        - listener_protocol
+        - container_port
+        - tls_certificate
+        - tls_ssl_policy
+        - tls_alpn_policy
+        - tls_target_protocol
       type: object_array
-      description: Optional gates that pause the deployment at chosen lifecycle stages until you approve it. Applies only to the blue/green, linear, and canary strategies.
-      collapsible: true
+      description: One to five NLB listeners and the unique container port each listener targets.
+      required: true
+      item_label: Listener
+      item_title:
+        template: "{listener_protocol} {listener_port}"
+      item_description: "Container port: {container_port}"
       item_inputs:
-        - id: stage
-          label: Stage
-          type: string
-          description: Deployment lifecycle stage at which to pause and wait for manual approval.
-          default: POST_TEST_TRAFFIC_SHIFT
-          values:
-            - label: Reconcile service
-              value: RECONCILE_SERVICE
-            - label: Pre scale up
-              value: PRE_SCALE_UP
-            - label: Post scale up
-              value: POST_SCALE_UP
-            - label: Post test traffic shift
-              value: POST_TEST_TRAFFIC_SHIFT
-            - label: Pre production traffic shift
-              value: PRE_PRODUCTION_TRAFFIC_SHIFT
-            - label: Post production traffic shift
-              value: POST_PRODUCTION_TRAFFIC_SHIFT
-        - id: timeout_in_minutes
-          label: Timeout (minutes)
+        - id: listener_port
+          label: Listener port
           type: number
-          description: Minutes to wait for manual approval before the timeout action runs.
-          max: 20160
+          description: Port the NLB listens on. Each listener port must be unique.
+          max: 65535
           min: 1
           required: true
-          default: 1440
-        - id: timeout_action
-          label: On timeout
+          default: 80
+        - id: listener_protocol
+          label: Listener protocol
           type: string
-          description: Action to take if approval is not given before the timeout elapses.
+          description: Protocol accepted by this NLB listener.
           required: true
-          default: ROLLBACK
+          default: TCP
           values:
-            - label: Roll back
-              value: ROLLBACK
-            - label: Continue
-              value: CONTINUE
-      item_label: Pause stage
-      item_title:
-        template: "{stage}"
-      item_description: "Timeout: {timeout_in_minutes} minutes / {timeout_action}"
-      show_when:
-        deployment_strategy:
-          - blue_green
-          - linear
-          - canary
-      default:
-        - stage: POST_TEST_TRAFFIC_SHIFT
-          timeout_in_minutes: 1440
-          timeout_action: ROLLBACK
-    - id: section_listener
-      label: Network listener
-      type: section
-    - id: container_port
-      immutable: true
-      label: Container port
-      type: number
-      description: Port the container listens on.
-      max: 65535
-      min: 1
-      required: true
-      default: 3000
-    - id: listener_port
-      immutable: true
-      label: Listener port
-      type: number
-      description: Port the NLB listens on.
-      max: 65535
-      min: 1
-      required: true
-      default: 80
-    - id: listener_protocol
-      immutable: true
-      label: Listener protocol
-      type: string
-      description: Protocol for the NLB listener and target group.
-      required: true
-      default: TCP
-      values:
-        - label: TCP
-          value: TCP
-        - label: TLS
-          value: TLS
-        - label: UDP
-          value: UDP
-    - id: tls_certificate
-      label: TLS certificate
-      type: $ref:rvn-acm-certificate
-      description: ACM certificate module for TLS listeners.
-      mapped_inputs:
-        - id: tls_certificate_arn
-          label: TLS certificate ARN
+            - label: TCP
+              value: TCP
+            - label: TLS
+              value: TLS
+            - label: UDP
+              value: UDP
+        - id: container_port
+          label: Container port
+          type: number
+          description: Port the container listens on. Each listener must use a unique container port.
+          max: 65535
+          min: 1
+          required: true
+          default: 3000
+        - id: tls_certificate
+          label: TLS certificate
+          type: $ref:rvn-acm-certificate
+          description: ACM certificate module for this TLS listener.
+          mapped_inputs:
+            - id: tls_certificate_arn
+              label: TLS certificate ARN
+              type: string
+              default: <<ref.stack.output.certificate_arn>>
+          required: true
+          show_when:
+            listener_protocol: TLS
+        - id: tls_ssl_policy
+          label: TLS SSL policy
           type: string
-          default: <<ref.stack.output.certificate_arn>>
-      required: true
-      show_when:
-        listener_protocol: TLS
-    - id: tls_ssl_policy
-      label: TLS SSL policy
-      type: string
-      description: SSL policy for TLS listeners.
-      collapsible: true
-      default: ELBSecurityPolicy-TLS13-1-2-2021-06
-      show_when:
-        listener_protocol: TLS
-    - id: tls_alpn_policy
-      label: TLS ALPN policy
-      type: string
-      description: Optional ALPN policy for TLS listeners.
-      collapsible: true
-      required: false
-      show_when:
-        listener_protocol: TLS
-      values:
-        - label: HTTP1 only
-          value: HTTP1Only
-        - label: HTTP2 only
-          value: HTTP2Only
-        - label: HTTP2 optional
-          value: HTTP2Optional
-        - label: HTTP2 preferred
-          value: HTTP2Preferred
-        - label: None
-          value: None
-    - id: tls_target_protocol
-      immutable: true
-      label: TLS target protocol
-      type: string
-      description: Protocol used between the NLB and the ECS task for TLS listeners. Use TCP for TLS termination at the NLB or TLS for encrypted traffic to the task.
-      required: true
-      default: TCP
-      show_when:
-        listener_protocol: TLS
-      values:
-        - label: TCP
-          value: TCP
-        - label: TLS
-          value: TLS
+          description: SSL policy for this TLS listener.
+          collapsible: true
+          default: ELBSecurityPolicy-TLS13-1-2-2021-06
+          show_when:
+            listener_protocol: TLS
+        - id: tls_alpn_policy
+          label: TLS ALPN policy
+          type: string
+          description: Optional ALPN policy for this TLS listener.
+          collapsible: true
+          required: false
+          default: None
+          show_when:
+            listener_protocol: TLS
+          values:
+            - label: HTTP1 only
+              value: HTTP1Only
+            - label: HTTP2 only
+              value: HTTP2Only
+            - label: HTTP2 optional
+              value: HTTP2Optional
+            - label: HTTP2 preferred
+              value: HTTP2Preferred
+            - label: None
+              value: None
+        - id: tls_target_protocol
+          label: TLS target protocol
+          type: string
+          description: Protocol used between the NLB and the ECS task. Use TCP for TLS termination at the NLB or TLS for encrypted traffic to the task.
+          required: true
+          default: TCP
+          show_when:
+            listener_protocol: TLS
+          values:
+            - label: TCP
+              value: TCP
+            - label: TLS
+              value: TLS
+      default:
+        - listener_port: 80
+          listener_protocol: TCP
+          container_port: 3000
     - id: load_balancer_ingress_cidr_blocks
       label: NLB ingress CIDRs
       type: string_array
@@ -394,7 +288,7 @@ module:
           terraform_variables:
             $merge:
               - ../../partials/stack/ecs-service-common-terraform-variables.yml
-              - container_port: << module.input.container_port >>
+              - container_port: << module.input.listeners[0].container_port >>
                 health_check_grace_period_seconds: << module.input.health_check_grace_period_seconds >>
                 load_balancer_ingress_cidr_blocks: >-
                   << module.input.public_nlb_service_enabled ? module.input.load_balancer_ingress_cidr_blocks :
@@ -403,17 +297,16 @@ module:
                   << module.input.public_nlb_service_enabled ? module.input.public_nlb_security_group_id :
                   module.input.private_nlb_security_group_id >>
                 load_balancer_attachment:
-                  container_port: << module.input.container_port >>
+                  container_port: << module.input.listeners[0].container_port >>
                   enabled: true
-                  nlb_listener:
-                    alpn_policy: '<< module.input.listener_protocol == "TLS" && module.input.tls_alpn_policy != "None" ? module.input.tls_alpn_policy : nil >>'
-                    certificate_arn: '<< module.input.listener_protocol == "TLS" ? module.input.tls_certificate_arn : nil >>'
-                    nlb_arn: >-
-                      << module.input.public_nlb_service_enabled ? module.input.public_nlb_arn :
-                      module.input.private_nlb_arn >>
-                    port: << module.input.listener_port >>
-                    protocol: << module.input.listener_protocol >>
-                    ssl_policy: '<< module.input.listener_protocol == "TLS" ? module.input.tls_ssl_policy : nil >>'
+                  nlb_listeners: >-
+                    << map(module.input.listeners, {"nlb_arn": (module.input.public_nlb_service_enabled ?
+                    module.input.public_nlb_arn : module.input.private_nlb_arn), "port": #.listener_port,
+                    "protocol": #.listener_protocol, "container_port": #.container_port, "target_protocol":
+                    (#.listener_protocol == "TLS" ? #.tls_target_protocol : #.listener_protocol),
+                    "certificate_arn": (#.listener_protocol == "TLS" ? #.tls_certificate_arn : nil),
+                    "ssl_policy": (#.listener_protocol == "TLS" ? #.tls_ssl_policy : nil), "alpn_policy":
+                    (#.listener_protocol == "TLS" && #.tls_alpn_policy != "None" ? #.tls_alpn_policy : nil)}) >>
                   target_group:
                     deregistration_delay: << module.input.deregistration_delay >>
                     health_check:
@@ -426,8 +319,8 @@ module:
                       protocol: << module.input.health_check_protocol >>
                       timeout: << module.input.health_check_timeout >>
                       unhealthy_threshold: << module.input.unhealthy_threshold >>
-                    port: << module.input.container_port >>
-                    protocol: '<< module.input.listener_protocol == "TLS" ? module.input.tls_target_protocol : module.input.listener_protocol >>'
+                    port: << module.input.listeners[0].container_port >>
+                    protocol: '<< module.input.listeners[0].listener_protocol == "TLS" ? module.input.listeners[0].tls_target_protocol : module.input.listeners[0].listener_protocol >>'
                     stickiness:
                       enabled: << module.input.source_ip_stickiness_enabled >>
                       type: source_ip
@@ -444,40 +337,8 @@ module:
   deploy:
     $merge:
       - ../../partials/deploy/ecs-service-deploy-common.yml
-    strategy: |
-      <<
-      module.input.deployment_strategy == "rolling" ? nil :
-      module.input.deployment_strategy == "blue_green" ? {
-        "type": "blue_green",
-        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
-        "pause_stages": module.input.deployment_pause_stages
-      } :
-      module.input.deployment_strategy == "linear" ? {
-        "type": "linear",
-        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
-        "pause_stages": module.input.deployment_pause_stages,
-        "linear": {
-          "step_percentage": module.input.linear_step_percentage,
-          "step_bake_time_in_minutes": module.input.linear_step_bake_time_in_minutes
-        }
-      } : {
-        "type": "canary",
-        "bake_time_in_minutes": module.input.deployment_bake_time_in_minutes,
-        "pause_stages": module.input.deployment_pause_stages,
-        "canary": {
-          "canary_percent": module.input.canary_percent,
-          "canary_bake_time_in_minutes": module.input.canary_bake_time_in_minutes
-        }
-      }
-      >>
     infrastructure:
-      $merge:
-        - ../../partials/deploy/ecs-service-deploy-infrastructure-common.yml
-        - ecs_target_group_arn: <<stack.output.target_group_arn>>
-          ecs_alternate_target_group_arn: <<stack.output.alternate_target_group_arn>>
-          ecs_production_listener_rule_arn: <<stack.output.production_listener_rule_arn>>
-          ecs_infrastructure_role_arn: <<stack.output.ecs_infrastructure_role_arn>>
-          ecs_test_listener_rule_arn: <<stack.output.test_listener_rule_arn>>
+      $include: ../../partials/deploy/ecs-service-deploy-infrastructure-common.yml
     task_definition:
       $merge:
         - ../../partials/deploy/ecs-service-task-definition-common.yml
@@ -486,7 +347,7 @@ module:
         > 0 ? module.input.image_start_command : nil), "cpu": (module.input.capacity_provider == "ec2" ?
         int(float(module.input.task_cpu) * 1024) : int(float(module.input.fargate_size.vcpu) * 1024)),
         "depends_on": [{"container_name": "log_router", "condition": "START"}], "environment": ([{name:
-        "PORT", value: string(module.input.container_port)}] | concat(module.input.environment_variables !=
+        "PORT", value: string(module.input.listeners[0].container_port)}] | concat(module.input.environment_variables !=
         nil ? module.input.environment_variables : [])), "essential": true, "image":
         (module.input.build_source == "image_registry" ? (deploy.input.image_ref contains
         "sha256:" ? module.input.image_repository + "@" + deploy.input.image_ref :
@@ -499,8 +360,8 @@ module:
         (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
         module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
         (stack.output.container_name),
-        "port_mappings": [{"container_port": (module.input.container_port), "protocol":
-        (module.input.listener_protocol == "UDP" ? "udp" : "tcp")}], "readonly_root_filesystem": false,
+        "port_mappings": map(module.input.listeners, {"container_port": #.container_port, "protocol":
+        (#.listener_protocol == "UDP" ? "udp" : "tcp")}), "readonly_root_filesystem": false,
         "repository_credentials": (module.input.image_registry_credentials_secret_arn ? {credentials_parameter:
         module.input.image_registry_credentials_secret_arn} : nil), "secrets": (module.input.secrets),
         "stop_timeout": 30}, {"name": "log_router", "image": module.input.firelens_image, "cpu": 0,
@@ -523,7 +384,7 @@ module:
         (len(module.input.image_start_command) > 0 ? module.input.image_start_command : nil), "cpu":
         (module.input.capacity_provider == "ec2" ? int(float(module.input.task_cpu) * 1024) :
         int(float(module.input.fargate_size.vcpu) * 1024)), "environment": ([{name: "PORT", value:
-        string(module.input.container_port)}] | concat(module.input.environment_variables != nil ?
+        string(module.input.listeners[0].container_port)}] | concat(module.input.environment_variables != nil ?
         module.input.environment_variables : [])), "essential": true, "image": (module.input.build_source ==
         "image_registry" ? (deploy.input.image_ref contains "sha256:" ?
         module.input.image_repository + "@" + deploy.input.image_ref : module.input.image_repository +
@@ -536,8 +397,8 @@ module:
         int(float(module.input.task_memory) * 1024) : int(float(module.input.fargate_size.memory_gb) *
         1024)), "mount_points": (module.input.efs_enabled ? [{"source_volume": "efs", "container_path":
         module.input.efs_mount_path, "read_only": module.input.efs_read_only}] : []), "name":
-        (stack.output.container_name), "port_mappings": [{"container_port":
-        (module.input.container_port), "protocol": (module.input.listener_protocol == "UDP" ? "udp" : "tcp")}],
+        (stack.output.container_name), "port_mappings": map(module.input.listeners, {"container_port":
+        #.container_port, "protocol": (#.listener_protocol == "UDP" ? "udp" : "tcp")}),
         "readonly_root_filesystem": false, "repository_credentials": (module.input.image_registry_credentials_secret_arn ?
         {credentials_parameter: module.input.image_registry_credentials_secret_arn} : nil), "secrets":
         (module.input.secrets), "stop_timeout": 30}]) | concat(module.input.sidecars ? module.input.sidecars
@@ -589,7 +450,7 @@ module:
 
     ## Overview
 
-    The ECS Network Service module creates an ECS service in an existing Ravion ECS cluster and attaches it to a public or private Network Load Balancer. Select an ECS cluster, choose how the container image is built or supplied, configure the NLB listener and target group health checks, and Ravion provisions the service, target groups, listener, IAM roles, security group, ECR repository when needed, and autoscaling settings.
+    The ECS Network Service module creates an ECS service in an existing Ravion ECS cluster and attaches it to a public or private Network Load Balancer. Select an ECS cluster, choose how the container image is built or supplied, configure one or more NLB listeners and shared target group health checks, and Ravion provisions the service, target groups, listeners, IAM roles, security group, ECR repository when needed, and autoscaling settings.
 
     The module is intentionally focused on Layer 4 services behind a Network Load Balancer. Use ECS Web Service for HTTP host and path routing through an Application Load Balancer.
 
@@ -604,6 +465,7 @@ module:
     | Serving UDP workloads            | Registering UDP container ports and target groups               |
     | Terminating TLS at the NLB       | Creating a TLS listener with an ACM certificate                 |
     | Passing TLS through to the task  | Using TLS target protocol for encrypted backend traffic         |
+    | Serving multiple network ports   | Attaching several listeners and container ports to one ECS service |
     | Deploying existing containers    | Pulling an image from a public or private registry              |
     | Tuning production capacity       | Combining Fargate, Fargate Spot, or EC2 with autoscaling        |
     | Running release tasks            | Running pre-deploy or post-deploy ECS tasks with the app image  |
@@ -616,7 +478,7 @@ module:
 
     Use Run in private subnets for most production services. Private subnets keep tasks off the public internet and route outbound traffic through NAT or equivalent egress. Turning it off runs tasks in public subnets and assigns public IPs.
 
-    NLB ingress CIDRs controls which IPv4 CIDR blocks can reach the public listener. It defaults to `0.0.0.0/0`. Private NLB ingress CIDRs applies when Public network service is off and defaults to the RFC 1918 private ranges: `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`.
+    NLB ingress CIDRs controls which IPv4 CIDR blocks can reach every public listener. It defaults to `0.0.0.0/0`. Private NLB ingress CIDRs applies when Public network service is off and defaults to the RFC 1918 private ranges: `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`.
 
     ## Build and image options
 
@@ -632,9 +494,11 @@ module:
 
     For Pull from image registry, provide the image repository without the tag. At deploy time, provide the tag to use. Use Registry credentials secret ARN for private registries that require ECS repository credentials. Use Start command to override the image default CMD when the image needs a different service command.
 
-    ## Listener and target group
+    ## Listeners and target groups
 
-    The service always creates an NLB listener and target group on the selected cluster Network Load Balancer. Configure Listener port for the port clients connect to and Container port for the port the app listens on inside the ECS task. Ravion also sets the `PORT` runtime environment variable from Container port.
+    The service requires at least one listener. Each listener creates an NLB listener, a target group, an ECS load balancer attachment, and the required security group ingress. Configure Listener port for the port clients connect to and Container port for the port the app listens on inside the ECS task.
+
+    Listener ports and container ports must be unique, and an ECS service supports at most five listeners. Ravion sets the `PORT` runtime environment variable from the first listener's Container port.
 
     | Listener protocol | Use it for                                      | Target behavior                                      |
     | ----------------- | ----------------------------------------------- | ---------------------------------------------------- |
@@ -642,7 +506,7 @@ module:
     | UDP               | UDP protocols                                   | Sends UDP traffic to the container port              |
     | TLS               | TLS termination or re-encryption at Layer 4     | Uses TLS certificate settings and TLS target protocol |
 
-    TLS listeners require an ACM certificate module reference. TLS SSL policy defaults to `ELBSecurityPolicy-TLS13-1-2-2021-06`. TLS ALPN policy is optional; leave it as None unless clients need a specific ALPN behavior. TLS target protocol controls traffic from the NLB to the ECS task: use TCP when the NLB terminates TLS, or TLS when the task should receive encrypted backend traffic.
+    Each TLS listener requires its own ACM certificate module reference. TLS SSL policy defaults to `ELBSecurityPolicy-TLS13-1-2-2021-06`. TLS ALPN policy is optional; leave it as None unless clients need a specific ALPN behavior. TLS target protocol controls traffic from the NLB to the ECS task: use TCP when the NLB terminates TLS, or TLS when the task should receive encrypted backend traffic.
 
     Source IP stickiness is off by default. Enable it when repeat traffic from the same source IP should stay on the same task when possible.
 
@@ -700,7 +564,7 @@ module:
 
     ## Application configuration
 
-    Use Runtime environment variables for plain container environment values. Ravion also sets PORT from Container port.
+    Use Runtime environment variables for plain container environment values. Ravion also sets PORT from the first listener's Container port.
 
     Use Runtime secrets for sensitive values. Secrets are injected into the ECS task from SSM Parameter Store or Secrets Manager using name and value_from objects.
 
@@ -714,7 +578,7 @@ module:
 
     ## Deployment
 
-    Deployment strategy defaults to Rolling. Blue/green, Linear, and Canary use the native ECS traffic-shift controller with production and alternate target groups. The deployment strategy can change between deploys without changing Terraform infrastructure.
+    ECS Network Service uses rolling deployments. ECS replaces tasks in place while every listener continues routing through its target group. Blue/green, Linear, and Canary are not available because native ECS traffic shifting accepts one production listener and cannot shift several NLB listeners together.
 
     Deployments update the ECS service task definition with the selected image, generated container definition, awslogs or FireLens configuration, runtime platform, environment variables, secrets, and capacity-provider-compatible task settings.
 
@@ -733,7 +597,7 @@ module:
 
     CloudWatch logging is enabled by default and appears in the Logs tab. Enable FireLens log routing when app logs should also go to destinations such as Datadog, Splunk, Firehose, OpenSearch, or S3. Keep CloudWatch output enabled unless logs should go exclusively to an external destination.
 
-    The Metrics tab includes common ECS service metrics plus Network Load Balancer target group health metrics for healthy and unhealthy hosts.
+    The Metrics tab includes common ECS service metrics plus Network Load Balancer target group health metrics for the first listener. Additional listener target groups are available through the stack outputs for external dashboards and alarms.
 
     ## Configuration
 
@@ -749,13 +613,14 @@ module:
     | Source base path                 | No       | .                        | Path from repository root to source code         |
     | Image repository                 | Yes*     | -                        | Required for image registry deployments          |
     | Start command                    | No       | []                       | Command arguments overriding image CMD           |
-    | Container port                   | Yes      | 3000                     | Port exposed by the app container                |
-    | Listener port                    | Yes      | 80                       | Port the NLB listens on                          |
-    | Listener protocol                | Yes      | TCP                      | TCP, TLS, or UDP                                 |
-    | TLS certificate                  | Yes*     | -                        | Required when Listener protocol is TLS           |
-    | TLS SSL policy                   | No       | ELBSecurityPolicy-TLS13-1-2-2021-06 | SSL policy for TLS listeners            |
-    | TLS ALPN policy                  | No       | None                     | Optional ALPN behavior for TLS listeners         |
-    | TLS target protocol              | Yes*     | TCP                      | Backend protocol for TLS listeners               |
+    | Listeners                        | Yes      | TCP 80 to 3000           | One or more NLB listener and container port mappings |
+    | Listener port                    | Yes      | 80                       | Unique NLB port for each listener                |
+    | Listener protocol                | Yes      | TCP                      | TCP, TLS, or UDP for each listener               |
+    | Container port                   | Yes      | 3000                     | Container port targeted by each listener         |
+    | TLS certificate                  | Yes*     | -                        | Required for each TLS listener                   |
+    | TLS SSL policy                   | No       | ELBSecurityPolicy-TLS13-1-2-2021-06 | SSL policy for each TLS listener        |
+    | TLS ALPN policy                  | No       | None                     | Optional ALPN behavior for each TLS listener     |
+    | TLS target protocol              | Yes*     | TCP                      | Backend protocol for each TLS listener           |
     | NLB ingress CIDRs                | No       | 0.0.0.0/0                | CIDRs allowed to reach the public NLB listener   |
     | Private NLB ingress CIDRs        | No       | RFC 1918 ranges          | CIDRs allowed to reach the private NLB listener  |
     | Health check protocol            | Yes      | TCP                      | TCP, HTTP, or HTTPS target group health checks   |
@@ -770,7 +635,6 @@ module:
     | ECS exec                         | No       | false                    | Enable ECS Exec for debugging containers         |
     | Autoscaling                      | No       | true                     | Enable CPU and optional memory target tracking   |
     | Desired tasks                    | Yes*     | 1                        | Number of tasks when autoscaling is disabled     |
-    | Deployment strategy              | Yes      | rolling                  | Rolling, Blue/green, Linear, or Canary           |
     | FireLens log routing             | No       | false                    | Route app logs through a Fluent Bit sidecar      |
     | Run pre-deploy command           | No       | false                    | Enable a task before each deployment             |
     | Run post-deploy command          | No       | false                    | Enable a task after each successful deployment   |
@@ -784,12 +648,14 @@ module:
     | OpenTofu version override        | No       | Ravion default           | Override the OpenTofu version for the stack      |
     | Ravion Terraform workspace name  | No       | {project}-{env}-{module} | Override the state backend workspace name        |
 
-    *Conditionally required based on the selected listener protocol, health check protocol, build type, autoscaling mode, or capacity provider.
+    *Conditionally required based on each listener protocol, health check protocol, build type, autoscaling mode, or capacity provider.
 
     ## Design decisions
 
     - The module always models a Layer 4 service behind a Network Load Balancer. HTTP host and path routing are intentionally outside this module definition.
-    - The listener is created by the service stack on the selected public or private cluster NLB, so each ECS Network Service owns its listener port.
+    - Listeners are created by the service stack on one selected public or private cluster NLB, so each ECS Network Service owns all of its listener ports.
+    - Deployments are rolling-only because native ECS traffic shifting cannot shift multiple NLB listeners as one deployment.
+    - The first listener supplies the `PORT` environment variable and the target group shown in the built-in healthy and unhealthy host metrics.
     - Tasks default to private subnets even for public network services. The NLB is public; the tasks remain private when the VPC has NAT or equivalent egress.
     - Health checks default to TCP because the module supports non-HTTP protocols.
     - Built images are pushed to an ECR repository created with the service stack. Pull from image registry lets teams bring their own image pipeline.

@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.3.0
-  description: "BREAKING: Replace the boolean Container insights input with a select supporting enhanced observability."
+  version: 0.5.2
+  description: "Add private_alb_ingress_security_group_ids input (and public_alb_ingress_security_group_ids Terraform variable) to allow ALB ingress rules that reference source security groups, such as the CloudFront VPC origins security group."
 module:
   inputs:
     - id: network
@@ -190,19 +190,23 @@ module:
           not: ""
       type: text
     - collapsible: true
+      default: true
       description: Managed termination protection for EC2 capacity.
-      id: ec2_managed_termination_protection
+      id: ec2_managed_termination_protection_enabled
       label: Managed termination protection
-      placeholder: ENABLED
       show_when:
         ec2_instance_type:
           not: ""
-      type: string
-      values:
-        - label: Enabled
-          value: ENABLED
-        - label: Disabled
-          value: DISABLED
+      type: boolean
+    - collapsible: true
+      default: true
+      description: Lets ECS automatically scale the EC2 Auto Scaling Group to match task demand. Disable to manage the instance count yourself.
+      id: ec2_managed_scaling_enabled
+      label: Managed scaling
+      show_when:
+        ec2_instance_type:
+          not: ""
+      type: boolean
     - collapsible: true
       description: Defaults to 100% which means ECS autoscales EC2 instances to have zero extra capacity (cheapest). Reduce to something like 80-90% if you want to pay for spare capacity for faster autoscaling.
       id: ec2_managed_scaling_target_capacity
@@ -213,7 +217,7 @@ module:
       show_when:
         ec2_instance_type:
           not: ""
-        ec2_managed_scaling_status: ENABLED
+        ec2_managed_scaling_enabled: true
       type: number
     - description: Creates an internet-facing Application Load Balancer for services that should receive traffic from the public internet, such as websites, public APIs, and webhook endpoints.
       id: section_public_alb
@@ -230,24 +234,17 @@ module:
       show_when:
         public_alb_enabled: true
       type: boolean
-    - description: ACM certificate module for public ALB HTTPS.
-      id: public_alb_certificate
-      label: Certificate
-      mapped_inputs:
-        - add_button_label: Add certificate ARN
-          default:
-            - <<ref.stack.output.certificate_arn>>
-          description: ACM certificate ARNs for public ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-          id: public_alb_certificate_arns
-          label: Certificate ARNs
-          placeholder: arn:aws:acm:...
-          required: true
-          type: string_array
-      required: true
-      show_when:
-        public_alb_enabled: true
-        public_alb_https_enabled: true
-      type: $ref:rvn-acm-certificate
+    - $template: ../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the public ALB HTTPS listener for SNI.
+        additional_certificate_arns_input_id: public_alb_additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_input_id: public_alb_certificate_arns
+        certificate_description: Primary ACM certificate module for public ALB HTTPS.
+        certificate_input_id: public_alb_certificate
+        show_when:
+          public_alb_enabled: true
+          public_alb_https_enabled: true
     - collapsible: true
       description: SSL policy for public ALB HTTPS.
       id: public_alb_ssl_policy
@@ -307,24 +304,17 @@ module:
       show_when:
         private_alb_enabled: true
       type: boolean
-    - description: ACM certificate module for private ALB HTTPS.
-      id: private_alb_certificate
-      label: Certificate
-      mapped_inputs:
-        - add_button_label: Add certificate ARN
-          default:
-            - <<ref.stack.output.certificate_arn>>
-          description: ACM certificate ARNs for private ALB HTTPS. The first ARN is the default certificate; additional ARNs are attached for SNI. At least one is required when HTTPS is enabled.
-          id: private_alb_certificate_arns
-          label: Certificate ARNs
-          placeholder: arn:aws:acm:...
-          required: true
-          type: string_array
-      required: true
-      show_when:
-        private_alb_enabled: true
-        private_alb_https_enabled: true
-      type: $ref:rvn-acm-certificate
+    - $template: ../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the private ALB HTTPS listener for SNI.
+        additional_certificate_arns_input_id: private_alb_additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_input_id: private_alb_certificate_arns
+        certificate_description: Primary ACM certificate module for private ALB HTTPS.
+        certificate_input_id: private_alb_certificate
+        show_when:
+          private_alb_enabled: true
+          private_alb_https_enabled: true
     - collapsible: true
       description: SSL policy for private ALB HTTPS.
       id: private_alb_ssl_policy
@@ -340,6 +330,24 @@ module:
       id: private_alb_ingress_cidr_blocks
       label: Ingress CIDRs
       placeholder: 10.0.0.0/8
+      show_when:
+        private_alb_enabled: true
+      type: string_array
+    - add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      description: Allowed IPv6 CIDRs for private ALB access. Defaults to no IPv6 ingress.
+      id: private_alb_ingress_ipv6_cidr_blocks
+      label: Ingress IPv6 CIDRs
+      placeholder: fd00::/8
+      show_when:
+        private_alb_enabled: true
+      type: string_array
+    - add_button_label: Add security group
+      collapsible: true
+      description: Security groups whose members can access the private ALB. Useful for sources without static CIDRs, such as CloudFront VPC origins.
+      id: private_alb_ingress_security_group_ids
+      label: Ingress security groups
+      placeholder: sg-...
       show_when:
         private_alb_enabled: true
       type: string_array
@@ -559,6 +567,8 @@ module:
     - Backend services
     - Private HTTP/HTTPS routing
 
+    For either ALB, the selected Certificate is the default HTTPS certificate. Use Additional certificate ARNs to attach more ACM certificates to the same listener through SNI.
+
     ### Network load balancers
 
     Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer an Application Load Balancer.
@@ -586,7 +596,7 @@ module:
     | Fargate               | No       | `true`               | Allow services to use Fargate capacity                        |
     | Fargate Spot          | No       | `true`               | Allow services to use lower-cost interruptible Fargate Spot   |
     | EC2 instance type     | No       | —                    | Enables EC2 capacity when selected                            |
-    | Public load balancer  | No       | `false`              | Create an internet-facing ALB                                 |
+    | Public load balancer  | No       | `true`               | Create an internet-facing ALB                                 |
     | Private load balancer | No       | `false`              | Create an internal ALB                                        |
     | Public NLB            | No       | `false`              | Create an internet-facing Network Load Balancer               |
     | Private NLB           | No       | `false`              | Create an internal Network Load Balancer                      |
@@ -604,6 +614,7 @@ module:
     | Spot instance types             | Additional instance types for mixed Spot capacity       |
     | Custom AMI ID                   | Custom ECS AMI; blank uses the latest ECS-optimized AMI |
     | Key pair name                   | EC2 key pair for SSH access                             |
+    | Managed scaling                 | Let ECS scale the Auto Scaling Group to match task demand |
     | Managed scaling target capacity | Spare capacity target for ECS managed scaling           |
 
     ## Design decisions
@@ -615,7 +626,7 @@ module:
     - **Shared load balancers:** Cluster-level ALBs and NLBs can be reused by services in the environment
     - **Private subnet placement:** ECS tasks and EC2 capacity use private subnets from the selected VPC
     - **Public ingress by default:** Public ALBs use Terraform's default internet ingress unless overridden in Terraform
-    - **Private ingress by default:** Private ALBs use Terraform's default RFC1918 private CIDR ranges unless overridden
+    - **Private ingress by default:** Private ALBs use Terraform's default RFC1918 private CIDR ranges and no IPv6 ingress unless overridden
     - **Enhanced Container Insights:** Enhanced production metrics are collected by default for operational visibility
 
     ## Learn more
@@ -642,8 +653,9 @@ module:
         ec2_spot_enabled: << module.input.ec2_spot_enabled >>
         ec2_instance_type: << module.input.ec2_instance_type >>
         ec2_key_name: << module.input.ec2_key_name >>
+        ec2_managed_scaling_enabled: << module.input.ec2_managed_scaling_enabled >>
         ec2_managed_scaling_target_capacity: << module.input.ec2_managed_scaling_target_capacity >>
-        ec2_managed_termination_protection: << module.input.ec2_managed_termination_protection >>
+        ec2_managed_termination_protection_enabled: << module.input.ec2_managed_termination_protection_enabled >>
         ec2_max_size: << module.input.ec2_max_size >>
         ec2_min_size: << module.input.ec2_min_size >>
         ec2_root_volume_size: << module.input.ec2_root_volume_size >>
@@ -660,11 +672,15 @@ module:
         public_nlb_enabled: << module.input.public_nlb_enabled >>
         name: << module.input.name >>
         private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
-        private_alb_certificate_arns: << module.input.private_alb_certificate_arns >>
+        private_alb_certificate_arns: >-
+          << (module.input.private_alb_certificate_arns != nil ? module.input.private_alb_certificate_arns : []) |
+          concat(module.input.private_alb_additional_certificate_arns != nil ? module.input.private_alb_additional_certificate_arns : []) >>
         private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
         private_alb_https_enabled: << module.input.private_alb_https_enabled >>
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
         private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
+        private_alb_ingress_ipv6_cidr_blocks: << module.input.private_alb_ingress_ipv6_cidr_blocks >>
+        private_alb_ingress_security_group_ids: << module.input.private_alb_ingress_security_group_ids >>
         private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
         private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
         private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
@@ -674,7 +690,9 @@ module:
         private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
         private_subnet_ids: << module.input.private_subnet_ids >>
         public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
-        public_alb_certificate_arns: << module.input.public_alb_certificate_arns >>
+        public_alb_certificate_arns: >-
+          << (module.input.public_alb_certificate_arns != nil ? module.input.public_alb_certificate_arns : []) |
+          concat(module.input.public_alb_additional_certificate_arns != nil ? module.input.public_alb_additional_certificate_arns : []) >>
         public_alb_access_logs_enabled: << module.input.public_alb_access_logs_enabled >>
         public_alb_https_enabled: << module.input.public_alb_https_enabled >>
         public_alb_idle_timeout: << module.input.public_alb_idle_timeout >>

@@ -4,8 +4,8 @@
 
 resource "aws_acm_certificate" "this" {
   region                    = var.region
-  domain_name               = var.domain_name
-  subject_alternative_names = length(var.subject_alternative_names) > 0 ? var.subject_alternative_names : null
+  domain_name               = var.domains[0]
+  subject_alternative_names = length(var.domains) > 1 ? slice(var.domains, 1, length(var.domains)) : null
   validation_method         = "DNS"
 
   lifecycle {

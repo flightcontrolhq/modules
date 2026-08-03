@@ -1,0 +1,345 @@
+definition:
+  type: rvn-aws-alb
+  name: AWS Application Load Balancer
+  description: Standalone Application Load Balancer (ALB) with HTTP/HTTPS listeners that multiple services can attach listener rules to.
+release:
+  version: 0.1.0
+  description: Initial module definition.
+module:
+  inputs:
+    - id: network
+      immutable: true
+      label: VPC network
+      type: $ref:rvn-aws-network
+      mapped_inputs:
+        - $template: ../../partials/templates/network-ref-mapped-inputs.yml
+          with:
+            aws_account_id_default: << ref.input.aws_account_id >>
+            aws_region_default: << ref.input.aws_region >>
+            execution_environment_default: << ref.input.execution_environment_id >>
+            private_subnet_ids_default: <<ref.stack.output.private_subnet_ids>>
+            public_subnet_ids_default: <<ref.stack.output.public_subnet_ids>>
+            vpc_id_default: <<ref.stack.output.vpc_id>>
+      required: true
+    - id: section_load_balancer
+      label: Load balancer
+      type: section
+    - id: name
+      immutable: true
+      label: Name slug
+      type: string
+      description: Name for the load balancer and related resources.
+      required: true
+      default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      patterns:
+        - message: 1-32 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$
+    - id: internal_load_balancer_enabled
+      label: Internal load balancer
+      type: boolean
+      description: Create an internal load balancer reachable only inside the VPC. Turn off for an internet-facing load balancer in the public subnets.
+      default: false
+    - id: deletion_protection_enabled
+      label: Deletion protection
+      type: boolean
+      description: Prevent accidental deletion of the load balancer via the AWS API.
+      default: true
+    - id: idle_timeout
+      label: Idle timeout (seconds)
+      type: number
+      description: Seconds a connection is allowed to be idle before the load balancer closes it.
+      collapsible: true
+      max: 4000
+      min: 1
+      default: 60
+    - id: section_listeners
+      label: Listeners
+      type: section
+    - id: http_listener_enabled
+      label: HTTP
+      type: boolean
+      description: Create an HTTP listener.
+      default: true
+    - id: http_listener_port
+      label: HTTP port
+      type: number
+      collapsible: true
+      max: 65535
+      min: 1
+      show_when:
+        http_listener_enabled: true
+      default: 80
+    - id: https_listener_enabled
+      label: HTTPS
+      type: boolean
+      description: Create an HTTPS listener. Select an ACM certificate when enabled.
+      default: false
+    - id: https_listener_port
+      label: HTTPS port
+      type: number
+      collapsible: true
+      max: 65535
+      min: 1
+      show_when:
+        https_listener_enabled: true
+      default: 443
+    - $template: ../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the HTTPS listener for SNI.
+        additional_certificate_arns_input_id: additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
+        certificate_arns_input_id: certificate_arns
+        certificate_description: Primary ACM certificate module for HTTPS. The certificate must use the same AWS account and region as the load balancer.
+        certificate_input_id: certificate
+        show_when:
+          https_listener_enabled: true
+    - id: ssl_policy
+      label: SSL policy
+      type: string
+      description: SSL policy for the HTTPS listener.
+      collapsible: true
+      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
+      show_when:
+        https_listener_enabled: true
+    - id: http_to_https_redirect_enabled
+      label: Redirect HTTP to HTTPS
+      type: boolean
+      description: Redirect HTTP traffic to the HTTPS listener. Applies only when both listeners are enabled.
+      show_when:
+        http_listener_enabled: true
+        https_listener_enabled: true
+      default: true
+    - id: section_security
+      label: Security
+      type: section
+    - id: ingress_cidr_blocks
+      label: Ingress IPv4 CIDRs
+      type: string_array
+      description: IPv4 CIDR blocks allowed to reach the load balancer. Defaults to public internet access for an internet-facing load balancer and RFC1918 private ranges for an internal load balancer. Use an empty list to allow no IPv4 ingress.
+      add_button_label: Add CIDR block
+      collapsible: true
+      placeholder: 0.0.0.0/0
+    - id: ingress_ipv6_cidr_blocks
+      label: Ingress IPv6 CIDRs
+      type: string_array
+      description: IPv6 CIDR blocks allowed to reach the load balancer. Defaults to public internet access for an internet-facing load balancer and no IPv6 ingress for an internal load balancer. Use an empty list to allow no IPv6 ingress.
+      add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      placeholder: "::/0"
+    - id: web_acl_arn
+      label: WAF web ACL ARN
+      type: string
+      description: WAFv2 Web ACL to associate with the load balancer.
+      collapsible: true
+      placeholder: arn:aws:wafv2:...
+    - id: section_access_logs
+      label: Access logs
+      type: section
+    - id: access_logs_enabled
+      label: Access logs
+      type: boolean
+      description: Write load balancer access logs to S3.
+      default: false
+    - id: access_logs_bucket_arn
+      label: Access logs bucket ARN
+      type: string
+      description: Existing S3 bucket for access logs. Leave blank to create a bucket.
+      collapsible: true
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        access_logs_enabled: true
+    - id: access_logs_retention_days
+      label: Access logs retention (days)
+      type: number
+      description: Days to retain access logs in the created bucket.
+      collapsible: true
+      min: 1
+      show_when:
+        access_logs_enabled: true
+      default: 90
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: networking/alb
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        access_logs_bucket_arn: << module.input.access_logs_bucket_arn || nil >>
+        access_logs_enabled: << module.input.access_logs_enabled >>
+        access_logs_retention_days: << module.input.access_logs_retention_days >>
+        certificate_arns: >-
+          << module.input.https_listener_enabled ?
+          ((module.input.certificate_arns != nil ? module.input.certificate_arns : []) |
+          concat(module.input.additional_certificate_arns != nil ? module.input.additional_certificate_arns : [])) : [] >>
+        deletion_protection_enabled: << module.input.deletion_protection_enabled >>
+        http_listener_enabled: << module.input.http_listener_enabled >>
+        http_listener_port: << module.input.http_listener_port >>
+        http_to_https_redirect_enabled: << module.input.http_to_https_redirect_enabled >>
+        https_listener_enabled: << module.input.https_listener_enabled >>
+        https_listener_port: << module.input.https_listener_port >>
+        idle_timeout: << module.input.idle_timeout >>
+        ingress_cidr_blocks: >-
+          << module.input.ingress_cidr_blocks != nil ? module.input.ingress_cidr_blocks :
+          (module.input.internal_load_balancer_enabled ? ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"] : ["0.0.0.0/0"]) >>
+        ingress_ipv6_cidr_blocks: >-
+          << module.input.ingress_ipv6_cidr_blocks != nil ? module.input.ingress_ipv6_cidr_blocks :
+          (module.input.internal_load_balancer_enabled ? [] : ["::/0"]) >>
+        internal_load_balancer_enabled: << module.input.internal_load_balancer_enabled >>
+        name: << module.input.name >>
+        region: << module.input.aws_region >>
+        ssl_policy: << module.input.ssl_policy || nil >>
+        subnet_ids: "<< module.input.internal_load_balancer_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+        vpc_id: << module.input.vpc_id >>
+        waf_association_enabled: '<< module.input.web_acl_arn != nil && module.input.web_acl_arn != "" >>'
+        web_acl_arn: << module.input.web_acl_arn || nil >>
+  ui:
+    links: |-
+      <<
+      (module.input.https_listener_enabled || module.input.http_listener_enabled) && stack.output.alb_dns_name ?
+      [{"name":"Load balancer","href":(module.input.https_listener_enabled ? "https://" : "http://") + stack.output.alb_dns_name}] :
+      []
+      >>
+    metrics:
+      - id: request_count
+        name: Request count
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            LoadBalancer: << stack.output.alb_arn_suffix >>
+          name: RequestCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: target_response_time
+        name: Target response time
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            LoadBalancer: << stack.output.alb_arn_suffix >>
+          name: TargetResponseTime
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Average
+      - id: target_5xx_errors
+        name: Target 5xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            LoadBalancer: << stack.output.alb_arn_suffix >>
+          name: HTTPCode_Target_5XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: elb_5xx_errors
+        name: Load balancer 5xx errors
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            LoadBalancer: << stack.output.alb_arn_suffix >>
+          name: HTTPCode_ELB_5XX_Count
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+      - id: active_connections
+        name: Active connections
+        type: line
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            LoadBalancer: << stack.output.alb_arn_suffix >>
+          name: ActiveConnectionCount
+          namespace: AWS/ApplicationELB
+          region: << stack.output.region >>
+          statistic: Sum
+  readme: |
+    Standalone Application Load Balancer (ALB) with HTTP/HTTPS listeners that multiple services can attach listener rules to.
+
+    ## Overview
+
+    Use this module to create an Application Load Balancer inside a VPC that is shared by one or more services. Select a VPC network and Ravion provisions the load balancer, its security group, HTTP and HTTPS listeners with a fixed default response, optional access logging, and optional WAF association.
+
+    The load balancer intentionally serves no traffic by itself. Services that reference this module, such as EC2 services, create their own target groups and listener rules on the shared listeners.
+
+    Terraform source: [flightcontrolhq/modules/networking/alb](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/alb)
+
+    ## Use cases
+
+    | Scenario | Benefit |
+    | --- | --- |
+    | Several services on one domain | Share one load balancer, route by host or path rules per service. |
+    | Public web apps and APIs | Internet-facing load balancer in the public subnets with HTTPS. |
+    | Internal services | Internal load balancer reachable only inside the VPC. |
+    | Cost control | One load balancer instead of one per service. |
+
+    ## Placement and security
+
+    The load balancer is internet-facing in the public subnets by default. Enable Internal load balancer to place it in the private subnets, reachable only inside the VPC.
+
+    The module creates a dedicated security group. Internet-facing load balancers allow 0.0.0.0/0 and ::/0 on the listener ports by default. Internal load balancers allow the RFC1918 IPv4 ranges and no IPv6 ingress by default. Restrict or remove access with Ingress IPv4 CIDRs and Ingress IPv6 CIDRs; an explicitly empty list creates no rules for that IP version. Services that attach to the load balancer allow traffic from this security group on their app ports.
+
+    ## Listeners and TLS
+
+    HTTP is enabled on port 80 by default. Enable HTTPS and select a primary ACM Certificate module in the same AWS account and region. Add Additional certificate ARNs when the listener should serve more certificates through SNI. When both listeners are enabled, HTTP traffic redirects to HTTPS by default. The HTTP and HTTPS listener ports remain configurable for workloads that cannot use ports 80 and 443.
+
+    Requests that match no service listener rule receive a fixed 503 response, so an unmatched host or path never reaches a service by accident.
+
+    ## Access logs and WAF
+
+    Enable Access logs to write load balancer access logs to S3. Leave the bucket ARN blank to create a bucket with the configured retention, or point at an existing bucket. Associate a WAFv2 Web ACL by providing its ARN.
+
+    ## Configuration
+
+    | Field | Required | Default | Description |
+    | --- | --- | --- | --- |
+    | VPC network | Yes | - | Existing rvn-aws-network module instance |
+    | Name slug | Yes | {project}-{env}-{module} | Name for the load balancer, 32 characters max |
+    | Internal load balancer | No | false | Place the load balancer in private subnets |
+    | Deletion protection | No | true | Prevent accidental deletion |
+    | Idle timeout (seconds) | No | 60 | Connection idle timeout |
+    | HTTP | No | true | Create an HTTP listener |
+    | HTTP port | No | 80 | HTTP listener port |
+    | HTTPS | No | false | Create an HTTPS listener |
+    | HTTPS port | No | 443 | HTTPS listener port |
+    | Certificate | Yes* | - | Primary ACM certificate module for HTTPS |
+    | Additional certificate ARNs | No | [] | Additional ACM certificates attached for SNI |
+    | SSL policy | No | TLS 1.3 policy | SSL policy for HTTPS |
+    | Redirect HTTP to HTTPS | No | true | Applies when both listeners are enabled |
+    | Ingress IPv4/IPv6 CIDRs | No | Visibility-dependent | Sources allowed to reach the load balancer; empty lists create no ingress rules |
+    | WAF web ACL ARN | No | - | WAFv2 Web ACL to associate |
+    | Access logs | No | false | Write access logs to S3 |
+    | Access logs bucket ARN | No | Created bucket | Existing bucket for access logs |
+    | Access logs retention (days) | No | 90 | Retention for the created bucket |
+    | Tags | No | Standard Ravion tags | Additional tags applied to resources |
+    | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
+    | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
+    | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
+
+    *Required when HTTPS is enabled.
+
+    ## Design decisions
+
+    - The default listener action is a fixed 503 response. Routing is owned by the services that attach listener rules, so the load balancer stays service-agnostic.
+    - Internal placement uses the network's private subnets and internet-facing placement uses the public subnets; subnet selection is not exposed separately.
+    - Internal ingress defaults to RFC1918 IPv4 ranges with no IPv6 ingress, while internet-facing ingress defaults to all IPv4 and IPv6 sources.
+    - HTTP-only is allowed for development, but production load balancers should enable HTTPS with an ACM certificate.
+    - Advanced ALB behaviors such as desync mitigation, header handling, and HTTP/2 keep their safe Terraform defaults and are available through Advanced Terraform variables.
+
+    ## Learn more
+
+    - [Application Load Balancers](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html)
+    - [Listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html)
+    - [ACM certificates](https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html)
+    - [AWS WAF](https://docs.aws.amazon.com/waf/latest/developerguide/waf-chapter.html)

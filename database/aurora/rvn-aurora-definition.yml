@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon Aurora cluster. Supports Aurora PostgreSQL and Aurora MySQL with provisioned or Serverless v2 capacity.
 
 release:
-  version: 0.1.0
-  description: Initial Aurora module definition.
+  version: 0.1.1
+  description: Handle disabled CloudWatch alarm inputs safely.
 module:
   inputs:
     - id: network
@@ -955,7 +955,7 @@ module:
         cloudwatch_alarm_connections_threshold: << module.input.cloudwatch_alarm_connections_threshold >>
         cloudwatch_alarm_cpu_threshold: << module.input.cloudwatch_alarm_cpu_threshold >>
         cloudwatch_alarm_evaluation_periods: << module.input.cloudwatch_alarm_evaluation_periods >>
-        cloudwatch_alarm_memory_threshold: << int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) >>
+        cloudwatch_alarm_memory_threshold: '<< module.input.cloudwatch_alarm_memory_threshold_mib != null ? int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) : 268435456 >>'
         cloudwatch_alarm_period: << module.input.cloudwatch_alarm_period >>
         cloudwatch_alarms_creation_enabled: << module.input.cloudwatch_alarms_creation_enabled >>
         cloudwatch_ok_actions: << module.input.cloudwatch_ok_actions >>

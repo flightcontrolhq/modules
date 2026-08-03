@@ -248,8 +248,8 @@ module "api_service" {
 | ec2_imdsv2_enabled | Require IMDSv2 | `bool` | `true` | no |
 | ec2_weight | EC2 weight in default strategy | `number` | `1` | no |
 | ec2_base | Base tasks on EC2 | `number` | `0` | no |
-| ec2_managed_termination_protection | Managed termination protection | `string` | `"ENABLED"` | no |
-| ec2_managed_scaling_status | Enable managed scaling | `string` | `"ENABLED"` | no |
+| ec2_managed_termination_protection_enabled | Enable managed termination protection | `bool` | `true` | no |
+| ec2_managed_scaling_enabled | Enable managed scaling | `bool` | `true` | no |
 | ec2_managed_scaling_target_capacity | Target capacity percentage | `number` | `100` | no |
 | ec2_security_group_ids | Additional security groups for EC2 | `list(string)` | `[]` | no |
 
@@ -263,6 +263,7 @@ module "api_service" {
 | public_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | public_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | public_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["0.0.0.0/0"]` | no |
+| public_alb_ingress_security_group_ids | Security group IDs allowed to access the public ALB | `list(string)` | `[]` | no |
 | public_alb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | public_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 | public_alb_web_acl_arn | WAFv2 Web ACL ARN | `string` | `null` | no |
@@ -277,6 +278,7 @@ module "api_service" {
 | private_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | private_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | private_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]` | no |
+| private_alb_ingress_security_group_ids | Security group IDs allowed to access the private ALB (e.g., CloudFront VPC origins) | `list(string)` | `[]` | no |
 | private_alb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | private_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 
@@ -459,8 +461,8 @@ module "api_service" {
 ║                                                                          │ • ec2_root_volume_size/type             │  ║
 ║                                                                          │ • ec2_user_data, ec2_imdsv2_enabled      │  ║
 ║                                                                          │ • ec2_weight, ec2_base                  │  ║
-║                                                                          │ • ec2_managed_termination_protection    │  ║
-║                                                                          │ • ec2_managed_scaling_status            │  ║
+║                                                                          │ • ec2_managed_termination_*             │  ║
+║                                                                          │ • ec2_managed_scaling_enabled           │  ║
 ║                                                                          │ • ec2_managed_scaling_target_capacity   │  ║
 ║                                                                          │ • ec2_security_group_ids                │  ║
 ║                                                                          └─────────────────────────────────────────┘  ║
@@ -869,9 +871,9 @@ When EC2 capacity provider is enabled, ECS uses **Capacity Provider Managed Scal
 │     → ECS scales IN the ASG (respecting termination protection)              │
 │                                                                              │
 │  Configuration:                                                              │
-│  • ec2_managed_scaling_status = "ENABLED"                                    │
+│  • ec2_managed_scaling_enabled = true                                         │
 │  • ec2_managed_scaling_target_capacity = 100 (%)                             │
-│  • ec2_managed_termination_protection = "ENABLED"                            │
+│  • ec2_managed_termination_protection_enabled = true                          │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

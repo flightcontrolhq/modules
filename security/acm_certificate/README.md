@@ -8,7 +8,7 @@ Requests an AWS Certificate Manager (ACM) **public** certificate using **DNS val
 - **Default**: output `validation_records` (CNAME name, type, value per domain); no Route53 resources; no blocking wait
 - **Optional**: `route53_validation_records_creation_enabled` + `route53_zone_id` to create validation CNAMEs in a single Route53 public hosted zone
 - **Optional**: `certificate_validation_wait_enabled` to add `aws_acm_certificate_validation` (apply waits until the certificate is **ISSUED**)
-- Optional Subject Alternative Names (SANs)
+- Ordered domain list with the first domain as primary and the remaining domains as Subject Alternative Names (SANs)
 - Tags and `create_before_destroy` lifecycle on the certificate
 
 ## Regional notes
@@ -24,10 +24,10 @@ Use this when DNS is managed outside this Terraform stack (or you will add recor
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/acm_certificate?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
-  name        = "api"
-  domain_name = "api.example.com"
+  name    = "api"
+  domains = ["api.example.com"]
 
   # route53_validation_records_creation_enabled = false # default
   # certificate_validation_wait_enabled          = false # default
@@ -43,10 +43,10 @@ Use when all validation names can be created in **one** Route53 public hosted zo
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/acm_certificate?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
   name                                        = "api"
-  domain_name                                 = "api.example.com"
+  domains                                     = ["api.example.com"]
   route53_validation_records_creation_enabled = true
   route53_zone_id                             = aws_route53_zone.primary.zone_id
   certificate_validation_wait_enabled         = true
@@ -57,30 +57,30 @@ module "cert" {
 }
 ```
 
-### Subject Alternative Names
+### Multiple domains
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/acm_certificate?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
-  name        = "app"
-  domain_name = "app.example.com"
-  subject_alternative_names = [
+  name = "app"
+  domains = [
+    "app.example.com",
     "www.example.com",
   ]
 }
 ```
 
-Do not duplicate the primary `domain_name` in `subject_alternative_names` (ACM will reject invalid combinations).
+The first entry in `domains` is the certificate's primary domain. Every remaining entry becomes a Subject Alternative Name. Domain names must be unique.
 
 ### With Application Load Balancer
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/acm_certificate?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
-  name        = "main"
-  domain_name = "api.example.com"
+  name    = "main"
+  domains = ["api.example.com"]
 }
 
 module "alb" {
@@ -113,8 +113,7 @@ Ensure the certificate is **ISSUED** before the ALB listener depends on a fully 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
 | name | Name prefix for tagging the certificate | `string` | n/a | yes |
-| domain_name | Primary FQDN for the certificate | `string` | n/a | yes |
-| subject_alternative_names | Additional FQDNs (SANs) | `list(string)` | `[]` | no |
+| domains | Ordered FQDNs for the certificate. The first is primary and the remainder are SANs. | `list(string)` | n/a | yes |
 | tags | Tags for the ACM certificate | `map(string)` | `{}` | no |
 | route53_validation_records_creation_enabled | Create Route53 CNAME validation records | `bool` | `false` | no |
 | route53_zone_id | Route53 public hosted zone ID (required if `route53_validation_records_creation_enabled` is true) | `string` | `null` | no |

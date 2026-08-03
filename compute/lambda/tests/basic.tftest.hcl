@@ -155,6 +155,40 @@ run "permissions_and_event_source_mappings" {
   }
 }
 
+run "image_registry_no_module_ecr" {
+  command = plan
+
+  variables {
+    package_type                    = "Image"
+    runtime                         = null
+    handler                         = null
+    s3_bucket                       = null
+    s3_key                          = null
+    ecr_repository_creation_enabled = false
+    image_uri                       = "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function:v1"
+  }
+
+  assert {
+    condition     = aws_lambda_function.this.package_type == "Image"
+    error_message = "Package type should be Image."
+  }
+
+  assert {
+    condition     = aws_lambda_function.this.image_uri == "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function:v1"
+    error_message = "Function should be created from the external image URI."
+  }
+
+  assert {
+    condition     = length(module.ecr) == 0
+    error_message = "No module-owned ECR repository should be created for external image registries."
+  }
+
+  assert {
+    condition     = length(terraform_data.bootstrap_image) == 0
+    error_message = "No bootstrap image should be seeded when the image comes from an external registry."
+  }
+}
+
 run "aliases_created" {
   command = plan
 

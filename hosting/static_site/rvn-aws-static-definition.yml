@@ -3,8 +3,8 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.3
-  description: Replace legacy CloudFront rewrite functions without leaving unmanaged resources.
+  version: 0.3.5
+  description: Document cache header defaults as the blank module inputs they are, with the applied value explained.
 module:
   build:
     builder: >-
@@ -318,6 +318,11 @@ module:
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select an AWS account and region to load available EC2 instance types.
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - id: section_deploy
       label: Deploy config
       type: section
@@ -435,12 +440,12 @@ module:
 
     | Setting | Default | Purpose |
     | --- | --- | --- |
-    | HTML Cache-Control | Terraform module default: public, max-age=0, must-revalidate | Browsers store HTML but revalidate on every navigation with a cheap conditional request that CloudFront answers from its edge cache, so a new deploy is visible on the next page load |
-    | Asset Cache-Control | Terraform module default: public, max-age=31536000, immutable | Hashed assets never change at a given URL across versions, so browsers cache them for a year and skip revalidation entirely |
-    | HTML cache path overrides | Terraform module defaults for service workers, manifests, favicon, robots, and sitemap | Treats stable root files as HTML-like responses instead of immutable assets |
+    | HTML Cache-Control | Blank | Blank applies public, max-age=0, must-revalidate, so browsers store HTML but revalidate on every navigation with a cheap conditional request that CloudFront answers from its edge cache, and a new deploy is visible on the next page load |
+    | Asset Cache-Control | Blank | Blank applies public, max-age=31536000, immutable, because hashed assets never change at a given URL across versions, so browsers cache them for a year and skip revalidation entirely |
+    | HTML cache path overrides | Blank | Blank covers service workers, manifests, favicon, robots, and sitemap, treating stable root files as HTML-like responses instead of immutable assets |
     | No-cache path patterns | [] | Bypasses CloudFront edge caching for selected path patterns |
-    | Cache policy ID | Module-managed 1-year policy by default | Controls how CloudFront caches responses from S3 at the edge |
-    | Origin request policy ID | AWS managed CORS-S3Origin by default | Controls what CloudFront forwards to S3 |
+    | Cache policy ID | Blank | Blank uses a module-managed 1-year policy; controls how CloudFront caches responses from S3 at the edge |
+    | Origin request policy ID | Blank | Blank uses the AWS managed CORS-S3Origin policy; controls what CloudFront forwards to S3 |
 
     Managed response headers selects AWS managed response header sets. Security headers is selected by default and adds HSTS, X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, and Referrer-Policy to every response; remove it if the site must be embeddable in cross-origin iframes. Add CORS or CORS with preflight to allow cross-origin requests from any origin. CloudFront allows one response headers policy per distribution behavior, so the selections combine into the single matching AWS managed policy (CORS with preflight supersedes CORS when both are selected).
 

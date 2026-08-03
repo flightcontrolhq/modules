@@ -18,7 +18,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `cache/`      | `elasticache`     | AWS ElastiCache clusters (Redis, Valkey, Memcached)                    | v1.0.0  |
 | `cdn/`        | `cloudfront`      | AWS CloudFront distributions with origins, cache behaviors, and edge redirects (includes `rvn-cloudfront` module definition) | v1.0.0  |
 | `compute/`    | `autoscaling`     | AWS Auto Scaling groups                                                | v1.0.0  |
-| `compute/`    | `ec2`             | AWS EC2 instances                                                      | Planned |
+| `compute/`    | `ec2_service`     | Supervised EC2 workloads with configurable rolling deploys, standalone or ECS-cluster ALB routing, target tuning, and deployment-scoped CloudWatch logs | v1.0.0  |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `eks`             | Composite EKS stack: cluster, system node group, post-compute add-ons, optional Karpenter AWS-side resources and Fargate profiles, provisioned in dependency order via the AWS API only (includes `rvn-eks` module definition) | v1.0.0  |
@@ -31,14 +31,15 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
 | `monitoring/` | `cloudwatch`      | AWS CloudWatch alarms and dashboards                                   | Planned |
-| `networking/` | `alb`             | AWS Application Load Balancers                                         | v1.0.0  |
+| `networking/` | `alb`             | Standalone AWS Application Load Balancer with shared HTTP/HTTPS listeners | v1.0.0  |
 | `networking/` | `eips`            | AWS Elastic IP pool with deterministic Name tags and `/32` CIDR outputs | v1.0.0  |
 | `networking/` | `nlb`             | AWS Network Load Balancers                                             | v1.0.0  |
 | `networking/` | `route53`         | AWS Route53 hosted zones and records                                   | v1.0.0  |
 | `networking/` | `security-groups` | AWS Security Groups                                                    | v1.0.0  |
 | `networking/` | `vpc`             | AWS VPC with adaptive public and private subnets                       | v1.0.0  |
-| `security/`   | `acm_certificate` | AWS ACM public certificates (DNS validation, optional Route53, optional wait) | v1.0.0  |
+| `security/`   | `acm_certificate` | AWS ACM public certificates with ordered domains, DNS validation, optional Route53, and optional wait | v1.0.0  |
 | `security/`   | `iam`             | AWS IAM roles and policies                                             | v1.0.0  |
+| `security/`   | `iam_policy`      | Reusable customer-managed AWS IAM policies                             | v1.0.0  |
 | `security/`   | `kms`             | AWS KMS keys (symmetric or asymmetric: signing, encryption, MAC, key agreement) | v1.0.0  |
 | `security/`   | `secrets-manager` | AWS Secrets Manager secrets                                            | Planned |
 | `stack/`      | `terraform`       | Ravion Terraform/OpenTofu stack workflows with git triggers and managed state (includes `rvn-stack` module definition) | v1.2.3  |

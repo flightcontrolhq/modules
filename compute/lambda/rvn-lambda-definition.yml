@@ -3,8 +3,11 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.3.1
-  description: "Add Railpack support for zip package and container image builds."
+  version: 0.4.0
+  description: >-
+    Stop creating a module-owned ECR repository when pulling from an image
+    registry. Add a required initial image tag or digest used to create the
+    function before its first deployment.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -178,7 +181,7 @@ module:
           value: s3_package
           show_when:
             package_type: Zip
-        - description: Deploy an image from the ECR repository configured on this module. Lambda requires an ECR repository in the same AWS account. Provide only the tag or digest at deploy time.
+        - description: Deploy an image from the ECR repository configured on this module. The repository must be in the same region as the function; a repository in a different AWS account works when its repository policy grants pull access to the function's account and the Lambda service principal. Provide only the tag or digest at deploy time.
           label: Pull from image registry
           value: image_registry
           show_when:
@@ -203,8 +206,17 @@ module:
     - id: image_repository
       label: Image repository
       type: string
-      description: ECR repository URI without a tag or digest, such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function. Lambda requires an ECR repository in the same AWS account.
+      description: ECR repository URI without a tag or digest, such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function. The repository must be in the same region as the function. A repository in a different AWS account works when its repository policy grants pull access to the function's account and the Lambda service principal.
       placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-function
+      required: true
+      show_when:
+        package_type: Image
+        build_source: image_registry
+    - id: initial_image_ref
+      label: Initial image tag or digest
+      type: string
+      description: Tag or digest used only to create the function before its first deployment. It must already exist in the image repository above. Deployments promote the tag or digest you pass at deploy time; changing this value afterward has no effect. Do not include the repository URI.
+      placeholder: sha256:... or latest
       required: true
       show_when:
         package_type: Image
@@ -884,12 +896,20 @@ module:
     - $template: ../../partials/templates/builder-infrastructure-inputs.yml
       with:
         no_options_message: Select an AWS account and region to load available EC2 instance types.
+        show_when:
+          build_source:
+            - dockerfile
+            - railpack
+            - nixpacks
     - id: section_ecr
       label: Image registry lifecycle
       type: section
       show_when:
         lambda_type: regional
         package_type: Image
+        build_source:
+          - dockerfile
+          - nixpacks
     - id: ecr_scan_on_push_enabled
       label: Scan images on push
       type: boolean
@@ -899,6 +919,9 @@ module:
       show_when:
         lambda_type: regional
         package_type: Image
+        build_source:
+          - dockerfile
+          - nixpacks
     - id: ecr_force_deletion_enabled
       label: Force delete image repository
       type: boolean
@@ -908,6 +931,9 @@ module:
       show_when:
         lambda_type: regional
         package_type: Image
+        build_source:
+          - dockerfile
+          - nixpacks
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
@@ -938,7 +964,7 @@ module:
         ecr_default_lifecycle_policy_enabled: true
         ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
         ecr_repository_creation_enabled: >-
-          << module.input.lambda_type != "edge" && module.input.package_type == "Image" >>
+          << module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_source != "image_registry" >>
         ecr_repository_name: << module.input.name >>
         ecr_scan_on_push_enabled: << module.input.ecr_scan_on_push_enabled >>
         environment_variables: >-
@@ -969,6 +995,10 @@ module:
           (len(module.input.image_start_command || []) > 0 ? module.input.image_start_command : nil), entry_point:
           (len(module.input.image_entry_point || []) > 0 ? module.input.image_entry_point : nil),
           working_directory: module.input.image_working_directory} : nil) >>
+        image_uri: >-
+          << module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_source == "image_registry" ?
+          (module.input.initial_image_ref contains "sha256:" ? module.input.image_repository + "@" + module.input.initial_image_ref :
+          module.input.image_repository + ":" + module.input.initial_image_ref) : nil >>
         kms_key_arn: >-
           << module.input.lambda_type == "edge" ? nil : (module.input.kms_key_arn || nil) >>
         lambda_at_edge_enabled: << module.input.lambda_type == "edge" >>

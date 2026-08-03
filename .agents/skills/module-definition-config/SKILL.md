@@ -1,6 +1,6 @@
 ---
 name: module-definition-config
-description: Create, analyze, and update Ravion module definition config in colocated *-definition.yml files for inputs, OpenTofu stack pipelines, build/deploy wiring, UI links, and CloudWatch metrics. Use when working on module definition config for VPC/network, ECS cluster, ECS web/service, static site, ACM, or similar Ravion infrastructure modules; first inspect similar existing repo definitions and do not use README content as source material.
+description: Create, analyze, and update Ravion module definition config in colocated *-definition.yml files for inputs, OpenTofu stack pipelines, build/deploy wiring, UI links, CloudWatch metrics, and hidden-input nil safety. Use when working on module definition config for VPC/network, ECS cluster, ECS web/service, static site, ACM, or similar Ravion infrastructure modules; first inspect similar existing repo definitions and do not use README content as source material.
 ---
 
 # Module Definition Config
@@ -61,8 +61,9 @@ Do not copy an example blindly. Reconcile it with the authoritative schema and t
 7. Verify `module.stack.pipelines.defaults.input.terraform_variables` maps every module-facing input to the source module variable intentionally.
 8. Verify dynamic `values` expressions use available context and ref-derived inputs.
 9. Verify `show_when` hides every field that only applies when another toggle, mode, or enum value is enabled.
-10. Use `advanced_terraform_variables` and `"...overrides"` only for intentional escape hatches.
-11. Update `release.description` when the authored version represents a publishable user-facing or internal change.
+10. Treat every value-producing input with `show_when` as nullable. Audit every runtime template use of that input and make arithmetic, conversion, concatenation, indexing, collection, and nested-member operations nil-safe.
+11. Use `advanced_terraform_variables` and `"...overrides"` only for intentional escape hatches.
+12. Update `release.description` when the authored version represents a publishable user-facing or internal change.
 
 ## Schema Reference
 
@@ -197,6 +198,43 @@ Do not rely on `collapsible: true` as a substitute for `show_when`. Collapsible 
 
 When a Terraform variable has a safe default that should always be used, omit the input and omit the generated Terraform variable instead of exposing a redundant form field. Example: if a database module defaults encryption at rest to true and Ravion should not encourage disabling it, do not expose `storage_encrypted`; let Terraform apply its default and use `advanced_terraform_variables` only for exceptional overrides.
 
+## Hidden Input Nil Safety
+
+Inputs hidden by `show_when` resolve to `nil`, even when the input definition has a non-nil `default`. This clearing is intentional. Never assume a hidden input retains its form default, and never work around the behavior by removing `show_when` or changing hidden-input normalization.
+
+For every value-producing input with `show_when`, find every reference to `module.input.<id>` across `stack`, `build`, `deploy`, `ui`, included partials, and dynamic value templates. Apply the same audit to `item_inputs` referenced as `#.<id>` inside `map` or `filter` expressions.
+
+Operations that require an explicit guard or fallback include:
+
+- Arithmetic: `+`, `-`, `*`, `/`, `%`.
+- Numeric and string conversion: `int(...)`, `float(...)`, and `string(...)` when the argument may be nil.
+- String concatenation involving a hidden value.
+- Collection operations that require a concrete array or map, including `concat(...)`, indexing, and iteration.
+- Nested member access followed by any unsafe operation, such as `module.input.size.vcpu * 1024`.
+
+Use one of these patterns:
+
+- Guard the operation with an explicit `!= nil` or `!= null` check.
+- Put the operation exclusively inside a short-circuited ternary branch controlled by the same mode or feature toggle as `show_when`.
+- Coalesce arrays to `[]`, maps to `{}`, and optional strings to the semantically correct value before an operation.
+- When converting a UI unit into a Terraform unit, fall back to the exact Terraform variable default from `variables.tf`, not merely the input's UI default.
+
+Unsafe and safe threshold conversion:
+
+```yaml
+# Unsafe: threshold_gib becomes nil when alarms are disabled.
+threshold_bytes: << int(module.input.threshold_gib * 1073741824) >>
+
+# Safe: preserve the Terraform default when the form field is hidden.
+threshold_bytes: '<< module.input.threshold_gib != nil ? int(module.input.threshold_gib * 1073741824) : 5368709120 >>'
+```
+
+Quote YAML template scalars containing ternary `:` characters. Do not rely on the YAML parser accepting an unquoted ternary expression.
+
+Current template runtime guarantees make `nil` falsey, short-circuit boolean operators, resolve missing member access to nil, and define `len(nil)` as `0`. These behaviors make truthiness checks and `len(hidden_list) > 0` safe, but they do not make arithmetic or conversions on nil safe.
+
+For a nil-safety bug fix, add a regression test in `tools/ravion-modules/test/compiler.test.ts` that compiles the real definition and asserts the guarded expression and exact Terraform fallback. Run the test before the fix to capture the unsafe expression, then after the fix and again as part of the full module-tool suite.
+
 ## Stack Pattern
 
 For OpenTofu-backed modules, prefer the repository's shared partials when they fit. The compiled stack should preserve this shape:
@@ -279,6 +317,9 @@ The local publish path targets `RAVION_API_URL` or `http://localhost:8080` by de
 - Every `module.input.*` reference is backed by a direct input or ref-derived field.
 - Required inputs hidden by `show_when` are only required when visible.
 - Every dependent input has `show_when`; no replica-only, alarm-only, engine-only, existing-resource-only, or disabled-default field is visible unconditionally.
+- Every value-producing input hidden by `show_when` is treated as nullable in all runtime templates, including included partials and nested `#.<id>` expressions.
+- Arithmetic, conversions, concatenation, indexing, iteration, and nested-member operations on potentially hidden values have an explicit nil guard, a controller-matched short-circuited branch, or a type-correct fallback.
+- Unit conversions use the exact Terraform default as their hidden-input fallback and have compiler regression coverage.
 - Fields intentionally omitted to preserve safe Terraform defaults are not also emitted in `terraform_variables`.
 - Destructive identity, target, state, and core topology inputs are marked `immutable: true`; `advanced_terraform_variables`, `execution_environment_id`, and observability/logging toggles remain mutable.
 - `aws_account_id` and `aws_region` are nulled when an execution environment is selected.
