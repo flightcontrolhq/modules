@@ -249,8 +249,8 @@ variable "ingress_security_group_ids" {
   default     = []
 
   validation {
-    condition     = alltrue([for sg in var.ingress_security_group_ids : can(regex("^sg-", sg))])
-    error_message = "All ingress_security_group_ids must be valid security group IDs starting with 'sg-'."
+    condition     = length(distinct(var.ingress_security_group_ids)) == length(var.ingress_security_group_ids) && alltrue([for sg in var.ingress_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All ingress_security_group_ids must be unique, valid security group IDs starting with 'sg-'."
   }
 }
 
