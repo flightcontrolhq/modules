@@ -3,8 +3,8 @@ definition:
   name: Route 53 DNS
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
-  version: 0.2.0
-  description: Add Logs tab for CloudWatch.
+  version: 0.2.1
+  description: Correct the documented default hosted zone comment to Managed in Ravion.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -557,7 +557,7 @@ module:
     | Create hosted zone | No | true | Creates a new hosted zone instead of referencing an existing one. |
     | Hosted zone ID | When Create hosted zone is disabled | None | Existing Route 53 hosted zone ID. |
     | Domain name | When Create hosted zone is enabled | None | Domain name for the created hosted zone. |
-    | Comment | No | Managed by Terraform | Comment stored on the created hosted zone. |
+    | Comment | No | Managed in Ravion | Comment stored on the created hosted zone. |
     | Force destroy records | No | false | Deletes all records when destroying a created hosted zone. |
     | Delegation set ID | No | None | Reusable delegation set for created public zones. |
     | Private hosted zone | No | false | Creates a private hosted zone instead of a public zone. |

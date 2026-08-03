@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.4.2
-  description: Handle disabled CloudWatch alarm inputs safely.
+  version: 0.4.3
+  description: Correct the documented defaults for instance class and CloudWatch alarms in the configuration table.
 module:
   inputs:
     - id: network
@@ -1127,7 +1127,7 @@ module:
     | Engine major version | Yes | None | Sets the RDS major engine version, such as 15 for PostgreSQL or 8.0 for MySQL. |
     | Engine minor version | No | Blank | Appended to the major version when an exact version is required. |
     | Auto minor version upgrades | No | true | Applies minor engine upgrades during the configured maintenance window. |
-    | Instance class | Yes | None | Use an RDS class such as db.t4g.micro or db.r6g.large. |
+    | Instance class | Yes | db.t4g.micro | Use a larger RDS class such as db.r6g.large for production workloads. |
     | Allocated storage | Yes | 20 | Storage in GiB. |
     | Master username | Yes | dbadmin | Master database user. Do not use reserved engine words such as admin. |
     | Storage KMS key ARN | No | Blank | Uses a customer-managed KMS key for storage encryption. |
@@ -1140,7 +1140,7 @@ module:
     | Backup retention days | No | 7 | Set to 0 to disable automated backups. |
     | Deletion protection | No | true | Helps prevent accidental deletion. |
     | Performance insights | No | true | Enables AWS Performance Insights. |
-    | CloudWatch alarms | No | false | Adds CPU, free storage, and connection alarms. |
+    | CloudWatch alarms | No | true | Adds CPU, free storage, and connection alarms. |
     | Free storage alarm threshold | No | 5 GiB | Converted to bytes before Terraform runs. |
     | Tags | No | Blank | Merged with Ravion standard tags. |
 

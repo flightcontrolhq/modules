@@ -3,8 +3,8 @@ definition:
   name: AWS IAM Role
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
-  version: 0.2.1
-  description: Use non-deprecated AWS region lookup.
+  version: 0.2.2
+  description: Correct the documented default role description; there is no default.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -362,7 +362,7 @@ module:
     | AWS account | Yes | None | AWS account where the IAM role is created. |
     | Region | Yes | None | Runner region for the stack. IAM resources are global, but Terraform still runs with an AWS region. |
     | Role name | Yes | Project, environment, and module given IDs | IAM role name. Must be unique in the AWS account. |
-    | Description | No | Managed by Terraform | Description stored on the IAM role. |
+    | Description | No | None | Description stored on the IAM role. |
     | Path | No | / | IAM path for the role. |
     | Maximum session duration seconds | No | 3600 | STS session duration, from 3600 to 43200 seconds. |
     | Force detach policies on destroy | No | true | Detaches managed policies before destroying the role. |

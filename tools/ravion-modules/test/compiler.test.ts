@@ -167,6 +167,31 @@ describe("compiler", () => {
     );
   });
 
+  it("gates the Lambda ECR repository on build source and seeds image-registry creates from an initial ref", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "lambda", "rvn-lambda-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
+
+    const initialImageRef = findInput(inputs, "initial_image_ref");
+    assert.equal(initialImageRef.label, "Initial image tag or digest");
+    assert.equal(initialImageRef.required, true);
+    assert.equal(getBuildSourceShowWhen(initialImageRef), "image_registry");
+
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_ecr")), ["dockerfile", "nixpacks"]);
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "ecr_scan_on_push_enabled")), ["dockerfile", "nixpacks"]);
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "ecr_force_deletion_enabled")), ["dockerfile", "nixpacks"]);
+
+    assert.equal(
+      getTerraformVariable(compiled.module, "ecr_repository_creation_enabled"),
+      '<< module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_source != "image_registry" >>',
+    );
+
+    const imageUri = assertString(getTerraformVariable(compiled.module, "image_uri"));
+    assert.match(imageUri, /module\.input\.build_source == "image_registry"/);
+    assert.match(imageUri, /module\.input\.initial_image_ref contains "sha256:"/);
+    assert.match(imageUri, /module\.input\.image_repository \+ "@" \+ module\.input\.initial_image_ref/);
+    assert.match(imageUri, /module\.input\.image_repository \+ ":" \+ module\.input\.initial_image_ref/);
+  });
+
   it("compiles Railpack inputs and builder object for static builds", async () => {
     const compiled = await compileDefinitionFile(join(repoRoot, "hosting", "static_site", "rvn-aws-static-definition.yml"));
     const inputs = getModuleInputs(compiled.module);
