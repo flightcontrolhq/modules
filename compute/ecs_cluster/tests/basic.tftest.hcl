@@ -456,17 +456,17 @@ run "ec2_asg_settings" {
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.min_size == 1
+    condition     = module.ecs_autoscaling[0].autoscaling_group_min_size == 1
     error_message = "ASG should have the correct min size"
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.max_size == 5
+    condition     = module.ecs_autoscaling[0].autoscaling_group_max_size == 5
     error_message = "ASG should have the correct max size"
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.desired_capacity == 2
+    condition     = module.ecs_autoscaling[0].autoscaling_group_desired_capacity == 2
     error_message = "ASG should have the correct desired capacity"
   }
 }
@@ -476,12 +476,12 @@ run "ec2_termination_protection" {
   command = plan
 
   variables {
-    ec2_instance_type                  = "t3.medium"
-    ec2_managed_termination_protection = "ENABLED"
+    ec2_instance_type                          = "t3.medium"
+    ec2_managed_termination_protection_enabled = true
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.protect_from_scale_in == true
+    condition     = module.ecs_autoscaling[0].ecs_capacity_provider_config.managed_termination_protection == "ENABLED"
     error_message = "ASG should have scale-in protection when termination protection is ENABLED"
   }
 
@@ -496,12 +496,12 @@ run "ec2_termination_protection_disabled" {
   command = plan
 
   variables {
-    ec2_instance_type                  = "t3.medium"
-    ec2_managed_termination_protection = "DISABLED"
+    ec2_instance_type                          = "t3.medium"
+    ec2_managed_termination_protection_enabled = false
   }
 
   assert {
-    condition     = module.ecs_autoscaling[0].aws_autoscaling_group.this.protect_from_scale_in == false
+    condition     = module.ecs_autoscaling[0].ecs_capacity_provider_config.managed_termination_protection == "DISABLED"
     error_message = "ASG should not have scale-in protection when termination protection is DISABLED"
   }
 }
@@ -512,7 +512,7 @@ run "ec2_managed_scaling" {
 
   variables {
     ec2_instance_type                   = "t3.medium"
-    ec2_managed_scaling_status          = "ENABLED"
+    ec2_managed_scaling_enabled         = true
     ec2_managed_scaling_target_capacity = 80
   }
 
@@ -524,6 +524,20 @@ run "ec2_managed_scaling" {
   assert {
     condition     = aws_ecs_capacity_provider.ec2[0].auto_scaling_group_provider[0].managed_scaling[0].target_capacity == 80
     error_message = "Managed scaling should have correct target capacity"
+  }
+}
+
+run "ec2_managed_scaling_disabled" {
+  command = plan
+
+  variables {
+    ec2_instance_type           = "t3.medium"
+    ec2_managed_scaling_enabled = false
+  }
+
+  assert {
+    condition     = aws_ecs_capacity_provider.ec2[0].auto_scaling_group_provider[0].managed_scaling[0].status == "DISABLED"
+    error_message = "Managed scaling should be disabled"
   }
 }
 
@@ -730,6 +744,47 @@ run "private_alb_custom_settings" {
   assert {
     condition     = length(module.private_alb) == 1
     error_message = "Private ALB should be created with custom settings"
+  }
+}
+
+# Test 28b: Private ALB ingress rules referencing source security groups
+run "private_alb_ingress_security_groups" {
+  command = plan
+
+  variables {
+    private_alb_enabled                    = true
+    private_alb_https_enabled              = true
+    private_alb_certificate_arns           = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    private_alb_ingress_security_group_ids = ["sg-0123456789abcdef0"]
+  }
+
+  assert {
+    condition = length([
+      for rule in module.private_alb[0].module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id == "sg-0123456789abcdef0"
+    ]) == 2
+    error_message = "Private ALB should have HTTP and HTTPS ingress rules referencing the source security group"
+  }
+}
+
+# Test 28c: Public ALB ingress rules referencing source security groups
+run "public_alb_ingress_security_groups" {
+  command = plan
+
+  variables {
+    public_alb_enabled                    = true
+    public_alb_https_enabled              = true
+    public_alb_certificate_arns           = ["arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"]
+    public_subnet_ids                     = ["subnet-public1", "subnet-public2"]
+    public_alb_ingress_security_group_ids = ["sg-0123456789abcdef0"]
+  }
+
+  assert {
+    condition = length([
+      for rule in module.public_alb[0].module.security_group.aws_vpc_security_group_ingress_rule.this : rule
+      if rule.referenced_security_group_id == "sg-0123456789abcdef0"
+    ]) == 2
+    error_message = "Public ALB should have HTTP and HTTPS ingress rules referencing the source security group"
   }
 }
 

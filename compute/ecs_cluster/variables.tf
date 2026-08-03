@@ -358,26 +358,16 @@ variable "ec2_base" {
   }
 }
 
-variable "ec2_managed_termination_protection" {
-  type        = string
-  description = "Managed termination protection for the EC2 capacity provider."
-  default     = "ENABLED"
-
-  validation {
-    condition     = contains(["ENABLED", "DISABLED"], var.ec2_managed_termination_protection)
-    error_message = "The ec2_managed_termination_protection must be 'ENABLED' or 'DISABLED'."
-  }
+variable "ec2_managed_termination_protection_enabled" {
+  type        = bool
+  description = "Whether managed termination protection is enabled for the EC2 capacity provider."
+  default     = true
 }
 
-variable "ec2_managed_scaling_status" {
-  type        = string
-  description = "Enable or disable managed scaling for the EC2 capacity provider."
-  default     = "ENABLED"
-
-  validation {
-    condition     = contains(["ENABLED", "DISABLED"], var.ec2_managed_scaling_status)
-    error_message = "The ec2_managed_scaling_status must be 'ENABLED' or 'DISABLED'."
-  }
+variable "ec2_managed_scaling_enabled" {
+  type        = bool
+  description = "Whether managed scaling is enabled for the EC2 capacity provider."
+  default     = true
 }
 
 variable "ec2_managed_scaling_target_capacity" {
@@ -461,6 +451,17 @@ variable "public_alb_ingress_ipv6_cidr_blocks" {
   type        = list(string)
   description = "IPv6 CIDR blocks allowed to access the public ALB."
   default     = ["::/0"]
+}
+
+variable "public_alb_ingress_security_group_ids" {
+  type        = list(string)
+  description = "Security group IDs whose members are allowed to access the public ALB."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.public_alb_ingress_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All public_alb_ingress_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
 }
 
 variable "public_alb_access_logs_enabled" {
@@ -550,6 +551,17 @@ variable "private_alb_ingress_ipv6_cidr_blocks" {
   type        = list(string)
   description = "IPv6 CIDR blocks allowed to access the private ALB. Defaults to no IPv6 ingress; RFC1918 has no IPv6 equivalent."
   default     = []
+}
+
+variable "private_alb_ingress_security_group_ids" {
+  type        = list(string)
+  description = "Security group IDs whose members are allowed to access the private ALB. Useful for sources without static CIDRs, such as CloudFront VPC origins."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.private_alb_ingress_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All private_alb_ingress_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
 }
 
 variable "private_alb_access_logs_enabled" {

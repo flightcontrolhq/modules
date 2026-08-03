@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.4.1
-  description: Add configurable option for VPC origin.
+  version: 0.4.2
+  description: Default Allowed methods to Read only, matching the Terraform module and documentation.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -316,7 +316,7 @@ module:
       type: string
       description: HTTP methods CloudFront forwards to the origin. Use all methods for apps that accept form posts or API writes.
       required: true
-      default: all
+      default: read
       values:
         - label: All methods
           description: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
@@ -873,7 +873,7 @@ module:
     | Cache policy | UseOriginCacheControlHeaders-QueryStrings | Caches only responses where the app sends Cache-Control headers |
     | Origin request policy | AllViewer | Forwards Host, cookies, and query strings so app sessions and ALB routing work |
     | Require signed URLs | false | Allows public viewer access unless enabled with trusted key groups |
-    | Allowed methods | All methods | Apps accept form posts and API writes |
+    | Allowed methods | Read only | Only GET and HEAD reach the origin; choose Read and OPTIONS or All methods to accept form posts and API writes |
     | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
 
     With the default cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
@@ -936,7 +936,7 @@ module:
     | Additional origins | No | [] | Extra origins with optional custom headers for path-based cache behaviors |
     | Redirect rules | No | [] | Ordered URL-pattern redirects returned before contacting an origin |
     | Viewer protocol policy | Yes | Redirect to HTTPS | How viewers connect to CloudFront |
-    | Allowed methods | Yes | All methods | Read-only options available for cache-friendly apps |
+    | Allowed methods | Yes | Read only | GET and HEAD only; switch to Read and OPTIONS or All methods for apps that write |
     | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
     | Origin request policy | Yes | AllViewer | AWS managed policies by name, or a custom policy ID |
     | Require signed URLs | No | false | Requires signed URLs or signed cookies on the default behavior |

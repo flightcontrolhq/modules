@@ -9,10 +9,10 @@ resource "aws_ecs_capacity_provider" "ec2" {
 
   auto_scaling_group_provider {
     auto_scaling_group_arn         = module.ecs_autoscaling[0].autoscaling_group_arn
-    managed_termination_protection = var.ec2_managed_termination_protection
+    managed_termination_protection = var.ec2_managed_termination_protection_enabled ? "ENABLED" : "DISABLED"
 
     managed_scaling {
-      status                    = var.ec2_managed_scaling_status
+      status                    = var.ec2_managed_scaling_enabled ? "ENABLED" : "DISABLED"
       target_capacity           = var.ec2_managed_scaling_target_capacity
       minimum_scaling_step_size = 1
       maximum_scaling_step_size = 10
@@ -21,5 +21,4 @@ resource "aws_ecs_capacity_provider" "ec2" {
 
   tags = local.tags
 }
-
 

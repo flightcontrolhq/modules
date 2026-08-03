@@ -291,6 +291,7 @@ spec:
 |------|-------------|------|---------|----------|
 | ingress_cidr_blocks | IPv4 CIDR blocks allowed to access the ALB | `list(string)` | `["0.0.0.0/0"]` | no |
 | ingress_ipv6_cidr_blocks | IPv6 CIDR blocks allowed to access the ALB | `list(string)` | `["::/0"]` | no |
+| ingress_security_group_ids | Security group IDs whose members are allowed to access the ALB | `list(string)` | `[]` | no |
 
 ### Access Logs
 
