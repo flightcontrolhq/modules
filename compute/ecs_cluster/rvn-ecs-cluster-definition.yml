@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 0.5.0
-  description: "BREAKING: Rename ec2_managed_termination_protection to ec2_managed_termination_protection_enabled and ec2_managed_scaling_status to ec2_managed_scaling_enabled; both inputs now accept booleans instead of ENABLED or DISABLED strings."
+  version: 0.5.2
+  description: "Add private_alb_ingress_security_group_ids input (and public_alb_ingress_security_group_ids Terraform variable) to allow ALB ingress rules that reference source security groups, such as the CloudFront VPC origins security group."
 module:
   inputs:
     - id: network
@@ -342,6 +342,15 @@ module:
       show_when:
         private_alb_enabled: true
       type: string_array
+    - add_button_label: Add security group
+      collapsible: true
+      description: Security groups whose members can access the private ALB. Useful for sources without static CIDRs, such as CloudFront VPC origins.
+      id: private_alb_ingress_security_group_ids
+      label: Ingress security groups
+      placeholder: sg-...
+      show_when:
+        private_alb_enabled: true
+      type: string_array
     - collapsible: true
       description: Idle timeout for the private ALB.
       id: private_alb_idle_timeout
@@ -671,6 +680,7 @@ module:
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
         private_alb_ingress_cidr_blocks: << module.input.private_alb_ingress_cidr_blocks >>
         private_alb_ingress_ipv6_cidr_blocks: << module.input.private_alb_ingress_ipv6_cidr_blocks >>
+        private_alb_ingress_security_group_ids: << module.input.private_alb_ingress_security_group_ids >>
         private_alb_ssl_policy: << module.input.private_alb_ssl_policy >>
         private_nlb_access_logs_bucket_arn: << module.input.private_nlb_access_logs_bucket_arn >>
         private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>
