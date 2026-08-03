@@ -272,7 +272,7 @@ module:
         secrets_kms_key_arn: << module.input.secrets_kms_key_arn >>
         private_endpoint_access_enabled: << module.input.private_endpoint_access_enabled >>
         public_endpoint_access_enabled: << module.input.public_endpoint_access_enabled >>
-        public_access_cidrs: << module.input.public_access_cidrs >>
+        public_access_cidrs: << module.input.public_access_cidrs || ["0.0.0.0/0"] >>
         ravion_runner_security_group_creation_enabled: << module.input.ravion_runner_security_group_creation_enabled >>
         system_node_group:
           instance_types: << module.input.system_node_instance_types >>
@@ -284,8 +284,8 @@ module:
         additional_node_groups: << module.input.additional_node_groups || {} >>
         ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
         karpenter_enabled: << module.input.karpenter_enabled >>
-        karpenter_controller_namespace: << module.input.karpenter_controller_namespace >>
-        karpenter_controller_service_account: << module.input.karpenter_controller_service_account >>
+        karpenter_controller_namespace: << module.input.karpenter_controller_namespace || "kube-system" >>
+        karpenter_controller_service_account: << module.input.karpenter_controller_service_account || "karpenter" >>
         fargate_profiles: << module.input.fargate_profiles || {} >>
         access_entries: << module.input.access_entries || {} >>
         enabled_cluster_log_types: << module.input.enabled_cluster_log_types >>
