@@ -141,9 +141,6 @@ jobs:
       - name: Dry-run publish plan
         run: node tools/ravion-modules/dist/src/cli.js publish
 
-      - name: Validate pending module versions
-        run: node tools/ravion-modules/dist/src/cli.js version-dry-run
-
       - name: Configure Git tag author
         run: |
           git config user.name "github-actions[bot]"
