@@ -10,7 +10,7 @@ import { generateDefinitionsFromInventory, readInventoryFile } from "./generate-
 import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from "./github-releases.js";
 import { runMigrationGuardrails } from "./guardrails.js";
 import { selectLocalDevSourceRef } from "./local-dev-source-ref.js";
-import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
+import { createDefaultRavionApiClient, dryRunModuleVersions, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags, pushPlannedTags } from "./tags.js";
 
@@ -109,6 +109,26 @@ if (command === "validate") {
   } else {
     console.log(output);
   }
+} else if (command === "version-dry-run") {
+  const definitionFilePaths = getPositionalArgs(args, new Set<string>());
+  const resolvedDefinitionFilePaths = await resolveDefinitionFileArgs(definitionFilePaths);
+  const compiled = resolvedDefinitionFilePaths.length > 0 ? await Promise.all(resolvedDefinitionFilePaths.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
+  const localDev = args.includes("--local-dev");
+  const client = await createDefaultRavionApiClient({ baseUrl: localDev ? (process.env.RAVION_API_URL ?? "http://localhost:8080") : undefined, requireToken: !localDev });
+  const localDevSourceRef = localDev ? await resolveLocalDevSourceRef() : undefined;
+  const results = await dryRunModuleVersions(compiled, client, {
+    localDev,
+    localDevForce: args.includes("--force"),
+    localDevSourceRef,
+    logger: (message) => console.error(`[version-dry-run] ${message}`),
+  });
+  console.log(JSON.stringify(results, null, 2));
+  const failures = results.filter((result) => result.status === "failed");
+  if (failures.length > 0) {
+    throw new Error(
+      `Module version dry-run validation failed for ${failures.length} definition${failures.length === 1 ? "" : "s"}:\n${failures.map((result) => `- ${result.type}@${result.version}: ${result.message}`).join("\n")}`,
+    );
+  }
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
   if (!inventoryPath) {
@@ -157,7 +177,7 @@ if (command === "validate") {
   await writeFile(outputPath, stringifyYaml(authoringDefinition));
   console.log(JSON.stringify({ sourceType, targetType, outputPath, version: version.version }, null, 2));
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|generate-definitions|pull-definition> <*-definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|version-dry-run|generate-definitions|pull-definition> <*-definition.yml...>");
   process.exitCode = 1;
 }
 }

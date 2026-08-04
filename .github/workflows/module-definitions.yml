@@ -105,6 +105,9 @@ jobs:
         if: steps.publish_plan.outcome == 'failure'
         run: exit 1
 
+      - name: Validate pending module versions
+        run: node tools/ravion-modules/dist/src/cli.js version-dry-run
+
   publish:
     name: Publish Module Definitions
     runs-on: ubuntu-latest
@@ -137,6 +140,9 @@ jobs:
 
       - name: Dry-run publish plan
         run: node tools/ravion-modules/dist/src/cli.js publish
+
+      - name: Validate pending module versions
+        run: node tools/ravion-modules/dist/src/cli.js version-dry-run
 
       - name: Configure Git tag author
         run: |
