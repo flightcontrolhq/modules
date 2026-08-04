@@ -142,6 +142,9 @@ export async function publishDefinitions(
     left.type.localeCompare(right.type),
   )) {
     let remoteDefinition = definitionsByType.get(definition.type);
+    const shouldPlanGlobalPublication = remoteDefinition?.isGlobalPublished === false;
+    const shouldPublishDefinitionAfterVersion =
+      !remoteDefinition || remoteDefinition.isGlobalPublished === false;
     if (!remoteDefinition) {
       items.push(
         createItem(
@@ -162,10 +165,6 @@ export async function publishDefinitions(
           type: definition.type,
           name: definition.name,
           description: definition.description,
-        });
-        remoteDefinition = await client.patchModuleDefinition({
-          id: remoteDefinition.id,
-          isGlobalPublished: true,
         });
         definitionsByType.set(remoteDefinition.type, remoteDefinition);
         inventory.versionsByDefinitionId[remoteDefinition.id] = [];
@@ -201,12 +200,30 @@ export async function publishDefinitions(
       }
     }
 
+    const latestRemoteVersion = remoteDefinition
+      ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
+      : undefined;
+    const globalPublicationItem = shouldPlanGlobalPublication
+      ? createItem(
+          definition,
+          "patch-definition",
+          dryRun,
+          `Publish module definition ${definition.type} globally.`,
+          "Make the module definition available globally.",
+          createDiff(
+            { isGlobalPublished: false },
+            { isGlobalPublished: true },
+          ),
+          latestRemoteVersion?.version,
+        )
+      : undefined;
+
     const remoteVersion = remoteDefinition
       ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).find(
           (version) => version.version === definition.version,
         )
       : undefined;
-    if (remoteVersion) {
+    if (remoteVersion && remoteDefinition) {
       items.push(
         createItem(
           definition,
@@ -218,12 +235,19 @@ export async function publishDefinitions(
           remoteVersion.version,
         ),
       );
+      if (globalPublicationItem) {
+        items.push(globalPublicationItem);
+      }
+      if (!dryRun && shouldPublishDefinitionAfterVersion) {
+        remoteDefinition = await client.patchModuleDefinition({
+          id: remoteDefinition.id,
+          isGlobalPublished: true,
+        });
+        definitionsByType.set(remoteDefinition.type, remoteDefinition);
+      }
       continue;
     }
 
-    const latestRemoteVersion = remoteDefinition
-      ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
-      : undefined;
     items.push(
       createItem(
         definition,
@@ -235,6 +259,9 @@ export async function publishDefinitions(
         latestRemoteVersion?.version,
       ),
     );
+    if (globalPublicationItem) {
+      items.push(globalPublicationItem);
+    }
     if (dryRun && options.validateRemote) {
       if (!remoteDefinition) {
         options.logger?.(
@@ -266,7 +293,22 @@ export async function publishDefinitions(
           `Cannot create ${definition.type}@${definition.version}; module definition was not created.`,
         );
       }
+      if (shouldPublishDefinitionAfterVersion) {
+        await client.validateModuleVersion({
+          moduleDefinitionId: remoteDefinition.id,
+          version: definition.version,
+          description: definition.releaseDescription,
+          config: definition.module,
+        });
+      }
       await createVersionOrConfirmDuplicate(client, remoteDefinition.id, definition);
+      if (shouldPublishDefinitionAfterVersion) {
+        remoteDefinition = await client.patchModuleDefinition({
+          id: remoteDefinition.id,
+          isGlobalPublished: true,
+        });
+        definitionsByType.set(remoteDefinition.type, remoteDefinition);
+      }
     }
   }
 
@@ -352,7 +394,6 @@ export function formatPublishPlanMarkdown(result: PublishResult): string {
       );
     }
     lines.push("");
-    return lines.join("\n");
   }
 
   if (result.errors && result.errors.length > 0) {
