@@ -307,14 +307,6 @@ export async function dryRunModuleVersions(
           description: definition.releaseDescription,
           config: definition.module,
         });
-        if (status.publishState === "conflict") {
-          return {
-            type: status.type,
-            version: status.version,
-            status: "failed" as const,
-            message: status.message,
-          };
-        }
         return {
           type: status.type,
           version: status.version,

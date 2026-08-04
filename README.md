@@ -216,6 +216,10 @@ publishes missing versions through the Ravion API.
 Pull requests run the same publish comparison in dry-run mode and post a PR comment with the
 planned creates, patches, skips, and config diffs. The dry run uses `https://api.ravion.com` and
 requires `RAVION_API_TOKEN`; when the token is missing, CI fails with an explicit credential error.
+PRs and the main publish job also run `node dist/src/cli.js version-dry-run`, which validates each
+pending module version's config through the Ravion API's module version dry run without creating
+anything. It skips already-published versions and definitions that do not exist remotely yet, and
+reports every failing definition at once.
 
 Manual dry runs use the same commands:
 
@@ -223,6 +227,7 @@ Manual dry runs use the same commands:
 cd tools/ravion-modules
 node dist/src/cli.js tags --api
 node dist/src/cli.js publish
+node dist/src/cli.js version-dry-run
 ```
 
 Mutation commands are explicit:
