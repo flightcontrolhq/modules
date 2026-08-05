@@ -25,6 +25,46 @@ variable "tags" {
 }
 
 ################################################################################
+# AWS Load Balancer Controller
+################################################################################
+
+variable "lb_controller_enabled" {
+  type        = bool
+  description = "Install the AWS Load Balancer Controller Helm chart so Ingress resources provision ALBs and LoadBalancer Services provision NLBs. Uses the Pod Identity role created by the compute/eks stack (enabled there by default)."
+  default     = true
+}
+
+variable "lb_controller_chart_version" {
+  type        = string
+  description = "Version of the aws-load-balancer-controller Helm chart to install."
+  default     = "1.14.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.lb_controller_chart_version))
+    error_message = "The lb_controller_chart_version must be a semantic version like '1.14.0' (no leading 'v')."
+  }
+}
+
+variable "lb_controller_namespace" {
+  type        = string
+  description = "Namespace the controller is installed into. Must match the Pod Identity association created by the compute/eks stack."
+  default     = "kube-system"
+}
+
+variable "lb_controller_service_account" {
+  type        = string
+  description = "Service account name for the controller. Must match the Pod Identity association created by the compute/eks stack."
+  default     = "aws-load-balancer-controller"
+}
+
+variable "lb_controller_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the aws-load-balancer-controller chart values (later entries win)."
+  default     = []
+}
+
+################################################################################
 # EBS CSI Driver
 ################################################################################
 

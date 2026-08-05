@@ -1,10 +1,10 @@
 definition:
   type: rvn-eks-addons
   name: EKS Add-ons
-  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, EBS CSI storage, and CloudWatch Container Insights, each toggled and configured independently.
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, EBS CSI storage, and CloudWatch Container Insights, each toggled and configured independently.
 release:
   version: 0.1.0
-  description: Initial EKS add-ons definition with selectable Karpenter, EBS CSI driver, and CloudWatch Container Insights add-ons.
+  description: Initial EKS add-ons definition with selectable Karpenter, AWS Load Balancer Controller, EBS CSI driver, and CloudWatch Container Insights add-ons.
 module:
   inputs:
     - id: cluster
@@ -102,6 +102,22 @@ module:
       show_when:
         karpenter_enabled: true
       type: boolean
+    - description: Turns Kubernetes Ingress resources into Application Load Balancers and LoadBalancer Services into NLBs. Uses the Pod Identity role created by the EKS Cluster module. Requires Kubernetes API connectivity from the Terraform runner.
+      id: section_lb_controller
+      label: Load balancer controller
+      type: section
+    - default: true
+      id: lb_controller_enabled
+      label: Load balancer controller
+      type: boolean
+    - collapsible: true
+      description: Version of the aws-load-balancer-controller Helm chart to install.
+      id: lb_controller_chart_version
+      label: Chart version
+      placeholder: 1.14.0
+      show_when:
+        lb_controller_enabled: true
+      type: string
     - description: EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role.
       id: section_ebs_csi
       label: EBS CSI driver
@@ -154,6 +170,8 @@ module:
         node_subnet_ids: << module.input.node_subnet_ids >>
         cluster_security_group_id: << module.input.cluster_security_group_id >>
         ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
+        lb_controller_enabled: << module.input.lb_controller_enabled >>
+        lb_controller_chart_version: << module.input.lb_controller_chart_version || "1.14.0" >>
         ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
         ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
         cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
@@ -168,19 +186,22 @@ module:
     | Add-on | Default | What it provides |
     | ------ | ------- | ---------------- |
     | **Karpenter** | On | Just-in-time node autoscaling: controller and node IAM roles, Pod Identity association, instance profile, SQS interruption queue, EventBridge rules, the controller Helm charts, and an optional default NodePool |
+    | **Load balancer controller** | On | Ingress resources become ALBs and LoadBalancer Services become NLBs, via the AWS Load Balancer Controller Helm chart wired to the cluster module's Pod Identity role |
     | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
     | **Container Insights** | On | Node, pod, and container metrics plus application/data plane logs via the amazon-cloudwatch-observability EKS add-on; populates the cluster module's Metrics and Logs tabs |
 
-    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter additionally installs Helm charts into the cluster, which is the only part that needs Kubernetes API connectivity.
+    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter and the load balancer controller additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
 
     Terraform source: [flightcontrolhq/modules/compute/eks/addons](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks/addons)
 
     ## Prerequisites
 
     - An **EKS Cluster** module.
-    - When **Karpenter** is enabled: a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
+    - When a Helm-installed add-on (**Karpenter** or the **load balancer controller**) is enabled: a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
-    When Karpenter is enabled, the Helm installs authenticate by assuming the cluster's **Ravion Runner role** (inherited automatically from the cluster reference) — a stable IAM role the EKS Cluster module registers as an access entry with cluster-admin. Per-run pipeline roles never appear in the cluster's access configuration.
+    The Helm installs authenticate by assuming the cluster's **Ravion Runner role** (inherited automatically from the cluster reference) — a stable IAM role the EKS Cluster module registers as an access entry with cluster-admin. Per-run pipeline roles never appear in the cluster's access configuration.
+
+    For the load balancer controller to place load balancers automatically, VPC subnets must carry the standard discovery tags: `kubernetes.io/role/elb = 1` on public subnets and `kubernetes.io/role/internal-elb = 1` on private subnets (alternatively, specify subnets per Ingress via annotation).
 
     ## Configuration
 
@@ -190,6 +211,7 @@ module:
     | Karpenter              | No       | `true`               | Autoscaling end to end (IAM, queue, controller, NodePool) |
     | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
     | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
+    | Load balancer controller | No     | `true`               | AWS Load Balancer Controller chart (Ingress → ALB)     |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
     | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
     | Tags                   | No       | Ravion defaults      | Tags on created resources and Karpenter-launched instances |
@@ -202,5 +224,6 @@ module:
 
     - [Karpenter](https://karpenter.sh/docs/) - Just-in-time node autoscaling
     - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/) - Customizing provisioning behavior
+    - [AWS Load Balancer Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/) - Ingress and Service load balancing
     - [Amazon EBS CSI driver](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html) - Persistent volumes on EKS
     - [Container Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContainerInsights.html) - Cluster observability

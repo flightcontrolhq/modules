@@ -14,7 +14,7 @@ into a single hosting unit with enforced provisioning order:
 
 This stack talks only to the AWS API, so it provisions in a single apply with
 no connectivity to the cluster's Kubernetes endpoint. Optional extensions —
-Karpenter autoscaling, the EBS CSI driver, and Container Insights — live in
+Karpenter autoscaling, the AWS Load Balancer Controller, the EBS CSI driver, and Container Insights — live in
 the separate [`compute/eks/addons`](addons/) stack as selectable add-ons, so
 clusters only carry what they use.
 
