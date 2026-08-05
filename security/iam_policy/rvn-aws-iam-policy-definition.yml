@@ -3,8 +3,8 @@ definition:
   name: AWS IAM Policy
   description: Creates one reusable customer-managed AWS IAM policy from structured statements or a complete JSON policy document.
 release:
-  version: 0.1.0
-  description: Initial module definition with immutable policy identity fields and structured statement support.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

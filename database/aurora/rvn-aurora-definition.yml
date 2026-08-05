@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon Aurora cluster. Supports Aurora PostgreSQL and Aurora MySQL with provisioned or Serverless v2 capacity.
 
 release:
-  version: 0.1.1
-  description: Handle disabled CloudWatch alarm inputs safely.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - id: network

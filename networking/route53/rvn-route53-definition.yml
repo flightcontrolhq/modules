@@ -3,8 +3,11 @@ definition:
   name: Route 53 DNS
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
-  version: 0.2.2
-  description: Split TXT and SPF record values longer than 255 characters automatically, and validate the Route 53 record value limits before apply.
+  version: 1.0.0
+  description: >-
+    First stable release. Split TXT and SPF record values longer than 255
+    characters automatically, and validate the Route 53 record value limits
+    before apply.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

@@ -3,11 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.4.0
-  description: >-
-    Stop creating a module-owned ECR repository when pulling from an image
-    registry. Add a required initial image tag or digest used to create the
-    function before its first deployment.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

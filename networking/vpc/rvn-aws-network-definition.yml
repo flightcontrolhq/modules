@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.2.2
-  description: Use non-deprecated AWS region lookup.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

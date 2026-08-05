@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.4.2
-  description: Default Allowed methods to Read only, matching the Terraform module and documentation.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

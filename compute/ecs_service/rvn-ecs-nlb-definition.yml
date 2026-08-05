@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.3.2
-  description: Allow existing services to upgrade to the `listeners` input without being recreated.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - id: section_cluster
