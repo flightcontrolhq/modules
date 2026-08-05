@@ -67,6 +67,17 @@ variable "node_subnet_ids" {
   }
 }
 
+variable "public_subnet_ids" {
+  type        = list(string)
+  description = "Public subnet IDs in the cluster VPC. Not used by the cluster itself; exposed as an output so dependent modules (such as compute/eks/addons shared load balancers) can place internet-facing resources."
+  default     = []
+
+  validation {
+    condition     = alltrue([for s in var.public_subnet_ids : can(regex("^subnet-", s))])
+    error_message = "All public_subnet_ids must be valid subnet IDs starting with 'subnet-'."
+  }
+}
+
 ################################################################################
 # Cluster
 ################################################################################

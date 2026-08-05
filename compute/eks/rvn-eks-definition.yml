@@ -50,6 +50,13 @@ module:
           label: Private subnet IDs
           required: true
           type: string_array
+        - add_button_label: Add public subnet ID
+          collapsible: true
+          default: <<ref.stack.output.public_subnet_ids>>
+          description: Public subnets made available to dependent modules, such as EKS Add-ons shared load balancers. Not used by the cluster itself.
+          id: public_subnet_ids
+          label: Public subnet IDs
+          type: string_array
       required: true
       type: $ref:rvn-aws-network
     - id: section_cluster
@@ -233,6 +240,7 @@ module:
         region: << module.input.aws_region >>
         vpc_id: << module.input.vpc_id >>
         subnet_ids: << module.input.subnet_ids >>
+        public_subnet_ids: << module.input.public_subnet_ids || [] >>
         kubernetes_version: << module.input.kubernetes_version >>
         deletion_protection_enabled: << module.input.deletion_protection_enabled >>
         secrets_encryption_enabled: << module.input.secrets_encryption_enabled >>
