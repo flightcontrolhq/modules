@@ -8,6 +8,7 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | **AWS Load Balancer Controller** | `lb_controller_enabled` | `true` | `aws-load-balancer-controller` Helm chart wired to the Pod Identity role created by the `compute/eks` composite; Ingress → ALB, LoadBalancer Service → NLB |
 | **EBS CSI driver** | `ebs_csi_driver_enabled` | `false` | `aws-ebs-csi-driver` EKS add-on + Pod Identity role |
 | **Container Insights** | `cloudwatch_observability_enabled` | `true` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit) |
+| **Shared load balancers** | `public_alb_enabled`, `private_alb_enabled`, `public_nlb_enabled`, `private_nlb_enabled` | `false` | Terraform-managed ALBs/NLBs (via `networking/alb` and `networking/nlb`) that workloads attach to with the load balancer controller's `TargetGroupBinding` CRD, plus cluster security group ingress rules allowing each load balancer to reach pods |
 
 The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter and the AWS Load Balancer Controller additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
 
@@ -30,8 +31,24 @@ module "eks_addons" {
   ravion_runner_role_arn    = module.eks.ravion_runner_role_arn
 
   ebs_csi_driver_enabled = true
+
+  # Shared public ALB that web workloads bind to via TargetGroupBinding
+  public_alb_enabled          = true
+  public_alb_https_enabled    = true
+  public_alb_certificate_arns = [aws_acm_certificate.main.arn]
+  public_subnet_ids           = module.network.public_subnet_ids
 }
 ```
+
+### Shared load balancers
+
+The shared load balancers mirror the ECS Cluster module's pattern: one Terraform-managed ALB (or NLB) is shared by many workloads. A workload module creates its own target group and listener rule, then registers pods with the target group in-cluster via the AWS Load Balancer Controller's [`TargetGroupBinding`](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/targetgroupbinding/targetgroupbinding/) CRD — so `lb_controller_enabled` must stay on for workloads to use them.
+
+Placement and security wiring:
+
+- Public ALB/NLB launch into `public_subnet_ids` (required when either public load balancer is enabled).
+- Private ALB/NLB launch into `node_subnet_ids`.
+- Each load balancer's security group is granted ingress to `cluster_security_group_id` on all TCP ports, so registered pods are reachable on any container port.
 
 ## Requirements
 
@@ -62,13 +79,31 @@ module "eks_addons" {
 | karpenter_interruption_queue_message_retention_seconds | Interruption queue retention. | `number` | `300` | no |
 | karpenter_helm_values | Extra YAML docs merged into the Karpenter chart values. | `list(string)` | `[]` | no |
 | karpenter_default_node_pool_enabled | Create the default NodePool + EC2NodeClass. | `bool` | `true` | no |
-| node_subnet_ids | Subnets for the default NodePool. Required when Karpenter + default NodePool are enabled. | `list(string)` | `null` | no |
-| cluster_security_group_id | Cluster security group for Karpenter nodes. Required when Karpenter + default NodePool are enabled. | `string` | `null` | no |
+| node_subnet_ids | Private subnets for the default NodePool and internal load balancers. Required when Karpenter's default NodePool, the private ALB, or the private NLB is enabled. | `list(string)` | `null` | no |
+| cluster_security_group_id | Cluster security group for Karpenter nodes and load-balancer-to-pod ingress. Required when Karpenter's default NodePool or any shared load balancer is enabled. | `string` | `null` | no |
 | karpenter_default_node_pool | Default NodePool settings (capacity types, categories, arch, CPU limit, expiry). | `object` | `{}` | no |
 | ebs_csi_driver_enabled | Install the aws-ebs-csi-driver add-on + Pod Identity role. | `bool` | `false` | no |
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
 | cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity role. | `bool` | `true` | no |
 | cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
+| public_subnet_ids | Public subnets for internet-facing load balancers. Required when the public ALB or public NLB is enabled. | `list(string)` | `[]` | no |
+| load_balancer_deletion_protection_enabled | Deletion protection on the shared load balancers. | `bool` | `false` | no |
+| public_alb_enabled / private_alb_enabled | Create a shared public / private ALB. | `bool` | `false` | no |
+| public_alb_https_enabled / private_alb_https_enabled | HTTPS listener (with HTTP→HTTPS redirect). | `bool` | `false` | no |
+| public_alb_certificate_arns / private_alb_certificate_arns | ACM certificates for the HTTPS listener (first is default, rest SNI). | `list(string)` | `[]` | no |
+| public_alb_ssl_policy / private_alb_ssl_policy | HTTPS listener SSL policy. | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
+| public_alb_idle_timeout / private_alb_idle_timeout | ALB idle timeout in seconds. | `number` | `60` | no |
+| public_alb_ingress_cidr_blocks | IPv4 CIDRs allowed to reach the public ALB. | `list(string)` | `["0.0.0.0/0"]` | no |
+| private_alb_ingress_cidr_blocks | IPv4 CIDRs allowed to reach the private ALB. | `list(string)` | RFC1918 ranges | no |
+| public_alb_ingress_ipv6_cidr_blocks / private_alb_ingress_ipv6_cidr_blocks | IPv6 ingress CIDRs. | `list(string)` | `["::/0"]` / `[]` | no |
+| public_alb_ingress_security_group_ids / private_alb_ingress_security_group_ids | Source security groups allowed to reach the ALB. | `list(string)` | `[]` | no |
+| public_alb_web_acl_arn | WAFv2 Web ACL for the public ALB. | `string` | `null` | no |
+| *_alb_access_logs_enabled / *_alb_access_logs_bucket_arn | ALB access logging toggle and existing bucket. | `bool` / `string` | `false` / `null` | no |
+| public_nlb_enabled / private_nlb_enabled | Create a shared public / private NLB. | `bool` | `false` | no |
+| *_nlb_cross_zone_load_balancing_enabled | NLB cross-zone load balancing. | `bool` | `false` | no |
+| *_nlb_security_group_ids | Additional security groups on the NLB. | `list(string)` | `[]` | no |
+| *_nlb_elastic_ips_enabled / *_nlb_elastic_ip_allocation_ids | Static Elastic IPs for the NLB, one allocation per subnet. | `bool` / `list(string)` | `false` / `[]` | no |
+| *_nlb_access_logs_enabled / *_nlb_access_logs_bucket_arn | NLB access logging toggle and existing bucket. | `bool` / `string` | `false` / `null` | no |
 
 ## Outputs
 
@@ -84,6 +119,10 @@ All outputs are null when the corresponding add-on is disabled.
 | lb_controller_chart_version / lb_controller_namespace | Load balancer controller install version and location. |
 | ebs_csi_addon_version / ebs_csi_role_arn | EBS CSI add-on version and Pod Identity role. |
 | cloudwatch_observability_addon_version / cloudwatch_observability_role_arn | Container Insights add-on version and Pod Identity role. |
+| public_alb_arn / dns_name / zone_id / arn_suffix / security_group_id / http_listener_arn / https_listener_arn | Shared public ALB attributes for workload target groups, DNS records, and metrics. |
+| private_alb_arn / dns_name / zone_id / arn_suffix / security_group_id / http_listener_arn / https_listener_arn | Shared private ALB attributes. |
+| public_nlb_arn / dns_name / zone_id / arn_suffix / security_group_id | Shared public NLB attributes. |
+| private_nlb_arn / dns_name / zone_id / arn_suffix / security_group_id | Shared private NLB attributes. |
 
 ## Notes
 

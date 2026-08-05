@@ -78,3 +78,127 @@ output "karpenter_interruption_queue_name" {
   description = "Name of the SQS interruption queue (null if disabled)."
   value       = var.karpenter_enabled ? module.karpenter[0].interruption_queue_name : null
 }
+
+################################################################################
+# Shared Load Balancers
+################################################################################
+
+output "public_alb_arn" {
+  description = "ARN of the shared public ALB (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_arn : null
+}
+
+output "public_alb_dns_name" {
+  description = "DNS name of the shared public ALB (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_dns_name : null
+}
+
+output "public_alb_zone_id" {
+  description = "Route 53 zone ID of the shared public ALB (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_zone_id : null
+}
+
+output "public_alb_arn_suffix" {
+  description = "ARN suffix of the shared public ALB, for CloudWatch metrics (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].alb_arn_suffix : null
+}
+
+output "public_alb_security_group_id" {
+  description = "Security group ID of the shared public ALB (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].security_group_id : null
+}
+
+output "public_alb_http_listener_arn" {
+  description = "ARN of the shared public ALB HTTP listener (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].http_listener_arn : null
+}
+
+output "public_alb_https_listener_arn" {
+  description = "ARN of the shared public ALB HTTPS listener (null if disabled)."
+  value       = var.public_alb_enabled ? module.public_alb[0].https_listener_arn : null
+}
+
+output "private_alb_arn" {
+  description = "ARN of the shared private ALB (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_arn : null
+}
+
+output "private_alb_dns_name" {
+  description = "DNS name of the shared private ALB (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_dns_name : null
+}
+
+output "private_alb_zone_id" {
+  description = "Route 53 zone ID of the shared private ALB (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_zone_id : null
+}
+
+output "private_alb_arn_suffix" {
+  description = "ARN suffix of the shared private ALB, for CloudWatch metrics (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].alb_arn_suffix : null
+}
+
+output "private_alb_security_group_id" {
+  description = "Security group ID of the shared private ALB (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].security_group_id : null
+}
+
+output "private_alb_http_listener_arn" {
+  description = "ARN of the shared private ALB HTTP listener (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].http_listener_arn : null
+}
+
+output "private_alb_https_listener_arn" {
+  description = "ARN of the shared private ALB HTTPS listener (null if disabled)."
+  value       = var.private_alb_enabled ? module.private_alb[0].https_listener_arn : null
+}
+
+output "public_nlb_arn" {
+  description = "ARN of the shared public NLB (null if disabled)."
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn : null
+}
+
+output "public_nlb_dns_name" {
+  description = "DNS name of the shared public NLB (null if disabled)."
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_dns_name : null
+}
+
+output "public_nlb_zone_id" {
+  description = "Route 53 zone ID of the shared public NLB (null if disabled)."
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_zone_id : null
+}
+
+output "public_nlb_arn_suffix" {
+  description = "ARN suffix of the shared public NLB, for CloudWatch metrics (null if disabled)."
+  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn_suffix : null
+}
+
+output "public_nlb_security_group_id" {
+  description = "Security group ID of the shared public NLB (null if disabled)."
+  value       = var.public_nlb_enabled ? module.public_nlb[0].security_group_id : null
+}
+
+output "private_nlb_arn" {
+  description = "ARN of the shared private NLB (null if disabled)."
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn : null
+}
+
+output "private_nlb_dns_name" {
+  description = "DNS name of the shared private NLB (null if disabled)."
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_dns_name : null
+}
+
+output "private_nlb_zone_id" {
+  description = "Route 53 zone ID of the shared private NLB (null if disabled)."
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_zone_id : null
+}
+
+output "private_nlb_arn_suffix" {
+  description = "ARN suffix of the shared private NLB, for CloudWatch metrics (null if disabled)."
+  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn_suffix : null
+}
+
+output "private_nlb_security_group_id" {
+  description = "Security group ID of the shared private NLB (null if disabled)."
+  value       = var.private_nlb_enabled ? module.private_nlb[0].security_group_id : null
+}

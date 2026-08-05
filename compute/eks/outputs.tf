@@ -61,6 +61,11 @@ output "node_subnet_ids" {
   value       = local.node_subnet_ids
 }
 
+output "public_subnet_ids" {
+  description = "Public subnet IDs passed through for dependent modules (compute/eks/addons shared load balancers). Empty when not provided."
+  value       = var.public_subnet_ids
+}
+
 output "ravion_runner_role_arn" {
   description = "ARN of the IAM role Ravion Runner step executions assume for Kubernetes API access (null when disabled)."
   value       = var.ravion_runner_role_creation_enabled ? module.ravion_runner_role[0].role_arn : null
