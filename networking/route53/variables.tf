@@ -178,6 +178,50 @@ variable "records" {
   }
 
   validation {
+    condition = alltrue(flatten([
+      for v in var.records : [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+          ) : [
+          for chunk in(
+            can(regex("^\\s*\"", value)) ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] : [value]
+          ) : length(chunk) <= 255
+        ]
+      ]
+    ]))
+    error_message = "Each DNS record value must be at most 255 characters per character string. Split longer values, such as DKIM public keys, into multiple quoted strings of at most 255 characters each, for example \"first-part\" \"second-part\"."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for v in var.records : [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+        ) : length(regexall("\"", value)) % 2 == 0
+      ]
+    ]))
+    error_message = "Each DNS record value must have balanced double quotes. Quoted values must be written as one or more complete quoted strings, for example \"first-part\" \"second-part\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
+      sum(concat([0], [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+        ) : length(value) + 1
+      ])) <= 65535
+    ])
+    error_message = "The combined length of all values for a single DNS record must not exceed 65535 characters, which is the Route 53 limit on the total record data size."
+  }
+
+  validation {
     condition = alltrue([
       for v in var.records :
       (

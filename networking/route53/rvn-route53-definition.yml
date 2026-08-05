@@ -3,8 +3,8 @@ definition:
   name: Route 53 DNS
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
-  version: 0.2.1
-  description: Correct the documented default hosted zone comment to Managed in Ravion.
+  version: 0.2.2
+  description: Validate DNS record values against the Route 53 255-character character-string limit so long values such as DKIM keys fail before apply.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -162,9 +162,12 @@ module:
               description: Route an A or AAAA record to a supported AWS resource without setting a TTL.
               value: alias
         - add_button_label: Add record value
-          description: Values for a standard DNS record. Leave empty for alias records.
+          description: Values for a standard DNS record. Leave empty for alias records. Route 53 allows at most 255 characters per character string, so split longer values such as DKIM keys into multiple quoted strings, for example "part-one" "part-two".
           id: records
           label: Record values
+          patterns:
+            - message: Each value must be at most 255 characters, or split into quoted strings of at most 255 characters each, for example "part-one" "part-two".
+              pattern: ^(?:[^"]{1,255}|(?:\s*"[^"]{0,255}"\s*)+)$
           required: true
           show_when:
             target_type:
@@ -177,6 +180,9 @@ module:
         - description: Value for a standard DNS record type that accepts exactly one value.
           id: record_value
           label: Record value
+          patterns:
+            - message: The value must be at most 255 characters, or split into quoted strings of at most 255 characters each, for example "part-one" "part-two".
+              pattern: ^(?:[^"]{1,255}|(?:\s*"[^"]{0,255}"\s*)+)$
           required: true
           show_when:
             target_type:
@@ -535,6 +541,8 @@ module:
     DNS records are configured as structured entries. Terraform derives each resource key from the record name, type, and optional set identifier. Each record includes a record name, record type, and either standard record values with a TTL or an alias target.
 
     Standard records use TTL seconds and Record values. CNAME and SOA records use a single Record value because those record types accept exactly one value. Alias targets are exposed for A and AAAA records, which is the normal pattern for routing to AWS resources such as load balancers, CloudFront distributions, API Gateway domains, and S3 website endpoints. Alias records use Alias target DNS name and Alias target hosted zone ID. The alias target hosted zone ID belongs to the AWS target resource, not this domain's hosted zone. For an ALB or NLB, use the load balancer canonical hosted zone ID. For CloudFront, use Z2FDTNDATAQYW2. Regional services such as API Gateway and S3 website endpoints have service and region-specific hosted zone IDs.
+
+    Route 53 accepts at most 255 characters per character string in a record value. Values longer than that, such as DKIM public keys and long SPF records, must be split into multiple quoted strings of at most 255 characters each, for example `"v=DKIM1; k=rsa; p=first-part" "second-part"`. This module rejects oversized or unbalanced-quote values during planning instead of failing the apply.
 
     Routing policy is optional. Use Set identifier for records that share the same name and type with weighted, failover, latency, or geolocation routing.
 

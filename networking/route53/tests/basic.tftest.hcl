@@ -1,6 +1,17 @@
 # Route53 module tests — run from module root: tofu test
 
 mock_provider "aws" {
+  alias = "us_east_1"
+
+  override_resource {
+    target = aws_cloudwatch_log_group.query_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/route53/example.com"
+    }
+  }
+}
+
+mock_provider "aws" {
   override_resource {
     target = aws_route53_zone.public
     values = {
@@ -18,6 +29,13 @@ mock_provider "aws" {
       arn                 = "arn:aws:route53:::hostedzone/Z1PRIVATE000000000"
       name_servers        = []
       primary_name_server = "ns-internal.aws"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.route53_query_logs
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
 
@@ -276,6 +294,106 @@ run "nested_routing_policy_requires_set_identifier" {
   }
 
   expect_failures = [var.records]
+}
+
+################################################################################
+# Record value character-string limits
+################################################################################
+
+run "long_unquoted_record_value_fails" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "selector._domainkey.example.com"
+        type    = "TXT"
+        ttl     = 300
+        records = ["v=DKIM1;k=rsa;p=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"]
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
+run "long_quoted_chunk_fails" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "selector._domainkey.example.com"
+        type    = "TXT"
+        ttl     = 300
+        records = ["\"v=DKIM1;k=rsa;p=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789\""]
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
+run "unbalanced_quotes_fail" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "example.com"
+        type    = "TXT"
+        ttl     = 300
+        records = ["\"v=spf1 include:example.net ~all"]
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
+run "long_value_split_into_quoted_chunks_succeeds" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "selector._domainkey.example.com"
+        type    = "TXT"
+        ttl     = 300
+        records = ["\"v=DKIM1;k=rsa;p=01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789\" \"01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789\""]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_route53_record.this) == 1
+    error_message = "A TXT record split into quoted strings of at most 255 characters should be accepted"
+  }
+}
+
+run "single_record_value_within_limit_succeeds" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name         = "www.example.com"
+        type         = "CNAME"
+        ttl          = 300
+        record_value = "target.example.net"
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_route53_record.this) == 1
+    error_message = "A single-value record within the character-string limit should be accepted"
+  }
 }
 
 ################################################################################
