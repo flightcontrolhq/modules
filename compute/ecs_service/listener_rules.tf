@@ -13,12 +13,18 @@ resource "aws_lb_listener_rule" "alb" {
   } : {}
 
   listener_arn = each.value.listener_arn
-  # The mirrored rule (index 0) takes the module-managed base priority when
-  # the green test rule is enabled so the test rule can sit one slot ahead;
-  # every other rule keeps its configured priority.
+  # The mirrored rule (index 0) is paired with the green test rule when that
+  # rule is enabled: an explicit configured priority is used as-is (the test
+  # rule then sits one slot ahead), otherwise this rule chains one slot after
+  # the test rule's provider-assigned apply-time priority so the pair lands
+  # on adjacent free slots. Every other rule keeps its configured priority.
   priority = (
     local.green_alb_listener_rule_enabled && each.key == "0"
-    ? local.green_production_priority
+    ? (
+      local.green_explicit_priority != null
+      ? local.green_explicit_priority
+      : aws_lb_listener_rule.test[0].priority + 1
+    )
     : each.value.priority
   )
 
@@ -130,8 +136,11 @@ resource "aws_lb_listener_rule" "test" {
 
   listener_arn = var.load_balancer_attachment.listener_rules[0].listener_arn
   # One slot ahead of the production rule so a request carrying the test
-  # header matches this rule first; ALB routes by priority order, not by
-  # specificity, so without this it would fall through to production.
+  # selector matches this rule first; ALB routes by priority order, not by
+  # specificity, so without this it would fall through to production. With
+  # no explicit priority configured this is null, so the provider assigns
+  # the next free slot at apply time and the production rule chains to
+  # priority + 1.
   priority = local.green_test_priority
 
   # Same group-stickiness requirement as the production rule: ECS

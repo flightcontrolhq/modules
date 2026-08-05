@@ -444,6 +444,51 @@ run "blue_green_deployment" {
 }
 
 ################################################################################
+# Test: Blue/Green Deployment (Auto Priority)
+#
+# No explicit listener rule priority: the test rule's priority is
+# provider-assigned at apply time and the production rule chains one
+# slot after it, so the plan must succeed with both priorities unknown.
+################################################################################
+
+run "blue_green_deployment_auto_priority" {
+  command = plan
+
+  variables {
+    deployment_type = "blue_green"
+    container_port  = 8080
+    load_balancer_attachment = {
+      target_group = {
+        port     = 8080
+        protocol = "HTTP"
+      }
+      listener_rules = [{
+        listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/my-alb/1234567890123456/1234567890123456"
+        conditions = [{
+          type   = "host-header"
+          values = ["api.example.com"]
+        }]
+      }]
+    }
+  }
+
+  assert {
+    condition     = var.load_balancer_attachment.listener_rules[0].priority == null
+    error_message = "Priority should default to null so the pair is assigned at apply time"
+  }
+
+  assert {
+    condition     = length(aws_lb_listener_rule.test) == 1
+    error_message = "Should create the green test rule without an explicit priority"
+  }
+
+  assert {
+    condition     = length(aws_lb_listener_rule.alb) == 1
+    error_message = "Should create the production listener rule without an explicit priority"
+  }
+}
+
+################################################################################
 # Test: Header selector for the green test rule
 #
 # test_traffic_condition_type = "header" swaps the distinguishing test

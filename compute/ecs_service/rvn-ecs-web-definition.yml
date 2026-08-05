@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.8.5
-  description: Fix ALB metric charts by adding the required LoadBalancer dimension.
+  version: 0.8.6
+  description: Assign ALB listener rule priorities at apply time when no explicit priority is set, so multiple services can share a listener without priority conflicts.
 module:
   inputs:
     - id: section_cluster
