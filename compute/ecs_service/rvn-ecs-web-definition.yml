@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.8.4
-  description: Improve build source, Railpack command, and builder instance guidance.
+  version: 0.8.5
+  description: Fix ALB metric charts by adding the required LoadBalancer dimension.
 module:
   inputs:
     - id: section_cluster
@@ -17,6 +17,16 @@ module:
       mapped_inputs:
         - $include: ../../partials/inputs/ecs-service-cluster-common-mapped-inputs.yml
         - $include: ../../partials/inputs/ecs-service-cluster-alb-mapped-inputs.yml
+        - default: <<ref.stack.output.public_alb_arn_suffix>>
+          id: public_alb_arn_suffix
+          immutable: true
+          label: Public ALB ARN suffix
+          type: string
+        - default: <<ref.stack.output.private_alb_arn_suffix>>
+          id: private_alb_arn_suffix
+          immutable: true
+          label: Private ALB ARN suffix
+          type: string
       required: true
     - id: section_service
       label: Web service
@@ -483,6 +493,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: RequestCount
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -495,6 +508,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: HTTPCode_Target_5XX_Count
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -507,6 +523,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: HTTPCode_Target_4XX_Count
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -519,6 +538,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: TargetResponseTime
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -531,6 +553,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: HealthyHostCount
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -543,6 +568,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: UnHealthyHostCount
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
