@@ -61,6 +61,11 @@ output "node_subnet_ids" {
   value       = local.node_subnet_ids
 }
 
+output "ravion_runner_role_arn" {
+  description = "ARN of the IAM role Ravion Runner step executions assume for Kubernetes API access (null when disabled)."
+  value       = var.ravion_runner_role_creation_enabled ? module.ravion_runner_role[0].role_arn : null
+}
+
 output "ravion_runner_security_group_id" {
   description = "ID of the Ravion Runner security group allowed to reach the cluster API endpoint (null if disabled)."
   value       = var.ravion_runner_security_group_creation_enabled ? aws_security_group.ravion_runner[0].id : null

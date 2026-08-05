@@ -118,6 +118,11 @@ module:
       id: ravion_runner_security_group_creation_enabled
       label: Ravion Runner security group
       type: boolean
+    - default: true
+      description: Create an IAM role that Ravion Runner step executions assume for Kubernetes API access, registered as an EKS access entry with cluster-admin. Used by the EKS Add-ons module to install Helm charts.
+      id: ravion_runner_role_creation_enabled
+      label: Ravion Runner role
+      type: boolean
     - description: Required managed node group that runs system workloads such as CoreDNS. Sized small by default; add more compute with additional node groups, Karpenter, or Fargate.
       id: section_system_nodes
       label: System node group
@@ -236,6 +241,7 @@ module:
         public_endpoint_access_enabled: << module.input.public_endpoint_access_enabled >>
         public_access_cidrs: << module.input.public_access_cidrs || ["0.0.0.0/0"] >>
         ravion_runner_security_group_creation_enabled: << module.input.ravion_runner_security_group_creation_enabled >>
+        ravion_runner_role_creation_enabled: << module.input.ravion_runner_role_creation_enabled >>
         system_node_group:
           instance_types: << module.input.system_node_instance_types >>
           capacity_type: << module.input.system_node_capacity_type >>
@@ -448,6 +454,8 @@ module:
 
     A **Ravion Runner security group** is created by default and allowed to reach the API endpoint on port 443. Attach it to the Ravion execution environment used by modules that talk to the Kubernetes API (such as **EKS Add-ons** with Karpenter enabled) so their pipeline runs can reach a private endpoint. Its ID is available as the `ravion_runner_security_group_id` stack output.
 
+    A **Ravion Runner role** is also created by default: a stable IAM role registered as an EKS access entry with cluster-admin, which Ravion Runner step executions assume when they need the Kubernetes API. This keeps per-run pipeline roles out of the cluster's access configuration — the EKS Add-ons module assumes it automatically via `aws eks get-token`. Its ARN is available as the `ravion_runner_role_arn` stack output. The trust policy admits only this AWS account; tighten it further with the `ravion_runner_role_trusted_principal_arns` Terraform variable.
+
     ## Cluster access
 
     EKS access entries control which IAM principals can access the cluster. The IAM principal that creates the cluster is granted admin access automatically. Additional principals can be granted access through the **Access entries** map. Automatic access for Ravion deploys will be wired here in a future release.
@@ -470,6 +478,7 @@ module:
     | Private endpoint access| No       | `true`               | Reach the API server from inside the VPC               |
     | Public endpoint access | No       | `false`              | Expose the API server to the internet                  |
     | Ravion Runner security group | No | `true`               | Security group allowed to reach the API endpoint       |
+    | Ravion Runner role     | No       | `true`               | Assumable IAM role with cluster-admin access entry     |
     | System node group      | No       | 2-4 `t3.medium`      | Instance types, capacity type, size bounds, disk size  |
     | Additional node groups | No       | -                    | Extra managed node groups keyed by name                |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |

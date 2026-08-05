@@ -139,6 +139,23 @@ variable "additional_cluster_security_group_ingress" {
   default     = []
 }
 
+variable "ravion_runner_role_creation_enabled" {
+  type        = bool
+  description = "Create an IAM role that Ravion Runner step executions can assume for Kubernetes API access, registered as an EKS access entry with cluster-admin."
+  default     = true
+}
+
+variable "ravion_runner_role_trusted_principal_arns" {
+  type        = list(string)
+  description = "IAM principal ARN patterns allowed to assume the Ravion Runner role (aws:PrincipalArn ArnLike condition). Empty means any principal in this account that holds sts:AssumeRole on the role's ARN."
+  default     = []
+
+  validation {
+    condition     = alltrue([for a in var.ravion_runner_role_trusted_principal_arns : can(regex("^arn:aws", a))])
+    error_message = "All ravion_runner_role_trusted_principal_arns must be IAM ARN patterns starting with 'arn:aws'."
+  }
+}
+
 variable "ravion_runner_security_group_creation_enabled" {
   type        = bool
   description = "Create a Ravion Runner security group in the cluster VPC and allow it to reach the Kubernetes API endpoint (443) on the EKS-managed cluster security group. Attach the security group to the Ravion execution environment used by this module."

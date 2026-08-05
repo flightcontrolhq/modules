@@ -78,10 +78,15 @@ variable "karpenter_enabled" {
   default     = true
 }
 
-variable "terraform_runner_access_entry_enabled" {
-  type        = bool
-  description = "Create an EKS access entry granting the IAM role running Terraform cluster-admin so the Helm releases can authenticate. Only used when Karpenter is enabled. Disable if the runner role already has cluster access (e.g. it created the cluster)."
-  default     = true
+variable "ravion_runner_role_arn" {
+  type        = string
+  description = "IAM role assumed by `aws eks get-token` to authenticate to the Kubernetes API (ravion_runner_role_arn output of the compute/eks stack). When null, the identity running Terraform is used directly and must already have cluster access."
+  default     = null
+
+  validation {
+    condition     = var.ravion_runner_role_arn == null || can(regex("^arn:aws", var.ravion_runner_role_arn))
+    error_message = "The ravion_runner_role_arn must be an IAM role ARN starting with 'arn:aws'."
+  }
 }
 
 variable "karpenter_controller_namespace" {
