@@ -1,10 +1,10 @@
 definition:
-  type: rvn-eks-components
-  name: EKS Cluster Components
-  description: Installs in-cluster components onto an existing EKS cluster via Helm - the Karpenter controller and a default NodePool.
+  type: rvn-eks-addons
+  name: EKS Add-ons
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, EBS CSI storage, and CloudWatch Container Insights, each toggled and configured independently.
 release:
   version: 0.1.0
-  description: Initial EKS cluster components definition installing the Karpenter controller and default NodePool via Helm.
+  description: Initial EKS add-ons definition with selectable Karpenter, EBS CSI driver, and CloudWatch Container Insights add-ons.
 module:
   inputs:
     - id: cluster
@@ -27,7 +27,8 @@ module:
           type: string
           values: $values:aws/regions
         - collapsible: true
-          description: Execution environment for Pipeline Terraform runners. Must run inside the cluster VPC with the cluster's Ravion Runner security group attached so Helm can reach the private Kubernetes API endpoint.
+          default: << ref.input.execution_environment_id >>
+          description: Execution environment for Pipeline Terraform runners. Defaults to the cluster module's execution environment. When Karpenter is enabled on a private cluster, it must run inside the cluster VPC with the cluster's Ravion Runner security group attached so Helm can reach the Kubernetes API endpoint.
           id: execution_environment_id
           label: Terraform execution environment
           type: string
@@ -42,115 +43,147 @@ module:
           required: true
           type: string
         - collapsible: true
-          default: <<ref.input.karpenter_controller_namespace>>
-          description: Namespace where the Karpenter controller is installed. Must match the cluster's Karpenter Pod Identity association.
-          id: karpenter_controller_namespace
-          label: Karpenter namespace
-          placeholder: kube-system
-          type: string
-        - collapsible: true
-          default: <<ref.input.karpenter_controller_service_account>>
-          description: Service account used by the Karpenter controller. Must match the cluster's Karpenter Pod Identity association.
-          id: karpenter_controller_service_account
-          label: Karpenter service account
-          placeholder: karpenter
-          type: string
-        - collapsible: true
-          default: <<ref.stack.output.karpenter_interruption_queue_name>>
-          description: SQS interruption queue created by the EKS cluster module.
-          id: karpenter_interruption_queue_name
-          label: Interruption queue name
-          required: true
-          type: string
-        - collapsible: true
-          default: <<ref.stack.output.karpenter_node_instance_profile_name>>
-          description: IAM instance profile for Karpenter-launched nodes, created by the EKS cluster module.
-          id: karpenter_node_instance_profile_name
-          label: Node instance profile
-          required: true
-          type: string
-        - collapsible: true
           default: <<ref.stack.output.cluster_security_group_id>>
           description: EKS-managed cluster security group attached to Karpenter-launched nodes.
           id: cluster_security_group_id
           label: Cluster security group ID
-          required: true
           type: string
         - add_button_label: Add subnet ID
           collapsible: true
           default: <<ref.stack.output.node_subnet_ids>>
-          description: Subnets the default NodePool launches nodes into.
+          description: Subnets the default Karpenter NodePool launches nodes into.
           id: node_subnet_ids
           label: Node subnet IDs
-          required: true
           type: string_array
       required: true
       type: $ref:rvn-eks
-    - description: Installs the Karpenter controller and CRDs via Helm. The cluster must be created with Karpenter enabled so the controller's IAM role, Pod Identity association, instance profile, and interruption queue exist.
+    - description: Just-in-time node autoscaling. Provisions Karpenter end to end - controller and node IAM roles, Pod Identity association, instance profile, interruption queue, EventBridge rules, the controller Helm charts, and a default NodePool. Requires Kubernetes API connectivity from the Terraform runner.
       id: section_karpenter
       label: Karpenter
       type: section
+    - default: true
+      id: karpenter_enabled
+      label: Karpenter
+      type: boolean
     - collapsible: true
       description: Version of the Karpenter Helm chart (and karpenter-crd chart) to install.
       id: karpenter_chart_version
       label: Chart version
       placeholder: 1.14.0
+      show_when:
+        karpenter_enabled: true
+      type: string
+    - collapsible: true
+      description: Namespace where the Karpenter controller is installed.
+      id: karpenter_controller_namespace
+      label: Controller namespace
+      placeholder: kube-system
+      show_when:
+        karpenter_enabled: true
+      type: string
+    - collapsible: true
+      description: Service account name used by the Karpenter controller.
+      id: karpenter_controller_service_account
+      label: Controller service account
+      placeholder: karpenter
+      show_when:
+        karpenter_enabled: true
       type: string
     - default: true
       description: Create a general-purpose default NodePool and EC2NodeClass so Karpenter can provision nodes out of the box. Disable to manage NodePools yourself.
       id: karpenter_default_node_pool_enabled
       label: Default NodePool
+      show_when:
+        karpenter_enabled: true
       type: boolean
+    - description: EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role.
+      id: section_ebs_csi
+      label: EBS CSI driver
+      type: section
+    - default: false
+      id: ebs_csi_driver_enabled
+      label: EBS CSI driver
+      type: boolean
+    - collapsible: true
+      description: Pinned add-on version. Leave blank to let AWS resolve the most recent compatible version.
+      id: ebs_csi_addon_version
+      label: Add-on version
+      placeholder: Latest compatible
+      show_when:
+        ebs_csi_driver_enabled: true
+      type: string
+    - description: CloudWatch Container Insights via the amazon-cloudwatch-observability EKS add-on - node, pod, and container metrics plus application and data plane logs, shown on the cluster module's Metrics and Logs tabs.
+      id: section_container_insights
+      label: Container Insights
+      type: section
+    - default: true
+      id: cloudwatch_observability_enabled
+      label: Container Insights
+      type: boolean
+    - collapsible: true
+      description: Pinned add-on version. Leave blank to let AWS resolve the most recent compatible version.
+      id: cloudwatch_observability_addon_version
+      label: Add-on version
+      placeholder: Latest compatible
+      show_when:
+        cloudwatch_observability_enabled: true
+      type: string
     - $include: ../../../partials/inputs/misc-section.yml
     - $include: ../../../partials/inputs/tags.yml
     - $include: ../../../partials/inputs/terraform-settings.yml
   stack:
     $template: ../../../partials/templates/opentofu-stack.yml
     with:
-      base_path: compute/eks/components
+      base_path: compute/eks/addons
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
         cluster_name: << module.input.cluster_name >>
         region: << module.input.aws_region >>
-        karpenter_controller_namespace: << module.input.karpenter_controller_namespace >>
-        karpenter_controller_service_account: << module.input.karpenter_controller_service_account >>
-        karpenter_chart_version: << module.input.karpenter_chart_version >>
-        karpenter_interruption_queue_name: << module.input.karpenter_interruption_queue_name >>
+        karpenter_enabled: << module.input.karpenter_enabled >>
+        karpenter_controller_namespace: << module.input.karpenter_controller_namespace || "kube-system" >>
+        karpenter_controller_service_account: << module.input.karpenter_controller_service_account || "karpenter" >>
+        karpenter_chart_version: << module.input.karpenter_chart_version || "1.14.0" >>
         karpenter_helm_values: []
-        karpenter_default_node_pool_enabled: << module.input.karpenter_default_node_pool_enabled >>
-        karpenter_node_instance_profile_name: << module.input.karpenter_node_instance_profile_name >>
+        karpenter_default_node_pool_enabled: '<< module.input.karpenter_default_node_pool_enabled != nil ? module.input.karpenter_default_node_pool_enabled : true >>'
         node_subnet_ids: << module.input.node_subnet_ids >>
         cluster_security_group_id: << module.input.cluster_security_group_id >>
+        ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
+        ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
+        cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
+        cloudwatch_observability_addon_version: << module.input.cloudwatch_observability_addon_version >>
         tags:
           $include: ../stack/ravion-tags.yml
   readme: |-
-    Installs in-cluster components onto an existing EKS cluster via Helm - the Karpenter controller, its CRDs, and a default NodePool.
+    Selectable add-ons for an existing EKS cluster. Each add-on is toggled independently and brings its own IAM wiring, so the cluster module stays lean and clusters only carry what they use.
 
-    ## Overview
+    ## Add-ons
 
-    The EKS Cluster module provisions everything through the AWS API in a single apply, but the Karpenter controller itself runs inside the cluster and must be installed through the Kubernetes API. This module owns that last step:
+    | Add-on | Default | What it provides |
+    | ------ | ------- | ---------------- |
+    | **Karpenter** | On | Just-in-time node autoscaling: controller and node IAM roles, Pod Identity association, instance profile, SQS interruption queue, EventBridge rules, the controller Helm charts, and an optional default NodePool |
+    | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
+    | **Container Insights** | On | Node, pod, and container metrics plus application/data plane logs via the amazon-cloudwatch-observability EKS add-on; populates the cluster module's Metrics and Logs tabs |
 
-    1. **karpenter-crd chart** - Karpenter's CRDs, managed as a separate chart so upgrades work
-    2. **karpenter chart** - the controller, wired to the cluster's interruption queue and Pod Identity service account
-    3. **Default NodePool** - an optional general-purpose NodePool and EC2NodeClass so autoscaling works out of the box
+    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter additionally installs Helm charts into the cluster, which is the only part that needs Kubernetes API connectivity.
 
-    Splitting these from the cluster stack keeps cluster provisioning free of Kubernetes API connectivity, and makes Karpenter chart upgrades small, low-blast-radius applies.
-
-    Terraform source: [flightcontrolhq/modules/compute/eks/components](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks/components)
+    Terraform source: [flightcontrolhq/modules/compute/eks/addons](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks/addons)
 
     ## Prerequisites
 
-    - An **EKS Cluster** module with **Karpenter** enabled. That creates the AWS-side resources this module depends on: controller and node IAM roles, the Pod Identity association, the node instance profile, and the SQS interruption queue.
-    - A **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached.
+    - An **EKS Cluster** module.
+    - When **Karpenter** is enabled: a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
     ## Configuration
 
     | Field                  | Required | Default              | Description                                            |
     | ---------------------- | -------- | -------------------- | ------------------------------------------------------ |
-    | EKS cluster            | Yes      | -                    | Existing EKS Cluster module with Karpenter enabled     |
+    | EKS cluster            | Yes      | -                    | Existing EKS Cluster module                            |
+    | Karpenter              | No       | `true`               | Autoscaling end to end (IAM, queue, controller, NodePool) |
     | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
     | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
-    | Tags                   | No       | Ravion defaults      | Tags applied to EC2 instances launched by the default NodePool |
+    | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
+    | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
+    | Tags                   | No       | Ravion defaults      | Tags on created resources and Karpenter-launched instances |
 
     ## Default NodePool
 
@@ -160,3 +193,5 @@ module:
 
     - [Karpenter](https://karpenter.sh/docs/) - Just-in-time node autoscaling
     - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/) - Customizing provisioning behavior
+    - [Amazon EBS CSI driver](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html) - Persistent volumes on EKS
+    - [Container Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContainerInsights.html) - Cluster observability

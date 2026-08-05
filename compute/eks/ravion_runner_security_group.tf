@@ -2,7 +2,7 @@
 # Ravion Runner Security Group
 #
 # Created by default so Ravion Runner instances (e.g. the Helm steps of the
-# compute/eks/components stack) can reach the private Kubernetes API endpoint.
+# compute/eks/addons stack) can reach the private Kubernetes API endpoint.
 # Attach this security group to the Ravion execution environment used by
 # modules that talk to the cluster's Kubernetes API.
 # The EKS-managed cluster security group only admits the cluster's own nodes

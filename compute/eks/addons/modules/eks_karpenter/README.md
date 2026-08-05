@@ -1,6 +1,6 @@
 # EKS Karpenter (IAM + Queue helper)
 
-Internal child module of [`compute/eks`](../..) — consumed via the composite only; not independently versioned or published.
+Internal child module of [`compute/eks/addons`](../..) — consumed via the addons stack only; not independently versioned or published.
 
 Provisions everything Karpenter needs on the AWS side so a consumer can
 `helm install` the controller without writing IAM by hand:
@@ -16,8 +16,8 @@ Provisions everything Karpenter needs on the AWS side so a consumer can
   rebalance recommendations, instance state changes, capacity reservation
   interruptions, and AWS Health events.
 
-The Helm install of Karpenter itself is the consumer's job — point the chart
-at the outputs from this module:
+The Helm install of Karpenter itself is done by the parent addons stack —
+its charts consume the outputs from this module:
 
 ```
 settings.clusterName            = <your cluster>
@@ -39,8 +39,8 @@ spec.instanceProfile = <output: node_instance_profile_name>
 
 ## Usage
 
-Prefer the [`compute/eks`](../..) composite. This module is nested under
-`compute/eks/modules/` and is not independently published.
+Prefer the [`compute/eks/addons`](../..) stack. This module is nested
+under `compute/eks/addons/modules/` and is not independently published.
 
 ## Requirements
 

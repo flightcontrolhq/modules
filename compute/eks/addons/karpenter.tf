@@ -3,13 +3,13 @@
 #
 # CRDs are managed by the dedicated karpenter-crd chart because Helm does not
 # upgrade CRDs bundled inside a chart's crds/ directory. Both charts are pinned
-# to the same version. The AWS-side prerequisites (controller and node IAM
-# roles, Pod Identity association, instance profile, interruption queue,
-# EventBridge rules) are created by the compute/eks stack with
-# karpenter_enabled = true.
+# to the same version. The AWS-side prerequisites come from module.karpenter
+# in this same stack (see eks_karpenter.tf).
 ################################################################################
 
 resource "helm_release" "karpenter_crd" {
+  count = var.karpenter_enabled ? 1 : 0
+
   name       = "karpenter-crd"
   namespace  = var.karpenter_controller_namespace
   repository = "oci://public.ecr.aws/karpenter"
@@ -20,6 +20,8 @@ resource "helm_release" "karpenter_crd" {
 }
 
 resource "helm_release" "karpenter" {
+  count = var.karpenter_enabled ? 1 : 0
+
   name       = "karpenter"
   namespace  = var.karpenter_controller_namespace
   repository = "oci://public.ecr.aws/karpenter"
@@ -33,9 +35,9 @@ resource "helm_release" "karpenter" {
       yamlencode({
         settings = {
           clusterName       = var.cluster_name
-          interruptionQueue = var.karpenter_interruption_queue_name
+          interruptionQueue = module.karpenter[0].interruption_queue_name
         }
-        # Must match the Pod Identity association created by the compute/eks stack.
+        # Must match the Pod Identity association created by module.karpenter.
         serviceAccount = {
           name = var.karpenter_controller_service_account
         }
@@ -44,7 +46,12 @@ resource "helm_release" "karpenter" {
     var.karpenter_helm_values,
   )
 
-  depends_on = [helm_release.karpenter_crd]
+  # The controller pod needs the Pod Identity association and interruption
+  # queue to exist before it starts.
+  depends_on = [
+    helm_release.karpenter_crd,
+    module.karpenter,
+  ]
 }
 
 ################################################################################
@@ -56,7 +63,7 @@ resource "helm_release" "karpenter" {
 ################################################################################
 
 resource "helm_release" "karpenter_default_node_pool" {
-  count = var.karpenter_default_node_pool_enabled ? 1 : 0
+  count = var.karpenter_enabled && var.karpenter_default_node_pool_enabled ? 1 : 0
 
   name      = "karpenter-default-node-pool"
   namespace = var.karpenter_controller_namespace
@@ -66,7 +73,7 @@ resource "helm_release" "karpenter_default_node_pool" {
     yamlencode({
       ec2NodeClass = {
         name             = "default"
-        instanceProfile  = var.karpenter_node_instance_profile_name
+        instanceProfile  = module.karpenter[0].node_instance_profile_name
         subnetIds        = var.node_subnet_ids
         securityGroupIds = [var.cluster_security_group_id]
         tags             = local.tags
