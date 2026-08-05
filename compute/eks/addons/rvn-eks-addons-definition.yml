@@ -43,6 +43,12 @@ module:
           required: true
           type: string
         - collapsible: true
+          default: <<ref.stack.output.ravion_runner_role_arn>>
+          description: IAM role assumed for Kubernetes API authentication when installing Helm charts. Defaults to the cluster's Ravion Runner role.
+          id: ravion_runner_role_arn
+          label: Ravion Runner role ARN
+          type: string
+        - collapsible: true
           default: <<ref.stack.output.cluster_security_group_id>>
           description: EKS-managed cluster security group attached to Karpenter-launched nodes.
           id: cluster_security_group_id
@@ -147,6 +153,7 @@ module:
         karpenter_default_node_pool_enabled: '<< module.input.karpenter_default_node_pool_enabled != nil ? module.input.karpenter_default_node_pool_enabled : true >>'
         node_subnet_ids: << module.input.node_subnet_ids >>
         cluster_security_group_id: << module.input.cluster_security_group_id >>
+        ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
         ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
         ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
         cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
@@ -173,7 +180,7 @@ module:
     - An **EKS Cluster** module.
     - When **Karpenter** is enabled: a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
-    When Karpenter is enabled, the stack automatically registers the pipeline's IAM role as an EKS access entry with cluster-admin so the Helm installs can authenticate; the role is resolved at apply time, so per-run pipeline roles work without manual access configuration.
+    When Karpenter is enabled, the Helm installs authenticate by assuming the cluster's **Ravion Runner role** (inherited automatically from the cluster reference) — a stable IAM role the EKS Cluster module registers as an access entry with cluster-admin. Per-run pipeline roles never appear in the cluster's access configuration.
 
     ## Configuration
 

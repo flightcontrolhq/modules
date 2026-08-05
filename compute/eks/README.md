@@ -80,6 +80,8 @@ module "eks" {
 | lb_controller_pod_identity_enabled | Create LB Controller Pod Identity role. | `bool` | `true` | no |
 | lb_controller_namespace / lb_controller_service_account | LB Controller SA location. | `string` | `"kube-system"` / `"aws-load-balancer-controller"` | no |
 | ravion_runner_security_group_creation_enabled | Create a Ravion Runner SG allowed to reach the API endpoint (443). | `bool` | `true` | no |
+| ravion_runner_role_creation_enabled | Create an assumable IAM role registered as an EKS access entry with cluster-admin, for runner Kubernetes API access. | `bool` | `true` | no |
+| ravion_runner_role_trusted_principal_arns | ArnLike patterns restricting who can assume the Ravion Runner role (empty = same-account principals with sts:AssumeRole). | `list(string)` | `[]` | no |
 | pod_identity_associations | Extra Pod Identity associations. | `map(object)` | `{}` | no |
 | deletion_protection_enabled | Protect the cluster from API deletion. | `bool` | `true` | no |
 | system_node_group | System managed node group config (object with optional attrs). | `object` | `{}` (defaults: name=`system`, 2/2/4 ON_DEMAND t3.medium) | no |
@@ -100,6 +102,7 @@ module "eks" {
 | cluster_security_group_id | EKS-managed cluster security group. |
 | node_subnet_ids | Subnets used for node placement (consumed by `addons`). |
 | ravion_runner_security_group_id | Ravion Runner SG allowed to reach the API endpoint (null if disabled). |
+| ravion_runner_role_arn | IAM role runners assume for Kubernetes API access (null if disabled). |
 | secrets_kms_key_arn | Secrets KMS key (null if disabled). |
 | lb_controller_role_arn | LB Controller Pod Identity role. |
 | system_node_group_name / system_node_group_arn | System node group identifiers. |
