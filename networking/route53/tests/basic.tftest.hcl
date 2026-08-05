@@ -300,7 +300,7 @@ run "nested_routing_policy_requires_set_identifier" {
 # Record value character-string limits
 ################################################################################
 
-run "long_unquoted_record_value_fails" {
+run "long_unquoted_txt_value_is_split_into_quoted_strings" {
   command = plan
 
   variables {
@@ -311,6 +311,37 @@ run "long_unquoted_record_value_fails" {
         type    = "TXT"
         ttl     = 300
         records = ["v=DKIM1;k=rsa;p=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(local.normalized_records["TXT-selector._domainkey.example.com"].records) == 1
+    error_message = "The split value should stay a single Route 53 record value"
+  }
+
+  assert {
+    condition     = length(regexall("\"[^\"]{1,255}\"", local.normalized_records["TXT-selector._domainkey.example.com"].records[0])) == 2
+    error_message = "A TXT value longer than 255 characters should be split into two quoted strings"
+  }
+
+  assert {
+    condition     = replace(replace(local.normalized_records["TXT-selector._domainkey.example.com"].records[0], "\" \"", ""), "\"", "") == "v=DKIM1;k=rsa;p=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+    error_message = "Splitting a TXT value should preserve the original characters"
+  }
+}
+
+run "long_unsplittable_record_value_fails" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "_sip._tcp.example.com"
+        type    = "SRV"
+        ttl     = 300
+        records = ["10 5 5060 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789.example.com"]
       }
     ]
   }
@@ -354,7 +385,7 @@ run "unbalanced_quotes_fail" {
   expect_failures = [var.records]
 }
 
-run "long_value_split_into_quoted_chunks_succeeds" {
+run "manually_split_long_value_succeeds" {
   command = plan
 
   variables {

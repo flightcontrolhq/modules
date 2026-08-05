@@ -185,13 +185,16 @@ variable "records" {
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
           ) : [
+          # TXT and SPF values are split into 255-character quoted strings by the module,
+          # so only quoted values and other record types are checked here.
           for chunk in(
-            can(regex("^\\s*\"", value)) ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] : [value]
+            can(regex("^\\s*\"", value)) ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] :
+            contains(["TXT", "SPF"], v.type) ? [] : [value]
           ) : length(chunk) <= 255
         ]
       ]
     ]))
-    error_message = "Each DNS record value must be at most 255 characters per character string. Split longer values, such as DKIM public keys, into multiple quoted strings of at most 255 characters each, for example \"first-part\" \"second-part\"."
+    error_message = "Each DNS record value must be at most 255 characters per character string, which is the Route 53 limit. TXT and SPF values longer than 255 characters are split automatically; for other record types, use a shorter value. If you write a value as quoted strings yourself, keep each quoted string at most 255 characters, for example \"first-part\" \"second-part\"."
   }
 
   validation {
