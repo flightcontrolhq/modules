@@ -1,7 +1,7 @@
 definition:
   type: rvn-eks
   name: EKS Cluster
-  description: Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Karpenter and Fargate compute.
+  description: Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, EBS CSI, Container Insights).
 release:
   version: 0.1.0
   description: Initial EKS module definition for the compute/eks composite stack.
@@ -114,7 +114,7 @@ module:
         public_endpoint_access_enabled: true
       type: string_array
     - default: true
-      description: Create a security group allowed to reach the Kubernetes API endpoint. Attach it to the Ravion execution environment used by modules that talk to the cluster (such as EKS Cluster Components) so their pipeline runs can reach a private endpoint.
+      description: Create a security group allowed to reach the Kubernetes API endpoint. Attach it to the Ravion execution environment used by modules that talk to the cluster (such as EKS Add-ons with Karpenter) so their pipeline runs can reach a private endpoint.
       id: ravion_runner_security_group_creation_enabled
       label: Ravion Runner security group
       type: boolean
@@ -165,39 +165,6 @@ module:
       id: additional_node_groups
       label: Additional node groups
       type: object
-    - description: Cluster add-ons installed after the system node group is ready. Core networking add-ons (VPC CNI, kube-proxy, CoreDNS, Pod Identity Agent) and the AWS Load Balancer Controller IAM role are always managed.
-      id: section_addons
-      label: Add-ons
-      type: section
-    - default: false
-      description: Install the EBS CSI driver add-on and its Pod Identity role so workloads can use EBS-backed persistent volumes.
-      id: ebs_csi_driver_enabled
-      label: EBS CSI driver
-      type: boolean
-    - description: Provisions the AWS-side Karpenter resources - controller and node IAM roles, Pod Identity association, instance profile, interruption queue, and EventBridge rules. Install the controller itself with the EKS Cluster Components module.
-      id: section_karpenter
-      label: Karpenter
-      type: section
-    - default: false
-      id: karpenter_enabled
-      label: Karpenter
-      type: boolean
-    - collapsible: true
-      description: Namespace where the Karpenter controller is installed.
-      id: karpenter_controller_namespace
-      label: Controller namespace
-      placeholder: kube-system
-      show_when:
-        karpenter_enabled: true
-      type: string
-    - collapsible: true
-      description: Service account name used by the Karpenter controller.
-      id: karpenter_controller_service_account
-      label: Controller service account
-      placeholder: karpenter
-      show_when:
-        karpenter_enabled: true
-      type: string
     - description: Run selected namespaces on AWS Fargate instead of EC2 nodes.
       id: section_fargate
       label: Fargate
@@ -248,11 +215,6 @@ module:
       label: Log retention (days)
       min: 1
       type: number
-    - default: true
-      description: Install the CloudWatch Observability add-on for Container Insights. Collects node, pod, and container metrics and ships container logs to CloudWatch, which may increase CloudWatch costs.
-      id: cloudwatch_observability_enabled
-      label: Container Insights
-      type: boolean
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
@@ -282,15 +244,10 @@ module:
           max_size: << module.input.system_node_max_size >>
           disk_size: << module.input.system_node_disk_size >>
         additional_node_groups: << module.input.additional_node_groups || {} >>
-        ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
-        karpenter_enabled: << module.input.karpenter_enabled >>
-        karpenter_controller_namespace: << module.input.karpenter_controller_namespace || "kube-system" >>
-        karpenter_controller_service_account: << module.input.karpenter_controller_service_account || "karpenter" >>
         fargate_profiles: << module.input.fargate_profiles || {} >>
         access_entries: << module.input.access_entries || {} >>
         enabled_cluster_log_types: << module.input.enabled_cluster_log_types >>
         cluster_log_retention_in_days: << module.input.cluster_log_retention_in_days >>
-        cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
         tags:
           $include: ../stack/ravion-tags.yml
   ui:
@@ -442,7 +399,7 @@ module:
           region: << stack.output.region >>
           log_group: /aws/containerinsights/<< stack.output.cluster_name >>/dataplane
   readme: |-
-    Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Karpenter and Fargate compute.
+    Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Fargate compute. Extend with the **EKS Add-ons** module (Karpenter, EBS CSI, Container Insights).
 
     ## Overview
 
@@ -450,10 +407,10 @@ module:
 
     1. **Cluster** - control plane, OIDC provider, secrets encryption, VPC CNI, kube-proxy, Pod Identity Agent, and the AWS Load Balancer Controller IAM role
     2. **System node group** - a small managed node group that gives system workloads somewhere to run
-    3. **Add-ons** - CoreDNS and the optional EBS CSI driver, installed only after compute exists so they start healthy
-    4. **Optional compute** - Karpenter AWS-side resources and Fargate profiles
+    3. **CoreDNS** - installed only after compute exists so it starts healthy
+    4. **Optional compute** - additional managed node groups and Fargate profiles
 
-    This module talks only to the AWS API, so it provisions in a single apply. In-cluster installs (the Karpenter controller and default NodePool) are handled by the separate **EKS Cluster Components** module.
+    This module talks only to the AWS API, so it provisions in a single apply. Optional extensions - Karpenter autoscaling, the EBS CSI driver, and Container Insights - are added by the separate **EKS Add-ons** module, so clusters only carry what they use.
 
     Terraform source: [flightcontrolhq/modules/compute/eks](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks)
 
@@ -462,9 +419,8 @@ module:
     | Scenario                          | EKS cluster helps by...                                          |
     | --------------------------------- | ---------------------------------------------------------------- |
     | Running Kubernetes workloads      | Providing a managed control plane and ready-to-use node group    |
-    | Autoscaling compute               | Provisioning Karpenter's IAM roles and interruption handling (pair with EKS Cluster Components) |
+    | Autoscaling, storage, observability | Pairing with the EKS Add-ons module (Karpenter, EBS CSI, Container Insights) |
     | Running serverless pods           | Creating Fargate profiles for selected namespaces                |
-    | Using persistent volumes          | Installing the EBS CSI driver with its Pod Identity role         |
     | Exposing services                 | Creating the AWS Load Balancer Controller IAM role automatically |
     | Meeting security requirements     | Encrypting secrets with KMS and keeping the API endpoint private |
 
@@ -480,7 +436,7 @@ module:
 
     ### Karpenter
 
-    Enabling Karpenter provisions the AWS-side resources it needs: controller and node IAM roles, a Pod Identity association, an instance profile, an SQS interruption queue, and EventBridge rules. The Karpenter controller itself runs inside the cluster and is installed by the **EKS Cluster Components** module, which references this cluster and adds a default NodePool/EC2NodeClass so autoscaling works out of the box.
+    This module does not create any Karpenter resources. To add Karpenter autoscaling, deploy the **EKS Add-ons** module referencing this cluster - it provisions everything Karpenter needs (IAM roles, Pod Identity association, instance profile, interruption queue, EventBridge rules) and installs the controller and a default NodePool.
 
     ### Fargate
 
@@ -490,7 +446,7 @@ module:
 
     By default the Kubernetes API server is reachable only from inside the VPC. Enable **Public endpoint access** to reach it from the internet, and restrict the allowed source ranges with **Public access CIDRs**.
 
-    A **Ravion Runner security group** is created by default and allowed to reach the API endpoint on port 443. Attach it to the Ravion execution environment used by modules that talk to the Kubernetes API (such as **EKS Cluster Components**) so their pipeline runs can reach a private endpoint. Its ID is available as the `ravion_runner_security_group_id` stack output.
+    A **Ravion Runner security group** is created by default and allowed to reach the API endpoint on port 443. Attach it to the Ravion execution environment used by modules that talk to the Kubernetes API (such as **EKS Add-ons** with Karpenter enabled) so their pipeline runs can reach a private endpoint. Its ID is available as the `ravion_runner_security_group_id` stack output.
 
     ## Cluster access
 
@@ -500,7 +456,7 @@ module:
 
     Control plane logs (API server, audit, and authenticator by default) are shipped to CloudWatch Logs and shown on the module's Logs tab. Adjust the log types and retention in the Observability section.
 
-    The CloudWatch Observability add-on (Container Insights) is installed by default. It collects node, pod, and container metrics into CloudWatch and ships container logs (application and data plane) to CloudWatch Logs; both are shown on the module's Metrics and Logs tabs. Control plane health metrics (API server requests and errors, pending pods, etcd database size) are published by EKS automatically at no cost and appear on the Metrics tab regardless of this setting. Disabling Container Insights reduces CloudWatch costs but empties the node and pod charts and the container log tabs.
+    Container Insights (node, pod, and container metrics plus application/data plane logs) is installed through the **EKS Add-ons** module; once enabled there, its data populates this module's Metrics and Logs tabs. Control plane health metrics (API server requests and errors, pending pods, etcd database size) are published by EKS automatically at no cost and appear on the Metrics tab regardless.
 
     ## Configuration
 
@@ -516,19 +472,16 @@ module:
     | Ravion Runner security group | No | `true`               | Security group allowed to reach the API endpoint       |
     | System node group      | No       | 2-4 `t3.medium`      | Instance types, capacity type, size bounds, disk size  |
     | Additional node groups | No       | -                    | Extra managed node groups keyed by name                |
-    | EBS CSI driver         | No       | `false`              | Install the EBS CSI add-on and Pod Identity role       |
-    | Karpenter              | No       | `false`              | Provision Karpenter's AWS-side IAM and interruption resources |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
     | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
     | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |
-    | Container Insights     | No       | `true`               | CloudWatch Observability add-on for metrics and container logs |
     | Tags                   | No       | Ravion defaults      | Custom tags applied to all resources                   |
 
     ## Design decisions
 
     This module follows AWS EKS production patterns:
 
-    - **Ordered provisioning:** CoreDNS and the EBS CSI driver are installed only after the system node group exists, avoiding the add-on deadlock that occurs on clusters without compute
+    - **Ordered provisioning:** CoreDNS is installed only after the system node group exists, avoiding the add-on deadlock that occurs on clusters without compute
     - **Private by default:** the API endpoint is private unless public access is explicitly enabled
     - **Encrypted secrets:** Kubernetes secrets are envelope-encrypted with KMS by default
     - **Deletion protection on:** the cluster cannot be deleted until protection is turned off, preventing accidental destroys

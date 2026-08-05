@@ -1,18 +1,20 @@
 ################################################################################
-# Karpenter (optional)
+# Karpenter AWS-side resources (optional add-on)
+#
+# Everything Karpenter needs outside the cluster: controller IAM role and Pod
+# Identity association, node IAM role + instance profile + EKS access entry,
+# SQS interruption queue, and EventBridge interruption rules. The Helm-side
+# install lives in karpenter.tf.
 ################################################################################
 
 module "karpenter" {
   source = "./modules/eks_karpenter"
   count  = var.karpenter_enabled ? 1 : 0
 
-  depends_on = [module.addons]
-
-  # Resolved at the root so managed policy ARNs stay known at plan time; the
-  # module-level depends_on above defers the submodule's own data sources.
+  # Resolved at the root so managed policy ARNs stay known at plan time.
   partition = data.aws_partition.current.partition
 
-  cluster_name = module.cluster.cluster_name
+  cluster_name = var.cluster_name
 
   controller_namespace       = var.karpenter_controller_namespace
   controller_service_account = var.karpenter_controller_service_account
@@ -24,10 +26,3 @@ module "karpenter" {
 
   tags = local.tags
 }
-
-################################################################################
-# Karpenter controller and default NodePool (Helm) are intentionally NOT
-# installed by this stack — see compute/eks/components. Keeping this stack
-# pure AWS API means it provisions in a single apply with no connectivity to
-# the cluster's Kubernetes endpoint.
-################################################################################

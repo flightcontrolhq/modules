@@ -4,7 +4,7 @@
 
 variable "cluster_name" {
   type        = string
-  description = "Name of the existing EKS cluster to install components onto."
+  description = "Name of the existing EKS cluster to install add-ons onto."
 
   validation {
     condition     = can(regex("^[0-9A-Za-z][A-Za-z0-9-_]{0,99}$", var.cluster_name))
@@ -25,21 +25,77 @@ variable "tags" {
 }
 
 ################################################################################
-# Karpenter Controller
+# EBS CSI Driver
 ################################################################################
+
+variable "ebs_csi_driver_enabled" {
+  type        = bool
+  description = "Install the aws-ebs-csi-driver add-on and create its Pod Identity role so workloads can use EBS-backed persistent volumes."
+  default     = false
+}
+
+variable "ebs_csi_addon_version" {
+  type        = string
+  description = "Pinned version for the aws-ebs-csi-driver add-on. When null, AWS resolves the most recent compatible version."
+  default     = null
+}
+
+variable "ebs_csi_addon_configuration_values" {
+  type        = string
+  description = "JSON string of add-on configuration overrides for aws-ebs-csi-driver."
+  default     = null
+}
+
+################################################################################
+# CloudWatch Observability (Container Insights)
+################################################################################
+
+variable "cloudwatch_observability_enabled" {
+  type        = bool
+  description = "Install the amazon-cloudwatch-observability add-on (Container Insights) and create its Pod Identity role. Collects node, pod, and container metrics and ships container logs to CloudWatch."
+  default     = true
+}
+
+variable "cloudwatch_observability_addon_version" {
+  type        = string
+  description = "Pinned version for the amazon-cloudwatch-observability add-on. When null, AWS resolves the most recent compatible version."
+  default     = null
+}
+
+variable "cloudwatch_observability_addon_configuration_values" {
+  type        = string
+  description = "JSON string of add-on configuration overrides for amazon-cloudwatch-observability."
+  default     = null
+}
+
+################################################################################
+# Karpenter
+################################################################################
+
+variable "karpenter_enabled" {
+  type        = bool
+  description = "Install Karpenter end to end: controller and node IAM roles, Pod Identity association, instance profile, interruption queue, EventBridge rules, the controller Helm charts, and (optionally) a default NodePool."
+  default     = true
+}
 
 variable "karpenter_controller_namespace" {
   type        = string
-  description = "Kubernetes namespace where the Karpenter controller is installed. Must match the Pod Identity association created by the compute/eks stack."
+  description = "Kubernetes namespace where the Karpenter controller is installed."
   default     = "kube-system"
   nullable    = false
 }
 
 variable "karpenter_controller_service_account" {
   type        = string
-  description = "Kubernetes service account name for the Karpenter controller. Must match the Pod Identity association created by the compute/eks stack."
+  description = "Kubernetes service account name for the Karpenter controller."
   default     = "karpenter"
   nullable    = false
+}
+
+variable "karpenter_node_role_additional_managed_policy_arns" {
+  type        = list(string)
+  description = "Extra managed policy ARNs to attach to the Karpenter-launched node role."
+  default     = []
 }
 
 variable "karpenter_chart_version" {
@@ -56,7 +112,14 @@ variable "karpenter_chart_version" {
 
 variable "karpenter_interruption_queue_name" {
   type        = string
-  description = "Name of the SQS interruption queue created by the compute/eks stack (karpenter_interruption_queue_name output)."
+  description = "Name for the SQS interruption queue. When null, defaults to 'karpenter-<cluster_name>'."
+  default     = null
+}
+
+variable "karpenter_interruption_queue_message_retention_seconds" {
+  type        = number
+  description = "Message retention for the Karpenter interruption queue."
+  default     = 300
 }
 
 variable "karpenter_helm_values" {
@@ -75,28 +138,35 @@ variable "karpenter_default_node_pool_enabled" {
   default     = true
 }
 
-variable "karpenter_node_instance_profile_name" {
-  type        = string
-  description = "IAM instance profile for Karpenter-launched nodes, created by the compute/eks stack (karpenter_node_instance_profile_name output)."
-}
-
 variable "node_subnet_ids" {
   type        = list(string)
-  description = "Subnet IDs the default NodePool launches nodes into (node_subnet_ids output of the compute/eks stack)."
+  description = "Subnet IDs the default NodePool launches nodes into (node_subnet_ids output of the compute/eks stack). Required when Karpenter and the default NodePool are enabled."
+  default     = null
 
   validation {
-    condition     = length(var.node_subnet_ids) >= 1 && alltrue([for s in var.node_subnet_ids : can(regex("^subnet-", s))])
-    error_message = "At least one subnet ID starting with 'subnet-' is required."
+    condition     = var.node_subnet_ids == null || alltrue([for s in coalesce(var.node_subnet_ids, []) : can(regex("^subnet-", s))])
+    error_message = "All node_subnet_ids must start with 'subnet-'."
+  }
+
+  validation {
+    condition     = !(var.karpenter_enabled && var.karpenter_default_node_pool_enabled) || (var.node_subnet_ids != null && length(coalesce(var.node_subnet_ids, [])) >= 1)
+    error_message = "node_subnet_ids is required when karpenter_enabled and karpenter_default_node_pool_enabled are true."
   }
 }
 
 variable "cluster_security_group_id" {
   type        = string
-  description = "EKS-managed cluster security group attached to Karpenter-launched nodes (cluster_security_group_id output of the compute/eks stack)."
+  description = "EKS-managed cluster security group attached to Karpenter-launched nodes (cluster_security_group_id output of the compute/eks stack). Required when Karpenter and the default NodePool are enabled."
+  default     = null
 
   validation {
-    condition     = can(regex("^sg-", var.cluster_security_group_id))
+    condition     = var.cluster_security_group_id == null || can(regex("^sg-", var.cluster_security_group_id))
     error_message = "The cluster_security_group_id must be a valid security group ID starting with 'sg-'."
+  }
+
+  validation {
+    condition     = !(var.karpenter_enabled && var.karpenter_default_node_pool_enabled) || var.cluster_security_group_id != null
+    error_message = "cluster_security_group_id is required when karpenter_enabled and karpenter_default_node_pool_enabled are true."
   }
 }
 

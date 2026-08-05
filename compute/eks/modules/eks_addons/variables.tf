@@ -18,17 +18,6 @@ variable "tags" {
   default     = {}
 }
 
-variable "partition" {
-  type        = string
-  description = "AWS partition (e.g. 'aws', 'aws-us-gov') used to build managed policy ARNs. Pass this from the calling module when this module is instantiated with depends_on, so policy ARNs are known at plan time; when null, it is resolved via a data source."
-  default     = null
-
-  validation {
-    condition     = var.partition == null || can(regex("^aws", var.partition))
-    error_message = "The partition must be a valid AWS partition name (e.g. 'aws', 'aws-us-gov', 'aws-cn')."
-  }
-}
-
 ################################################################################
 # Add-ons
 ################################################################################
@@ -42,41 +31,5 @@ variable "coredns_addon_version" {
 variable "coredns_addon_configuration_values" {
   type        = string
   description = "JSON string of add-on configuration overrides for coredns."
-  default     = null
-}
-
-variable "ebs_csi_driver_enabled" {
-  type        = bool
-  description = "Install the aws-ebs-csi-driver add-on and create its Pod Identity role."
-  default     = false
-}
-
-variable "ebs_csi_addon_version" {
-  type        = string
-  description = "Pinned version for the aws-ebs-csi-driver add-on. When null, AWS resolves the most recent compatible version."
-  default     = null
-}
-
-variable "ebs_csi_addon_configuration_values" {
-  type        = string
-  description = "JSON string of add-on configuration overrides for aws-ebs-csi-driver."
-  default     = null
-}
-
-variable "cloudwatch_observability_enabled" {
-  type        = bool
-  description = "Install the amazon-cloudwatch-observability add-on (Container Insights) and create its Pod Identity role. Collects node, pod, and container metrics and ships container logs to CloudWatch."
-  default     = true
-}
-
-variable "cloudwatch_observability_addon_version" {
-  type        = string
-  description = "Pinned version for the amazon-cloudwatch-observability add-on. When null, AWS resolves the most recent compatible version."
-  default     = null
-}
-
-variable "cloudwatch_observability_addon_configuration_values" {
-  type        = string
-  description = "JSON string of add-on configuration overrides for amazon-cloudwatch-observability."
   default     = null
 }

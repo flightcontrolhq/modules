@@ -12,7 +12,7 @@
 ################################################################################
 
 module "node_role" {
-  source = "../../../../security/iam"
+  source = "../../../../../security/iam"
 
   name        = "${var.cluster_name}-karpenter-node"
   description = "Karpenter-launched node IAM role for ${var.cluster_name}"

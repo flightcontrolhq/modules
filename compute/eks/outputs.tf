@@ -57,7 +57,7 @@ output "cluster_security_group_id" {
 }
 
 output "node_subnet_ids" {
-  description = "Subnet IDs used for node placement (node_subnet_ids, falling back to subnet_ids). Consumed by compute/eks/components for the default Karpenter NodePool."
+  description = "Subnet IDs used for node placement (node_subnet_ids, falling back to subnet_ids). Consumed by compute/eks/addons for the default Karpenter NodePool."
   value       = local.node_subnet_ids
 }
 
@@ -74,16 +74,6 @@ output "secrets_kms_key_arn" {
 output "lb_controller_role_arn" {
   description = "ARN of the AWS Load Balancer Controller Pod Identity role (null if disabled)."
   value       = module.cluster.lb_controller_role_arn
-}
-
-output "ebs_csi_role_arn" {
-  description = "ARN of the EBS CSI driver Pod Identity role (null if disabled)."
-  value       = module.addons.ebs_csi_role_arn
-}
-
-output "cloudwatch_observability_role_arn" {
-  description = "ARN of the CloudWatch Observability add-on Pod Identity role (null if disabled)."
-  value       = module.addons.cloudwatch_observability_role_arn
 }
 
 ################################################################################
@@ -103,30 +93,6 @@ output "system_node_group_arn" {
 output "additional_node_group_names" {
   description = "Map of additional node group key -> node group name."
   value       = { for k, m in module.node_groups : k => m.node_group_name }
-}
-
-################################################################################
-# Karpenter (null when disabled)
-################################################################################
-
-output "karpenter_controller_role_arn" {
-  description = "ARN of the Karpenter controller IAM role (null when karpenter_enabled is false)."
-  value       = var.karpenter_enabled ? module.karpenter[0].controller_role_arn : null
-}
-
-output "karpenter_node_role_arn" {
-  description = "ARN of the IAM role attached to Karpenter-launched nodes (null when karpenter_enabled is false)."
-  value       = var.karpenter_enabled ? module.karpenter[0].node_role_arn : null
-}
-
-output "karpenter_node_instance_profile_name" {
-  description = "Instance profile name for Karpenter EC2NodeClass (null when karpenter_enabled is false)."
-  value       = var.karpenter_enabled ? module.karpenter[0].node_instance_profile_name : null
-}
-
-output "karpenter_interruption_queue_name" {
-  description = "Name of the SQS interruption queue (null when karpenter_enabled is false)."
-  value       = var.karpenter_enabled ? module.karpenter[0].interruption_queue_name : null
 }
 
 ################################################################################

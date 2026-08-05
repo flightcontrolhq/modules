@@ -7,7 +7,7 @@
 ################################################################################
 
 module "controller_role" {
-  source = "../../../../security/iam"
+  source = "../../../../../security/iam"
 
   name        = "${var.cluster_name}-karpenter"
   description = "Karpenter controller Pod Identity role for ${var.cluster_name}"

@@ -7,15 +7,16 @@ into a single hosting unit with enforced provisioning order:
    vpc-cni / kube-proxy / Pod Identity Agent, LB Controller role
 2. **System node group** (`modules/eks_node_group`) — required compute so
    Deployment-kind add-ons can schedule
-3. **Post-compute add-ons** (`modules/eks_addons`) — CoreDNS and optional
-   EBS CSI (deadlock without step 2)
-4. **Optional Karpenter / Fargate** (`modules/eks_karpenter`,
-   `modules/eks_fargate_profile`) — after add-ons are healthy
+3. **Post-compute add-ons** (`modules/eks_addons`) — CoreDNS
+   (deadlock without step 2)
+4. **Optional Fargate** (`modules/eks_fargate_profile`) — after add-ons are
+   healthy
 
 This stack talks only to the AWS API, so it provisions in a single apply with
-no connectivity to the cluster's Kubernetes endpoint. In-cluster installs
-(the Karpenter controller Helm charts and default NodePool) live in the
-separate [`compute/eks/components`](components/) stack.
+no connectivity to the cluster's Kubernetes endpoint. Optional extensions —
+Karpenter autoscaling, the EBS CSI driver, and Container Insights — live in
+the separate [`compute/eks/addons`](addons/) stack as selectable add-ons, so
+clusters only carry what they use.
 
 Child modules live in `compute/eks/modules/` and are **not** independently
 published root stacks — they have no `provider` / `cloud {}` blocks. Callers
@@ -35,9 +36,6 @@ module "eks" {
 
   kubernetes_version             = "1.31"
   public_endpoint_access_enabled = true
-
-  ebs_csi_driver_enabled = true
-  karpenter_enabled      = true
 
   tags = { Environment = "prod" }
 }
@@ -87,15 +85,6 @@ module "eks" {
 | system_node_group | System managed node group config (object with optional attrs). | `object` | `{}` (defaults: name=`system`, 2/2/4 ON_DEMAND t3.medium) | no |
 | additional_node_groups | Extra node groups keyed by name. | `map(object)` | `{}` | no |
 | coredns_addon_version / coredns_addon_configuration_values | CoreDNS pin / JSON overrides. | `string` | `null` | no |
-| ebs_csi_driver_enabled | Install aws-ebs-csi-driver + Pod Identity. | `bool` | `false` | no |
-| ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
-| cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity. | `bool` | `true` | no |
-| cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
-| karpenter_enabled | Provision Karpenter AWS-side resources. | `bool` | `false` | no |
-| karpenter_controller_namespace / karpenter_controller_service_account | Karpenter SA location. | `string` | `"kube-system"` / `"karpenter"` | no |
-| karpenter_node_role_additional_managed_policy_arns | Extra policies on Karpenter node role. | `list(string)` | `[]` | no |
-| karpenter_interruption_queue_name | Override interruption queue name. | `string` | `null` | no |
-| karpenter_interruption_queue_message_retention_seconds | Interruption queue retention. | `number` | `300` | no |
 | fargate_profiles | Fargate profiles keyed by name (`selectors` required). | `map(object)` | `{}` | no |
 
 ## Outputs
@@ -109,26 +98,21 @@ module "eks" {
 | region / aws_account_id | Deployment location. |
 | oidc_issuer_url / oidc_provider_arn | IRSA wiring. |
 | cluster_security_group_id | EKS-managed cluster security group. |
-| node_subnet_ids | Subnets used for node placement (consumed by `components`). |
+| node_subnet_ids | Subnets used for node placement (consumed by `addons`). |
 | ravion_runner_security_group_id | Ravion Runner SG allowed to reach the API endpoint (null if disabled). |
 | secrets_kms_key_arn | Secrets KMS key (null if disabled). |
 | lb_controller_role_arn | LB Controller Pod Identity role. |
-| ebs_csi_role_arn | EBS CSI Pod Identity role (null if disabled). |
-| cloudwatch_observability_role_arn | CloudWatch Observability Pod Identity role (null if disabled). |
 | system_node_group_name / system_node_group_arn | System node group identifiers. |
 | additional_node_group_names | Map of additional node group key -> name. |
-| karpenter_controller_role_arn / karpenter_node_role_arn / karpenter_node_instance_profile_name / karpenter_interruption_queue_name | Karpenter outputs (null when disabled). |
 | fargate_profile_names | Map of Fargate profile key -> name. |
 
 ## Notes
 
-- Ordering is intentional: CoreDNS and the EBS CSI controller are Deployments and
-  hang `DEGRADED` for ~20 minutes when no compute exists. The composite
-  `depends_on` chain prevents that deadlock.
-- `karpenter_enabled` provisions only the AWS-side resources (controller and
-  node IAM roles, Pod Identity association, instance profile, interruption
-  queue, EventBridge rules). The controller itself is installed by the
-  [`compute/eks/components`](components/) stack, which is the only piece that
-  needs Kubernetes API connectivity.
+- Ordering is intentional: CoreDNS is a Deployment and hangs `DEGRADED` for
+  ~20 minutes when no compute exists. The composite `depends_on` chain
+  prevents that deadlock.
+- This module creates no optional add-ons. Karpenter autoscaling, the EBS CSI
+  driver, and Container Insights are selectable toggles on the
+  [`compute/eks/addons`](addons/) stack, deployed against this cluster.
 - Nested modules under `modules/` are internal implementation details of this
   composite — do not instantiate them as separate root stacks.
