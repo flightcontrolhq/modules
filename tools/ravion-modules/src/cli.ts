@@ -11,6 +11,7 @@ import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from
 import { runMigrationGuardrails } from "./guardrails.js";
 import { selectLocalDevSourceRef } from "./local-dev-source-ref.js";
 import { createDefaultRavionApiClient, dryRunModuleVersions, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
+import { syncReadme } from "./readme.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags, pushPlannedTags } from "./tags.js";
 
@@ -129,6 +130,14 @@ if (command === "validate") {
       `Module version dry-run validation failed for ${failures.length} definition${failures.length === 1 ? "" : "s"}:\n${failures.map((result) => `- ${result.type}@${result.version}: ${result.message}`).join("\n")}`,
     );
   }
+} else if (command === "readme") {
+  const rootPath = getRootArg(args);
+  const check = args.includes("--check");
+  const result = await syncReadme({ rootPath, write: !check });
+  console.log(JSON.stringify({ readmePath: result.readmePath, changed: result.changed, mode: check ? "check" : "write" }, null, 2));
+  if (check && result.changed) {
+    throw new Error("README module definitions table is out of date. Run `node tools/ravion-modules/dist/src/cli.js readme` and commit the result.");
+  }
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
   if (!inventoryPath) {
@@ -177,7 +186,7 @@ if (command === "validate") {
   await writeFile(outputPath, stringifyYaml(authoringDefinition));
   console.log(JSON.stringify({ sourceType, targetType, outputPath, version: version.version }, null, 2));
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|version-dry-run|generate-definitions|pull-definition> <*-definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|version-dry-run|readme|generate-definitions|pull-definition> <*-definition.yml...>");
   process.exitCode = 1;
 }
 }
