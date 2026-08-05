@@ -109,22 +109,6 @@ module:
       show_when:
         karpenter_enabled: true
       type: boolean
-    - description: Turns Kubernetes Ingress resources into Application Load Balancers and LoadBalancer Services into NLBs. Uses the Pod Identity role created by the EKS Cluster module. Requires Kubernetes API connectivity from the Terraform runner.
-      id: section_lb_controller
-      label: Load balancer controller
-      type: section
-    - default: true
-      id: lb_controller_enabled
-      label: Load balancer controller
-      type: boolean
-    - collapsible: true
-      description: Version of the aws-load-balancer-controller Helm chart to install.
-      id: lb_controller_chart_version
-      label: Chart version
-      placeholder: 1.14.0
-      show_when:
-        lb_controller_enabled: true
-      type: string
     - description: EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role.
       id: section_ebs_csi
       label: EBS CSI driver
@@ -157,13 +141,24 @@ module:
       show_when:
         cloudwatch_observability_enabled: true
       type: string
-    - description: Creates an internet-facing Application Load Balancer that web workloads attach to via the load balancer controller's TargetGroupBinding, for traffic from the public internet such as websites, public APIs, and webhook endpoints.
-      id: section_public_alb
-      label: Public application load balancer
+    - description: The AWS Load Balancer Controller is installed automatically when any load balancer below is enabled - it registers workload pods into the load balancer target groups (TargetGroupBinding), using the Pod Identity role created by the EKS Cluster module, and requires Kubernetes API connectivity from the Terraform runner. To install it without any shared load balancer (e.g. to provision ALBs/NLBs directly from Ingress and LoadBalancer resources), set lb_controller_enabled to true in Advanced Terraform variables.
+      id: section_lb_controller
+      label: Load balancer controller
+      type: section
+    - collapsible: true
+      description: Version of the aws-load-balancer-controller Helm chart to install.
+      id: lb_controller_chart_version
+      label: Chart version
+      placeholder: 1.14.0
+      type: string
+    - description: Application Load Balancers that web workloads attach to via the load balancer controller's TargetGroupBinding. Use these for HTTP/HTTPS traffic - websites, APIs, and webhook endpoints.
+      id: section_alb
+      label: Application load balancers
       type: section
     - default: false
+      description: Create an internet-facing Application Load Balancer for traffic from the public internet.
       id: public_alb_enabled
-      label: Public load balancer
+      label: Public ALB
       type: boolean
     - default: true
       description: Enable HTTPS listener on the public ALB.
@@ -227,13 +222,10 @@ module:
         public_alb_enabled: true
         public_alb_access_logs_enabled: true
       type: string
-    - description: Creates an internal Application Load Balancer for workloads that should only be reachable inside the VPC or private network, such as internal APIs, admin tools, and service-to-service traffic.
-      id: section_private_alb
-      label: Private application load balancer
-      type: section
     - default: false
+      description: Create an internal Application Load Balancer reachable only inside the VPC, for internal APIs, admin tools, and service-to-service traffic.
       id: private_alb_enabled
-      label: Private load balancer
+      label: Private ALB
       type: boolean
     - default: false
       description: Enable HTTPS listener on the private ALB.
@@ -316,7 +308,7 @@ module:
         private_alb_enabled: true
         private_alb_access_logs_enabled: true
       type: string
-    - description: Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer the Application Load Balancer sections above.
+    - description: Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer the Application Load Balancers section above.
       id: section_nlb
       label: Network load balancers
       type: section
@@ -460,7 +452,6 @@ module:
         node_subnet_ids: << module.input.node_subnet_ids >>
         cluster_security_group_id: << module.input.cluster_security_group_id >>
         ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
-        lb_controller_enabled: << module.input.lb_controller_enabled >>
         lb_controller_chart_version: << module.input.lb_controller_chart_version || "1.14.0" >>
         ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
         ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
@@ -522,7 +513,7 @@ module:
     | Add-on | Default | What it provides |
     | ------ | ------- | ---------------- |
     | **Karpenter** | On | Just-in-time node autoscaling: controller and node IAM roles, Pod Identity association, instance profile, SQS interruption queue, EventBridge rules, the controller Helm charts, and an optional default NodePool |
-    | **Load balancer controller** | On | Ingress resources become ALBs and LoadBalancer Services become NLBs, via the AWS Load Balancer Controller Helm chart wired to the cluster module's Pod Identity role |
+    | **Load balancer controller** | With load balancers | Installed automatically when any shared load balancer is enabled; registers workload pods into their target groups (TargetGroupBinding) via the AWS Load Balancer Controller Helm chart wired to the cluster module's Pod Identity role. Opt in without shared load balancers via advanced Terraform variables to provision ALBs/NLBs directly from Ingress and LoadBalancer resources |
     | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
     | **Container Insights** | On | Node, pod, and container metrics plus application/data plane logs via the amazon-cloudwatch-observability EKS add-on; populates the cluster module's Metrics and Logs tabs |
     | **Shared load balancers** | Off | Terraform-managed public/private ALBs and NLBs that web workloads attach to via the load balancer controller's TargetGroupBinding — the same shared-LB pattern the ECS Cluster module uses |
@@ -536,14 +527,14 @@ module:
     - Public load balancers require **public subnet IDs**, inherited from the cluster reference (set them on the EKS Cluster module, where they flow in from its network reference).
     - Private load balancers are placed in the cluster's node subnets.
     - Each load balancer's security group is automatically allowed to reach pods through the EKS cluster security group (all TCP ports).
-    - Using `TargetGroupBinding` requires the **load balancer controller** add-on to be enabled.
+    - Because `TargetGroupBinding` depends on the controller, enabling any load balancer automatically installs the **load balancer controller** - there is nothing extra to configure.
 
     Terraform source: [flightcontrolhq/modules/compute/eks/addons](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks/addons)
 
     ## Prerequisites
 
     - An **EKS Cluster** module.
-    - When a Helm-installed add-on (**Karpenter** or the **load balancer controller**) is enabled: a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
+    - When a Helm-installed add-on runs (**Karpenter**, or any **shared load balancer** - which installs the **load balancer controller**): a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
     The Helm installs authenticate by assuming the cluster's **Ravion Runner role** (inherited automatically from the cluster reference) — a stable IAM role the EKS Cluster module registers as an access entry with cluster-admin. Per-run pipeline roles never appear in the cluster's access configuration.
 
@@ -557,11 +548,11 @@ module:
     | Karpenter              | No       | `true`               | Autoscaling end to end (IAM, queue, controller, NodePool) |
     | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
     | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
-    | Load balancer controller | No     | `true`               | AWS Load Balancer Controller chart (Ingress → ALB)     |
+    | Controller chart version | No     | `1.14.0`             | aws-load-balancer-controller Helm chart version (controller installed automatically with any load balancer) |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
     | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
-    | Public load balancer   | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
-    | Private load balancer  | No       | `false`              | Shared internal ALB                                    |
+    | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
+    | Private ALB            | No       | `false`              | Shared internal ALB                                    |
     | Public / private NLB   | No       | `false`              | Shared Network Load Balancers for TCP/UDP workloads    |
     | Load balancer deletion protection | No | `true`         | Prevent accidental deletion of the shared load balancers |
     | Tags                   | No       | Ravion defaults      | Tags on created resources and Karpenter-launched instances |

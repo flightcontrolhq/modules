@@ -5,14 +5,14 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | Add-on | Toggle | Default | What it creates |
 |---|---|---|---|
 | **Karpenter** | `karpenter_enabled` | `true` | Controller + node IAM roles, Pod Identity association, instance profile, EKS access entry, SQS interruption queue, EventBridge rules (via `modules/eks_karpenter`), plus the `karpenter-crd` and `karpenter` Helm charts and an optional default NodePool |
-| **AWS Load Balancer Controller** | `lb_controller_enabled` | `true` | `aws-load-balancer-controller` Helm chart wired to the Pod Identity role created by the `compute/eks` composite; Ingress → ALB, LoadBalancer Service → NLB |
+| **AWS Load Balancer Controller** | automatic with any load balancer, or `lb_controller_enabled` opt-in | `false` | `aws-load-balancer-controller` Helm chart wired to the Pod Identity role created by the `compute/eks` composite; registers workload pods into shared load balancer target groups (`TargetGroupBinding`); Ingress → ALB, LoadBalancer Service → NLB |
 | **EBS CSI driver** | `ebs_csi_driver_enabled` | `false` | `aws-ebs-csi-driver` EKS add-on + Pod Identity role |
 | **Container Insights** | `cloudwatch_observability_enabled` | `true` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit) |
 | **Shared load balancers** | `public_alb_enabled`, `private_alb_enabled`, `public_nlb_enabled`, `private_nlb_enabled` | `false` | Terraform-managed ALBs/NLBs (via `networking/alb` and `networking/nlb`) that workloads attach to with the load balancer controller's `TargetGroupBinding` CRD, plus cluster security group ingress rules allowing each load balancer to reach pods |
 
 The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter and the AWS Load Balancer Controller additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
 
-> **Connectivity contract (Helm add-ons only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled` and `lb_controller_enabled` both false, no cluster connectivity is needed.
+> **Connectivity contract (Helm add-ons only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled`, `lb_controller_enabled`, and all four load balancer toggles off, no cluster connectivity is needed.
 >
 > **Authentication:** set `ravion_runner_role_arn` to the cluster's Ravion Runner role (`ravion_runner_role_arn` output of `compute/eks`) and `aws eks get-token` assumes it — the cluster module registers that role as an EKS access entry with cluster-admin, so per-run pipeline roles never need their own access entries. When null, the identity running Terraform is used directly and must already have cluster access.
 
@@ -42,7 +42,7 @@ module "eks_addons" {
 
 ### Shared load balancers
 
-The shared load balancers mirror the ECS Cluster module's pattern: one Terraform-managed ALB (or NLB) is shared by many workloads. A workload module creates its own target group and listener rule, then registers pods with the target group in-cluster via the AWS Load Balancer Controller's [`TargetGroupBinding`](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/targetgroupbinding/targetgroupbinding/) CRD — so `lb_controller_enabled` must stay on for workloads to use them.
+The shared load balancers mirror the ECS Cluster module's pattern: one Terraform-managed ALB (or NLB) is shared by many workloads. A workload module creates its own target group and listener rule, then registers pods with the target group in-cluster via the AWS Load Balancer Controller's [`TargetGroupBinding`](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/targetgroupbinding/targetgroupbinding/) CRD — enabling any load balancer therefore installs the controller automatically.
 
 Placement and security wiring:
 
@@ -67,7 +67,7 @@ Placement and security wiring:
 | tags | Tags applied to created resources and Karpenter-launched instances. | `map(string)` | `{}` | no |
 | karpenter_enabled | Install Karpenter end to end. | `bool` | `true` | no |
 | ravion_runner_role_arn | IAM role assumed by `aws eks get-token` for Kubernetes API authentication. | `string` | `null` | no |
-| lb_controller_enabled | Install the AWS Load Balancer Controller Helm chart. | `bool` | `true` | no |
+| lb_controller_enabled | Install the AWS Load Balancer Controller without any shared load balancer (it installs automatically with one). | `bool` | `false` | no |
 | lb_controller_chart_version | aws-load-balancer-controller chart version. | `string` | `"1.14.0"` | no |
 | lb_controller_namespace / lb_controller_service_account | Must match the Pod Identity association from `compute/eks`. | `string` | `"kube-system"` / `"aws-load-balancer-controller"` | no |
 | lb_controller_helm_values | Extra YAML docs merged into the chart values. | `list(string)` | `[]` | no |

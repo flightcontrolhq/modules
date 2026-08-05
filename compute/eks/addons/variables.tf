@@ -30,8 +30,8 @@ variable "tags" {
 
 variable "lb_controller_enabled" {
   type        = bool
-  description = "Install the AWS Load Balancer Controller Helm chart so Ingress resources provision ALBs and LoadBalancer Services provision NLBs. Uses the Pod Identity role created by the compute/eks stack (enabled there by default)."
-  default     = true
+  description = "Install the AWS Load Balancer Controller even when no shared load balancer is enabled, e.g. to provision ALBs/NLBs directly from Ingress and LoadBalancer resources. The controller is installed automatically whenever any shared load balancer is enabled, since workload target registration (TargetGroupBinding) depends on it."
+  default     = false
 }
 
 variable "lb_controller_chart_version" {
