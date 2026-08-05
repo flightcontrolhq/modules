@@ -11,6 +11,8 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter additionally installs Helm charts, which is the only part that needs Kubernetes API connectivity.
 
 > **Connectivity contract (Karpenter only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled = false`, no cluster connectivity is needed.
+>
+> **Authentication:** the stack self-registers the IAM role running Terraform as an EKS access entry with cluster-admin (resolved at apply time, so ephemeral per-run pipeline roles work). Disable with `terraform_runner_access_entry_enabled = false` if the role already has cluster access — for example, when it is the identity that created the cluster.
 
 ## Usage
 
@@ -45,6 +47,7 @@ module "eks_addons" {
 | region | AWS region. When null, the provider's configured region is used. | `string` | `null` | no |
 | tags | Tags applied to created resources and Karpenter-launched instances. | `map(string)` | `{}` | no |
 | karpenter_enabled | Install Karpenter end to end. | `bool` | `true` | no |
+| terraform_runner_access_entry_enabled | Self-register the Terraform runner role as cluster-admin for Helm authentication (Karpenter only). | `bool` | `true` | no |
 | karpenter_controller_namespace | Namespace for the controller and its Pod Identity association. | `string` | `"kube-system"` | no |
 | karpenter_controller_service_account | Service account for the controller and its Pod Identity association. | `string` | `"karpenter"` | no |
 | karpenter_chart_version | Karpenter (and karpenter-crd) chart version. | `string` | `"1.14.0"` | no |

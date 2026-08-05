@@ -78,6 +78,12 @@ variable "karpenter_enabled" {
   default     = true
 }
 
+variable "terraform_runner_access_entry_enabled" {
+  type        = bool
+  description = "Create an EKS access entry granting the IAM role running Terraform cluster-admin so the Helm releases can authenticate. Only used when Karpenter is enabled. Disable if the runner role already has cluster access (e.g. it created the cluster)."
+  default     = true
+}
+
 variable "karpenter_controller_namespace" {
   type        = string
   description = "Kubernetes namespace where the Karpenter controller is installed."

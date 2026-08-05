@@ -173,6 +173,8 @@ module:
     - An **EKS Cluster** module.
     - When **Karpenter** is enabled: a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
+    When Karpenter is enabled, the stack automatically registers the pipeline's IAM role as an EKS access entry with cluster-admin so the Helm installs can authenticate; the role is resolved at apply time, so per-run pipeline roles work without manual access configuration.
+
     ## Configuration
 
     | Field                  | Required | Default              | Description                                            |

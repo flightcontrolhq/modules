@@ -17,6 +17,10 @@ resource "helm_release" "karpenter_crd" {
   version    = var.karpenter_chart_version
 
   create_namespace = true
+
+  # The runner's access entry must exist or the Kubernetes API rejects the
+  # token from `aws eks get-token` with a credentials error.
+  depends_on = [aws_eks_access_policy_association.terraform_runner_admin]
 }
 
 resource "helm_release" "karpenter" {
