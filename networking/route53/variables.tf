@@ -178,6 +178,57 @@ variable "records" {
   }
 
   validation {
+    condition = alltrue(flatten([
+      for v in var.records : [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+          ) : [
+          # ASCII TXT and SPF values are split into 255-byte quoted strings by the module,
+          # so only quoted values and values the module passes through are checked here.
+          # base64 encoding is used to measure bytes rather than Unicode characters:
+          # a base64 string of at most 340 characters encodes at most 255 bytes.
+          for chunk in(
+            strcontains(value, "\"") ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] :
+            contains(["TXT", "SPF"], v.type) && can(regex("^[[:ascii:]]*$", value)) ? [] : [value]
+          ) : length(base64encode(chunk)) <= 340
+        ]
+      ]
+    ]))
+    error_message = "Each DNS record value must be at most 255 bytes per character string, which is the Route 53 limit. TXT and SPF values that use only ASCII characters are split automatically; otherwise, split the value into quoted strings of at most 255 bytes each, for example \"first-part\" \"second-part\"."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for v in var.records : [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+          # A value that uses quotes must be a complete sequence of quoted strings, so no
+          # unquoted text is silently passed through to Route 53 unchecked.
+        ) : !strcontains(value, "\"") || can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
+      ]
+    ]))
+    error_message = "A DNS record value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
+      sum(concat([0], [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+        ) : length(base64encode(value)) / 4 * 3 + 1
+      ])) <= 65535
+    ])
+    error_message = "The combined size of all values for a single DNS record must not exceed 65535 bytes, which is the Route 53 limit on the total record data size."
+  }
+
+  validation {
     condition = alltrue([
       for v in var.records :
       (
