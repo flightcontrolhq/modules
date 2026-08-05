@@ -114,6 +114,20 @@ resource "aws_lb_listener_rule" "alb" {
   # native traffic-shift deployments; a no-op for rolling deployments.
   lifecycle {
     ignore_changes = [action]
+
+    # Apply-time guard for the chained pair: if the listener's highest
+    # existing rule sits at 49999, the provider assigns 50000 (the ALB
+    # maximum) to the test rule and this rule's priority + 1 would fall
+    # outside the valid 1-50000 range. Fail with an actionable message
+    # instead of an opaque ELBv2 validation error.
+    precondition {
+      condition = (
+        local.green_alb_listener_rule_enabled && each.key == "0" && local.green_explicit_priority == null
+        ? aws_lb_listener_rule.test[0].priority < 50000
+        : true
+      )
+      error_message = "The green test rule was assigned priority 50000 (the ALB maximum), leaving no slot for the production rule at priority + 1. Set an explicit listener rule priority on a free slot (with the slot below it free for the test rule)."
+    }
   }
 }
 
