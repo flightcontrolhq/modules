@@ -4,12 +4,12 @@
 
 output "lb_controller_chart_version" {
   description = "Installed version of the aws-load-balancer-controller Helm chart (null if disabled)."
-  value       = var.lb_controller_enabled ? helm_release.lb_controller[0].version : null
+  value       = local.lb_controller_install ? helm_release.lb_controller[0].version : null
 }
 
 output "lb_controller_namespace" {
   description = "Namespace where the AWS Load Balancer Controller is installed (null if disabled)."
-  value       = var.lb_controller_enabled ? helm_release.lb_controller[0].namespace : null
+  value       = local.lb_controller_install ? helm_release.lb_controller[0].namespace : null
 }
 
 ################################################################################

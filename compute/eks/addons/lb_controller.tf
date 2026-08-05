@@ -8,8 +8,22 @@
 # the controller also works on nodes with restricted IMDS and on Fargate.
 ################################################################################
 
+locals {
+  # The controller is installed only when something needs it: any shared load
+  # balancer (workload modules register pods into their target groups via
+  # TargetGroupBinding, which only the controller reconciles), or an explicit
+  # lb_controller_enabled opt-in for Ingress/LoadBalancer-resource use.
+  lb_controller_install = (
+    var.lb_controller_enabled ||
+    var.public_alb_enabled ||
+    var.private_alb_enabled ||
+    var.public_nlb_enabled ||
+    var.private_nlb_enabled
+  )
+}
+
 resource "helm_release" "lb_controller" {
-  count = var.lb_controller_enabled ? 1 : 0
+  count = local.lb_controller_install ? 1 : 0
 
   name       = "aws-load-balancer-controller"
   namespace  = var.lb_controller_namespace
