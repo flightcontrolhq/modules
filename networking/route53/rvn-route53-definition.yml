@@ -162,12 +162,9 @@ module:
               description: Route an A or AAAA record to a supported AWS resource without setting a TTL.
               value: alias
         - add_button_label: Add record value
-          description: Values for a standard DNS record. Leave empty for alias records. Paste long TXT and SPF values such as DKIM keys as-is; Route 53 allows at most 255 characters per string and this module splits longer values for you.
+          description: Values for a standard DNS record. Leave empty for alias records.
           id: records
           label: Record values
-          patterns:
-            - message: Each quoted string must be at most 255 characters, and quotes must be balanced, for example "part-one" "part-two".
-              pattern: ^(?:[^"]*|(?:\s*"[^"]{0,255}"\s*)+)$
           required: true
           show_when:
             target_type:
@@ -180,9 +177,6 @@ module:
         - description: Value for a standard DNS record type that accepts exactly one value.
           id: record_value
           label: Record value
-          patterns:
-            - message: Each quoted string must be at most 255 characters, and quotes must be balanced, for example "part-one" "part-two".
-              pattern: ^(?:[^"]*|(?:\s*"[^"]{0,255}"\s*)+)$
           required: true
           show_when:
             target_type:
@@ -541,8 +535,6 @@ module:
     DNS records are configured as structured entries. Terraform derives each resource key from the record name, type, and optional set identifier. Each record includes a record name, record type, and either standard record values with a TTL or an alias target.
 
     Standard records use TTL seconds and Record values. CNAME and SOA records use a single Record value because those record types accept exactly one value. Alias targets are exposed for A and AAAA records, which is the normal pattern for routing to AWS resources such as load balancers, CloudFront distributions, API Gateway domains, and S3 website endpoints. Alias records use Alias target DNS name and Alias target hosted zone ID. The alias target hosted zone ID belongs to the AWS target resource, not this domain's hosted zone. For an ALB or NLB, use the load balancer canonical hosted zone ID. For CloudFront, use Z2FDTNDATAQYW2. Regional services such as API Gateway and S3 website endpoints have service and region-specific hosted zone IDs.
-
-    Route 53 accepts at most 255 characters per string in a record value. Paste long TXT and SPF values, such as DKIM public keys, exactly as your provider gives them to you: the module splits them into 255-character quoted strings automatically, which DNS resolvers rejoin into the original value. Values you split yourself are used as written. For record types that cannot be split, a value longer than 255 characters fails during planning with an explanation instead of failing the apply.
 
     Routing policy is optional. Use Set identifier for records that share the same name and type with weighted, failover, latency, or geolocation routing.
 
