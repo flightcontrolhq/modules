@@ -280,7 +280,7 @@ Each record supports:
 #### Long record values
 
 Route53 accepts at most 255 characters per character string in a record value, and at
-most 65535 characters across all values of a single record. `TXT` and `SPF` values are
+most 65535 bytes across all values of a single record. `TXT` and `SPF` values are
 allowed to be a sequence of quoted strings that resolvers rejoin, so this module splits
 oversized `TXT` and `SPF` values into 255-character quoted strings automatically. Pass a
 DKIM key or long SPF record exactly as your provider gives it to you:

@@ -57,7 +57,8 @@ locals {
         for value in(v.records != null ? v.records : v.record_values != null ? v.record_values : [v.record_value]) : (
           contains(local.chunked_record_types, v.type) &&
           length(value) > local.character_string_max_length &&
-          !strcontains(value, "\"")
+          !strcontains(value, "\"") &&
+          can(regex("^[[:ascii:]]*$", value))
           ) ? join(" ", [
             for i in range(ceil(length(value) / local.character_string_max_length)) :
             "\"${substr(

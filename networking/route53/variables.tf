@@ -185,16 +185,18 @@ variable "records" {
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
           ) : [
-          # TXT and SPF values are split into 255-character quoted strings by the module,
-          # so only quoted values and other record types are checked here.
+          # ASCII TXT and SPF values are split into 255-byte quoted strings by the module,
+          # so only quoted values and values the module passes through are checked here.
+          # base64 encoding is used to measure bytes rather than Unicode characters:
+          # a base64 string of at most 340 characters encodes at most 255 bytes.
           for chunk in(
-            can(regex("^\\s*\"", value)) ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] :
-            contains(["TXT", "SPF"], v.type) ? [] : [value]
-          ) : length(chunk) <= 255
+            strcontains(value, "\"") ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] :
+            contains(["TXT", "SPF"], v.type) && can(regex("^[[:ascii:]]*$", value)) ? [] : [value]
+          ) : length(base64encode(chunk)) <= 340
         ]
       ]
     ]))
-    error_message = "Each DNS record value must be at most 255 characters per character string, which is the Route 53 limit. TXT and SPF values longer than 255 characters are split automatically; for other record types, use a shorter value. If you write a value as quoted strings yourself, keep each quoted string at most 255 characters, for example \"first-part\" \"second-part\"."
+    error_message = "Each DNS record value must be at most 255 bytes per character string, which is the Route 53 limit. TXT and SPF values that use only ASCII characters are split automatically; otherwise, split the value into quoted strings of at most 255 bytes each, for example \"first-part\" \"second-part\"."
   }
 
   validation {
@@ -204,10 +206,12 @@ variable "records" {
           coalesce(v.records, []),
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
-        ) : length(regexall("\"", value)) % 2 == 0
+          # A value that uses quotes must be a complete sequence of quoted strings, so no
+          # unquoted text is silently passed through to Route 53 unchecked.
+        ) : !strcontains(value, "\"") || can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
       ]
     ]))
-    error_message = "Each DNS record value must have balanced double quotes. Quoted values must be written as one or more complete quoted strings, for example \"first-part\" \"second-part\"."
+    error_message = "A DNS record value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
   }
 
   validation {
@@ -218,10 +222,10 @@ variable "records" {
           coalesce(v.records, []),
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
-        ) : length(value) + 1
+        ) : length(base64encode(value)) / 4 * 3 + 1
       ])) <= 65535
     ])
-    error_message = "The combined length of all values for a single DNS record must not exceed 65535 characters, which is the Route 53 limit on the total record data size."
+    error_message = "The combined size of all values for a single DNS record must not exceed 65535 bytes, which is the Route 53 limit on the total record data size."
   }
 
   validation {

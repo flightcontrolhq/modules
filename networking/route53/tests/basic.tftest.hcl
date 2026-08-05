@@ -385,6 +385,42 @@ run "unbalanced_quotes_fail" {
   expect_failures = [var.records]
 }
 
+run "quoted_value_with_unquoted_text_fails" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "example.com"
+        type    = "TXT"
+        ttl     = 300
+        records = ["\"v=spf1\" include:example.net012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 ~all"]
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
+run "long_non_ascii_txt_value_fails" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "example.com"
+        type    = "TXT"
+        ttl     = 300
+        records = ["ααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααααα"]
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
 run "manually_split_long_value_succeeds" {
   command = plan
 
