@@ -141,16 +141,6 @@ module:
       show_when:
         cloudwatch_observability_enabled: true
       type: string
-    - description: The AWS Load Balancer Controller is installed automatically when any load balancer below is enabled - it registers workload pods into the load balancer target groups (TargetGroupBinding), using the Pod Identity role created by the EKS Cluster module, and requires Kubernetes API connectivity from the Terraform runner. To install it without any shared load balancer (e.g. to provision ALBs/NLBs directly from Ingress and LoadBalancer resources), set lb_controller_enabled to true in Advanced Terraform variables.
-      id: section_lb_controller
-      label: Load balancer controller
-      type: section
-    - collapsible: true
-      description: Version of the aws-load-balancer-controller Helm chart to install.
-      id: lb_controller_chart_version
-      label: Chart version
-      placeholder: 1.14.0
-      type: string
     - description: Application Load Balancers that web workloads attach to via the load balancer controller's TargetGroupBinding. Use these for HTTP/HTTPS traffic - websites, APIs, and webhook endpoints.
       id: section_alb
       label: Application load balancers
@@ -432,6 +422,12 @@ module:
       id: load_balancer_deletion_protection_enabled
       label: Load balancer deletion protection
       type: boolean
+    - collapsible: true
+      description: Version of the aws-load-balancer-controller Helm chart to install. The controller is installed automatically when any load balancer is enabled, to register workload pods into the load balancer target groups.
+      id: lb_controller_chart_version
+      label: Load balancer controller chart version
+      placeholder: 1.14.0
+      type: string
     - $include: ../../../partials/inputs/misc-section.yml
     - $include: ../../../partials/inputs/tags.yml
     - $include: ../../../partials/inputs/terraform-settings.yml
@@ -548,7 +544,7 @@ module:
     | Karpenter              | No       | `true`               | Autoscaling end to end (IAM, queue, controller, NodePool) |
     | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
     | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
-    | Controller chart version | No     | `1.14.0`             | aws-load-balancer-controller Helm chart version (controller installed automatically with any load balancer) |
+    | Load balancer controller chart version | No | `1.14.0`    | aws-load-balancer-controller Helm chart version (controller installed automatically with any load balancer) |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
     | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
     | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
