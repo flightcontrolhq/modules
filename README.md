@@ -1,6 +1,6 @@
 # Ravion Modules
 
-OpenTofu/Terraform module library for [Flightcontrol](https://www.flightcontrol.dev/).
+OpenTofu/Terraform module library for [Ravion](https://www.ravion.com/).
 
 ## Overview
 
