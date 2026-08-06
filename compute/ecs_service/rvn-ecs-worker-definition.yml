@@ -3,8 +3,8 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.3.3
-  description: Improve build source, Railpack command, and builder instance guidance.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - id: section_cluster

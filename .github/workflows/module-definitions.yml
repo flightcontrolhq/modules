@@ -44,6 +44,9 @@ jobs:
       - name: Compile and validate definitions
         run: node tools/ravion-modules/dist/src/cli.js compile
 
+      - name: Check README module definitions table
+        run: node tools/ravion-modules/dist/src/cli.js readme --check
+
   publish-plan:
     name: Publish Dry-Run Plan
     runs-on: ubuntu-latest
@@ -154,6 +157,19 @@ jobs:
 
       - name: Publish module versions
         run: node tools/ravion-modules/dist/src/cli.js publish --apply
+
+      - name: Update README module definitions table
+        run: node tools/ravion-modules/dist/src/cli.js readme
+
+      - name: Commit README module definitions table
+        run: |
+          if git diff --quiet -- README.md; then
+            echo "README module definitions table is already up to date."
+            exit 0
+          fi
+          git add README.md
+          git commit -m "docs: refresh README module definitions table [skip ci]"
+          git push origin HEAD:main
 
       - name: Create GitHub releases
         env:

@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: Requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 0.4.1
-  description: Allow existing certificates to upgrade to the `domains` input without being recreated.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

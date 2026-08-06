@@ -3,8 +3,8 @@ definition:
   name: AWS IAM Role
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
-  version: 0.2.2
-  description: Correct the documented default role description; there is no default.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

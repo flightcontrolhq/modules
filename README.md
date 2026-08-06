@@ -49,6 +49,38 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
 | `storage/`    | `s3`              | AWS S3 buckets with encryption, SSE-C blocking, lifecycle rules, CORS, and bucket policies | v1.0.0  |
 
+## Published Module Definitions
+
+The table below is generated from the `release.version` in each `*-definition.yml` file and is kept in
+sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and refreshed on publish).
+
+<!-- BEGIN GENERATED: module-definitions -->
+
+| Definition | Name | Version | Module path |
+| ---------- | ---- | ------- | ----------- |
+| `rvn-acm-certificate` | ACM Certificate | v1.0.0 | `security/acm_certificate/` |
+| `rvn-aurora` | Aurora Database | v1.0.0 | `database/aurora/` |
+| `rvn-aws-alb` | AWS Application Load Balancer | v1.0.0 | `networking/alb/` |
+| `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.0 | `security/iam_policy/` |
+| `rvn-aws-iam-role` | AWS IAM Role | v1.0.0 | `security/iam/` |
+| `rvn-aws-network` | VPC Network | v1.0.0 | `networking/vpc/` |
+| `rvn-aws-static` | Static Hosting | v1.0.0 | `hosting/static_site/` |
+| `rvn-cloudfront` | CloudFront CDN | v1.0.0 | `cdn/cloudfront/` |
+| `rvn-ec2-service` | EC2 Service | v1.0.0 | `compute/ec2_service/` |
+| `rvn-ecs-cluster` | ECS Cluster | v1.0.0 | `compute/ecs_cluster/` |
+| `rvn-ecs-nlb` | ECS Network Service | v1.0.0 | `compute/ecs_service/` |
+| `rvn-ecs-web` | ECS Web Service | v1.0.0 | `compute/ecs_service/` |
+| `rvn-ecs-worker` | ECS Worker | v1.0.0 | `compute/ecs_service/` |
+| `rvn-efs` | EFS File System | v1.0.0 | `storage/efs/` |
+| `rvn-elasticache` | ElastiCache | v1.0.0 | `cache/elasticache/` |
+| `rvn-lambda` | Lambda Function | v1.0.0 | `compute/lambda/` |
+| `rvn-rds` | RDS Database | v1.0.0 | `database/rds/` |
+| `rvn-route53` | Route 53 DNS | v1.0.0 | `networking/route53/` |
+| `rvn-s3` | S3 Bucket | v1.0.0 | `storage/s3/` |
+| `rvn-stack` | Terraform Stack | v1.2.4 | `stack/terraform/` |
+
+<!-- END GENERATED: module-definitions -->
+
 ## Usage
 
 Reference modules using Git URLs with version pinning:

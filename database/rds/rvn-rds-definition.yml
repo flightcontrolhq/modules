@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.4.3
-  description: Correct the documented defaults for instance class and CloudWatch alarms in the configuration table.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - id: network

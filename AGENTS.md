@@ -229,6 +229,11 @@ When adding, modifying, or removing modules:
 
 This is **critical** for maintaining accurate documentation.
 
+The **Published Module Definitions** table in the root `README.md` is generated. After changing a
+definition's `release.version` (or adding/removing a definition), refresh it with `make readme` and
+commit the result. CI checks it with `ravion-modules readme --check` on pull requests and refreshes it
+on `main` after publishing.
+
 ### Before Committing
 
 Always run these commands before committing changes:

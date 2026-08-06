@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 0.1.1
-  description: Reorganize EC2 service inputs and clarify web and storage configuration.
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - id: network

@@ -3,8 +3,8 @@ definition:
   name: EFS File System
   description: Creates and manages an Amazon EFS file system with mount targets, security groups, automatic backups, and an optional access point.
 release:
-  version: 0.1.0
-  description: Initial version
+  version: 1.0.0
+  description: First stable release.
 module:
   inputs:
     - id: network
