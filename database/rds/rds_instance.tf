@@ -36,7 +36,7 @@ resource "aws_db_instance" "this" {
   # Authentication
   username                            = var.username
   password                            = var.master_user_password_management_enabled ? null : var.password
-  manage_master_user_password         = var.master_user_password_management_enabled
+  manage_master_user_password         = var.master_user_password_management_enabled ? true : null
   master_user_secret_kms_key_id       = var.master_user_password_management_enabled ? var.master_user_secret_kms_key_id : null
   iam_database_authentication_enabled = local.iam_database_authentication_enabled
 

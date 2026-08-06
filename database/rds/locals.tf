@@ -149,7 +149,7 @@ locals {
   )
   proxy_auth_secret_arns = (
     length(var.proxy_auth_secret_arns) > 0 ? var.proxy_auth_secret_arns :
-    var.master_user_password_management_enabled ? [aws_db_instance.this.master_user_secret[0].secret_arn] : []
+    var.master_user_password_management_enabled ? [for s in aws_db_instance.this.master_user_secret : s.secret_arn] : []
   )
   proxy_secret_kms_key_arns = distinct(concat(
     var.proxy_secret_kms_key_arns,
