@@ -5,6 +5,11 @@
 # upgrade CRDs bundled inside a chart's crds/ directory. Both charts are pinned
 # to the same version. The AWS-side prerequisites come from module.karpenter
 # in this same stack (see eks_karpenter.tf).
+#
+# All releases set upgrade_install so an apply adopts a same-named release
+# already present in the cluster (e.g. left behind by a deleted module
+# instance) instead of failing with "cannot re-use a name that is still in
+# use".
 ################################################################################
 
 resource "helm_release" "karpenter_crd" {
@@ -17,6 +22,7 @@ resource "helm_release" "karpenter_crd" {
   version    = var.karpenter_chart_version
 
   create_namespace = true
+  upgrade_install  = true
 }
 
 resource "helm_release" "karpenter" {
@@ -28,7 +34,8 @@ resource "helm_release" "karpenter" {
   chart      = "karpenter"
   version    = var.karpenter_chart_version
 
-  skip_crds = true
+  skip_crds       = true
+  upgrade_install = true
 
   values = concat(
     [
@@ -68,6 +75,8 @@ resource "helm_release" "karpenter_default_node_pool" {
   name      = "karpenter-default-node-pool"
   namespace = var.karpenter_controller_namespace
   chart     = "${path.module}/charts/karpenter-resources"
+
+  upgrade_install = true
 
   values = [
     yamlencode({

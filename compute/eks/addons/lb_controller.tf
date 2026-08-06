@@ -31,6 +31,10 @@ resource "helm_release" "lb_controller" {
   chart      = "aws-load-balancer-controller"
   version    = var.lb_controller_chart_version
 
+  # Adopt a same-named release already in the cluster (e.g. left behind by a
+  # deleted module instance) instead of failing on install.
+  upgrade_install = true
+
   values = concat(
     [
       yamlencode({
