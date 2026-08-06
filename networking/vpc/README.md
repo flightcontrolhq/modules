@@ -21,7 +21,7 @@ This module creates a production-ready AWS VPC with public and private subnets, 
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name     = "my-vpc"
   vpc_cidr = "10.0.0.0/16"
@@ -34,7 +34,7 @@ By default, the module creates up to 3 public/private subnet pairs. If the selec
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                = "my-vpc"
   vpc_cidr            = "10.0.0.0/16"
@@ -47,7 +47,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                                  = "my-vpc"
   vpc_cidr                              = "10.0.0.0/16"
@@ -64,14 +64,14 @@ Allocate the EIPs in a separate module so they survive VPC replacements (useful 
 
 ```hcl
 module "nat_eips" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/eips?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/eips?ref=v1.0.0"
 
   name      = "prod-nat"
   eip_count = 3 # one per resolved subnet AZ
 }
 
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                                  = "prod"
   vpc_cidr                              = "10.0.0.0/16"
@@ -89,7 +89,7 @@ The list length must equal `1` when `nat_gateway_high_availability_enabled = fal
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name         = "my-vpc"
   vpc_cidr     = "10.0.0.0/16"
@@ -101,7 +101,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                     = "my-vpc"
   vpc_cidr                 = "10.0.0.0/16"
@@ -115,7 +115,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                  = "my-vpc"
   vpc_cidr              = "10.0.0.0/16"
@@ -129,7 +129,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                    = "my-vpc"
   vpc_cidr                = "10.0.0.0/16"
@@ -143,7 +143,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name     = "my-vpc"
   vpc_cidr = "10.0.0.0/16"
@@ -174,7 +174,7 @@ specified peer route tables.
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name     = "my-vpc"
   vpc_cidr = "10.0.0.0/16"
@@ -201,7 +201,7 @@ the peer's route tables).
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name     = "my-vpc"
   vpc_cidr = "10.0.0.0/16"
@@ -225,7 +225,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name         = "my-vpc"
   vpc_cidr     = "10.0.0.0/16"
@@ -244,7 +244,7 @@ module "vpc" {
 
 ```hcl
 module "vpc" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/vpc?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/vpc?ref=v1.0.0"
 
   name                  = "production"
   vpc_cidr              = "10.0.0.0/16"

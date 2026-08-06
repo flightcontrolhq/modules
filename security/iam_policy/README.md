@@ -6,7 +6,7 @@ Creates one reusable customer-managed AWS IAM policy from structured statements 
 
 ```hcl
 module "application_policy" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//security/iam_policy?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//security/iam_policy?ref=v1.0.0"
 
   name        = "application-s3-read"
   description = "Allows the application to read objects from its bucket."
@@ -33,7 +33,7 @@ Use `policy_json` when a complete policy document is more practical. When set, i
 
 ```hcl
 module "custom_policy" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//security/iam_policy?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//security/iam_policy?ref=v1.0.0"
 
   name = "custom-policy"
   policy_json = jsonencode({

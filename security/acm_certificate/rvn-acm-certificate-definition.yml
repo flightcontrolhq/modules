@@ -147,4 +147,4 @@ module:
 
     - [AWS Certificate Manager DNS validation](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html)
     - [AWS Certificate Manager certificates for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/acm_certificate)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/security/acm_certificate)

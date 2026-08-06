@@ -24,7 +24,7 @@ Use this when DNS is managed outside this Terraform stack (or you will add recor
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
+  source = "git::https://github.com/ravionhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
   name    = "api"
   domains = ["api.example.com"]
@@ -43,7 +43,7 @@ Use when all validation names can be created in **one** Route53 public hosted zo
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
+  source = "git::https://github.com/ravionhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
   name                                        = "api"
   domains                                     = ["api.example.com"]
@@ -61,7 +61,7 @@ module "cert" {
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
+  source = "git::https://github.com/ravionhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
   name = "app"
   domains = [
@@ -77,14 +77,14 @@ The first entry in `domains` is the certificate's primary domain. Every remainin
 
 ```hcl
 module "cert" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
+  source = "git::https://github.com/ravionhq/modules.git//security/acm_certificate?ref=rvn-acm-certificate@0.4.0"
 
   name    = "main"
   domains = ["api.example.com"]
 }
 
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/alb?ref=v1.0.0"
 
   name       = "main"
   vpc_id     = module.vpc.vpc_id

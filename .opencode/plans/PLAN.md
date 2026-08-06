@@ -132,7 +132,7 @@ module:
   stack:
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       ref: $local.module_tag
       base_path: networking/vpc
     pipelines:
@@ -140,7 +140,7 @@ module:
         variant: standard
         input:
           source:
-            repo: https://github.com/flightcontrolhq/modules
+            repo: https://github.com/ravionhq/modules
             ref: $local.module_tag
             base_path: networking/vpc
       change:

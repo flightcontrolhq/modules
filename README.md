@@ -87,7 +87,7 @@ Reference modules using Git URLs with version pinning:
 
 ```hcl
 module "sqs_queue" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//messaging/sqs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//messaging/sqs?ref=v1.0.0"
 
   # Module inputs
   name = "my-queue"
@@ -101,10 +101,10 @@ Always pin to a specific version using Git tags:
 
 ```hcl
 # Recommended: Pin to exact version
-source = "git::https://github.com/flightcontrolhq/modules.git//messaging/sqs?ref=v1.0.0"
+source = "git::https://github.com/ravionhq/modules.git//messaging/sqs?ref=v1.0.0"
 
 # Alternative: Pin to major version branch (if available)
-source = "git::https://github.com/flightcontrolhq/modules.git//messaging/sqs?ref=v1"
+source = "git::https://github.com/ravionhq/modules.git//messaging/sqs?ref=v1"
 ```
 
 ## Module Standards
@@ -158,7 +158,7 @@ module:
   stack:
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       ref: $local.module_tag
       base_path: networking/vpc
 ```
@@ -215,7 +215,7 @@ module:
       - ravion_state_backend_workspace: "<< module.given_id >>"
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       ref: $local.module_tag
       base_path: networking/vpc
 ```

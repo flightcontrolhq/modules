@@ -160,7 +160,7 @@ module:
     - **VPC Flow Logs** for network traffic monitoring and SOC 2 compliance
     - **VPC Peering** to connect with existing VPCs across accounts or regions
 
-     Terraform source: [flightcontrolhq/modules/networking/vpc](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc)
+     Terraform source: [ravionhq/modules/networking/vpc](https://github.com/ravionhq/modules/tree/$local.module_tag/networking/vpc)
 
     ## Use cases
 

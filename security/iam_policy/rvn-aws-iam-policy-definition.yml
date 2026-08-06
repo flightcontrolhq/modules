@@ -276,4 +276,4 @@ module:
     - [IAM managed policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
     - [IAM JSON policy elements](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html)
     - [IAM permissions boundaries](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/iam_policy)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/security/iam_policy)

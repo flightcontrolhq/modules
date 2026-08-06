@@ -514,7 +514,7 @@ module:
     - **Public and private Network Load Balancers** for TCP/UDP and static IP use cases
     - **CloudWatch Container Insights** dashboard metrics for production visibility
 
-    Terraform source: [flightcontrolhq/modules/compute/ecs_cluster](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_cluster)
+    Terraform source: [ravionhq/modules/compute/ecs_cluster](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ecs_cluster)
 
     ## Use cases
 

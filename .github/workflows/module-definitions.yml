@@ -185,4 +185,4 @@ jobs:
         if: steps.published_versions.outputs.published == 'true'
         env:
           GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
-        run: gh api repos/flightcontrolhq/docs/dispatches -f event_type=module-catalog-published
+        run: gh api repos/ravionhq/docs/dispatches -f event_type=module-catalog-published

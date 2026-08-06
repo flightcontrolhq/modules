@@ -376,7 +376,7 @@ module:
 
     ECS services can reference this module directly: the service mounts the file system into the app container and attaches the client security group automatically.
 
-    Terraform source: [flightcontrolhq/modules/storage/efs](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/storage/efs)
+    Terraform source: [ravionhq/modules/storage/efs](https://github.com/ravionhq/modules/tree/$local.module_tag/storage/efs)
 
     ## Use cases
 

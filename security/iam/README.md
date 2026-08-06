@@ -19,7 +19,7 @@ Creates a flexible AWS IAM role with support for multiple trust relationship typ
 
 ```hcl
 module "ecs_task_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name             = "my-ecs-task-role"
   trusted_services = ["ecs-tasks.amazonaws.com"]
@@ -34,7 +34,7 @@ module "ecs_task_role" {
 
 ```hcl
 module "lambda_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name             = "my-lambda-execution-role"
   trusted_services = ["lambda.amazonaws.com"]
@@ -57,7 +57,7 @@ module "lambda_role" {
 
 ```hcl
 module "ec2_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name                    = "my-ec2-instance-role"
   trusted_services        = ["ec2.amazonaws.com"]
@@ -77,7 +77,7 @@ module "ec2_role" {
 
 ```hcl
 module "github_actions_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name = "github-actions-deploy-role"
 
@@ -107,7 +107,7 @@ module "github_actions_role" {
 
 ```hcl
 module "cross_account_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name                   = "cross-account-access-role"
   trusted_aws_principals = ["arn:aws:iam::111111111111:root"]
@@ -129,7 +129,7 @@ module "cross_account_role" {
 
 ```hcl
 module "eks_pod_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name = "my-app-pod-role"
 
@@ -156,7 +156,7 @@ module "eks_pod_role" {
 
 ```hcl
 module "role_with_json_policy" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name             = "my-custom-role"
   trusted_services = ["ec2.amazonaws.com"]
@@ -178,7 +178,7 @@ module "role_with_json_policy" {
 
 ```hcl
 module "custom_trust_role" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/iam?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/iam?ref=v1.0.0"
 
   name = "custom-trust-role"
 

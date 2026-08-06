@@ -868,4 +868,4 @@ module:
     - [ElastiCache for Redis OSS security](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/auth.html)
     - [ElastiCache for Valkey](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/engine-versions.html)
     - [ElastiCache Serverless](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/elasticache-serverless.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/cache/elasticache)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/cache/elasticache)

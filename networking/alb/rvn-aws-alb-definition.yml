@@ -273,7 +273,7 @@ module:
 
     The load balancer intentionally serves no traffic by itself. Services that reference this module, such as EC2 services, create their own target groups and listener rules on the shared listeners.
 
-    Terraform source: [flightcontrolhq/modules/networking/alb](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/alb)
+    Terraform source: [ravionhq/modules/networking/alb](https://github.com/ravionhq/modules/tree/$local.module_tag/networking/alb)
 
     ## Use cases
 

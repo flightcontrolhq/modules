@@ -1321,4 +1321,4 @@ module:
     - [Aurora Serverless v2](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html)
     - [Aurora global databases](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html)
     - [Aurora monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_Monitoring.html)
-    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/aurora)
+    - [Terraform source](https://github.com/ravionhq/modules/tree/$local.module_tag/database/aurora)

@@ -356,7 +356,7 @@ module:
 
     Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
 
-    Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/hosting/static_site)
+    Terraform source: [ravionhq/modules/hosting/static_site](https://github.com/ravionhq/modules/tree/$local.module_tag/hosting/static_site)
 
     ## Use cases
 

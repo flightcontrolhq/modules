@@ -810,7 +810,7 @@ module:
 
     Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule. Web services can attach to a standalone Application Load Balancer or reuse the public or private ALB from an ECS cluster. The selected network and load balancer must use the same AWS account, region, and VPC. The Auto Scaling Group can still terminate instances because of scaling, health failures, or operator action. Root and data EBS volumes survive releases, but not instance termination.
 
-    Terraform source: [flightcontrolhq/modules/compute/ec2_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ec2_service)
+    Terraform source: [ravionhq/modules/compute/ec2_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ec2_service)
 
     ## Use cases
 
