@@ -11,7 +11,7 @@ namespaces / labels deliberately if you have multiple profiles.
 
 ```hcl
 module "fargate_kube_system" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//kubernetes/eks_fargate_profile?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//kubernetes/eks_fargate_profile?ref=v1.0.0"
 
   cluster_name = module.eks.cluster_name
   name         = "kube-system"

@@ -23,7 +23,7 @@ This module creates an Amazon ECS cluster with configurable capacity providers (
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -36,7 +36,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -60,7 +60,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -92,7 +92,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -134,7 +134,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -151,7 +151,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -166,7 +166,7 @@ module "ecs" {
 
 # Service modules create their own listeners and target groups
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   # ... service configuration ...
 

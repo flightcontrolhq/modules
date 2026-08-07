@@ -189,7 +189,7 @@ Brief description of what this module creates.
 
 \`\`\`hcl
 module "example" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//category/module?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//category/module?ref=v1.0.0"
 
   name = "example"
   # other required inputs

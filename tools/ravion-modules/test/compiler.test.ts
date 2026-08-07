@@ -43,7 +43,7 @@ describe("compiler", () => {
             variant: "standard",
             input: {
               source: {
-                repo: "https://github.com/flightcontrolhq/modules",
+                repo: "https://github.com/ravionhq/modules",
                 ref: "ravion-aws-vpc@1.2.3",
                 base_path: "networking/vpc",
               },
@@ -54,7 +54,7 @@ describe("compiler", () => {
         ravion_state_backend_workspace: "<< module.given_id >>",
         type: "opentofu",
         source: {
-          repo: "https://github.com/flightcontrolhq/modules",
+          repo: "https://github.com/ravionhq/modules",
           ref: "ravion-aws-vpc@1.2.3",
           base_path: "networking/vpc",
         },
@@ -62,7 +62,7 @@ describe("compiler", () => {
       deploy: {
         strategy: "rolling",
       },
-      readme: "Terraform source https://github.com/flightcontrolhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
+      readme: "Terraform source https://github.com/ravionhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
       settings: {
         advanced: {
           retries: 2,

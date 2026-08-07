@@ -15,7 +15,7 @@ The module is intentionally thin: it allocates `var.eip_count` Elastic IPs, tags
 
 ```hcl
 module "egress_eips" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/eips?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/eips?ref=v1.0.0"
 
   name      = "egress-prod"
   eip_count = 6
