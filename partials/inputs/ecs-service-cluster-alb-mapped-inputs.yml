@@ -1,20 +1,20 @@
 - id: section_cluster_alb
   label: Cluster load balancers
   type: section
-- id: public_albs
-  label: Public load balancers
-  type: array
-  description: Public load balancer records from the selected cluster, including listener ARNs and security group IDs.
+- id: public_albs_by_name
+  label: Public load balancers by name
+  type: object
+  description: Public load balancer records from the selected cluster keyed by name, including listener ARNs and security group IDs.
   collapsible: true
   required: false
-  default: <<ref.stack.output.public_albs>>
-- id: private_albs
-  label: Private load balancers
-  type: array
-  description: Private load balancer records from the selected cluster, including listener ARNs and security group IDs.
+  default: <<ref.stack.output.public_albs_by_name>>
+- id: private_albs_by_name
+  label: Private load balancers by name
+  type: object
+  description: Private load balancer records from the selected cluster keyed by name, including listener ARNs and security group IDs.
   collapsible: true
   required: false
-  default: <<ref.stack.output.private_albs>>
+  default: <<ref.stack.output.private_albs_by_name>>
 - id: public_alb_http_listener_arn
   immutable: true
   label: Public ALB HTTP listener ARN
@@ -39,6 +39,14 @@
   collapsible: true
   required: false
   default: <<ref.stack.output.public_alb_security_group_id>>
+- id: public_alb_arn_suffix
+  immutable: true
+  label: Public ALB ARN suffix
+  type: string
+  description: ARN suffix of the cluster's first public ALB for CloudWatch metrics.
+  collapsible: true
+  required: false
+  default: <<ref.stack.output.public_alb_arn_suffix>>
 - id: private_alb_http_listener_arn
   immutable: true
   label: Private ALB HTTP listener ARN
@@ -63,3 +71,11 @@
   collapsible: true
   required: false
   default: <<ref.stack.output.private_alb_security_group_id>>
+- id: private_alb_arn_suffix
+  immutable: true
+  label: Private ALB ARN suffix
+  type: string
+  description: ARN suffix of the cluster's first private ALB for CloudWatch metrics.
+  collapsible: true
+  required: false
+  default: <<ref.stack.output.private_alb_arn_suffix>>

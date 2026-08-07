@@ -580,7 +580,7 @@ The pre-2.0 singleton outputs (`public_alb_arn`, `public_alb_dns_name`, `public_
 ║    ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤   ║
 ║    │                                                                                                               │   ║
 ║    │  ┌────────────────────────────────┐  ┌────────────────────────────────┐                                      │   ║
-║    │  │  module.public_alb[0]          │  │  module.private_alb[0]         │                                      │   ║
+║    │  │  module.public_alb["name"]     │  │  module.private_alb["name"]    │                                      │   ║
 ║    │  │  (networking/alb)              │  │  (networking/alb)              │                                      │   ║
 ║    │  ├────────────────────────────────┤  ├────────────────────────────────┤                                      │   ║
 ║    │  │ • Internet-facing              │  │ • Internal                     │                                      │   ║
@@ -591,7 +591,7 @@ The pre-2.0 singleton outputs (`public_alb_arn`, `public_alb_dns_name`, `public_
 ║    │  └────────────────────────────────┘  └────────────────────────────────┘                                      │   ║
 ║    │                                                                                                               │   ║
 ║    │  ┌────────────────────────────────┐  ┌────────────────────────────────┐                                      │   ║
-║    │  │  module.public_nlb[0]          │  │  module.private_nlb[0]         │                                      │   ║
+║    │  │  module.public_nlb["name"]     │  │  module.private_nlb["name"]    │                                      │   ║
 ║    │  │  (networking/nlb)              │  │  (networking/nlb)              │                                      │   ║
 ║    │  ├────────────────────────────────┤  ├────────────────────────────────┤                                      │   ║
 ║    │  │ • Internet-facing              │  │ • Internal                     │                                      │   ║
@@ -744,10 +744,10 @@ The pre-2.0 singleton outputs (`public_alb_arn`, `public_alb_dns_name`, `public_
 | `aws_iam_role_policy_attachment` | 0 or 2 | ECS and SSM policy attachments |
 | `module.ecs_autoscaling` | 0 or 1 | Auto Scaling Group for EC2 instances |
 | `module.ecs_instance_security_group` | 0 or 1 | Security group for EC2 instances |
-| `module.public_alb` | 0 or 1 | Public Application Load Balancer |
-| `module.private_alb` | 0 or 1 | Private Application Load Balancer |
-| `module.public_nlb` | 0 or 1 | Public Network Load Balancer |
-| `module.private_nlb` | 0 or 1 | Private Network Load Balancer |
+| `module.public_alb` | 0 to N (one per entry, keyed by name) | Public Application Load Balancers |
+| `module.private_alb` | 0 to N (one per entry, keyed by name) | Private Application Load Balancers |
+| `module.public_nlb` | 0 to N (one per entry, keyed by name) | Public Network Load Balancers |
+| `module.private_nlb` | 0 to N (one per entry, keyed by name) | Private Network Load Balancers |
 
 ## FAQ
 
@@ -978,3 +978,20 @@ The module automatically creates a security group for EC2 instances that:
 - The `name` variable is limited to 28 characters to ensure ALB names don't exceed AWS limits
 - EBS volumes on EC2 instances are encrypted by default
 - Managed termination protection prevents ECS from terminating instances with running tasks
+
+## Migrating from 1.x (single load balancer inputs)
+
+Version 2.0.0 replaces the singleton `public_alb_*`/`private_alb_*`/`*_nlb_*` variables with the
+`public_albs`, `private_albs`, `public_nlbs`, and `private_nlbs` object arrays. Load balancer module
+instances are keyed by their resolved name (`for_each`) instead of a positional index (`count`), so
+Terraform addresses change from `module.public_alb[0]` to `module.public_alb["<name>"]`.
+
+For existing state, move each load balancer to its new address before applying, e.g.:
+
+```bash
+tofu state mv 'module.public_alb[0]' 'module.public_alb["my-cluster-pub"]'
+```
+
+The default resolved name for the first entry is `<name>-pub` (public ALB), `<name>-priv`
+(private ALB), `<name>-pub-nlb` (public NLB), and `<name>-priv-nlb` (private NLB) when no explicit
+`name` is set. Without the state move, Terraform plans to destroy and recreate the load balancer.

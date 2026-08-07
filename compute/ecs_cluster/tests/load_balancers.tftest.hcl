@@ -441,6 +441,28 @@ run "multiple_public_albs" {
   }
 }
 
+run "public_alb_addresses_keyed_by_name" {
+  command = plan
+
+  variables {
+    public_subnet_ids = ["subnet-public1", "subnet-public2"]
+    public_albs = [
+      { name = "alb-b" },
+      { name = "alb-a" },
+    ]
+  }
+
+  assert {
+    condition     = contains(keys(module.public_alb), "alb-a") && contains(keys(module.public_alb), "alb-b")
+    error_message = "Public ALB module instances should be keyed by resolved name so addresses stay stable when entries are reordered"
+  }
+
+  assert {
+    condition     = output.public_albs[0].name == "alb-b" && output.public_albs[1].name == "alb-a"
+    error_message = "Public ALB outputs should preserve the input order"
+  }
+}
+
 run "multiple_private_albs_default_names" {
   command = plan
 

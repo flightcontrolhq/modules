@@ -267,6 +267,27 @@ module:
           show_when:
             https_enabled: true
           type: string
+        - add_button_label: Add CIDR block
+          collapsible: true
+          description: Allowed IPv4 CIDRs. Defaults to allowing all IPv4 traffic.
+          id: ingress_cidr_blocks
+          label: Ingress CIDRs
+          placeholder: 0.0.0.0/0
+          type: string_array
+        - add_button_label: Add IPv6 CIDR block
+          collapsible: true
+          description: Allowed IPv6 CIDRs. Defaults to allowing all IPv6 traffic.
+          id: ingress_ipv6_cidr_blocks
+          label: Ingress IPv6 CIDRs
+          placeholder: ::/0
+          type: string_array
+        - add_button_label: Add security group
+          collapsible: true
+          description: Security groups whose members can access this load balancer. Useful for sources without static CIDRs, such as CloudFront VPC origins.
+          id: ingress_security_group_ids
+          label: Ingress security groups
+          placeholder: sg-...
+          type: string_array
         - collapsible: true
           description: Idle timeout for this load balancer.
           id: idle_timeout
@@ -681,7 +702,12 @@ module:
           "https_enabled": #.https_enabled, "certificate_arns": ((#.certificate_arns != nil ?
           #.certificate_arns : []) | concat(#.additional_certificate_arns != nil ?
           #.additional_certificate_arns : [])), "ssl_policy": #.ssl_policy, "idle_timeout":
-          #.idle_timeout, "web_acl_arn": #.web_acl_arn, "access_logs_enabled": #.access_logs_enabled,
+          #.idle_timeout, "ingress_cidr_blocks": (#.ingress_cidr_blocks != nil &&
+          len(#.ingress_cidr_blocks) > 0 ? #.ingress_cidr_blocks : nil), "ingress_ipv6_cidr_blocks":
+          (#.ingress_ipv6_cidr_blocks != nil && len(#.ingress_ipv6_cidr_blocks) > 0 ?
+          #.ingress_ipv6_cidr_blocks : nil), "ingress_security_group_ids":
+          (#.ingress_security_group_ids != nil ? #.ingress_security_group_ids : []),
+          "web_acl_arn": #.web_acl_arn, "access_logs_enabled": #.access_logs_enabled,
           "access_logs_bucket_arn": #.access_logs_bucket_arn}) >>
         private_albs: >-
           << map(module.input.private_albs != nil ? module.input.private_albs : [], {"name": #.name,

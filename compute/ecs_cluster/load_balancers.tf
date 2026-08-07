@@ -3,11 +3,11 @@
 ################################################################################
 
 module "public_alb" {
-  count = length(var.public_albs)
+  for_each = local.public_albs_by_name
 
   source = "../../networking/alb"
 
-  name   = local.public_alb_names[count.index]
+  name   = each.key
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -16,28 +16,28 @@ module "public_alb" {
 
   # Listener configuration
   http_listener_enabled          = true
-  https_listener_enabled         = var.public_albs[count.index].https_enabled
-  http_to_https_redirect_enabled = var.public_albs[count.index].https_enabled
+  https_listener_enabled         = each.value.https_enabled
+  http_to_https_redirect_enabled = each.value.https_enabled
 
   # SSL/TLS
-  certificate_arns = var.public_albs[count.index].certificate_arns
-  ssl_policy       = var.public_albs[count.index].ssl_policy
+  certificate_arns = each.value.certificate_arns
+  ssl_policy       = each.value.ssl_policy
 
   # ALB settings
-  idle_timeout                = var.public_albs[count.index].idle_timeout
+  idle_timeout                = each.value.idle_timeout
   deletion_protection_enabled = var.load_balancer_deletion_protection_enabled
 
   # Security
-  ingress_cidr_blocks        = var.public_albs[count.index].ingress_cidr_blocks
-  ingress_ipv6_cidr_blocks   = var.public_albs[count.index].ingress_ipv6_cidr_blocks
-  ingress_security_group_ids = var.public_albs[count.index].ingress_security_group_ids
+  ingress_cidr_blocks        = each.value.ingress_cidr_blocks
+  ingress_ipv6_cidr_blocks   = each.value.ingress_ipv6_cidr_blocks
+  ingress_security_group_ids = each.value.ingress_security_group_ids
 
   # Access logs
-  access_logs_enabled    = var.public_albs[count.index].access_logs_enabled
-  access_logs_bucket_arn = var.public_albs[count.index].access_logs_bucket_arn
+  access_logs_enabled    = each.value.access_logs_enabled
+  access_logs_bucket_arn = each.value.access_logs_bucket_arn
 
   # WAF
-  web_acl_arn = var.public_albs[count.index].web_acl_arn
+  web_acl_arn = each.value.web_acl_arn
 }
 
 ################################################################################
@@ -45,11 +45,11 @@ module "public_alb" {
 ################################################################################
 
 module "private_alb" {
-  count = length(var.private_albs)
+  for_each = local.private_albs_by_name
 
   source = "../../networking/alb"
 
-  name   = local.private_alb_names[count.index]
+  name   = each.key
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -58,25 +58,25 @@ module "private_alb" {
 
   # Listener configuration
   http_listener_enabled          = true
-  https_listener_enabled         = var.private_albs[count.index].https_enabled
-  http_to_https_redirect_enabled = var.private_albs[count.index].https_enabled
+  https_listener_enabled         = each.value.https_enabled
+  http_to_https_redirect_enabled = each.value.https_enabled
 
   # SSL/TLS
-  certificate_arns = var.private_albs[count.index].certificate_arns
-  ssl_policy       = var.private_albs[count.index].ssl_policy
+  certificate_arns = each.value.certificate_arns
+  ssl_policy       = each.value.ssl_policy
 
   # ALB settings
-  idle_timeout                = var.private_albs[count.index].idle_timeout
+  idle_timeout                = each.value.idle_timeout
   deletion_protection_enabled = var.load_balancer_deletion_protection_enabled
 
   # Security
-  ingress_cidr_blocks        = var.private_albs[count.index].ingress_cidr_blocks
-  ingress_ipv6_cidr_blocks   = var.private_albs[count.index].ingress_ipv6_cidr_blocks
-  ingress_security_group_ids = var.private_albs[count.index].ingress_security_group_ids
+  ingress_cidr_blocks        = each.value.ingress_cidr_blocks
+  ingress_ipv6_cidr_blocks   = each.value.ingress_ipv6_cidr_blocks
+  ingress_security_group_ids = each.value.ingress_security_group_ids
 
   # Access logs
-  access_logs_enabled    = var.private_albs[count.index].access_logs_enabled
-  access_logs_bucket_arn = var.private_albs[count.index].access_logs_bucket_arn
+  access_logs_enabled    = each.value.access_logs_enabled
+  access_logs_bucket_arn = each.value.access_logs_bucket_arn
 }
 
 ################################################################################
@@ -84,11 +84,11 @@ module "private_alb" {
 ################################################################################
 
 module "public_nlb" {
-  count = length(var.public_nlbs)
+  for_each = local.public_nlbs_by_name
 
   source = "../../networking/nlb"
 
-  name   = local.public_nlb_names[count.index]
+  name   = each.key
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -97,18 +97,18 @@ module "public_nlb" {
 
   # NLB settings
   deletion_protection_enabled       = var.load_balancer_deletion_protection_enabled
-  cross_zone_load_balancing_enabled = var.public_nlbs[count.index].cross_zone_load_balancing_enabled
+  cross_zone_load_balancing_enabled = each.value.cross_zone_load_balancing_enabled
 
   # Security groups
-  additional_security_group_ids = var.public_nlbs[count.index].security_group_ids
+  additional_security_group_ids = each.value.security_group_ids
 
   # Access logs
-  access_logs_enabled    = var.public_nlbs[count.index].access_logs_enabled
-  access_logs_bucket_arn = var.public_nlbs[count.index].access_logs_bucket_arn
+  access_logs_enabled    = each.value.access_logs_enabled
+  access_logs_bucket_arn = each.value.access_logs_bucket_arn
 
   # Elastic IPs
-  elastic_ips_enabled       = var.public_nlbs[count.index].elastic_ips_enabled
-  elastic_ip_allocation_ids = var.public_nlbs[count.index].elastic_ip_allocation_ids
+  elastic_ips_enabled       = each.value.elastic_ips_enabled
+  elastic_ip_allocation_ids = each.value.elastic_ip_allocation_ids
 }
 
 ################################################################################
@@ -116,11 +116,11 @@ module "public_nlb" {
 ################################################################################
 
 module "private_nlb" {
-  count = length(var.private_nlbs)
+  for_each = local.private_nlbs_by_name
 
   source = "../../networking/nlb"
 
-  name   = local.private_nlb_names[count.index]
+  name   = each.key
   tags   = var.tags
   vpc_id = var.vpc_id
 
@@ -129,16 +129,16 @@ module "private_nlb" {
 
   # NLB settings
   deletion_protection_enabled       = var.load_balancer_deletion_protection_enabled
-  cross_zone_load_balancing_enabled = var.private_nlbs[count.index].cross_zone_load_balancing_enabled
+  cross_zone_load_balancing_enabled = each.value.cross_zone_load_balancing_enabled
 
   # Security groups
-  additional_security_group_ids = var.private_nlbs[count.index].security_group_ids
+  additional_security_group_ids = each.value.security_group_ids
 
   # Access logs
-  access_logs_enabled    = var.private_nlbs[count.index].access_logs_enabled
-  access_logs_bucket_arn = var.private_nlbs[count.index].access_logs_bucket_arn
+  access_logs_enabled    = each.value.access_logs_enabled
+  access_logs_bucket_arn = each.value.access_logs_bucket_arn
 
   # Elastic IPs
-  elastic_ips_enabled       = var.private_nlbs[count.index].elastic_ips_enabled
-  elastic_ip_allocation_ids = var.private_nlbs[count.index].elastic_ip_allocation_ids
+  elastic_ips_enabled       = each.value.elastic_ips_enabled
+  elastic_ip_allocation_ids = each.value.elastic_ip_allocation_ids
 }

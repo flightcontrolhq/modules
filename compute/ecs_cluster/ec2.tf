@@ -67,16 +67,16 @@ module "ecs_instance_security_group" {
   # be -1; setting them to 0 causes update failures.
   ingress_rules = concat(
     # Allow inbound from each public ALB
-    [for idx, lb in module.public_alb : {
-      description                  = "Allow inbound from public ALB ${local.public_alb_names[idx]}"
+    [for name, lb in module.public_alb : {
+      description                  = "Allow inbound from public ALB ${name}"
       from_port                    = -1
       to_port                      = -1
       ip_protocol                  = "-1"
       referenced_security_group_id = lb.security_group_id
     }],
     # Allow inbound from each private ALB
-    [for idx, lb in module.private_alb : {
-      description                  = "Allow inbound from private ALB ${local.private_alb_names[idx]}"
+    [for name, lb in module.private_alb : {
+      description                  = "Allow inbound from private ALB ${name}"
       from_port                    = -1
       to_port                      = -1
       ip_protocol                  = "-1"
