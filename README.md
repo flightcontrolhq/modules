@@ -22,9 +22,9 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
-| `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.0.0  |
+| `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.1.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
-| `database/`   | `rds`             | AWS RDS instances                                                      | v1.0.0  |
+| `database/`   | `rds`             | AWS RDS instances                                                      | v1.1.0  |
 | `hosting/`    | `static_site`     | Composite static site hosting (S3 + CloudFront + OAC, optional CloudFront Function / Lambda@Edge) | v1.0.0  |
 | `kubernetes/` | `eks_cluster`     | AWS EKS clusters with OIDC, KMS-encrypted secrets, control plane logging, core add-ons, EBS CSI / Pod Identity Agent, LB Controller Pod Identity role, and access entries | v1.0.0  |
 | `kubernetes/` | `eks_node_group`  | AWS EKS managed node groups (one per module) with IAM, optional launch template, taints, labels, and SPOT/ON_DEMAND capacity | v1.0.0  |
@@ -59,7 +59,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | Definition | Name | Version | Module path |
 | ---------- | ---- | ------- | ----------- |
 | `rvn-acm-certificate` | ACM Certificate | v1.0.0 | `security/acm_certificate/` |
-| `rvn-aurora` | Aurora Database | v1.0.0 | `database/aurora/` |
+| `rvn-aurora` | Aurora Database | v1.1.0 | `database/aurora/` |
 | `rvn-aws-alb` | AWS Application Load Balancer | v1.0.0 | `networking/alb/` |
 | `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.0 | `security/iam_policy/` |
 | `rvn-aws-iam-role` | AWS IAM Role | v1.0.0 | `security/iam/` |
@@ -74,7 +74,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-efs` | EFS File System | v1.0.0 | `storage/efs/` |
 | `rvn-elasticache` | ElastiCache | v1.0.0 | `cache/elasticache/` |
 | `rvn-lambda` | Lambda Function | v1.0.0 | `compute/lambda/` |
-| `rvn-rds` | RDS Database | v1.0.0 | `database/rds/` |
+| `rvn-rds` | RDS Database | v1.1.0 | `database/rds/` |
 | `rvn-route53` | Route 53 DNS | v1.0.0 | `networking/route53/` |
 | `rvn-s3` | S3 Bucket | v1.0.0 | `storage/s3/` |
 | `rvn-stack` | Terraform Stack | v1.2.4 | `stack/terraform/` |

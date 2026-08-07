@@ -917,6 +917,89 @@ run "test_master_user_password_management_enabled_default" {
   }
 }
 
+# Test: managed and preserved passwords are mutually exclusive
+run "test_password_management_and_preservation_conflict" {
+  command = plan
+
+  variables {
+    name                                      = "test-db"
+    engine                                    = "postgres"
+    instance_class                            = "db.t3.micro"
+    allocated_storage                         = 20
+    vpc_id                                    = "vpc-12345678"
+    subnet_ids                                = ["subnet-11111111", "subnet-22222222"]
+    username                                  = "admin"
+    master_user_password_management_enabled   = true
+    master_user_password_preservation_enabled = true
+  }
+
+  expect_failures = [
+    var.master_user_password_preservation_enabled,
+  ]
+}
+
+# Test: preservation mode requires a matching existing database
+run "test_fresh_database_requires_master_credentials" {
+  command = plan
+
+  variables {
+    name                                      = "test-db"
+    engine                                    = "postgres"
+    instance_class                            = "db.t3.micro"
+    allocated_storage                         = 20
+    vpc_id                                    = "vpc-12345678"
+    subnet_ids                                = ["subnet-11111111", "subnet-22222222"]
+    username                                  = "admin"
+    master_user_password_management_enabled   = false
+    master_user_password_preservation_enabled = true
+  }
+
+  override_data {
+    target = data.aws_db_instance.password_preservation
+    values = {
+      db_instance_arn = ""
+    }
+  }
+
+  expect_failures = [
+    aws_db_instance.this,
+  ]
+}
+
+# Test: imported databases can retain an externally managed password
+run "test_unmanaged_import_password_is_omitted" {
+  command = plan
+
+  variables {
+    name                                      = "test-db"
+    engine                                    = "postgres"
+    instance_class                            = "db.t3.micro"
+    allocated_storage                         = 20
+    vpc_id                                    = "vpc-12345678"
+    subnet_ids                                = ["subnet-11111111", "subnet-22222222"]
+    username                                  = "admin"
+    master_user_password_management_enabled   = false
+    master_user_password_preservation_enabled = true
+  }
+
+  override_data {
+    target = data.aws_db_instance.password_preservation
+    values = {
+      db_instance_arn = "arn:aws:rds:us-east-1:123456789012:db:test-db"
+    }
+  }
+
+  assert {
+    condition     = aws_db_instance.this.manage_master_user_password == null
+    error_message = "manage_master_user_password should be omitted when password management is disabled."
+  }
+
+  assert {
+    condition     = data.aws_db_instance.password_preservation[0].db_instance_arn == "arn:aws:rds:us-east-1:123456789012:db:test-db"
+    error_message = "Password preservation should verify that the imported database exists."
+  }
+}
+
 # Test: performance_insights_enabled defaults to true
 run "test_performance_insights_enabled_default" {
   command = plan
