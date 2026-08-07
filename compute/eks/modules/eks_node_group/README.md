@@ -21,7 +21,7 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | Name               | Version    |
 | ------------------ | ---------- |
 | opentofu/terraform | >= 1.10.0  |
-| aws                | >= 5.0     |
+| aws                | >= 6.0     |
 
 ## Inputs
 
@@ -42,7 +42,7 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | taints | Kubernetes taints. | `list(object)` | `[]` | no |
 | disk_size / disk_type / disk_iops / disk_throughput | Root volume tuning (triggers launch template). | `number/string/number/number` | `null` | no |
 | ebs_kms_key_arn | Encrypt root volume with this KMS key (triggers launch template). | `string` | `null` | no |
-| user_data | Raw additional user data (base64-encoded internally; triggers launch template). | `string` | `null` | no |
+| user_data | Custom user data, base64-encoded internally and merged by EKS with its own bootstrap user data (triggers launch template). Format depends on `ami_type` — see [User data format](#user-data-format). | `string` | `null` | no |
 | security_group_ids | Extra SGs on node ENIs (triggers launch template). | `list(string)` | `[]` | no |
 | detailed_monitoring_enabled | Enable EC2 1-minute monitoring. | `bool` | `false` | no |
 | metadata_http_tokens | IMDSv2 enforcement. | `string` | `"required"` | no |
@@ -64,8 +64,75 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | launch_template_id / launch_template_arn / launch_template_latest_version | Launch template (null when EKS-default). |
 | aws_account_id / region | Account & region info. |
 
+## User data format
+
+`user_data` is written verbatim into the launch template as
+`base64encode(var.user_data)`. The module does not wrap, template, or append
+anything to it, and the launch template deliberately never sets `image_id` —
+the AMI comes from the node group's `ami_type`.
+
+Because no AMI ID is specified, EKS **merges** its own generated bootstrap user
+data with the value you supply, and that merge only works when your value is in
+the format the AMI family expects. A bare `#!/bin/bash` script is *not* valid
+for the default `AL2023_x86_64_STANDARD` AMI type and will leave nodes unable to
+join the cluster.
+
+Consequences of the merge, for every AMI type:
+
+- Don't call `bootstrap.sh`, `nodeadm`, or `Start-EKSBootstrap.ps1` yourself — EKS supplies those.
+- Don't start or reconfigure `kubelet` from `user_data`. Use this module's `labels` / `taints` inputs instead.
+- Cluster metadata (`name`, `apiServerEndpoint`, `certificateAuthority`, `cidr`) comes from the EKS-merged part; don't repeat it.
+
+| `ami_type` | Required format | Notes |
+|------------|-----------------|-------|
+| `AL2_*` | MIME multi-part archive | Shell commands go in a `Content-Type: text/x-shellscript` part. |
+| `AL2023_*` (default) | MIME multi-part archive | Shell commands go in a `text/x-shellscript` part; node/kubelet settings go in an `application/node.eks.aws` part holding a `node.eks.aws/v1alpha1` `NodeConfig` document. |
+| `BOTTLEROCKET_*` | TOML settings | Merged with the EKS-provided settings, and your keys win. Formatting isn't preserved, and EKS doesn't accept every valid TOML construct (no quoted keys within quoted keys, escaped quotes in values, or mixed-type arrays). |
+| `WINDOWS_*` | PowerShell | Your commands run first, then the EKS-managed commands, all inside a single `<powershell></powershell>` tag. |
+| `CUSTOM` | n/a | Requires an AMI ID in the launch template, which this module does not expose. |
+
+AL2023 — pass the whole MIME document as the value (typically via `file()` so
+boundary lines aren't reindented):
+
+```
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/x-shellscript; charset="us-ascii"
+
+#!/bin/bash
+dnf install -y htop
+
+--BOUNDARY
+Content-Type: application/node.eks.aws
+
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  kubelet:
+    config:
+      shutdownGracePeriod: 30s
+
+--BOUNDARY--
+```
+
+```hcl
+user_data = file("${path.module}/al2023-user-data.txt")
+```
+
+Bottlerocket:
+
+```
+[settings.kubernetes.system-reserved]
+cpu = "10m"
+memory = "100Mi"
+```
+
+Reference: [Customize managed nodes with launch templates — Amazon EC2 user data](https://docs.aws.amazon.com/eks/latest/userguide/launch-templates.html#launch-template-user-data).
+
 ## Notes
 
 - `desired_size` is honored on create and ignored thereafter via `lifecycle.ignore_changes` so an autoscaler can manage capacity without drifting against terraform state. Use `min_size` / `max_size` to constrain it.
-- A launch template is only created when at least one of `disk_size`, `disk_type`, `disk_iops`, `disk_throughput`, `ebs_kms_key_arn`, `user_data`, `security_group_ids`, `detailed_monitoring_enabled`, or non-default IMDS settings is supplied. Otherwise EKS uses its internal_load_balancer_enabled default template (which we cannot modify directly).
+- A launch template is only created when at least one of `disk_size`, `disk_type`, `disk_iops`, `disk_throughput`, `ebs_kms_key_arn`, `user_data`, `security_group_ids`, `detailed_monitoring_enabled`, or non-default IMDS settings is supplied. Otherwise EKS uses its internal default template (which we cannot modify directly).
 - The default node role attaches `AmazonSSMManagedInstanceCore` so you can `aws ssm start-session` into nodes without managing SSH keys.

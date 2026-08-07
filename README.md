@@ -21,8 +21,8 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `ec2_service`     | Supervised EC2 workloads with configurable rolling deploys, standalone or ECS-cluster ALB routing, target tuning, and deployment-scoped CloudWatch logs | v1.0.0  |
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
-| `compute/`    | `eks`             | Composite EKS stack: cluster, system node group, CoreDNS, and optional Fargate profiles, provisioned in dependency order via the AWS API only (includes `rvn-eks` module definition) | v1.0.0  |
-| `compute/`    | `eks/addons`      | Selectable add-ons for an existing EKS cluster: Karpenter autoscaling, AWS Load Balancer Controller, EBS CSI driver, and CloudWatch Container Insights (includes `rvn-eks-addons` module definition) | v1.0.0  |
+| `compute/`    | `eks`             | Composite EKS stack: cluster, system node group, CoreDNS, and optional Fargate profiles, provisioned in dependency order via the AWS API only (includes `rvn-eks` module definition) | Unreleased |
+| `compute/`    | `eks/addons`      | Selectable add-ons for an existing EKS cluster: Karpenter autoscaling, AWS Load Balancer Controller, External Secrets Operator, EBS CSI driver, and CloudWatch Container Insights (includes `rvn-eks-addons` module definition) | Unreleased |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
 | `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.0.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
@@ -46,6 +46,25 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
 | `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
 | `storage/`    | `s3`              | AWS S3 buckets with encryption, SSE-C blocking, lifecycle rules, CORS, and bucket policies | v1.0.0  |
+
+## Application Charts
+
+Versioned Helm charts for **chart-less apps** — users who bring a container
+image and no chart of their own. Unlike `compute/eks/addons/charts/karpenter-resources`,
+which the addons Terraform installs, these are deployed per app by the Ravion
+runner, which clones this repository and resolves a repo-relative path. They
+version independently under `rvn-eks@<version>` tags.
+
+| Chart | Workload shape | Status |
+| ----- | -------------- | ------ |
+| [`charts/rvn-eks-web`](charts/rvn-eks-web) | Long-running HTTP service; Deployment + Service + TargetGroupBinding against a Terraform-owned target group | v0.1.0 |
+| [`charts/rvn-eks-worker`](charts/rvn-eks-worker) | Long-running background process; Deployment with no network surface | v0.1.0 |
+| [`charts/rvn-eks-cron`](charts/rvn-eks-cron) | Scheduled job; CronJob | v0.1.0 |
+
+Each chart's values schema is a public, compatibly-evolving API enforced by a
+`values.schema.json`. See [`charts/README.md`](charts/README.md) for the
+placement rationale, the compatibility policy, and the reference-only secrets
+contract.
 
 ## Usage
 
@@ -304,6 +323,18 @@ This repository follows [Semantic Versioning](https://semver.org/):
 ## Testing
 
 This repository uses [Terratest](https://terratest.gruntwork.io/) for integration testing of infrastructure modules. Tests deploy real AWS resources to validate module behavior.
+
+### Application Chart Tests
+
+The Helm charts under `charts/` are tested without a cluster: `helm lint` plus
+assertions against `helm template` output. No AWS credentials are needed.
+
+```bash
+make test-charts                    # all charts
+make test-charts CHART=rvn-eks-web  # one chart
+```
+
+Requires `helm` and `yq`. Runs in CI via `.github/workflows/helm-charts.yml`.
 
 ### Prerequisites
 

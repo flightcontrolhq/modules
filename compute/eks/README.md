@@ -14,7 +14,8 @@ into a single hosting unit with enforced provisioning order:
 
 This stack talks only to the AWS API, so it provisions in a single apply with
 no connectivity to the cluster's Kubernetes endpoint. Optional extensions —
-Karpenter autoscaling, the AWS Load Balancer Controller, the EBS CSI driver, and Container Insights — live in
+Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets
+Operator, the EBS CSI driver, and Container Insights — live in
 the separate [`compute/eks/addons`](addons/) stack as selectable add-ons, so
 clusters only carry what they use.
 
@@ -26,7 +27,7 @@ should consume this composite only.
 
 ```hcl
 module "eks" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/eks?ref=v1.0.0"
+  source = "git::https://github.com/flightcontrolhq/modules.git//compute/eks?ref=main"
 
   name   = "platform"
   region = "us-east-1"
@@ -40,6 +41,11 @@ module "eks" {
   tags = { Environment = "prod" }
 }
 ```
+
+> **Pinning a `ref`:** this repository has no `vX.Y.Z` tags. Releases are tagged
+> per module definition as `rvn-<definition-type>@<x.y.z>` (for example
+> `rvn-aws-network@1.0.1`). Once a release of this stack is cut, pin to
+> `?ref=rvn-eks@<x.y.z>`; until then use `?ref=main` or a commit SHA.
 
 ## Requirements
 
@@ -114,8 +120,15 @@ module "eks" {
 - Ordering is intentional: CoreDNS is a Deployment and hangs `DEGRADED` for
   ~20 minutes when no compute exists. The composite `depends_on` chain
   prevents that deadlock.
-- This module creates no optional add-ons. Karpenter autoscaling, the EBS CSI
-  driver, and Container Insights are selectable toggles on the
-  [`compute/eks/addons`](addons/) stack, deployed against this cluster.
+- This module creates no optional add-ons. Karpenter autoscaling, the External
+  Secrets Operator, the EBS CSI driver, and Container Insights are selectable
+  toggles on the [`compute/eks/addons`](addons/) stack, deployed against this
+  cluster.
+- `secrets_encryption_enabled` (default `true`) puts Kubernetes Secrets in etcd
+  under KMS envelope encryption, using a dedicated CMK per cluster unless
+  `secrets_kms_key_arn` supplies one. That is the at-rest half of the secrets
+  story; the reference half — workloads naming Secrets Manager / Parameter
+  Store ARNs instead of carrying values — is the External Secrets Operator
+  add-on, documented in [`compute/eks/addons`](addons/#secrets-external-secrets-operator).
 - Nested modules under `modules/` are internal implementation details of this
   composite — do not instantiate them as separate root stacks.

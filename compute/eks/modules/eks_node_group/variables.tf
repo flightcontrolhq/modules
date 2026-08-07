@@ -259,7 +259,7 @@ variable "ebs_kms_key_arn" {
 
 variable "user_data" {
   type        = string
-  description = "Raw user-data appended to the EKS bootstrap script. Module base64-encodes it."
+  description = "Custom user data placed verbatim in the launch template (module base64-encodes it). EKS merges its own node bootstrap user data with this, so the value must use the format the ami_type expects: MIME multi-part for AL2/AL2023, TOML for Bottlerocket, PowerShell for Windows. See the module README."
   default     = null
 }
 

@@ -1,10 +1,10 @@
 definition:
   type: rvn-eks-addons
   name: EKS Add-ons
-  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, EBS CSI storage, CloudWatch Container Insights, and shared application/network load balancers, each toggled and configured independently.
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, CloudWatch Container Insights, and shared application/network load balancers, each toggled and configured independently.
 release:
   version: 0.1.0
-  description: Initial EKS add-ons definition with selectable Karpenter, AWS Load Balancer Controller, EBS CSI driver, and CloudWatch Container Insights add-ons, plus optional shared ALBs/NLBs that web workloads attach to via TargetGroupBinding.
+  description: Initial EKS add-ons definition with selectable Karpenter, AWS Load Balancer Controller, External Secrets Operator, EBS CSI driver, and CloudWatch Container Insights add-ons, plus optional shared ALBs/NLBs that web workloads attach to via TargetGroupBinding.
 module:
   inputs:
     - id: cluster
@@ -140,6 +140,39 @@ module:
       placeholder: Latest compatible
       show_when:
         cloudwatch_observability_enabled: true
+      type: string
+    - description: Reference-only secrets for workloads. The External Secrets Operator reads the Secrets Manager secrets and SSM parameters that services reference by ARN and materializes them into Kubernetes secrets, so secret values never pass through Ravion, Helm values, or release history. Requires Kubernetes API connectivity from the Terraform runner.
+      id: section_external_secrets
+      label: External secrets
+      type: section
+    - default: true
+      id: eso_enabled
+      label: External Secrets Operator
+      type: boolean
+    - add_button_label: Add ARN
+      collapsible: true
+      description: Secrets Manager secret and SSM parameter ARNs (wildcards allowed) the operator may read. Leave empty to allow reading every secret and parameter in this account and region. Add entries to scope the operator down, or to reach other regions and accounts.
+      id: eso_secret_arns
+      label: Readable secret ARNs
+      placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*
+      show_when:
+        eso_enabled: true
+      type: string_array
+    - collapsible: true
+      description: Version of the external-secrets Helm chart to install.
+      id: eso_chart_version
+      label: Chart version
+      placeholder: 2.8.0
+      show_when:
+        eso_enabled: true
+      type: string
+    - collapsible: true
+      description: Namespace the operator is installed into. Created if it does not exist.
+      id: eso_namespace
+      label: Operator namespace
+      placeholder: external-secrets
+      show_when:
+        eso_enabled: true
       type: string
     - description: Application Load Balancers that web workloads attach to via the load balancer controller's TargetGroupBinding. Use these for HTTP/HTTPS traffic - websites, APIs, and webhook endpoints.
       id: section_alb
@@ -453,6 +486,10 @@ module:
         ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
         cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
         cloudwatch_observability_addon_version: << module.input.cloudwatch_observability_addon_version >>
+        eso_enabled: '<< module.input.eso_enabled != nil ? module.input.eso_enabled : true >>'
+        eso_chart_version: << module.input.eso_chart_version || "2.8.0" >>
+        eso_namespace: << module.input.eso_namespace || "external-secrets" >>
+        eso_secret_arns: '<< module.input.eso_secret_arns != nil ? module.input.eso_secret_arns : [] >>'
         public_subnet_ids: << module.input.public_subnet_ids >>
         load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
         public_alb_enabled: << module.input.public_alb_enabled >>
@@ -510,11 +547,27 @@ module:
     | ------ | ------- | ---------------- |
     | **Karpenter** | On | Just-in-time node autoscaling: controller and node IAM roles, Pod Identity association, instance profile, SQS interruption queue, EventBridge rules, the controller Helm charts, and an optional default NodePool |
     | **Load balancer controller** | With load balancers | Installed automatically when any shared load balancer is enabled; registers workload pods into their target groups (TargetGroupBinding) via the AWS Load Balancer Controller Helm chart wired to the cluster module's Pod Identity role. Opt in without shared load balancers via advanced Terraform variables to provision ALBs/NLBs directly from Ingress and LoadBalancer resources |
+    | **External Secrets Operator** | On | Reference-only secrets: workloads name a Secrets Manager secret or SSM parameter by ARN, and the operator materializes it into a Kubernetes secret using its own scoped Pod Identity role |
     | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
     | **Container Insights** | On | Node, pod, and container metrics plus application/data plane logs via the amazon-cloudwatch-observability EKS add-on; populates the cluster module's Metrics and Logs tabs |
     | **Shared load balancers** | Off | Terraform-managed public/private ALBs and NLBs that web workloads attach to via the load balancer controller's TargetGroupBinding — the same shared-LB pattern the ECS Cluster module uses |
 
-    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter and the load balancer controller additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
+    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the load balancer controller, and the External Secrets Operator additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
+
+    ## External secrets
+
+    Kubernetes has no equivalent of the ECS task definition's `valueFrom` injection, so this add-on installs the External Secrets Operator as the bridge. A service references a secret **by ARN**; the operator reads it with its own IAM role and materializes it into a Kubernetes secret in the service's namespace. Values live only in AWS — they never pass through Ravion, Helm values, or Helm release history.
+
+    Two cluster-scoped stores are created for services to reference, one per AWS backend (the operator's AWS provider takes a single service per store):
+
+    | Backend | Store name | Kind |
+    | ------- | ---------- | ---- |
+    | AWS Secrets Manager | `ravion-aws` | `ClusterSecretStore` |
+    | AWS SSM Parameter Store | `ravion-aws-parameter-store` | `ClusterSecretStore` |
+
+    By default the operator may read every secret and parameter in the cluster's account and region. Add **readable secret ARNs** to scope it to specific secrets or prefixes, or to grant access in another region or account.
+
+    At rest, the Kubernetes secrets the operator writes are KMS envelope-encrypted in etcd — the EKS Cluster module enables that by default with a dedicated key per cluster.
 
     ## Shared load balancers
 
@@ -530,7 +583,7 @@ module:
     ## Prerequisites
 
     - An **EKS Cluster** module.
-    - When a Helm-installed add-on runs (**Karpenter**, or any **shared load balancer** - which installs the **load balancer controller**): a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
+    - When a Helm-installed add-on runs (**Karpenter**, the **External Secrets Operator**, or any **shared load balancer** - which installs the **load balancer controller**): a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
     The Helm installs authenticate by assuming the cluster's **Ravion Runner role** (inherited automatically from the cluster reference) — a stable IAM role the EKS Cluster module registers as an access entry with cluster-admin. Per-run pipeline roles never appear in the cluster's access configuration.
 
@@ -545,6 +598,8 @@ module:
     | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
     | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
     | Load balancer controller chart version | No | `1.14.0`    | aws-load-balancer-controller Helm chart version (controller installed automatically with any load balancer) |
+    | External Secrets Operator | No    | `true`               | Reference-only secrets, ClusterSecretStores, and a scoped Pod Identity role |
+    | Readable secret ARNs   | No       | Account + region     | Scopes which Secrets Manager secrets and SSM parameters the operator may read |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
     | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
     | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
@@ -562,5 +617,6 @@ module:
     - [Karpenter](https://karpenter.sh/docs/) - Just-in-time node autoscaling
     - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/) - Customizing provisioning behavior
     - [AWS Load Balancer Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/) - Ingress and Service load balancing
+    - [External Secrets Operator](https://external-secrets.io/) - Referencing AWS secrets from Kubernetes workloads
     - [Amazon EBS CSI driver](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html) - Persistent volumes on EKS
     - [Container Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContainerInsights.html) - Cluster observability
