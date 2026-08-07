@@ -106,8 +106,8 @@ resource "aws_db_instance" "this" {
     }
 
     precondition {
-      condition     = var.master_user_password_management_enabled || var.password != null
-      error_message = "password is required when master_user_password_management_enabled is false."
+      condition     = var.master_user_password_management_enabled || var.password != null || try(data.aws_db_instance.password_preservation[0].db_instance_arn != "", false) || var.snapshot_identifier != null || var.restore_to_point_in_time != null
+      error_message = "A new database requires master credentials. Enable master_user_password_management_enabled, provide password, restore a database, or enable master_user_password_preservation_enabled when importing an existing database."
     }
 
     precondition {

@@ -40,7 +40,7 @@ New instances launched by the Auto Scaling Group boot from the launch template b
 
 ```hcl
 module "web" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ec2_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//compute/ec2_service?ref=v1.0.0"
 
   name       = "my-web"
   vpc_id     = "vpc-0123456789abcdef0"
@@ -87,7 +87,7 @@ module "web" {
 
 ```hcl
 module "worker" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ec2_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//compute/ec2_service?ref=v1.0.0"
 
   name       = "my-worker"
   vpc_id     = "vpc-0123456789abcdef0"

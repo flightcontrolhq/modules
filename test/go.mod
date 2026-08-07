@@ -1,4 +1,4 @@
-module github.com/flightcontrolhq/modules/test
+module github.com/ravionhq/modules/test
 
 go 1.23
 

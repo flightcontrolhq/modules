@@ -232,7 +232,7 @@ variable "master_username" {
 }
 
 variable "master_password" {
-  description = "Password for the master DB user. Required when master_user_password_management_enabled is false. Must be 8-128 characters."
+  description = "Optional password for the master DB user when Secrets Manager password management is disabled. Leave null when importing or restoring a cluster whose existing password must remain unmanaged by Terraform."
   type        = string
   default     = null
   sensitive   = true
@@ -244,9 +244,20 @@ variable "master_password" {
 }
 
 variable "master_user_password_management_enabled" {
-  description = "Whether to manage the master user password with Secrets Manager. Default is true."
+  description = "Whether Amazon Aurora manages the master user password with Secrets Manager. Disable this before importing a cluster whose existing password is managed externally."
   type        = bool
   default     = true
+}
+
+variable "master_user_password_preservation_enabled" {
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. The named cluster must already exist in AWS, and master user password management must be disabled."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.master_user_password_preservation_enabled || !var.master_user_password_management_enabled
+    error_message = "master_user_password_preservation_enabled and master_user_password_management_enabled cannot both be true."
+  }
 }
 
 variable "master_user_secret_kms_key_id" {

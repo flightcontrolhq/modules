@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 1.1.0
-  description: Add optional RDS Proxy connection pooling in front of the database.
+  version: 1.1.1
+  description: Add optional RDS Proxy connection pooling and update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - id: network
@@ -539,12 +539,26 @@ module:
     - id: section_auth
       label: Credentials & authentication
       type: section
+    - default: true
+      description: Let AWS generate and manage the master password in Secrets Manager. Disable before importing a database whose existing password is managed externally.
+      id: master_user_password_management_enabled
+      label: Manage password in Secrets Manager
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Preserve the externally managed password of an imported database. Ravion verifies that the named database already exists in AWS.
+      id: master_user_password_preservation_enabled
+      label: Preserve existing master password
+      show_when:
+        master_user_password_management_enabled: false
+      type: boolean
     - collapsible: true
       id: master_user_secret_kms_key_id
       label: Secrets Manager KMS key ARN
       placeholder: arn:aws:kms:...
       required: false
       show_when:
+        master_user_password_management_enabled: true
         restore_mode: none
       type: string
     - collapsible: true
@@ -1084,7 +1098,8 @@ module:
         kms_key_id: << module.input.kms_key_id >>
         license_model: '<< module.input.engine == "oracle-ee" || module.input.engine == "oracle-se2" || module.input.engine == "oracle-se2-cdb" ? module.input.license_model_oracle : module.input.license_model_sqlserver >>'
         maintenance_window: << module.input.maintenance_window >>
-        master_user_password_management_enabled: true
+        master_user_password_management_enabled: << module.input.master_user_password_management_enabled >>
+        master_user_password_preservation_enabled: << module.input.master_user_password_preservation_enabled || false >>
         master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
         max_allocated_storage: << module.input.max_allocated_storage >>
         monitoring_interval: << module.input.monitoring_interval >>
@@ -1238,7 +1253,7 @@ module:
 
     ## Credentials and security
 
-    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Disable it only when you need to provide a master password yourself.
+    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Before importing a database whose existing password is managed outside Secrets Manager, disable password management and enable Preserve existing master password. Leaving password management enabled causes AWS to generate a new master password. Preservation verifies that the named database already exists in AWS, preventing a new database from reaching AWS without any source of master credentials.
 
     Storage encryption is enabled by default. Provide a storage KMS key ARN when you need a customer-managed key for storage. IAM database authentication is shown only for MySQL and PostgreSQL.
 
@@ -1279,7 +1294,8 @@ module:
     | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
     | Multi-AZ | No | false | Enables high availability standby. |
     | Read replicas | No | false | Creates read replicas when supported by the engine. |
-    | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. |
+    | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. Disable before importing an externally managed password. |
+    | Preserve existing master password | No | false | Verifies the database exists in AWS and leaves its externally managed password unchanged. |
     | Backup retention days | No | 7 | Set to 0 to disable automated backups. |
     | Deletion protection | No | true | Helps prevent accidental deletion. |
     | Performance insights | No | true | Enables AWS Performance Insights. |
@@ -1306,4 +1322,4 @@ module:
     - [RDS DB instance classes](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html)
     - [RDS security](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.html)
     - [RDS monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Monitoring.html)
-    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/rds)
+    - [Terraform source](https://github.com/ravionhq/modules/tree/$local.module_tag/database/rds)

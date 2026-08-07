@@ -3,8 +3,8 @@ definition:
   name: ACM Certificate
   description: Requests an AWS Certificate Manager public certificate with DNS validation.
 release:
-  version: 1.0.0
-  description: First stable release.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -147,4 +147,4 @@ module:
 
     - [AWS Certificate Manager DNS validation](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html)
     - [AWS Certificate Manager certificates for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/acm_certificate)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/security/acm_certificate)

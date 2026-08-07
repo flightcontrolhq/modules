@@ -18,7 +18,7 @@ Provisions an AWS KMS Customer Master Key (CMK) plus a stable alias. Supports bo
 
 ```hcl
 module "app_data_key" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/kms?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/kms?ref=v1.0.0"
 
   name = "app-data"
 
@@ -36,7 +36,7 @@ module "app_data_key" {
 
 ```hcl
 module "oidc_signer" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/kms?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/kms?ref=v1.0.0"
 
   name      = "oidc-signer-prod"
   key_spec  = "RSA_2048"
@@ -58,7 +58,7 @@ module "oidc_signer" {
 
 ```hcl
 module "session_hmac" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/kms?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/kms?ref=v1.0.0"
 
   name      = "session-hmac"
   key_spec  = "HMAC_256"
@@ -75,7 +75,7 @@ All principal lists default to `[]`, so you can apply the key first and re-apply
 
 ```hcl
 module "kms" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//security/kms?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//security/kms?ref=v1.0.0"
 
   name = "future-key"
   # Apply once with no role lists, then re-apply once the broker / publisher /

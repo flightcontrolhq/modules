@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon Aurora cluster. Supports Aurora PostgreSQL and Aurora MySQL with provisioned or Serverless v2 capacity.
 
 release:
-  version: 1.1.0
-  description: Add optional RDS Proxy connection pooling in front of the cluster.
+  version: 1.1.1
+  description: Add optional RDS Proxy connection pooling and update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - id: network
@@ -516,12 +516,26 @@ module:
     - id: section_auth
       label: Credentials & authentication
       type: section
+    - default: true
+      description: Let AWS generate and manage the master password in Secrets Manager. Disable before importing a cluster whose existing password is managed externally.
+      id: master_user_password_management_enabled
+      label: Manage password in Secrets Manager
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Preserve the externally managed password of an imported cluster. Ravion verifies that the named cluster already exists in AWS.
+      id: master_user_password_preservation_enabled
+      label: Preserve existing master password
+      show_when:
+        master_user_password_management_enabled: false
+      type: boolean
     - collapsible: true
       id: master_user_secret_kms_key_id
       label: Secrets Manager KMS key ARN
       placeholder: arn:aws:kms:...
       required: false
       show_when:
+        master_user_password_management_enabled: true
         restore_mode: none
       type: string
     - collapsible: true
@@ -1096,7 +1110,8 @@ module:
         local_write_forwarding_enabled: << module.input.local_write_forwarding_enabled >>
         major_version_upgrade_enabled: << module.input.major_version_upgrade_enabled >>
         master_password: null
-        master_user_password_management_enabled: true
+        master_user_password_management_enabled: << module.input.master_user_password_management_enabled >>
+        master_user_password_preservation_enabled: << module.input.master_user_password_preservation_enabled || false >>
         master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
         master_username: << module.input.master_username >>
         minor_version_auto_upgrade_enabled: << module.input.minor_version_auto_upgrade_enabled >>
@@ -1374,7 +1389,7 @@ module:
 
     ## Credentials and security
 
-    Master password management in AWS Secrets Manager is enabled by default, so AWS creates and stores the master password for the cluster. Provide a Secrets Manager KMS key ARN when you need a customer-managed key for that secret.
+    Master password management in AWS Secrets Manager is enabled by default, so AWS creates and stores the master password for the cluster. Before importing a cluster whose existing password is managed outside Secrets Manager, disable password management and enable Preserve existing master password. Leaving password management enabled causes AWS to generate a new master password. Preservation verifies that the named cluster already exists in AWS, preventing a new cluster from reaching AWS without any source of master credentials. Provide a Secrets Manager KMS key ARN when you need a customer-managed key for a managed secret.
 
     Storage encryption is enabled by the Terraform module. Provide a storage KMS key ARN when you need a customer-managed key for cluster storage. IAM database authentication and the Aurora Data API HTTP endpoint are optional.
 
@@ -1415,6 +1430,8 @@ module:
     | Reader count | No | 0 | Number of reader instances. Add readers for high availability and read scaling. |
     | Database name | No | Blank | Creates an initial database on new clusters when provided. |
     | Username | Yes for new clusters | dbadmin | Master database user. |
+    | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. Disable before importing an externally managed password. |
+    | Preserve existing master password | No | false | Verifies the cluster exists in AWS and leaves its externally managed password unchanged. |
     | Publicly accessible | No | false | Switches the DB subnet group to public subnets. Leave disabled unless public database access is intentional. |
     | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
     | Backup retention days | No | 7 | Aurora requires at least 1 day. |
@@ -1447,4 +1464,4 @@ module:
     - [Aurora Serverless v2](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html)
     - [Aurora global databases](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html)
     - [Aurora monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_Monitoring.html)
-    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/aurora)
+    - [Terraform source](https://github.com/ravionhq/modules/tree/$local.module_tag/database/aurora)

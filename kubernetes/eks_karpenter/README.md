@@ -39,7 +39,7 @@ spec.instanceProfile = <output: node_instance_profile_name>
 
 ```hcl
 module "karpenter" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//kubernetes/eks_karpenter?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//kubernetes/eks_karpenter?ref=v1.0.0"
 
   cluster_name = module.eks.cluster_name
 }

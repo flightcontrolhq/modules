@@ -21,7 +21,7 @@ Creates an Amazon DynamoDB table with support for on-demand and provisioned bill
 
 ```hcl
 module "dynamodb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//database/dynamodb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//database/dynamodb?ref=v1.0.0"
 
   name     = "my-app-sessions"
   hash_key = "session_id"
@@ -39,7 +39,7 @@ module "dynamodb" {
 
 ```hcl
 module "dynamodb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//database/dynamodb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//database/dynamodb?ref=v1.0.0"
 
   name      = "my-app-events"
   hash_key  = "user_id"
@@ -77,7 +77,7 @@ module "dynamodb" {
 
 ```hcl
 module "dynamodb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//database/dynamodb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//database/dynamodb?ref=v1.0.0"
 
   name         = "my-app-orders"
   hash_key     = "order_id"
@@ -99,7 +99,7 @@ module "dynamodb" {
 
 ```hcl
 module "dynamodb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//database/dynamodb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//database/dynamodb?ref=v1.0.0"
 
   name     = "my-app-global-users"
   hash_key = "user_id"

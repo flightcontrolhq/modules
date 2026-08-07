@@ -27,7 +27,7 @@ For ALB attachments, the module provisions the production + alternate target-gro
 
 ```hcl
 module "ecs_cluster" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name               = "my-cluster"
   vpc_id             = "vpc-12345678"
@@ -40,7 +40,7 @@ module "ecs_cluster" {
 }
 
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "api"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -89,7 +89,7 @@ module "api_service" {
 
 ```hcl
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name            = "api"
   cluster_arn     = module.ecs_cluster.cluster_arn
@@ -131,7 +131,7 @@ resource "aws_service_discovery_private_dns_namespace" "main" {
 }
 
 module "backend_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "backend"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -157,7 +157,7 @@ module "backend_service" {
 
 ```hcl
 module "tcp_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "tcp-service"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -188,7 +188,7 @@ module "tcp_service" {
 
 ```hcl
 module "worker_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "worker"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -240,7 +240,7 @@ module "worker_service" {
 
 ```hcl
 module "worker_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "worker"
   cluster_arn = module.ecs_cluster.cluster_arn

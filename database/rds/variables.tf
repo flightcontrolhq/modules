@@ -331,7 +331,7 @@ variable "username" {
 
 variable "password" {
   type        = string
-  description = "The master password for the database. Required if master_user_password_management_enabled is false."
+  description = "Optional master password for the database when Secrets Manager password management is disabled. Leave null when importing or restoring a database whose existing password must remain unmanaged by Terraform."
   default     = null
   sensitive   = true
 
@@ -343,8 +343,19 @@ variable "password" {
 
 variable "master_user_password_management_enabled" {
   type        = bool
-  description = "Whether to manage the master user password with AWS Secrets Manager."
+  description = "Whether AWS RDS manages the master user password with Secrets Manager. Disable this before importing a database whose existing password is managed externally."
   default     = true
+}
+
+variable "master_user_password_preservation_enabled" {
+  type        = bool
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. The named database must already exist in AWS, and master user password management must be disabled."
+  default     = false
+
+  validation {
+    condition     = !var.master_user_password_preservation_enabled || !var.master_user_password_management_enabled
+    error_message = "master_user_password_preservation_enabled and master_user_password_management_enabled cannot both be true."
+  }
 }
 
 variable "master_user_secret_kms_key_id" {

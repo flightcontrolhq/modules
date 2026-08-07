@@ -360,8 +360,9 @@ module "aurora" {
 | security_group_ids | Additional security group IDs to attach. | `list(string)` | `[]` | no |
 | allowed_security_group_ids | Security group IDs allowed to access the cluster. | `list(string)` | `[]` | no |
 | allowed_cidr_blocks | CIDR blocks allowed to access the cluster. | `list(string)` | `[]` | no |
-| master_password | Master password (required when master_user_password_management_enabled is false). | `string` | `null` | no |
-| master_user_password_management_enabled | Use Secrets Manager for master password. | `bool` | `true` | no |
+| master_password | Optional master password when Secrets Manager management is disabled. Leave null to preserve an imported or restored cluster's externally managed password. | `string` | `null` | no |
+| master_user_password_management_enabled | Use Secrets Manager for the master password. Disable before importing a cluster whose existing password is managed externally. | `bool` | `true` | no |
+| master_user_password_preservation_enabled | Preserve an existing externally managed password by omitting password configuration. The named cluster must already exist in AWS, and password management must be disabled. | `bool` | `false` | no |
 | master_user_secret_kms_key_id | KMS key ARN for the Secrets Manager secret. | `string` | `null` | no |
 | iam_database_authentication_enabled | Enable IAM database authentication. | `bool` | `false` | no |
 | storage_encryption_enabled | Enable encryption at rest. | `bool` | `true` | no |
