@@ -41,6 +41,35 @@ output "cloudwatch_observability_role_arn" {
 }
 
 ################################################################################
+# External Secrets Operator
+################################################################################
+
+output "eso_namespace" {
+  description = "Kubernetes namespace where the External Secrets Operator is installed (null if disabled)."
+  value       = var.eso_enabled ? helm_release.external_secrets[0].namespace : null
+}
+
+output "eso_chart_version" {
+  description = "Installed version of the external-secrets Helm chart (null if disabled)."
+  value       = var.eso_enabled ? helm_release.external_secrets[0].version : null
+}
+
+output "eso_role_arn" {
+  description = "ARN of the External Secrets Operator Pod Identity role (null if disabled)."
+  value       = var.eso_enabled ? module.external_secrets_role[0].role_arn : null
+}
+
+output "eso_secrets_manager_store_name" {
+  description = "Name of the cluster-scoped AWS Secrets Manager store (kind ClusterSecretStore, apiVersion external-secrets.io/v1) that workload charts reference for Secrets Manager secrets (null if disabled)."
+  value       = var.eso_enabled && var.eso_cluster_secret_stores_enabled ? var.eso_secrets_manager_store_name : null
+}
+
+output "eso_parameter_store_store_name" {
+  description = "Name of the cluster-scoped AWS SSM Parameter Store store (kind ClusterSecretStore, apiVersion external-secrets.io/v1) that workload charts reference for SSM parameters (null if disabled)."
+  value       = var.eso_enabled && var.eso_cluster_secret_stores_enabled ? var.eso_parameter_store_store_name : null
+}
+
+################################################################################
 # Karpenter
 ################################################################################
 

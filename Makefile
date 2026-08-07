@@ -1,6 +1,6 @@
 # Makefile for Ravion Modules
 
-.PHONY: help test test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev pull-local-definition readme env-local-sh env-local-fish
+.PHONY: help test test-charts test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev pull-local-definition readme env-local-sh env-local-fish
 
 TIMEOUT ?= 180m
 PARALLEL ?= 3
@@ -49,6 +49,7 @@ help:
 	@echo "  test-ecs-service     Run ECS Service tests"
 	@echo "  test-elasticache     Run ElastiCache tests"
 	@echo "  test-s3              Run S3 module tests"
+	@echo "  test-charts          Run Helm chart lint + template tests (no cluster needed)"
 	@echo ""
 	@echo "Cleanup Targets:"
 	@echo "  test-cleanup         Clean up orphaned test resources"
@@ -73,6 +74,8 @@ help:
 	@echo "  make test PARALLEL=1             # Run tests sequentially"
 	@echo "  make test-vpc TIMEOUT=30m        # Run VPC tests"
 	@echo "  make test-single TEST=TestVpcBasic"
+	@echo "  make test-charts"
+	@echo "  make test-charts CHART=rvn-eks-web"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network DRY_RUN=1"
 	@echo "  make publish-local-dev MODULE=rvn-aws-network FORCE=1"
@@ -167,6 +170,10 @@ test-elasticache:
 test-s3:
 	@echo "Running S3 tests..."
 	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestS3 ./...)
+
+test-charts:
+	@echo "Running Helm chart lint + template tests..."
+	@./charts/test.sh $(CHART)
 
 test-cleanup:
 	@echo "Cleaning up orphaned terratest resources..."

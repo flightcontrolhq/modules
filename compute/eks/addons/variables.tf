@@ -109,6 +109,90 @@ variable "cloudwatch_observability_addon_configuration_values" {
 }
 
 ################################################################################
+# External Secrets Operator
+################################################################################
+
+variable "eso_enabled" {
+  type        = bool
+  description = "Install the External Secrets Operator, its Pod Identity role, and the Ravion ClusterSecretStores. Workloads then reference Secrets Manager secrets and SSM parameters by ARN and ESO materializes them into Kubernetes Secrets, so secret values never pass through Ravion, Helm values, or release history."
+  default     = true
+}
+
+variable "eso_chart_version" {
+  type        = string
+  description = "Version of the external-secrets Helm chart to install."
+  default     = "2.8.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.eso_chart_version))
+    error_message = "The eso_chart_version must be a semantic version like '2.8.0' (no leading 'v')."
+  }
+}
+
+variable "eso_namespace" {
+  type        = string
+  description = "Kubernetes namespace the External Secrets Operator is installed into. Created if it does not exist."
+  default     = "external-secrets"
+  nullable    = false
+}
+
+variable "eso_service_account" {
+  type        = string
+  description = "Service account name for the External Secrets Operator controller. Must match the chart's service account, since the Pod Identity association binds credentials to this name."
+  default     = "external-secrets"
+  nullable    = false
+}
+
+variable "eso_secret_arns" {
+  type        = list(string)
+  description = "Secrets Manager secret and SSM parameter ARNs (wildcards allowed) the operator may read. When empty, the role can read every secret and parameter in this account and region. Set this to scope the role down, or to grant access to other regions and accounts."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.eso_secret_arns : can(regex("^arn:[^:]*:(secretsmanager|ssm):", arn))])
+    error_message = "All eso_secret_arns must be Secrets Manager or SSM ARNs, e.g. 'arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*' or 'arn:aws:ssm:us-east-2:111122223333:parameter/prod/*'."
+  }
+}
+
+variable "eso_kms_key_arns" {
+  type        = list(string)
+  description = "Customer-managed KMS key ARNs the operator may decrypt with. Only needed for secrets or parameters encrypted with a customer-managed key; the AWS-managed aws/secretsmanager and aws/ssm keys need no explicit grant."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.eso_kms_key_arns : can(regex("^arn:[^:]*:kms:", arn))])
+    error_message = "All eso_kms_key_arns must be valid KMS key ARNs."
+  }
+}
+
+variable "eso_cluster_secret_stores_enabled" {
+  type        = bool
+  description = "Create the Ravion ClusterSecretStores. Disable to manage SecretStore resources yourself; workload charts then need their own store reference."
+  default     = true
+}
+
+variable "eso_secrets_manager_store_name" {
+  type        = string
+  description = "Name of the cluster-scoped AWS Secrets Manager store. This is the store name Ravion app charts default to."
+  default     = "ravion-aws"
+  nullable    = false
+}
+
+variable "eso_parameter_store_store_name" {
+  type        = string
+  description = "Name of the cluster-scoped AWS SSM Parameter Store store. A separate store is required because ESO's AWS provider takes a single service per store."
+  default     = "ravion-aws-parameter-store"
+  nullable    = false
+}
+
+variable "eso_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the external-secrets chart values, after the values this module derives (CRD install, service account). Later entries win."
+  default     = []
+}
+
+################################################################################
 # Karpenter
 ################################################################################
 
