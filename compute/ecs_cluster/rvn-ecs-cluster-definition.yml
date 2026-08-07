@@ -226,7 +226,7 @@ module:
       id: section_public_albs
       label: Public application load balancers
       type: section
-    - add_button_label: Add public load balancer
+    - label: Public load balancers
       default:
         - name: <<project.given_id>>-<<environment.given_id>>-pub
           https_enabled: true
@@ -321,7 +321,7 @@ module:
       id: section_private_albs
       label: Private application load balancers
       type: section
-    - add_button_label: Add private load balancer
+    - label: Private load balancers
       default: []
       description: Each entry creates one internal Application Load Balancer. Services on this cluster choose a load balancer by name.
       id: private_albs
@@ -408,7 +408,7 @@ module:
       id: section_nlb
       label: Network load balancers
       type: section
-    - add_button_label: Add public NLB
+    - label: Public network load balancers
       default: []
       description: Each entry creates one internet-facing Network Load Balancer. Services on this cluster choose a load balancer by name.
       id: public_nlbs
@@ -467,7 +467,7 @@ module:
             access_logs_enabled: true
           type: string
       type: object_array
-    - add_button_label: Add private NLB
+    - label: Private network load balancers
       default: []
       description: Each entry creates one internal Network Load Balancer. Services on this cluster choose a load balancer by name.
       id: private_nlbs
