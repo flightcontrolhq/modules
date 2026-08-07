@@ -3,11 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 1.0.0
-  description: >-
-    First stable release. Assign ALB listener rule priorities at apply time when
-    no explicit priority is set, so multiple services can share a listener
-    without priority conflicts.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - id: section_cluster
