@@ -349,8 +349,13 @@ variable "master_user_password_management_enabled" {
 
 variable "master_user_password_preservation_enabled" {
   type        = bool
-  description = "Whether to preserve an existing externally managed master password by omitting password configuration. The named database must already exist in AWS."
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. The named database must already exist in AWS, and master user password management must be disabled."
   default     = false
+
+  validation {
+    condition     = !var.master_user_password_preservation_enabled || !var.master_user_password_management_enabled
+    error_message = "master_user_password_preservation_enabled and master_user_password_management_enabled cannot both be true."
+  }
 }
 
 variable "master_user_secret_kms_key_id" {

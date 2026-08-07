@@ -917,6 +917,27 @@ run "test_master_user_password_management_enabled_default" {
   }
 }
 
+# Test: managed and preserved passwords are mutually exclusive
+run "test_password_management_and_preservation_conflict" {
+  command = plan
+
+  variables {
+    name                                      = "test-db"
+    engine                                    = "postgres"
+    instance_class                            = "db.t3.micro"
+    allocated_storage                         = 20
+    vpc_id                                    = "vpc-12345678"
+    subnet_ids                                = ["subnet-11111111", "subnet-22222222"]
+    username                                  = "admin"
+    master_user_password_management_enabled   = true
+    master_user_password_preservation_enabled = true
+  }
+
+  expect_failures = [
+    var.master_user_password_preservation_enabled,
+  ]
+}
+
 # Test: preservation mode requires a matching existing database
 run "test_fresh_database_requires_master_credentials" {
   command = plan
