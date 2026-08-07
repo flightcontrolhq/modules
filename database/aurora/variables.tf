@@ -250,7 +250,7 @@ variable "master_user_password_management_enabled" {
 }
 
 variable "master_user_password_preservation_enabled" {
-  description = "Whether to preserve an existing externally managed master password by omitting password configuration. Enable only when importing an existing cluster."
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. The named cluster must already exist in AWS."
   type        = bool
   default     = false
 }

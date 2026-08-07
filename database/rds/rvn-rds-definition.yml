@@ -419,7 +419,7 @@ module:
       type: boolean
     - collapsible: true
       default: false
-      description: Confirm that this is an imported database whose existing externally managed password must remain unchanged. Do not enable for a new database.
+      description: Preserve the externally managed password of an imported database. Ravion verifies that the named database already exists in AWS.
       id: master_user_password_preservation_enabled
       label: Preserve existing master password
       show_when:
@@ -1114,7 +1114,7 @@ module:
 
     ## Credentials and security
 
-    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Before importing a database whose existing password is managed outside Secrets Manager, disable password management and enable Preserve existing master password. Leaving password management enabled causes AWS to generate a new master password. The preservation confirmation prevents a new database from reaching AWS without any source of master credentials.
+    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Before importing a database whose existing password is managed outside Secrets Manager, disable password management and enable Preserve existing master password. Leaving password management enabled causes AWS to generate a new master password. Preservation verifies that the named database already exists in AWS, preventing a new database from reaching AWS without any source of master credentials.
 
     Storage encryption is enabled by default. Provide a storage KMS key ARN when you need a customer-managed key for storage. IAM database authentication is shown only for MySQL and PostgreSQL.
 
@@ -1152,7 +1152,7 @@ module:
     | Multi-AZ | No | false | Enables high availability standby. |
     | Read replicas | No | false | Creates read replicas when supported by the engine. |
     | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. Disable before importing an externally managed password. |
-    | Preserve existing master password | No | false | Import-only confirmation that leaves an existing externally managed password unchanged. |
+    | Preserve existing master password | No | false | Verifies the database exists in AWS and leaves its externally managed password unchanged. |
     | Backup retention days | No | 7 | Set to 0 to disable automated backups. |
     | Deletion protection | No | true | Helps prevent accidental deletion. |
     | Performance insights | No | true | Enables AWS Performance Insights. |
