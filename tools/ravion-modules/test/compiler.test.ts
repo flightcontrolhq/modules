@@ -95,6 +95,20 @@ describe("compiler", () => {
     );
   });
 
+  it("compiles database password preservation with a false fallback when the input is hidden", async () => {
+    const rds = await compileDefinitionFile(join(repoRoot, "database", "rds", "rvn-rds-definition.yml"));
+    const aurora = await compileDefinitionFile(join(repoRoot, "database", "aurora", "rvn-aurora-definition.yml"));
+
+    assert.equal(
+      getTerraformVariable(rds.module, "master_user_password_preservation_enabled"),
+      "<< module.input.master_user_password_preservation_enabled || false >>",
+    );
+    assert.equal(
+      getTerraformVariable(aurora.module, "master_user_password_preservation_enabled"),
+      "<< module.input.master_user_password_preservation_enabled || false >>",
+    );
+  });
+
   it("fails when a local token remains after compilation", async () => {
     await assert.rejects(
       compileDefinitionFile(join(fixturesDir, "invalid-local-token.yml")),
