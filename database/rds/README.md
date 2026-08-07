@@ -337,8 +337,8 @@ module "mysql" {
 | read_replica_count | Number of read replicas to create. | `number` | `1` | no |
 | read_replica_instance_class | Instance class for read replicas. | `string` | `null` | no |
 | read_replica_availability_zones | AZs for read replicas. | `list(string)` | `[]` | no |
-| password | Master password (required if master_user_password_management_enabled is false). | `string` | `null` | no |
-| master_user_password_management_enabled | Use Secrets Manager for master password. | `bool` | `true` | no |
+| password | Optional master password when Secrets Manager management is disabled. Leave null to preserve an imported or restored database's externally managed password. | `string` | `null` | no |
+| master_user_password_management_enabled | Use Secrets Manager for the master password. Disable before importing a database whose existing password is managed externally. | `bool` | `true` | no |
 | master_user_secret_kms_key_id | KMS key for Secrets Manager secret. | `string` | `null` | no |
 | iam_database_authentication_enabled | Enable IAM database authentication. | `bool` | `false` | no |
 | db_name | Database name to create. | `string` | `null` | no |

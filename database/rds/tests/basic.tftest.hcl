@@ -917,6 +917,27 @@ run "test_master_user_password_management_enabled_default" {
   }
 }
 
+# Test: imported databases can retain an externally managed password
+run "test_unmanaged_import_password_is_omitted" {
+  command = plan
+
+  variables {
+    name                                    = "test-db"
+    engine                                  = "postgres"
+    instance_class                          = "db.t3.micro"
+    allocated_storage                       = 20
+    vpc_id                                  = "vpc-12345678"
+    subnet_ids                              = ["subnet-11111111", "subnet-22222222"]
+    username                                = "admin"
+    master_user_password_management_enabled = false
+  }
+
+  assert {
+    condition     = aws_db_instance.this.manage_master_user_password == null
+    error_message = "manage_master_user_password should be omitted when password management is disabled."
+  }
+}
+
 # Test: performance_insights_enabled defaults to true
 run "test_performance_insights_enabled_default" {
   command = plan

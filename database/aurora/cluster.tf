@@ -39,7 +39,7 @@ resource "aws_rds_cluster" "this" {
   # Authentication
   master_username                     = var.master_username
   master_password                     = var.master_user_password_management_enabled ? null : var.master_password
-  manage_master_user_password         = var.master_user_password_management_enabled
+  manage_master_user_password         = var.master_user_password_management_enabled ? true : null
   master_user_secret_kms_key_id       = var.master_user_password_management_enabled ? var.master_user_secret_kms_key_id : null
   iam_database_authentication_enabled = var.iam_database_authentication_enabled
 
@@ -109,11 +109,6 @@ resource "aws_rds_cluster" "this" {
     precondition {
       condition     = var.security_group_creation_enabled || var.security_group_id != null || length(var.security_group_ids) > 0
       error_message = "At least one security group must be provided: set security_group_creation_enabled = true, provide security_group_id, or provide security_group_ids."
-    }
-
-    precondition {
-      condition     = var.master_user_password_management_enabled || var.master_password != null
-      error_message = "master_password is required when master_user_password_management_enabled is false."
     }
 
     precondition {
