@@ -249,6 +249,12 @@ variable "master_user_password_management_enabled" {
   default     = true
 }
 
+variable "master_user_password_preservation_enabled" {
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. Enable only when importing an existing cluster."
+  type        = bool
+  default     = false
+}
+
 variable "master_user_secret_kms_key_id" {
   description = "The ARN of the KMS key used to encrypt the master user secret in Secrets Manager."
   type        = string

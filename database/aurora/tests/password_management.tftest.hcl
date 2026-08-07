@@ -23,7 +23,7 @@ mock_provider "aws" {
   }
 }
 
-run "test_unmanaged_import_password_is_omitted" {
+run "test_fresh_cluster_requires_master_credentials" {
   command = plan
 
   variables {
@@ -37,6 +37,28 @@ run "test_unmanaged_import_password_is_omitted" {
     security_group_id                       = "sg-12345678"
     master_username                         = "dbadmin"
     master_user_password_management_enabled = false
+  }
+
+  expect_failures = [
+    aws_rds_cluster.this,
+  ]
+}
+
+run "test_unmanaged_import_password_is_omitted" {
+  command = plan
+
+  variables {
+    name                                      = "test-cluster"
+    engine                                    = "aurora-postgresql"
+    engine_version                            = "16.4"
+    instance_class                            = "db.t4g.medium"
+    vpc_id                                    = "vpc-12345678"
+    subnet_ids                                = ["subnet-11111111", "subnet-22222222"]
+    security_group_creation_enabled           = false
+    security_group_id                         = "sg-12345678"
+    master_username                           = "dbadmin"
+    master_user_password_management_enabled   = false
+    master_user_password_preservation_enabled = true
   }
 
   assert {

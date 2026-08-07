@@ -917,8 +917,8 @@ run "test_master_user_password_management_enabled_default" {
   }
 }
 
-# Test: imported databases can retain an externally managed password
-run "test_unmanaged_import_password_is_omitted" {
+# Test: fresh databases cannot omit every source of master credentials
+run "test_fresh_database_requires_master_credentials" {
   command = plan
 
   variables {
@@ -930,6 +930,27 @@ run "test_unmanaged_import_password_is_omitted" {
     subnet_ids                              = ["subnet-11111111", "subnet-22222222"]
     username                                = "admin"
     master_user_password_management_enabled = false
+  }
+
+  expect_failures = [
+    aws_db_instance.this,
+  ]
+}
+
+# Test: imported databases can retain an externally managed password
+run "test_unmanaged_import_password_is_omitted" {
+  command = plan
+
+  variables {
+    name                                      = "test-db"
+    engine                                    = "postgres"
+    instance_class                            = "db.t3.micro"
+    allocated_storage                         = 20
+    vpc_id                                    = "vpc-12345678"
+    subnet_ids                                = ["subnet-11111111", "subnet-22222222"]
+    username                                  = "admin"
+    master_user_password_management_enabled   = false
+    master_user_password_preservation_enabled = true
   }
 
   assert {

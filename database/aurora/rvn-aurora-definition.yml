@@ -5,7 +5,7 @@ definition:
 
 release:
   version: 1.1.0
-  description: Add password management controls for safe cluster imports.
+  description: Add guarded password management controls for safe cluster imports.
 module:
   inputs:
     - id: network
@@ -411,6 +411,14 @@ module:
       description: Let AWS generate and manage the master password in Secrets Manager. Disable before importing a cluster whose existing password is managed externally.
       id: master_user_password_management_enabled
       label: Manage password in Secrets Manager
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Confirm that this is an imported cluster whose existing externally managed password must remain unchanged. Do not enable for a new cluster.
+      id: master_user_password_preservation_enabled
+      label: Preserve existing master password
+      show_when:
+        master_user_password_management_enabled: false
       type: boolean
     - collapsible: true
       id: master_user_secret_kms_key_id
@@ -994,6 +1002,7 @@ module:
         major_version_upgrade_enabled: << module.input.major_version_upgrade_enabled >>
         master_password: null
         master_user_password_management_enabled: << module.input.master_user_password_management_enabled >>
+        master_user_password_preservation_enabled: << module.input.master_user_password_preservation_enabled || false >>
         master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
         master_username: << module.input.master_username >>
         minor_version_auto_upgrade_enabled: << module.input.minor_version_auto_upgrade_enabled >>
@@ -1259,7 +1268,7 @@ module:
 
     ## Credentials and security
 
-    Master password management in AWS Secrets Manager is enabled by default, so AWS creates and stores the master password for the cluster. Disable it before importing a cluster whose existing password is managed outside Secrets Manager; leaving it enabled causes AWS to generate a new master password. When disabled and no password is supplied through advanced Terraform variables, Terraform leaves the existing password unchanged. Provide a Secrets Manager KMS key ARN when you need a customer-managed key for a managed secret.
+    Master password management in AWS Secrets Manager is enabled by default, so AWS creates and stores the master password for the cluster. Before importing a cluster whose existing password is managed outside Secrets Manager, disable password management and enable Preserve existing master password. Leaving password management enabled causes AWS to generate a new master password. The preservation confirmation prevents a new cluster from reaching AWS without any source of master credentials. Provide a Secrets Manager KMS key ARN when you need a customer-managed key for a managed secret.
 
     Storage encryption is enabled by the Terraform module. Provide a storage KMS key ARN when you need a customer-managed key for cluster storage. IAM database authentication and the Aurora Data API HTTP endpoint are optional.
 
@@ -1297,6 +1306,7 @@ module:
     | Database name | No | Blank | Creates an initial database on new clusters when provided. |
     | Username | Yes for new clusters | dbadmin | Master database user. |
     | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. Disable before importing an externally managed password. |
+    | Preserve existing master password | No | false | Import-only confirmation that leaves an existing externally managed password unchanged. |
     | Publicly accessible | No | false | Switches the DB subnet group to public subnets. Leave disabled unless public database access is intentional. |
     | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
     | Backup retention days | No | 7 | Aurora requires at least 1 day. |

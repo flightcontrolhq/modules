@@ -347,6 +347,12 @@ variable "master_user_password_management_enabled" {
   default     = true
 }
 
+variable "master_user_password_preservation_enabled" {
+  type        = bool
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. Enable only when importing an existing database."
+  default     = false
+}
+
 variable "master_user_secret_kms_key_id" {
   type        = string
   description = "The ARN of the KMS key to encrypt the master user password secret in Secrets Manager."
