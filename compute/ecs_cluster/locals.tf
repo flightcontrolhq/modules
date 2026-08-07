@@ -66,3 +66,14 @@ locals {
     var.ec2_spot_instance_types
   ) : []
 }
+
+################################################################################
+# Load Balancer Names
+################################################################################
+
+locals {
+  public_alb_names  = [for idx, lb in var.public_albs : coalesce(lb.name, idx == 0 ? "${var.name}-pub" : "${var.name}-pub-${idx + 1}")]
+  private_alb_names = [for idx, lb in var.private_albs : coalesce(lb.name, idx == 0 ? "${var.name}-priv" : "${var.name}-priv-${idx + 1}")]
+  public_nlb_names  = [for idx, lb in var.public_nlbs : coalesce(lb.name, idx == 0 ? "${var.name}-pub-nlb" : "${var.name}-pub-nlb-${idx + 1}")]
+  private_nlb_names = [for idx, lb in var.private_nlbs : coalesce(lb.name, idx == 0 ? "${var.name}-priv-nlb" : "${var.name}-priv-nlb-${idx + 1}")]
+}

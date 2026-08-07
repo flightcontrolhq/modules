@@ -1,33 +1,33 @@
 - id: section_cluster_nlb
   label: Cluster network load balancers
   type: section
-- id: public_nlb_arn
-  immutable: true
-  label: Public NLB ARN
+- id: public_nlb_name
+  label: Public NLB
   type: string
-  default: <<ref.stack.output.public_nlb_arn>>
-- id: public_nlb_arn_suffix
-  immutable: true
-  label: Public NLB ARN suffix
+  description: Which of the cluster's public network load balancers this service uses. Defaults to the first one.
+  required: false
+  show_when:
+    public_nlb_service_enabled: true
+  values: $values:ravion/module_input_options?module_type=rvn-ecs-cluster&module_instance_id=<<module.input.cluster>>&input=public_nlbs&value_field=name
+- id: private_nlb_name
+  label: Private NLB
   type: string
-  default: <<ref.stack.output.public_nlb_arn_suffix>>
-- id: public_nlb_security_group_id
-  immutable: true
-  label: Public NLB security group ID
-  type: string
-  default: <<ref.stack.output.public_nlb_security_group_id>>
-- id: private_nlb_arn
-  immutable: true
-  label: Private NLB ARN
-  type: string
-  default: <<ref.stack.output.private_nlb_arn>>
-- id: private_nlb_arn_suffix
-  immutable: true
-  label: Private NLB ARN suffix
-  type: string
-  default: <<ref.stack.output.private_nlb_arn_suffix>>
-- id: private_nlb_security_group_id
-  immutable: true
-  label: Private NLB security group ID
-  type: string
-  default: <<ref.stack.output.private_nlb_security_group_id>>
+  description: Which of the cluster's private network load balancers this service uses. Defaults to the first one.
+  required: false
+  show_when:
+    public_nlb_service_enabled: false
+  values: $values:ravion/module_input_options?module_type=rvn-ecs-cluster&module_instance_id=<<module.input.cluster>>&input=private_nlbs&value_field=name
+- id: public_nlbs
+  label: Public NLBs
+  type: array
+  description: Public network load balancer records from the selected cluster, including ARNs and security group IDs.
+  collapsible: true
+  required: false
+  default: <<ref.stack.output.public_nlbs>>
+- id: private_nlbs
+  label: Private NLBs
+  type: array
+  description: Private network load balancer records from the selected cluster, including ARNs and security group IDs.
+  collapsible: true
+  required: false
+  default: <<ref.stack.output.private_nlbs>>
