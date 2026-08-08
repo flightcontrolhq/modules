@@ -57,6 +57,7 @@ test('normalizes Accept into a Markdown cache-key header', () => {
     const cases = [
         ['text/markdown', '1'],
         ['text/markdown,text/html;q=0.9', '1'],
+        ['text/markdown;q=0.1,text/markdown;q=0.9,text/html;q=0.5', '1'],
         ['text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', '0'],
         ['*/*', '0'],
         ['text/*;q=0.5, text/html;q=0.1', '1'],

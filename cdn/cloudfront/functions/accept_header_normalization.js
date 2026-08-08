@@ -24,9 +24,13 @@
             } else if (type === '*/*') {
                 specificity = 0;
             }
-            if (specificity > bestSpecificity) {
+            if (
+                specificity >= 0 &&
+                (specificity > bestSpecificity ||
+                    (specificity === bestSpecificity && quality > bestQuality))
+            ) {
                 bestSpecificity = specificity;
-                bestQuality = specificity >= 0 ? quality : 0;
+                bestQuality = quality;
             }
         }
         return bestQuality;
