@@ -21,7 +21,7 @@ The [`compute/eks`](..) composite intentionally creates none of these, so cluste
 
 ```hcl
 module "eks_addons" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/eks/addons?ref=main"
+  source = "git::https://github.com/ravionhq/modules.git//compute/eks/addons?ref=main"
 
   cluster_name = module.eks.cluster_name
   region       = "us-east-2"

@@ -27,7 +27,7 @@ should consume this composite only.
 
 ```hcl
 module "eks" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/eks?ref=main"
+  source = "git::https://github.com/ravionhq/modules.git//compute/eks?ref=main"
 
   name   = "platform"
   region = "us-east-1"

@@ -1,0 +1,216 @@
+definition:
+  type: rvn-eks-worker
+  name: EKS Worker
+  description: Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
+release:
+  version: 0.1.0
+  description: Initial EKS worker definition - deploy-only Helm release of the rvn-eks-worker chart onto an existing EKS cluster.
+module:
+  inputs:
+    - id: section_cluster
+      label: EKS cluster
+      type: section
+    - id: cluster
+      immutable: true
+      label: EKS cluster
+      type: $ref:rvn-eks
+      mapped_inputs:
+        - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
+      required: true
+    - id: section_service
+      label: Worker service
+      type: section
+    - $template: ../../partials/templates/eks-workload-release-inputs.yml
+      with:
+        name_description: Name for the Helm release and the Kubernetes objects it creates.
+    - $include: ../../partials/inputs/eks-workload-image-inputs.yml
+    - $include: ../../partials/inputs/eks-workload-resource-inputs.yml
+    - id: section_scaling
+      label: Scaling
+      type: section
+    - id: autoscaling_enabled
+      label: Autoscaling
+      type: boolean
+      description: Scale pods with a HorizontalPodAutoscaler. Requires the metrics server or an equivalent metrics API in the cluster.
+      default: false
+    - id: min_replicas
+      label: Minimum pods
+      type: number
+      max: 1000
+      min: 1
+      show_when:
+        autoscaling_enabled: true
+      default: 1
+    - id: max_replicas
+      label: Maximum pods
+      type: number
+      max: 1000
+      min: 1
+      show_when:
+        autoscaling_enabled: true
+      default: 3
+    - id: autoscaling_cpu_target
+      label: CPU target (%)
+      type: number
+      description: Average CPU utilization, as a percentage of the CPU request, the autoscaler aims to hold.
+      max: 100
+      min: 1
+      show_when:
+        autoscaling_enabled: true
+      default: 70
+    - id: autoscaling_memory_target
+      label: Memory target (%)
+      type: number
+      description: Optional average memory utilization target, as a percentage of the memory request. Leave blank to scale on CPU alone.
+      required: false
+      collapsible: true
+      max: 100
+      min: 1
+      show_when:
+        autoscaling_enabled: true
+    - id: replica_count
+      label: Pods
+      type: number
+      description: Number of worker pods to run when autoscaling is disabled.
+      max: 1000
+      min: 0
+      show_when:
+        autoscaling_enabled: false
+      default: 1
+    - id: termination_grace_period_seconds
+      label: Shutdown grace period (secs)
+      type: number
+      description: Seconds a pod has to finish in-flight work after SIGTERM before it is killed. Raise this for workers with long-running jobs.
+      collapsible: true
+      max: 3600
+      min: 0
+      default: 30
+    - $include: ../../partials/inputs/eks-workload-runtime-inputs.yml
+  deploy:
+    $merge:
+      - ../../partials/deploy/eks-workload-deploy-common.yml
+    definition:
+      $merge:
+        - ../../partials/deploy/eks-workload-helm-definition-common.yml
+        - source:
+            type: inline
+            repo: https://github.com/ravionhq/modules
+            branch: main
+            ref: $local.module_tag
+            chart: charts/rvn-eks-worker
+          values:
+            $merge:
+              - ../../partials/deploy/eks-workload-helm-values-common.yml
+              - terminationGracePeriodSeconds: '<< module.input.termination_grace_period_seconds != nil ? module.input.termination_grace_period_seconds : 30 >>'
+                replicaCount: >-
+                  << module.input.autoscaling_enabled ? (module.input.min_replicas != nil ?
+                  module.input.min_replicas : 1) : (module.input.replica_count != nil ?
+                  module.input.replica_count : 1) >>
+                autoscaling:
+                  enabled: '<< module.input.autoscaling_enabled != nil ? module.input.autoscaling_enabled : false >>'
+                  minReplicas: '<< module.input.min_replicas != nil ? module.input.min_replicas : 1 >>'
+                  maxReplicas: '<< module.input.max_replicas != nil ? module.input.max_replicas : 3 >>'
+                  targetCPUUtilizationPercentage: '<< module.input.autoscaling_cpu_target != nil ? module.input.autoscaling_cpu_target : 70 >>'
+                  targetMemoryUtilizationPercentage: << module.input.autoscaling_memory_target >>
+  readme: |
+    Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
+
+    ## Overview
+
+    EKS Worker runs queue consumers, event processors, and other long-lived background processes on an existing Ravion EKS cluster. You bring a container image; Ravion brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-worker` chart, which renders a Deployment, a ServiceAccount, an optional HorizontalPodAutoscaler, and, when the module declares runtime secrets, an `ExternalSecret`.
+
+    The chart deliberately renders no Service, no container port, and no probes. A worker is reached by nothing; it reaches out.
+
+    This module creates no AWS infrastructure of its own, so it has no Terraform stack. Everything it needs - cluster endpoint, certificate authority data, and the Ravion Runner role - comes from the selected EKS Cluster module.
+
+    Chart source: [ravionhq/modules/charts/rvn-eks-worker](https://github.com/ravionhq/modules/tree/$local.module_tag/charts/rvn-eks-worker)
+
+    ## Use cases
+
+    | Scenario | EKS Worker helps by... |
+    | -------- | ---------------------- |
+    | Queue consumers | Running scalable workers for SQS, Kafka, Redis, or custom queues |
+    | Background jobs | Processing async work without any HTTP routing |
+    | Event processors | Running long-lived containers that consume streams or events |
+    | Moving a worker from ECS to EKS | Keeping the same image and `{name, value_from}` secret shape |
+
+    ## Prerequisites
+
+    - An **EKS Cluster** module.
+    - The **External Secrets Operator** add-on on that cluster, if the worker uses Runtime secrets.
+
+    ## Image
+
+    Provide the **Image repository** without a tag. At deploy time, provide the **Image tag or digest**. A value beginning with `sha256:` is used as a digest and everything else as a tag.
+
+    Workers usually need a command: use **Start command** to override the image entrypoint and **Start command arguments** to override its default arguments. For example, entrypoint `bundle` with arguments `exec sidekiq`.
+
+    Use **Image pull secret names** for private registries. Each entry names a Kubernetes Secret of type `kubernetes.io/dockerconfigjson` that already exists in the release namespace.
+
+    ## Resources and scaling
+
+    | Field | Default | Description |
+    | ----- | ------- | ----------- |
+    | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
+    | Memory request | 256Mi | Memory reserved for the pod |
+    | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
+    | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
+
+    Autoscaling is **off** by default, unlike the web module. CPU utilization is a poor proxy for worker demand: a worker blocked on a queue poll uses almost no CPU no matter how deep the backlog. Enable it when the work is genuinely CPU-bound, and prefer a fixed pod count otherwise.
+
+    **Shutdown grace period (secs)** is the window a pod gets after SIGTERM to finish in-flight work before it is killed. The default of 30 seconds suits short tasks. Raise it to at least the length of your longest job, or a rollout will kill work mid-flight.
+
+    ## Application configuration
+
+    Use **Runtime environment variables** for plain values, as an array of `{name, value}` objects.
+
+    Use **Runtime secrets** for sensitive values, as an array of `{name, value_from}` objects - the same shape as ECS. `value_from` must be a full Secrets Manager or SSM Parameter Store ARN, including the JSON-key extraction suffix when you want a single key out of a JSON secret.
+
+    Ravion never reads these values. The ARNs travel to the chart as references, the chart renders an `ExternalSecret`, and the External Secrets Operator materializes the Kubernetes Secret in the cluster. No secret value reaches Ravion, the Helm values document, or the Helm release history.
+
+    ## Deployment
+
+    Every deploy runs `helm upgrade --install --atomic`, so a release either lands completely or leaves the cluster on the previous revision. Pods roll with the chart's RollingUpdate strategy, which surges 25% and keeps zero pods unavailable.
+
+    Deployments collapse: if several are queued, only the newest runs.
+
+    ## Configuration
+
+    | Field | Required | Default | Description |
+    | ----- | -------- | ------- | ----------- |
+    | EKS cluster | Yes | - | Existing rvn-eks module instance |
+    | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes objects |
+    | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
+    | Create namespace | No | true | Create the namespace if it does not exist |
+    | Image repository | Yes | - | Image repository without a tag |
+    | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace |
+    | Start command | No | [] | Overrides the image entrypoint |
+    | Start command arguments | No | [] | Overrides the image default arguments |
+    | CPU request | Yes | 100m | CPU reserved per pod |
+    | Memory request | Yes | 256Mi | Memory reserved per pod |
+    | CPU limit | No | - | Optional CPU ceiling |
+    | Memory limit | Yes | 512Mi | Memory ceiling per pod |
+    | Autoscaling | No | false | Scale pods with a HorizontalPodAutoscaler |
+    | Minimum pods | No | 1 | Lower bound when autoscaling |
+    | Maximum pods | No | 3 | Upper bound when autoscaling |
+    | CPU target (%) | No | 70 | Average CPU utilization target |
+    | Memory target (%) | No | - | Optional average memory utilization target |
+    | Pods | No | 1 | Fixed pod count when autoscaling is disabled |
+    | Shutdown grace period (secs) | No | 30 | Drain window after SIGTERM |
+    | Runtime environment variables | No | - | Array of {name, value} objects |
+    | Runtime secrets | No | - | Array of {name, value_from} ARN references |
+
+    ## Design decisions
+
+    - **No Terraform stack.** The module creates nothing in AWS, so there is no plan to review and no state to manage. Configuration changes take effect on the next deploy.
+    - **No Service and no probes.** A worker exposes no port, so there is nothing to route to and no HTTP endpoint to check. Liveness for a worker is better expressed by letting the process exit on a fatal error and letting Kubernetes restart it.
+    - **Autoscaling defaults off.** CPU utilization rarely tracks worker demand. Turning it on by default would produce autoscaling that looks configured but never fires.
+    - **Name and namespace are fixed after creation.** Together they identify the Helm release that rollback and history target.
+    - **Pod Identity, not IRSA.** The chart emits a stable ServiceAccount name and no role annotation, so an `aws_eks_pod_identity_association` can bind an IAM role to it by namespace and name.
+
+    ## Learn more
+
+    - [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
+    - [Pod termination and graceful shutdown](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination)
+    - [HorizontalPodAutoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
+    - [External Secrets Operator](https://external-secrets.io/)

@@ -16,7 +16,7 @@ Chart version `0.1.0`. See [compatibility policy](../README.md#values-schema-is-
 ```yaml
 source:
   type: inline
-  repo: https://github.com/flightcontrolhq/modules
+  repo: https://github.com/ravionhq/modules
   branch: main
   ref: rvn-eks@0.1.0
   chart: charts/rvn-eks-cron

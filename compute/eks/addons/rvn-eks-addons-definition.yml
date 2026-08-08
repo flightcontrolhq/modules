@@ -578,7 +578,7 @@ module:
     - Each load balancer's security group is automatically allowed to reach pods through the EKS cluster security group (all TCP ports).
     - Because `TargetGroupBinding` depends on the controller, enabling any load balancer automatically installs the **load balancer controller** - there is nothing extra to configure.
 
-    Terraform source: [flightcontrolhq/modules/compute/eks/addons](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks/addons)
+    Terraform source: [ravionhq/modules/compute/eks/addons](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/eks/addons)
 
     ## Prerequisites
 

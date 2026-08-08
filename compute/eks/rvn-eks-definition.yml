@@ -426,7 +426,7 @@ module:
 
     This module talks only to the AWS API, so it provisions in a single apply. Optional extensions - Karpenter autoscaling, the AWS Load Balancer Controller, the EBS CSI driver, and Container Insights - are added by the separate **EKS Add-ons** module, so clusters only carry what they use.
 
-    Terraform source: [flightcontrolhq/modules/compute/eks](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/eks)
+    Terraform source: [ravionhq/modules/compute/eks](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/eks)
 
     ## Use cases
 

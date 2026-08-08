@@ -1,0 +1,54 @@
+################################################################################
+# Target Group
+#
+# A single IP-mode target group the AWS Load Balancer Controller registers pod
+# IPs into, driven by the TargetGroupBinding the rvn-eks-web chart renders from
+# the target_group_arn output.
+#
+# Unlike compute/ecs_service there is no tg-2: the 2026-08-06 load balancer ADR
+# on ENG-5033 scopes EKS v1 to rolling Deployment updates, so there is no
+# alternate target group, no test listener rule, and no traffic-shift
+# controller rewriting the forward action. Nothing external mutates this target
+# group, which is why it carries no ignore_changes.
+################################################################################
+
+resource "aws_lb_target_group" "this" {
+  name        = local.target_group_name
+  port        = var.container_port
+  protocol    = var.target_group_protocol
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  deregistration_delay = var.target_group_deregistration_delay
+  slow_start           = var.target_group_slow_start
+
+  health_check {
+    enabled             = var.health_check.enabled
+    path                = var.health_check.path
+    port                = var.health_check.port
+    protocol            = local.health_check_protocol
+    matcher             = var.health_check.matcher
+    interval            = var.health_check.interval
+    timeout             = var.health_check.timeout
+    healthy_threshold   = var.health_check.healthy_threshold
+    unhealthy_threshold = var.health_check.unhealthy_threshold
+  }
+
+  stickiness {
+    enabled         = var.stickiness.enabled
+    type            = var.stickiness.type
+    cookie_duration = var.stickiness.cookie_duration
+    cookie_name     = var.stickiness.type == "app_cookie" ? var.stickiness.cookie_name : null
+  }
+
+  tags = merge(local.tags, {
+    Name = "${var.name}-tg"
+  })
+
+  # The listener rule forwards to this ARN, so a replacement has to exist
+  # before the original is destroyed or the destroy fails with "currently in
+  # use by a listener rule".
+  lifecycle {
+    create_before_destroy = true
+  }
+}
