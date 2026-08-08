@@ -9,6 +9,8 @@ Two runtimes are supported:
 
 Instances install the prerequisites for both runtimes at launch, so `runtime` can switch between `container` and `manual` without replacing the instance group. Supervisord owns the app in both modes and restarts it after an unexpected exit.
 
+Container workloads that need to orchestrate sibling containers can enable `docker_socket_mount_enabled`. The deploy runner then bind-mounts `/var/run/docker.sock` at the identical path inside the app container and adds the host `docker` group's GID at container-start time. The image must include a `docker` CLI. This is Docker-outside-of-Docker: mounting the host Docker socket grants the container root-equivalent control of the instance, including the ability to start privileged containers, read the host filesystem, and use the instance role. Leave it disabled unless this level of access is required.
+
 ## How deploys work
 
 For the **container** runtime the module creates an SSM Command document (`<name>-deploy` — the name is a platform contract derived from the group name) that encodes the whole in-place deploy for one instance:
@@ -116,6 +118,7 @@ aws ssm send-command \
 
 - The root volume and optional data volume are per-instance EBS. They survive every in-place deploy because instances are not replaced, but they are lost when the Auto Scaling Group terminates the instance.
 - For storage that must survive instance termination, mount an EFS file system (`efs_*` variables); it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
+- When `docker_socket_mount_enabled` is enabled, the data volume and EFS host paths are mapped identically inside the app container. This lets sibling containers started through the host Docker socket resolve those same host-path binds correctly.
 - Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh.
 
 ## Requirements
@@ -140,6 +143,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | additional_security_group_ids | Extra security groups on the instances | `list(string)` | `[]` | no |
 | direct_access_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
 | runtime | `container` or `manual` | `string` | n/a | yes |
+| docker_socket_mount_enabled | Mount the host Docker socket and add the host `docker` group GID (container mode only; grants root-equivalent control of the instance) | `bool` | `false` | no |
 | app_port | Port the app listens on | `number` | `null` | no |
 | container_start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
 | manual_start_command | Long-running foreground manual app command managed by supervisord | `string` | `null` | yes for manual |

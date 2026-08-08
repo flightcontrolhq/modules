@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.0.1
-  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  version: 1.1.0
+  description: Optionally mount the host Docker socket for container workloads that orchestrate sibling containers.
 module:
   inputs:
     - id: network
@@ -126,6 +126,14 @@ module:
       required: false
       show_when:
         deploy_type: container
+    - id: docker_socket_mount_enabled
+      label: Docker socket mount
+      type: boolean
+      description: "Mount the host Docker socket into the container and add the host docker group's GID. This grants the container root-equivalent control of the instance: it can start privileged containers, read the host filesystem, and use the instance role. The container image must include a docker CLI for this to be useful."
+      collapsible: true
+      show_when:
+        deploy_type: container
+      default: false
     - $template: ../../partials/inputs/dockerfile-build.yml
       with:
         show_when:
@@ -723,6 +731,7 @@ module:
         runtime: << module.input.deploy_type >>
         secrets: << module.input.secrets || [] >>
         container_start_command: '<< module.input.deploy_type == "container" ? (module.input.container_start_command || nil) : nil >>'
+        docker_socket_mount_enabled: '<< module.input.deploy_type == "container" ? (module.input.docker_socket_mount_enabled || false) : false >>'
         subnet_ids: "<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
         tags:
           $include: ../../partials/stack/ravion-tags.yml
@@ -851,6 +860,8 @@ module:
     | Manual | Build disabled | Run Deploy commands as root on every host, then run Start command under supervisord |
 
     Instances are prepared for both modes at launch. Supervisord owns the long-running process and restarts it after an unexpected exit. In Container mode, Start command override replaces the image CMD but preserves its ENTRYPOINT. In Manual mode, the start command must remain in the foreground and should explicitly drop root privileges when the app should run as another user.
+
+    Container workloads that need to orchestrate sibling containers can enable Docker socket mount. The deploy runner bind-mounts `/var/run/docker.sock` at the identical path inside the app container and adds the host `docker` group's GID at container-start time, so the image must include a `docker` CLI. This is Docker-outside-of-Docker: mounting the host Docker socket grants the container root-equivalent control of the instance, including the ability to start privileged containers, read the host filesystem, and use the instance role. Leave it disabled unless this level of access is required.
 
     ## Build sources
 
@@ -993,6 +1004,7 @@ module:
     | Railpack install / build / start commands | No | Detected | Optional Railpack command overrides |
     | Image repository | Yes* | - | Repository without tag or digest for registry deployments |
     | Start command override | No | Image CMD | Container command override; preserves image ENTRYPOINT |
+    | Docker socket mount | No | false | Mount the host Docker socket and add its group GID for sibling-container orchestration; requires a Docker CLI in the image and grants root-equivalent control of the instance |
     | Build environment variables | No | {} | Values and secret references available only during image builds |
     | Inject environment variables in Dockerfile | No | false | Pass build environment values as Docker build arguments |
     | Builder instance type / size | Yes* | ec2 / c7a.4xlarge | On-demand or Spot build runner and its EC2 size |
