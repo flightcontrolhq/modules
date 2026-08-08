@@ -947,7 +947,7 @@ module:
 
     ## Application configuration
 
-    Runtime environment variables must be single-line values. They are rendered into the app environment file at instance boot and on every deploy. Container mode passes the file to Docker; Manual mode loads it before Deploy commands and the Start command. A configuration change requires a stack update and then a deploy to restart the app with the new values.
+    Runtime environment variables must be single-line values. They are rendered into the app environment file at instance boot and on every deploy. Container mode passes the file to Docker; Manual mode loads it before Deploy commands and the Start command. A configuration change requires a stack update. A deploy refreshes the environment file and restarts the app with the current values.
 
     Runtime secrets use same-account Secrets Manager or SSM Parameter Store references. Each instance fetches values while rebuilding its environment file, so the values do not enter Terraform state or the SSM document. A rotated value takes effect on the next deploy without a stack change. Multi-line secret values are unsupported.
 

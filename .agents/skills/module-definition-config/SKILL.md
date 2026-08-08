@@ -154,6 +154,39 @@ Common module-specific immutable fields:
 
 Keep operational and product-level controls mutable even when they can create/delete supporting resources, cause downtime, trigger a rollout, or replace lower-level resources. Examples that should generally remain mutable include execution environments, VPC NAT gateway settings and supplied NAT EIPs, VPC peering maps, VPC Flow Logs, CloudFront aliases, CloudFront ACM certificate ARN, static default version seed, access logging, ECS cluster EC2 capacity settings, ECS cluster load balancer toggles and NLB Elastic IP settings, ECS service public/private routing selection, ECS service build type, generated-vs-existing ECS IAM role override ARNs, health checks, autoscaling thresholds, cache headers, price class, IAM trust/policy documents, tags, descriptions, log retention, CPU/memory sizing, and deployment rollout settings.
 
+## Apply Phases (`applies_on`)
+
+The compiler derives each value-producing input's `applies_on` metadata from
+references to that input in `module.stack`, `module.build`, and
+`module.deploy`. Normally, do not author it: compile the definition and let
+static analysis stamp the derived phases. An authored value is legitimate when
+static analysis cannot see a valid dependency, such as an indirect or
+runtime-defined reference. The compiler warns when an authored override omits a
+phase that it can derive statically.
+
+An explicit `applies_on: []` means the input is a known no-op for the current
+stack, build, and deploy configuration. An absent `applies_on` field means the
+definition predates this metadata and is unknown to downstream consumers; do
+not use absence to imply that a change requires nothing.
+
+When iterating on an input, first compile the active definition and inspect the
+result for that input:
+
+```bash
+make modules-tools-build
+node tools/ravion-modules/dist/src/cli.js compile \
+  compute/ecs_service/rvn-ecs-web-definition.yml > /tmp/rvn-ecs-web-compiled.json
+jq -r '.. | objects | select(.id? == "task_cpu") |
+  [.id, ((.applies_on // "<absent>") | tostring)] | @tsv' \
+  /tmp/rvn-ecs-web-compiled.json
+```
+
+Use the actual definition path and input ID under review. Then exercise the
+required phase: run the project-config apply dry run to verify the stack plan,
+run the build pipeline for a `build` phase, and use the module instance's
+Deploys tab and **DEPLOY** action for a `deploy` phase. If metadata is absent,
+test conservatively as a stack update followed by a deploy.
+
 ## Field Visibility Rules
 
 Default to hiding conditional fields. If a field is irrelevant, ignored, confusing, or invalid unless another input has a specific value, give it a `show_when` condition tied to that controlling input.
@@ -322,6 +355,7 @@ The local publish path targets `RAVION_API_URL` or `http://localhost:8080` by de
 - Unit conversions use the exact Terraform default as their hidden-input fallback and have compiler regression coverage.
 - Fields intentionally omitted to preserve safe Terraform defaults are not also emitted in `terraform_variables`.
 - Destructive identity, target, state, and core topology inputs are marked `immutable: true`; `advanced_terraform_variables`, `execution_environment_id`, and observability/logging toggles remain mutable.
+- Derived `applies_on` phases match the stack, build, and deploy references for every new or moved input; authored overrides are intentional and complete.
 - `aws_account_id` and `aws_region` are nulled when an execution environment is selected.
 - Source fields use the intended repo, base path, and `$local.module_tag` or explicit source ref.
 - UI metrics use stable CloudWatch namespace, metric name, dimensions, account, and region expressions.
