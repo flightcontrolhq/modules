@@ -56,6 +56,11 @@ output "cluster_security_group_id" {
   value       = module.cluster.cluster_security_group_id
 }
 
+output "vpc_id" {
+  description = "ID of the VPC the cluster runs in. Consumed by workload modules that create load balancer target groups, which must live in the same VPC as the pods they register."
+  value       = var.vpc_id
+}
+
 output "node_subnet_ids" {
   description = "Subnet IDs used for node placement (node_subnet_ids, falling back to subnet_ids). Consumed by compute/eks/addons for the default Karpenter NodePool."
   value       = local.node_subnet_ids

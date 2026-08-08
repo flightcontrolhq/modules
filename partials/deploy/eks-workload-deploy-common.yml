@@ -1,0 +1,30 @@
+# Shared `aws:eks` deploy scaffolding.
+#
+# `infrastructure` is fed entirely from module inputs mapped off the EKS
+# Cluster reference: the deploy resolver has no `ref` scope, so cross-module
+# values must already be resolved onto this module's inputs.
+#
+# Ravion cross-checks two of these fields against cluster_arn at resolve time -
+# cluster_name against the ARN tail, and region against the ARN's region - and
+# fails the deploy with a config error naming the field when either disagrees.
+type: aws:eks
+concurrency:
+  queue_overflow: oldest
+  queue_size: 1
+timeout: 1800
+infrastructure:
+  cluster_arn: << module.input.cluster_arn >>
+  cluster_name: << module.input.cluster_name >>
+  cluster_endpoint: << module.input.cluster_endpoint >>
+  cluster_certificate_authority_data: << module.input.cluster_certificate_authority_data >>
+  region: << module.input.aws_region >>
+  ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
+inputs:
+  - id: image_ref
+    label: Image tag or digest
+    type: string
+    description: >-
+      Tag or digest to deploy from the configured image repository. A value starting with
+      "sha256:" is used as a digest, anything else as a tag. Do not pass a full image URI.
+    placeholder: "sha256:... or latest"
+    required: true

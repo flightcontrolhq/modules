@@ -16,7 +16,7 @@ Deployed by the Ravion runner from an inline chart source:
 ```yaml
 source:
   type: inline
-  repo: https://github.com/flightcontrolhq/modules
+  repo: https://github.com/ravionhq/modules
   branch: main
   ref: rvn-eks@0.1.0
   chart: charts/rvn-eks-web
