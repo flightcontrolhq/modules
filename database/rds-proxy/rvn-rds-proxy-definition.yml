@@ -67,6 +67,7 @@ module:
       required: true
       type: string
     - default: POSTGRESQL
+      description: Must match the engine of the target database.
       id: engine_family
       immutable: true
       label: Engine family
@@ -83,6 +84,7 @@ module:
       label: Target database
       type: section
     - default: db_instance
+      description: Register an RDS instance or an Aurora cluster as the proxy target.
       id: target_type
       label: Target type
       required: true
@@ -92,6 +94,71 @@ module:
           value: db_instance
         - label: Aurora cluster
           value: db_cluster
+    - default: module
+      description: Select an existing Ravion database module or enter the identifier of a database managed outside Ravion.
+      id: target_source
+      label: Target source
+      required: true
+      type: string
+      values:
+        - label: Ravion database module
+          value: module
+        - label: Database identifier
+          value: identifier
+    - description: RDS database module to register as the proxy target. Add this proxy's security group to that module's allowed security groups so the database accepts proxy connections.
+      id: rds_database
+      label: RDS database
+      required: false
+      show_when:
+        target_type: db_instance
+        target_source: module
+      type: $ref:rvn-rds
+      mapped_inputs:
+        - default: <<ref.stack.output.db_instance_identifier>>
+          description: Instance identifier from the selected RDS module.
+          id: rds_db_instance_identifier
+          label: DB instance identifier
+          required: true
+          type: string
+        - default: <<ref.stack.output.master_user_secret_arn>>
+          description: Managed master user secret from the selected RDS module. Blank when that database does not manage its password in Secrets Manager; add auth secret ARNs instead.
+          id: rds_master_user_secret_arn
+          label: Master user secret ARN
+          required: false
+          type: string
+        - default: <<ref.stack.output.port>>
+          description: Database port from the selected RDS module.
+          id: rds_port
+          label: Database port
+          required: false
+          type: number
+    - description: Aurora cluster module to register as the proxy target. Add this proxy's security group to that module's allowed security groups so the cluster accepts proxy connections.
+      id: aurora_database
+      label: Aurora cluster
+      required: false
+      show_when:
+        target_type: db_cluster
+        target_source: module
+      type: $ref:rvn-aurora
+      mapped_inputs:
+        - default: <<ref.stack.output.cluster_identifier>>
+          description: Cluster identifier from the selected Aurora module.
+          id: aurora_cluster_identifier
+          label: DB cluster identifier
+          required: true
+          type: string
+        - default: <<ref.stack.output.cluster_master_user_secret_arn>>
+          description: Managed master user secret from the selected Aurora module. Blank when that cluster does not manage its password in Secrets Manager; add auth secret ARNs instead.
+          id: aurora_master_user_secret_arn
+          label: Master user secret ARN
+          required: false
+          type: string
+        - default: <<ref.stack.output.cluster_port>>
+          description: Cluster port from the selected Aurora module.
+          id: aurora_port
+          label: Database port
+          required: false
+          type: number
     - description: Identifier of the RDS instance to register as the proxy target.
       id: db_instance_identifier
       label: DB instance identifier
@@ -99,6 +166,7 @@ module:
       required: true
       show_when:
         target_type: db_instance
+        target_source: identifier
       type: string
     - description: Identifier of the Aurora cluster to register as the proxy target.
       id: db_cluster_identifier
@@ -107,16 +175,17 @@ module:
       required: true
       show_when:
         target_type: db_cluster
+        target_source: identifier
       type: string
     - id: section_auth
       label: Authentication
       type: section
     - add_button_label: Add secret ARN
-      description: Secrets Manager secrets containing database credentials the proxy uses to connect to the target database.
+      description: Secrets Manager secrets containing database credentials the proxy uses to connect to the target database. Leave blank to use the managed master user secret of the selected database module.
       id: auth_secret_arns
       label: Auth secret ARNs
       placeholder: arn:aws:secretsmanager:...
-      required: true
+      required: false
       type: string_array
     - add_button_label: Add KMS key ARN
       collapsible: true
@@ -157,7 +226,7 @@ module:
       label: Network access
       type: section
     - collapsible: true
-      description: "Leave blank to use the engine family default port: 5432 for PostgreSQL, 3306 for MySQL, or 1433 for SQL Server."
+      description: "Leave blank to use the port of the selected database module, or the engine family default port: 5432 for PostgreSQL, 3306 for MySQL, or 1433 for SQL Server."
       id: port
       label: Port
       max: 65535
@@ -261,10 +330,10 @@ module:
         ...overrides: << module.input.advanced_terraform_variables >>
         allowed_cidr_blocks: << module.input.allowed_cidr_blocks >>
         allowed_security_group_ids: << module.input.allowed_security_group_ids >>
-        auth: '<< map(module.input.auth_secret_arns, {"secret_arn": #, "iam_auth": module.input.iam_auth_enabled ? "REQUIRED" : "DISABLED"}) >>'
+        auth: '<< map(len(module.input.auth_secret_arns) > 0 ? module.input.auth_secret_arns : ((module.input.rds_master_user_secret_arn || module.input.aurora_master_user_secret_arn) ? [module.input.rds_master_user_secret_arn || module.input.aurora_master_user_secret_arn] : []), {"secret_arn": #, "iam_auth": module.input.iam_auth_enabled ? "REQUIRED" : "DISABLED"}) >>'
         connection_borrow_timeout: << module.input.connection_borrow_timeout >>
-        db_cluster_identifier: << module.input.db_cluster_identifier >>
-        db_instance_identifier: << module.input.db_instance_identifier >>
+        db_cluster_identifier: '<< module.input.target_type == "db_cluster" ? (module.input.aurora_cluster_identifier || module.input.db_cluster_identifier) : null >>'
+        db_instance_identifier: '<< module.input.target_type == "db_instance" ? (module.input.rds_db_instance_identifier || module.input.db_instance_identifier) : null >>'
         debug_logging_enabled: << module.input.debug_logging_enabled >>
         engine_family: << module.input.engine_family >>
         iam_role_arn: << module.input.iam_role_arn >>
@@ -274,7 +343,7 @@ module:
         max_connections_percent: << module.input.max_connections_percent >>
         max_idle_connections_percent: << module.input.max_idle_connections_percent >>
         name: << module.input.name >>
-        port: << module.input.port >>
+        port: << module.input.port || module.input.rds_port || module.input.aurora_port >>
         region: << module.input.aws_region >>
         secret_kms_key_arns: << module.input.secret_kms_key_arns >>
         security_group_creation_enabled: << module.input.security_group_creation_enabled >>
@@ -332,6 +401,19 @@ module:
 
     The RDS and Aurora modules can create a proxy directly with their RDS Proxy toggle. Use this standalone module when the target database is not managed by Ravion, or when you want to manage the proxy lifecycle separately from the database.
 
+    ## Target database
+
+    Target type selects whether the proxy registers an RDS instance or an Aurora cluster. Target source selects where the target comes from:
+
+    | Target source | Behavior |
+    | --- | --- |
+    | Ravion database module | Select an existing RDS or Aurora module. Ravion reads its database identifier, managed master user secret, and port from that module's stack outputs. |
+    | Database identifier | Enter the identifier of a database managed outside Ravion, along with its auth secret ARNs. |
+
+    When a Ravion module supplies the target, add this proxy's security group ID to that module's allowed security groups. The proxy connects to the database through the database security group, and the database module owns those ingress rules.
+
+    Applications do not use the proxy until you point their connection string at the proxy endpoint output.
+
     ## Use cases
 
     | Scenario | Benefit |
@@ -349,7 +431,9 @@ module:
 
     ## Authentication
 
-    The proxy reads database credentials from the Secrets Manager secrets listed in auth secret ARNs. For an RDS or Aurora database with managed master passwords, use the master user secret ARN. The module creates an IAM role that can read only those secrets; provide KMS key ARNs when the secrets use customer-managed keys. TLS is required by default, and IAM authentication for clients is optional.
+    The proxy reads database credentials from the Secrets Manager secrets listed in auth secret ARNs. Leave that field blank when a selected database module manages its master password in Secrets Manager; the proxy then uses that module's master user secret. Add auth secret ARNs explicitly for databases identified by identifier, for databases whose password is managed outside Secrets Manager, or to authenticate as a different database user.
+
+    The module creates an IAM role that can read only the resolved auth secrets; provide KMS key ARNs when the secrets use customer-managed keys. TLS is required by default, and IAM authentication for clients is optional.
 
     ## Configuration
 
@@ -359,8 +443,10 @@ module:
     | Name slug | Yes | Project and environment given IDs + proxy | Proxy name and prefix for related resources. |
     | Engine family | Yes | PostgreSQL | PostgreSQL, MySQL / MariaDB, or SQL Server. Must match the target database engine. |
     | Target type | Yes | RDS instance | Register an RDS instance or an Aurora cluster as the proxy target. |
-    | DB instance / cluster identifier | Yes | None | Identifier of the target database. |
-    | Auth secret ARNs | Yes | None | Secrets Manager secrets with database credentials. |
+    | Target source | Yes | Ravion database module | Select an existing RDS or Aurora module, or enter a database identifier. |
+    | RDS database / Aurora cluster | Yes for module targets | None | Supplies the database identifier, master user secret, and port. |
+    | DB instance / cluster identifier | Yes for identifier targets | None | Identifier of a database managed outside Ravion. |
+    | Auth secret ARNs | No | Blank | Secrets Manager secrets with database credentials. Required when the target does not provide a managed master user secret. |
     | Require TLS | No | true | Requires TLS for client connections. |
     | IAM authentication | No | false | Requires IAM auth for client connections. |
     | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
@@ -382,4 +468,4 @@ module:
 
     - [Amazon RDS Proxy documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html)
     - [RDS Proxy managing connections](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy-managing.html)
-    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/rds-proxy)
+    - [Terraform source](https://github.com/ravionhq/modules/tree/$local.module_tag/database/rds-proxy)

@@ -326,7 +326,7 @@ module:
       label: Connection pooling
       type: section
     - default: false
-      description: Create an RDS Proxy in front of the cluster for connection pooling and improved failover handling.
+      description: Create an RDS Proxy in front of the cluster for connection pooling and improved failover handling. Applications keep connecting to the cluster endpoint until you update their connection string to the proxy endpoint output.
       id: proxy_creation_enabled
       label: RDS Proxy
       type: boolean
@@ -1414,6 +1414,8 @@ module:
     ## Connection pooling
 
     Enable RDS Proxy to place a managed connection pool in front of the cluster. The proxy authenticates with the Secrets Manager master user secret by default, requires TLS, and allows the same security group and CIDR sources configured for the cluster. Pool sizing, idle timeouts, session pinning, IAM authentication, and custom auth secrets are configurable in the Connection pooling section.
+
+    Creating the proxy does not change how applications reach the cluster. Update your application connection string to the proxy endpoint output to route traffic through the pool.
 
     ## Configuration
 
