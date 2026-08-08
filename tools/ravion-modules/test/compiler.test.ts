@@ -162,6 +162,44 @@ describe("compiler", () => {
     assert.match(warnings[0] ?? "", /override\.yml.*warning.*build, deploy/);
   });
 
+  it("does not attribute ambiguous bare mapped input references", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        { id: "first", type: "$ref:first", mapped_inputs: [{ id: "shared", type: "string" }] },
+        { id: "second", type: "$ref:second", mapped_inputs: [{ id: "shared", type: "string" }] },
+      ],
+      stack: { value: "<< module.input.shared >>" },
+    };
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (message: string) => warnings.push(message);
+    try {
+      deriveAppliesOn(module);
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    assert.deepEqual(findInput(getModuleInputs(module), "first").applies_on, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "second").applies_on, []);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? "", /shared/);
+  });
+
+  it("does not use item input children for bare-id fallback", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        { id: "first", type: "object_array", item_inputs: [{ id: "shared", type: "string" }] },
+        { id: "second", type: "object_array", item_inputs: [{ id: "shared", type: "string" }] },
+      ],
+      stack: { value: "<< module.input.shared >>" },
+    };
+
+    deriveAppliesOn(module);
+
+    assert.deepEqual(findInput(getModuleInputs(module), "first").applies_on, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "second").applies_on, []);
+  });
+
   it("compiles all colocated definitions under module category directories", async () => {
     const compiled = await compileAllDefinitions(join(fixturesDir, "modules"));
 

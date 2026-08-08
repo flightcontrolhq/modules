@@ -79,6 +79,7 @@ type ApplyPhase = (typeof APPLY_PHASES)[number];
 
 interface InputAnalysis {
   input: Record<string, unknown>;
+  nestedKind?: "item_inputs" | "mapped_inputs";
   direct: Set<ApplyPhase>;
   children: InputAnalysis[];
   derived: Set<ApplyPhase>;
@@ -94,8 +95,9 @@ export function deriveAppliesOn(module: Record<string, unknown>, filePath = "<mo
     .filter((input): input is Record<string, unknown> => isRecord(input) && input.type !== "section")
     .map((input) => createInputAnalysis(input));
 
+  const ambiguousNestedIds = new Set<string>();
   for (const phase of APPLY_PHASES) {
-    collectInputReferences(module[phase], phase, analyses);
+    collectInputReferences(module[phase], phase, analyses, ambiguousNestedIds);
   }
 
   for (const analysis of analyses) {
@@ -104,22 +106,29 @@ export function deriveAppliesOn(module: Record<string, unknown>, filePath = "<mo
   }
 }
 
-function createInputAnalysis(input: Record<string, unknown>): InputAnalysis {
+function createInputAnalysis(input: Record<string, unknown>, nestedKind?: InputAnalysis["nestedKind"]): InputAnalysis {
   const children = [];
-  for (const key of ["item_inputs", "mapped_inputs"]) {
+  for (const key of ["item_inputs", "mapped_inputs"] as const) {
     const nested = input[key];
     if (Array.isArray(nested)) {
       children.push(
-        ...nested.filter((child): child is Record<string, unknown> => isRecord(child)).map((child) => createInputAnalysis(child)),
+        ...nested
+          .filter((child): child is Record<string, unknown> => isRecord(child))
+          .map((child) => createInputAnalysis(child, key)),
       );
     }
   }
-  return { input, direct: new Set(), children, derived: new Set() };
+  return { input, nestedKind, direct: new Set(), children, derived: new Set() };
 }
 
-function collectInputReferences(value: unknown, phase: ApplyPhase, analyses: InputAnalysis[]): void {
+function collectInputReferences(
+  value: unknown,
+  phase: ApplyPhase,
+  analyses: InputAnalysis[],
+  ambiguousNestedIds: Set<string>,
+): void {
   if (Array.isArray(value)) {
-    value.forEach((item) => collectInputReferences(item, phase, analyses));
+    value.forEach((item) => collectInputReferences(item, phase, analyses, ambiguousNestedIds));
     return;
   }
   if (typeof value === "string") {
@@ -127,7 +136,7 @@ function collectInputReferences(value: unknown, phase: ApplyPhase, analyses: Inp
     for (const match of value.matchAll(referencePattern)) {
       const path = match[1];
       if (path) {
-        markInputReference(path.split("."), phase, analyses);
+        markInputReference(path.split("."), phase, analyses, ambiguousNestedIds);
       }
     }
     return;
@@ -135,28 +144,47 @@ function collectInputReferences(value: unknown, phase: ApplyPhase, analyses: Inp
   if (!isRecord(value)) {
     return;
   }
-  Object.values(value).forEach((child) => collectInputReferences(child, phase, analyses));
+  Object.values(value).forEach((child) => collectInputReferences(child, phase, analyses, ambiguousNestedIds));
 }
 
-function markInputReference(path: string[], phase: ApplyPhase, analyses: InputAnalysis[]): void {
+function markInputReference(
+  path: string[],
+  phase: ApplyPhase,
+  analyses: InputAnalysis[],
+  ambiguousNestedIds: Set<string>,
+): void {
   const [id, ...nestedPath] = path;
   if (!id) {
     return;
   }
-  const analysis = analyses.find((candidate) => candidate.input.id === id) ?? findNestedInputAnalysis(id, analyses);
+  const analysis = analyses.find((candidate) => candidate.input.id === id);
   if (analysis) {
     markNestedInputReference(analysis, nestedPath, phase);
+    return;
+  }
+  const nestedMatches = findMappedInputAnalyses(id, analyses);
+  if (nestedMatches.length > 1) {
+    if (!ambiguousNestedIds.has(id)) {
+      ambiguousNestedIds.add(id);
+      console.warn(`Ambiguous mapped input reference: ${id}`);
+    }
+    return;
+  }
+  const nestedAnalysis = nestedMatches[0];
+  if (nestedAnalysis) {
+    markNestedInputReference(nestedAnalysis, nestedPath, phase);
   }
 }
 
-function findNestedInputAnalysis(id: string, analyses: InputAnalysis[]): InputAnalysis | undefined {
+function findMappedInputAnalyses(id: string, analyses: InputAnalysis[]): InputAnalysis[] {
+  const matches: InputAnalysis[] = [];
   for (const analysis of analyses) {
-    const match = analysis.children.find((child) => child.input.id === id) ?? findNestedInputAnalysis(id, analysis.children);
-    if (match) {
-      return match;
+    if (analysis.nestedKind === "mapped_inputs" && analysis.input.id === id) {
+      matches.push(analysis);
     }
+    matches.push(...findMappedInputAnalyses(id, analysis.children));
   }
-  return undefined;
+  return matches;
 }
 
 function markNestedInputReference(analysis: InputAnalysis, path: string[], phase: ApplyPhase): void {
