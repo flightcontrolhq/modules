@@ -44,6 +44,9 @@ jobs:
       - name: Compile and validate definitions
         run: node tools/ravion-modules/dist/src/cli.js compile
 
+      - name: Check README module definitions table
+        run: node tools/ravion-modules/dist/src/cli.js readme --check
+
   publish-plan:
     name: Publish Dry-Run Plan
     runs-on: ubuntu-latest
@@ -105,6 +108,9 @@ jobs:
         if: steps.publish_plan.outcome == 'failure'
         run: exit 1
 
+      - name: Validate pending module versions
+        run: node tools/ravion-modules/dist/src/cli.js version-dry-run
+
   publish:
     name: Publish Module Definitions
     runs-on: ubuntu-latest
@@ -152,6 +158,19 @@ jobs:
       - name: Publish module versions
         run: node tools/ravion-modules/dist/src/cli.js publish --apply
 
+      - name: Update README module definitions table
+        run: node tools/ravion-modules/dist/src/cli.js readme
+
+      - name: Commit README module definitions table
+        run: |
+          if git diff --quiet -- README.md; then
+            echo "README module definitions table is already up to date."
+            exit 0
+          fi
+          git add README.md
+          git commit -m "docs: refresh README module definitions table [skip ci]"
+          git push origin HEAD:main
+
       - name: Create GitHub releases
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,4 +185,4 @@ jobs:
         if: steps.published_versions.outputs.published == 'true'
         env:
           GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
-        run: gh api repos/flightcontrolhq/docs/dispatches -f event_type=module-catalog-published
+        run: gh api repos/ravionhq/docs/dispatches -f event_type=module-catalog-published

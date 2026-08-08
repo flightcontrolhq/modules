@@ -1,6 +1,6 @@
 # Makefile for Ravion Modules
 
-.PHONY: help test test-charts test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev pull-local-definition env-local-sh env-local-fish
+.PHONY: help test test-charts test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev pull-local-definition readme env-local-sh env-local-fish
 
 TIMEOUT ?= 180m
 PARALLEL ?= 3
@@ -64,6 +64,7 @@ help:
 	@echo "  modules-tools-build  Build module definition tooling"
 	@echo "  publish-local-dev    Publish one module to local dev API (MODULE=module type, file name, or path required)"
 	@echo "  pull-local-definition Pull one module definition from local dev API into an authoring YAML file"
+	@echo "  readme               Refresh the README module definitions table from definition release versions"
 	@echo "  env-local-sh         Print sh/bash/zsh commands for loading .env.local"
 	@echo "  env-local-fish       Print fish commands for loading .env.local"
 	@echo ""
@@ -107,6 +108,10 @@ endif
 pull-local-definition: modules-tools-build
 	@echo "Pulling $(PULL_SOURCE_TYPE) from local dev API into $(PULL_OUTPUT) as $(PULL_TARGET_TYPE)..."
 	@$(LOAD_ENV_LOCAL) node $(MODULE_TOOLS_DIR)/dist/src/cli.js pull-definition --local-dev --source-type "$(PULL_SOURCE_TYPE)" --target-type "$(PULL_TARGET_TYPE)" --output "$(PULL_OUTPUT)" $(PULL_VERSION_FLAG)
+
+readme: modules-tools-build
+	@echo "Refreshing README module definitions table..."
+	@node $(MODULE_TOOLS_DIR)/dist/src/cli.js readme
 
 env-local-sh:
 	@node -e 'const fs=require("node:fs"); const path=process.env.ENV_LOCAL||"$(ENV_LOCAL)"; if(!fs.existsSync(path)) process.exit(0); for (const line of fs.readFileSync(path,"utf8").split(/\r?\n/)) { const trimmed=line.trim(); if(!trimmed||trimmed.startsWith("#")) continue; const index=trimmed.indexOf("="); if(index<1) continue; const key=trimmed.slice(0,index).trim(); const value=trimmed.slice(index+1).trim().replace(/^(["'"'"'])(.*)\1$$/,"$$2"); if(!/^[A-Za-z_][A-Za-z0-9_]*$$/.test(key)) continue; console.log(`export ${key}=${JSON.stringify(value)}`); }'

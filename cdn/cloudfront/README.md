@@ -367,7 +367,7 @@ Redirect rules run at viewer request time before CloudFront contacts an origin. 
 
 ```hcl
 module "cdn" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//cdn/cloudfront?ref=rvn-cloudfront@0.3.0"
+  source = "git::https://github.com/ravionhq/modules.git//cdn/cloudfront?ref=rvn-cloudfront@0.3.0"
 
   name = "marketing"
 

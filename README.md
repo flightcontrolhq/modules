@@ -1,6 +1,6 @@
 # Ravion Modules
 
-OpenTofu/Terraform module library for [Flightcontrol](https://www.flightcontrol.dev/).
+OpenTofu/Terraform module library for [Ravion](https://www.ravion.com/).
 
 ## Overview
 
@@ -25,9 +25,9 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `eks/addons`      | Selectable add-ons for an existing EKS cluster: Karpenter autoscaling, AWS Load Balancer Controller, External Secrets Operator, EBS CSI driver, and CloudWatch Container Insights (includes `rvn-eks-addons` module definition) | Unreleased |
 | `compute/`    | `eks_service`     | Load balancer attachment for an EKS workload: IP-mode target group and listener rule against a shared EKS Add-ons ALB (includes the `rvn-eks-web`, `rvn-eks-worker`, and `rvn-eks-cron` module definitions) | Unreleased |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
-| `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.0.0  |
+| `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.1.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
-| `database/`   | `rds`             | AWS RDS instances                                                      | v1.0.0  |
+| `database/`   | `rds`             | AWS RDS instances                                                      | v1.1.0  |
 | `hosting/`    | `static_site`     | Composite static site hosting (S3 + CloudFront + OAC, optional CloudFront Function / Lambda@Edge) | v1.0.0  |
 | `messaging/`  | `sns`             | AWS SNS topics and subscriptions                                       | Planned |
 | `messaging/`  | `sqs`             | AWS SQS queues                                                         | Planned |
@@ -47,6 +47,43 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `storage/`    | `ebs`             | AWS EBS volumes                                                        | Planned |
 | `storage/`    | `efs`             | AWS EFS file systems with mount targets, client/mount-target security groups, and optional access point | v1.0.0  |
 | `storage/`    | `s3`              | AWS S3 buckets with encryption, SSE-C blocking, lifecycle rules, CORS, and bucket policies | v1.0.0  |
+
+## Published Module Definitions
+
+The table below is generated from the `release.version` in each `*-definition.yml` file and is kept in
+sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and refreshed on publish).
+
+<!-- BEGIN GENERATED: module-definitions -->
+
+| Definition | Name | Version | Module path |
+| ---------- | ---- | ------- | ----------- |
+| `rvn-acm-certificate` | ACM Certificate | v1.0.1 | `security/acm_certificate/` |
+| `rvn-aurora` | Aurora Database | v1.1.1 | `database/aurora/` |
+| `rvn-aws-alb` | AWS Application Load Balancer | v1.0.1 | `networking/alb/` |
+| `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.1 | `security/iam_policy/` |
+| `rvn-aws-iam-role` | AWS IAM Role | v1.0.1 | `security/iam/` |
+| `rvn-aws-network` | VPC Network | v1.0.1 | `networking/vpc/` |
+| `rvn-aws-static` | Static Hosting | v1.0.1 | `hosting/static_site/` |
+| `rvn-cloudfront` | CloudFront CDN | v1.0.1 | `cdn/cloudfront/` |
+| `rvn-ec2-service` | EC2 Service | v1.0.1 | `compute/ec2_service/` |
+| `rvn-ecs-cluster` | ECS Cluster | v1.0.1 | `compute/ecs_cluster/` |
+| `rvn-ecs-nlb` | ECS Network Service | v1.0.1 | `compute/ecs_service/` |
+| `rvn-ecs-web` | ECS Web Service | v1.0.1 | `compute/ecs_service/` |
+| `rvn-ecs-worker` | ECS Worker | v1.0.1 | `compute/ecs_service/` |
+| `rvn-efs` | EFS File System | v1.0.1 | `storage/efs/` |
+| `rvn-eks` | EKS Cluster | v0.1.0 | `compute/eks/` |
+| `rvn-eks-addons` | EKS Add-ons | v0.1.0 | `compute/eks/addons/` |
+| `rvn-eks-cron` | EKS Cron Job | v0.1.0 | `compute/eks_service/` |
+| `rvn-eks-web` | EKS Web Service | v0.1.0 | `compute/eks_service/` |
+| `rvn-eks-worker` | EKS Worker | v0.1.0 | `compute/eks_service/` |
+| `rvn-elasticache` | ElastiCache | v1.0.1 | `cache/elasticache/` |
+| `rvn-lambda` | Lambda Function | v1.0.1 | `compute/lambda/` |
+| `rvn-rds` | RDS Database | v1.1.1 | `database/rds/` |
+| `rvn-route53` | Route 53 DNS | v1.0.1 | `networking/route53/` |
+| `rvn-s3` | S3 Bucket | v1.0.1 | `storage/s3/` |
+| `rvn-stack` | Terraform Stack | v1.2.4 | `stack/terraform/` |
+
+<!-- END GENERATED: module-definitions -->
 
 ## Application Charts
 
@@ -73,7 +110,7 @@ Reference modules using Git URLs with version pinning:
 
 ```hcl
 module "sqs_queue" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//messaging/sqs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//messaging/sqs?ref=v1.0.0"
 
   # Module inputs
   name = "my-queue"
@@ -87,10 +124,10 @@ Always pin to a specific version using Git tags:
 
 ```hcl
 # Recommended: Pin to exact version
-source = "git::https://github.com/flightcontrolhq/modules.git//messaging/sqs?ref=v1.0.0"
+source = "git::https://github.com/ravionhq/modules.git//messaging/sqs?ref=v1.0.0"
 
 # Alternative: Pin to major version branch (if available)
-source = "git::https://github.com/flightcontrolhq/modules.git//messaging/sqs?ref=v1"
+source = "git::https://github.com/ravionhq/modules.git//messaging/sqs?ref=v1"
 ```
 
 ## Module Standards
@@ -144,7 +181,7 @@ module:
   stack:
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       ref: $local.module_tag
       base_path: networking/vpc
 ```
@@ -201,7 +238,7 @@ module:
       - ravion_state_backend_workspace: "<< module.given_id >>"
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       ref: $local.module_tag
       base_path: networking/vpc
 ```
@@ -234,6 +271,10 @@ publishes missing versions through the Ravion API.
 Pull requests run the same publish comparison in dry-run mode and post a PR comment with the
 planned creates, patches, skips, and config diffs. The dry run uses `https://api.ravion.com` and
 requires `RAVION_API_TOKEN`; when the token is missing, CI fails with an explicit credential error.
+Pull requests also run `node dist/src/cli.js version-dry-run`, which validates each
+pending module version's config through the Ravion API's module version dry run without creating
+anything. It skips already-published versions and definitions that do not exist remotely yet, and
+reports every failing definition at once.
 
 Manual dry runs use the same commands:
 
@@ -241,6 +282,7 @@ Manual dry runs use the same commands:
 cd tools/ravion-modules
 node dist/src/cli.js tags --api
 node dist/src/cli.js publish
+node dist/src/cli.js version-dry-run
 ```
 
 Mutation commands are explicit:

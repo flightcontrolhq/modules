@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flightcontrolhq/modules/test/helpers"
+	"github.com/ravionhq/modules/test/helpers"
 )
 
 // TestCleanupOrphanedResources finds and deletes all Terratest resources.

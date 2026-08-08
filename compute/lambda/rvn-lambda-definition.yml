@@ -3,11 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 0.4.0
-  description: >-
-    Stop creating a module-owned ECR repository when pulling from an image
-    registry. Add a required initial image tag or digest used to create the
-    function before its first deployment.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -1196,7 +1193,7 @@ module:
 
     The Lambda Function module creates an AWS Lambda function, execution role, CloudWatch log group, optional artifact bucket, and a live alias that Ravion updates during deployments. Terraform provisions the long-lived function infrastructure with either a bootstrap zip package or a bootstrap container image. Deployments publish a new function version and move the live alias.
 
-    Terraform source: [flightcontrolhq/modules/compute/lambda](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/lambda)
+    Terraform source: [ravionhq/modules/compute/lambda](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/lambda)
 
     ## Use cases
 

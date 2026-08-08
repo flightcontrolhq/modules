@@ -20,7 +20,7 @@ This module creates an AWS Application Load Balancer (ALB) with HTTP and HTTPS l
 
 ```hcl
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/alb?ref=v1.0.0"
 
   name       = "main"
   vpc_id     = module.vpc.vpc_id
@@ -38,7 +38,7 @@ To enable HTTPS, you must set `https_listener_enabled = true` and provide `certi
 
 ```hcl
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/alb?ref=v1.0.0"
 
   name       = "main"
   vpc_id     = module.vpc.vpc_id
@@ -57,7 +57,7 @@ module "alb" {
 
 ```hcl
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/alb?ref=v1.0.0"
 
   name       = "internal"
   vpc_id     = module.vpc.vpc_id
@@ -73,7 +73,7 @@ module "alb" {
 
 ```hcl
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/alb?ref=v1.0.0"
 
   name       = "secure"
   vpc_id     = module.vpc.vpc_id
@@ -101,7 +101,7 @@ module "alb" {
 ```hcl
 # Create ALB with HTTPS
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/alb?ref=v1.0.0"
 
   name       = "main"
   vpc_id     = module.vpc.vpc_id
@@ -113,7 +113,7 @@ module "alb" {
 
 # ECS service creates its own target group and listener rule
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ecs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//compute/ecs?ref=v1.0.0"
 
   name       = "api"
   cluster_id = module.ecs_cluster.id
@@ -135,7 +135,7 @@ module "api_service" {
 
 # Another ECS service on the same ALB
 module "web_service" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ecs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//compute/ecs?ref=v1.0.0"
 
   name       = "web"
   cluster_id = module.ecs_cluster.id
@@ -162,7 +162,7 @@ For EKS, the ECS-style integration won't work directly. Instead, use the AWS Loa
 ```hcl
 # Create ALB with HTTPS
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/alb?ref=v1.0.0"
 
   name       = "eks-alb"
   vpc_id     = module.vpc.vpc_id

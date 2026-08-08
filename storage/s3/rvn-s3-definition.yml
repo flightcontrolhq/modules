@@ -3,8 +3,8 @@ definition:
   name: S3 Bucket
   description: S3 bucket with public access blocking, encryption, versioning, CORS, lifecycle rules, and configurable bucket policies.
 release:
-  version: 0.3.1
-  description: Block SSE-C uploads and prevent recurring S3 encryption plan changes.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -465,4 +465,4 @@ module:
     - [Blocking public access to your Amazon S3 storage](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html)
     - [Protecting data with server-side encryption](https://docs.aws.amazon.com/AmazonS3/latest/userguide/serv-side-encryption.html)
     - [Managing your storage lifecycle](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/storage/s3)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/storage/s3)

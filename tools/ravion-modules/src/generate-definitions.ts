@@ -40,7 +40,7 @@ export interface GenerateDefinitionsResult {
   missing: MissingModuleResult[];
 }
 
-const REPO_URL = "https://github.com/flightcontrolhq/modules";
+const REPO_URL = "https://github.com/ravionhq/modules";
 const DEFAULT_MODULE_PATHS: Record<string, string> = {
   "rvn-acm-certificate": "security/acm_certificate",
   "rvn-aws-network": "networking/vpc",

@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
 release:
-  version: 0.4.2
-  description: Default Allowed methods to Read only, matching the Terraform module and documentation.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -776,7 +776,7 @@ module:
 
     The default configuration is safe for dynamic apps: responses are cached at the edge only when your app returns Cache-Control headers, and the full viewer request, including the Host header, cookies, and query strings, is forwarded to the origin. You get TLS termination close to users, HTTP/2 and HTTP/3, connection reuse to the origin, optional WAF, and per-path caching for static assets.
 
-    Terraform source: [flightcontrolhq/modules/cdn/cloudfront](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/cdn/cloudfront)
+    Terraform source: [ravionhq/modules/cdn/cloudfront](https://github.com/ravionhq/modules/tree/$local.module_tag/cdn/cloudfront)
 
     ## Use cases
 
