@@ -140,6 +140,9 @@ module:
             - nixpacks
     - $merge:
         - ../../partials/inputs/build-environment-variables.yml
+      applies_on:
+        - build
+        - deploy
       show_when:
         build_source:
           - dockerfile
