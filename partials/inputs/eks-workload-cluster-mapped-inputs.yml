@@ -73,4 +73,9 @@
   description: VPC the cluster runs in. Load balancer target groups must live in the same VPC as the pods they register.
   collapsible: true
   required: true
-  default: <<ref.stack.output.vpc_id>>
+  # Read from the cluster's input, not its stack output: the cluster carries
+  # vpc_id as an input mapped off its own network reference, so this resolves
+  # as soon as a cluster is selected. ref.stack.output.vpc_id would resolve
+  # only after the cluster stack had applied, leaving this required field empty
+  # while adding a workload. Matches ecs-service-cluster-common-mapped-inputs.
+  default: <<ref.input.vpc_id>>

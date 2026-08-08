@@ -1,3 +1,12 @@
+# Image inputs shared by rvn-eks-web, rvn-eks-worker, and rvn-eks-cron.
+#
+# The repository and its pull secrets apply only to the image_registry build
+# source. For Dockerfile and Railpack builds the repository is the ECR
+# repository the stack creates, and the node pulls from it with its own
+# credentials, so neither field has anything to configure.
+#
+# The start command is not gated: it overrides the entrypoint of whatever image
+# the workload ends up running, built or pulled.
 - id: section_image
   label: Image
   type: section
@@ -7,6 +16,8 @@
   description: Image repository without a tag, such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/api. The tag or digest is supplied at deploy time.
   placeholder: 123456789012.dkr.ecr.us-east-1.amazonaws.com/api
   required: true
+  show_when:
+    build_source: image_registry
 - id: image_pull_secret_names
   label: Image pull secret names
   type: string_array
@@ -14,6 +25,8 @@
   add_button_label: Add pull secret
   collapsible: true
   required: false
+  show_when:
+    build_source: image_registry
 - id: start_command
   label: Start command
   type: string_array

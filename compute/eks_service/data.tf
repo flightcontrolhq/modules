@@ -8,9 +8,13 @@ data "aws_region" "current" {}
 # be exposed as outputs, for CloudFront origins, DNS records, and the module's
 # dashboard link.
 data "aws_lb_listener" "attached" {
+  count = local.enable_load_balancer ? 1 : 0
+
   arn = var.listener_arn
 }
 
 data "aws_lb" "attached" {
-  arn = data.aws_lb_listener.attached.load_balancer_arn
+  count = local.enable_load_balancer ? 1 : 0
+
+  arn = data.aws_lb_listener.attached[0].load_balancer_arn
 }

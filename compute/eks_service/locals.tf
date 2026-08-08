@@ -12,6 +12,13 @@ locals {
 
   region = coalesce(var.region, data.aws_region.current.region)
 
+  # A listener ARN is what makes this workload web-facing. Worker and cron
+  # stacks pass null, and the target group, listener rule, and load balancer
+  # lookup all drop out, leaving the ECR repository as the module's only
+  # resource. This mirrors compute/ecs_service, where a nullable
+  # load_balancer_attachment gates the same objects.
+  enable_load_balancer = var.listener_arn != null
+
   # ELBv2 target group names are capped at 32 characters and the "-tg" suffix
   # takes 3, mirroring the ECS service module's truncation.
   target_group_name = "${substr(var.name, 0, min(length(var.name), 24))}-tg"

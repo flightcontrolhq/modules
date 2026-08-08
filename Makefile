@@ -1,6 +1,6 @@
 # Makefile for Ravion Modules
 
-.PHONY: help test test-charts test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service list-tests modules-tools-build publish-local-dev pull-local-definition readme env-local-sh env-local-fish
+.PHONY: help test test-charts test-vpc test-alb test-nlb test-sg test-ecs test-elasticache test-s3 test-cleanup test-cleanup-dry clean fmt validate deps test-single test-ecs-cluster test-ecs-service test-eks-service list-tests modules-tools-build publish-local-dev pull-local-definition readme env-local-sh env-local-fish
 
 TIMEOUT ?= 180m
 PARALLEL ?= 3
@@ -47,6 +47,7 @@ help:
 	@echo "  test-ecs             Run all ECS tests"
 	@echo "  test-ecs-cluster     Run ECS Cluster tests"
 	@echo "  test-ecs-service     Run ECS Service tests"
+	@echo "  test-eks-service     Run EKS Service tests"
 	@echo "  test-elasticache     Run ElastiCache tests"
 	@echo "  test-s3              Run S3 module tests"
 	@echo "  test-charts          Run Helm chart lint + template tests (no cluster needed)"
@@ -162,6 +163,10 @@ test-ecs-cluster:
 test-ecs-service:
 	@echo "Running ECS Service tests..."
 	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestEcsService ./...)
+
+test-eks-service:
+	@echo "Running EKS Service tests..."
+	$(call run_test,$(TIMEOUT),$(PARALLEL),-run TestEksService ./...)
 
 test-elasticache:
 	@echo "Running ElastiCache tests..."

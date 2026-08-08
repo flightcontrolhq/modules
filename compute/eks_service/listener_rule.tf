@@ -7,15 +7,20 @@
 # the forward action (that exists only so ELBv2 accepts the weighted forward
 # ECS writes mid-deployment), and no ignore_changes on `action`, because on EKS
 # nothing outside Terraform ever rewrites this rule.
+#
+# Created only when var.listener_arn is set, alongside the target group it
+# forwards to.
 ################################################################################
 
 resource "aws_lb_listener_rule" "this" {
+  count = local.enable_load_balancer ? 1 : 0
+
   listener_arn = var.listener_arn
   priority     = var.listener_rule_priority
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.this.arn
+    target_group_arn = aws_lb_target_group.this[0].arn
   }
 
   dynamic "condition" {

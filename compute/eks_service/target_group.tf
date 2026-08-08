@@ -10,9 +10,14 @@
 # alternate target group, no test listener rule, and no traffic-shift
 # controller rewriting the forward action. Nothing external mutates this target
 # group, which is why it carries no ignore_changes.
+#
+# Created only when var.listener_arn is set. Worker and cron workloads reuse
+# this root module for its ECR repository alone and leave the listener null.
 ################################################################################
 
 resource "aws_lb_target_group" "this" {
+  count = local.enable_load_balancer ? 1 : 0
+
   name        = local.target_group_name
   port        = var.container_port
   protocol    = var.target_group_protocol
