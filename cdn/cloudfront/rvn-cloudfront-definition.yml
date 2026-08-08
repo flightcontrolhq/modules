@@ -334,12 +334,12 @@ module:
       required: true
       default: managed_accept
       values:
-        - label: UseOriginCacheControlHeaders-QueryStrings
-          description: Caches only responses with Cache-Control headers from your app. Query strings are part of the cache key.
-          value: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
         - label: UseOriginCacheControlHeaders-QueryStrings with normalized Markdown negotiation (recommended)
           description: Caches only responses with Cache-Control headers from your app. Query strings and a normalized Markdown preference are part of the cache key.
           value: managed_accept
+        - label: UseOriginCacheControlHeaders-QueryStrings
+          description: Caches only responses with Cache-Control headers from your app. Query strings are part of the cache key.
+          value: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
         - label: UseOriginCacheControlHeaders
           description: Caches only responses with Cache-Control headers from your app. Query strings are not part of the cache key.
           value: 83da9c7e-98b4-4e11-a168-04f0df8e2c65
