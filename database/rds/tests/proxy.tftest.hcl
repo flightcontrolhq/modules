@@ -94,8 +94,8 @@ run "test_proxy_not_created_by_default" {
 }
 
 # Full plan with the proxy enabled. This exercises the complete dependency
-# graph: DB security group ingress references the proxy security group while
-# the proxy targets the database.
+# graph: standalone proxy ingress rule references the proxy security group
+# while the proxy targets the database.
 run "test_proxy_created_when_enabled" {
   command = plan
 

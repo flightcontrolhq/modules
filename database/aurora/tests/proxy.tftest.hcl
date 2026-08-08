@@ -2,10 +2,9 @@
 # Aurora RDS Proxy Integration Tests
 #
 # Covers the optional RDS Proxy wiring: engine family mapping, auth secret
-# resolution, preconditions, and that the combined plan graph (cluster
-# security group ingress from the proxy security group, proxy targeting the
-# cluster, proxy depending on cluster instances) resolves without dependency
-# cycles.
+# resolution, preconditions, and that the combined plan graph (standalone
+# proxy ingress rule, proxy targeting the cluster, proxy depending on cluster
+# instances) resolves without dependency cycles.
 ################################################################################
 
 mock_provider "aws" {

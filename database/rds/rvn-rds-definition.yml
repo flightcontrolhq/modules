@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 1.1.1
-  description: Add optional RDS Proxy connection pooling and update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  version: 1.2.0
+  description: Add optional RDS Proxy connection pooling.
 module:
   inputs:
     - id: network

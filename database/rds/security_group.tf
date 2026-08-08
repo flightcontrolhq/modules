@@ -33,17 +33,7 @@ module "security_group" {
         ip_protocol = "tcp"
         cidr_ipv4   = cidr
       }
-    ],
-    # RDS Proxy source
-    local.create_proxy ? [
-      {
-        description                  = "Allow ${var.engine} traffic from the RDS Proxy"
-        from_port                    = local.port
-        to_port                      = local.port
-        ip_protocol                  = "tcp"
-        referenced_security_group_id = module.proxy[0].security_group_id
-      }
-    ] : []
+    ]
   )
 
   # Egress to VPC only. For ip_protocol="-1" (all protocols), AWS requires
@@ -57,4 +47,21 @@ module "security_group" {
       cidr_ipv4   = data.aws_vpc.this.cidr_block
     }
   ]
+}
+
+# Separate from the security group module so the database can depend on the SG
+# without creating a cycle through the proxy target registration.
+resource "aws_vpc_security_group_ingress_rule" "proxy" {
+  count = local.create_security_group && local.create_proxy ? 1 : 0
+
+  security_group_id            = module.security_group[0].security_group_id
+  description                  = "Allow ${var.engine} traffic from the RDS Proxy"
+  from_port                    = local.port
+  to_port                      = local.port
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = module.proxy[0].security_group_id
+
+  tags = merge(local.tags, {
+    Name = "${var.name}-rds-proxy-ingress"
+  })
 }
