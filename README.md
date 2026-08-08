@@ -73,13 +73,13 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-ecs-web` | ECS Web Service | v1.0.2 | `compute/ecs_service/` |
 | `rvn-ecs-worker` | ECS Worker | v1.0.2 | `compute/ecs_service/` |
 | `rvn-efs` | EFS File System | v1.0.2 | `storage/efs/` |
-| `rvn-elasticache` | ElastiCache | v1.0.1 | `cache/elasticache/` |
-| `rvn-lambda` | Lambda Function | v1.0.1 | `compute/lambda/` |
-| `rvn-rds` | RDS Database | v1.2.0 | `database/rds/` |
-| `rvn-rds-proxy` | RDS Proxy | v0.1.0 | `database/rds-proxy/` |
-| `rvn-route53` | Route 53 DNS | v1.0.1 | `networking/route53/` |
-| `rvn-s3` | S3 Bucket | v1.0.1 | `storage/s3/` |
-| `rvn-stack` | Terraform Stack | v1.2.4 | `stack/terraform/` |
+| `rvn-elasticache` | ElastiCache | v1.0.2 | `cache/elasticache/` |
+| `rvn-lambda` | Lambda Function | v1.0.2 | `compute/lambda/` |
+| `rvn-rds` | RDS Database | v1.2.1 | `database/rds/` |
+| `rvn-rds-proxy` | RDS Proxy | v0.1.1 | `database/rds-proxy/` |
+| `rvn-route53` | Route 53 DNS | v1.0.2 | `networking/route53/` |
+| `rvn-s3` | S3 Bucket | v1.0.2 | `storage/s3/` |
+| `rvn-stack` | Terraform Stack | v1.2.5 | `stack/terraform/` |
 
 <!-- END GENERATED: module-definitions -->
 
