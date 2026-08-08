@@ -3,8 +3,8 @@ definition:
   name: EKS Worker
   description: Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
 release:
-  version: 0.1.0
-  description: Initial EKS worker definition - deploy-only Helm release of the rvn-eks-worker chart onto an existing EKS cluster.
+  version: 0.2.0
+  description: Add container image builds. Build source now selects Dockerfile, Railpack, or an existing registry image. The first two build from a Git repository and push to an ECR repository, so the module gains a Terraform stack that creates that repository and nothing else. Adds build environment variables with optional Dockerfile build-argument injection, plus builder instance and ECR lifecycle settings.
 module:
   inputs:
     - id: section_cluster
@@ -23,6 +23,7 @@ module:
     - $template: ../../partials/templates/eks-workload-release-inputs.yml
       with:
         name_description: Name for the Helm release and the Kubernetes objects it creates.
+    - $include: ../../partials/inputs/eks-workload-build-inputs.yml
     - $include: ../../partials/inputs/eks-workload-image-inputs.yml
     - $include: ../../partials/inputs/eks-workload-resource-inputs.yml
     - id: section_scaling
@@ -86,6 +87,23 @@ module:
       min: 0
       default: 30
     - $include: ../../partials/inputs/eks-workload-runtime-inputs.yml
+    - $include: ../../partials/inputs/eks-workload-builder-ecr-inputs.yml
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+  stack:
+    # A worker has no load balancer, so listener_arn is null and
+    # compute/eks_service reduces to the ECR repository the build pushes to.
+    # This is the same shape rvn-ecs-worker uses with load_balancer_attachment.
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: compute/eks_service
+      terraform_variables:
+        $merge:
+          - ../../partials/stack/eks-workload-common-terraform-variables.yml
+          - listener_arn: null
+  build:
+    $include: ../../partials/build/eks-workload-image-build.yml
   deploy:
     $merge:
       - ../../partials/deploy/eks-workload-deploy-common.yml
@@ -117,13 +135,15 @@ module:
 
     ## Overview
 
-    EKS Worker runs queue consumers, event processors, and other long-lived background processes on an existing Ravion EKS cluster. You bring a container image; Ravion brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-worker` chart, which renders a Deployment, a ServiceAccount, an optional HorizontalPodAutoscaler, and, when the module declares runtime secrets, an `ExternalSecret`.
+    EKS Worker runs queue consumers, event processors, and other long-lived background processes on an existing Ravion EKS cluster. Ravion builds the image from your repository - or takes one you already have - and brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-worker` chart, which renders a Deployment, a ServiceAccount, an optional HorizontalPodAutoscaler, and, when the module declares runtime secrets, an `ExternalSecret`.
 
     The chart deliberately renders no Service, no container port, and no probes. A worker is reached by nothing; it reaches out.
 
-    This module creates no AWS infrastructure of its own, so it has no Terraform stack. Everything it needs - cluster endpoint, certificate authority data, and the Ravion Runner role - comes from the selected EKS Cluster module.
+    The only AWS resource this module creates is the ECR repository that Dockerfile and Railpack builds push to, so its Terraform stack is a single repository and nothing else. On the Pull from image registry path the stack creates nothing at all. Everything else the module needs - cluster endpoint, certificate authority data, and the Ravion Runner role - comes from the selected EKS Cluster module.
 
     Chart source: [ravionhq/modules/charts/rvn-eks-worker](https://github.com/ravionhq/modules/tree/$local.module_tag/charts/rvn-eks-worker)
+
+    Terraform source: [ravionhq/modules/compute/eks_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/eks_service)
 
     ## Use cases
 
@@ -139,13 +159,40 @@ module:
     - An **EKS Cluster** module.
     - The **External Secrets Operator** add-on on that cluster, if the worker uses Runtime secrets.
 
-    ## Image
+    ## Build and image options
 
-    Provide the **Image repository** without a tag. At deploy time, provide the **Image tag or digest**. A value beginning with `sha256:` is used as a digest and everything else as a tag.
+    | Build source | When to use it |
+    | ------------ | -------------- |
+    | Dockerfile | Build from a Dockerfile in the selected repository |
+    | Railpack | Let Ravion detect the app stack and build an image from source with Railpack |
+    | Pull from image registry | Deploy an existing image from Docker Hub, GHCR, ECR, or another registry |
+
+    For Dockerfile and Railpack builds, provide **Git repository** and optionally **Source base path**. The stack creates an ECR repository named after the worker, Ravion pushes each build to it, and the chart deploys the resulting digest. Nodes pull from same-account ECR with their own credentials, so no pull secret is involved.
+
+    A worker built with **Railpack** often shares a repository with the web service in front of it. Railpack's detected start command is rarely the worker's command, so set the worker's entrypoint below rather than relying on the image default.
+
+    Use **Build environment variables** for values the build itself needs - a private registry token, a `NODE_ENV` that changes what gets compiled. Values can be plain strings or references loaded from Parameter Store or Secrets Manager. For Dockerfile builds, turn on **Inject environment variables in Dockerfile** to pass them to the build as Docker build arguments; without it they are visible to the builder but not to `docker build`.
+
+    These are separate from **Runtime environment variables** further down, and deliberately so: a credential needed to install dependencies has no business being in the running pod's environment. Anything both halves need has to be set in both places.
+
+    For **Pull from image registry**, provide the **Image repository** without a tag, and use **Image pull secret names** for a private registry - each entry names a Kubernetes Secret of type `kubernetes.io/dockerconfigjson` that already exists in the release namespace.
+
+    Whichever source you choose, the deploy takes an **Image tag or digest**. A value beginning with `sha256:` is used as a digest and everything else as a tag.
 
     Workers usually need a command: use **Start command** to override the image entrypoint and **Start command arguments** to override its default arguments. For example, entrypoint `bundle` with arguments `exec sidekiq`.
 
-    Use **Image pull secret names** for private registries. Each entry names a Kubernetes Secret of type `kubernetes.io/dockerconfigjson` that already exists in the release namespace.
+    ## Builder settings
+
+    Builder settings apply to Dockerfile and Railpack builds only.
+
+    | Field | Default | Description |
+    | ----- | ------- | ----------- |
+    | Builder instance type | ec2 | Use EC2 for predictable availability or EC2 spot for lower cost |
+    | Builder instance size | c7a.4xlarge | EC2 instance size used for builds |
+    | Builder execution environment | Cluster value | Optional override for where image builds run |
+    | Builder AMI | Default image | Optional AMI override for build runners |
+
+    **Scan images on push** asks ECR to run its basic vulnerability scan on every pushed image. **Force delete image repository** lets the repository be destroyed while it still holds images; without it, destroying the module fails until the repository is emptied.
 
     ## Resources and scaling
 
@@ -182,8 +229,19 @@ module:
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes objects |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
     | Create namespace | No | true | Create the namespace if it does not exist |
-    | Image repository | Yes | - | Image repository without a tag |
-    | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace |
+    | Build source | Yes | dockerfile | Dockerfile, Railpack, or Pull from image registry |
+    | Git repository | Yes* | - | Required for Dockerfile and Railpack builds |
+    | Source base path | No | . | Repository-relative source and build root |
+    | Dockerfile path | No | Dockerfile | Path to the Dockerfile, for Dockerfile builds |
+    | Docker build context path | No | . | Docker build context, for Dockerfile builds |
+    | Build environment variables | No | - | Values available during Dockerfile and Railpack builds |
+    | Inject environment variables in Dockerfile | No | false | Pass build environment variables to `docker build` as build arguments |
+    | Railpack version | No | Ravion default | Optional pin for Railpack builds |
+    | Install command | No | Railpack default | Optional Railpack dependency install command |
+    | Build command | No | Railpack default | Optional Railpack build command |
+    | Start command (Railpack) | No | Railpack default | Optional Railpack start command |
+    | Image repository | Yes* | - | Image repository without a tag; required for Pull from image registry |
+    | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace, for Pull from image registry |
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
     | CPU request | Yes | 100m | CPU reserved per pod |
@@ -199,10 +257,21 @@ module:
     | Shutdown grace period (secs) | No | 30 | Drain window after SIGTERM |
     | Runtime environment variables | No | - | Array of {name, value} objects |
     | Runtime secrets | No | - | Array of {name, value_from} ARN references |
+    | Builder instance type | No | ec2 | EC2 or EC2 spot capacity for builds |
+    | Builder instance size | No | c7a.4xlarge | EC2 instance size used for builds |
+    | Builder execution environment | No | Cluster value | Optional override for where builds run |
+    | Builder AMI | No | Default image | Optional AMI override for build runners |
+    | Scan images on push | No | true | ECR basic vulnerability scan on every push |
+    | Force delete image repository | No | false | Allow destroying the repository while it holds images |
+    | Tags | No | Standard Ravion tags | Additional tags applied to the ECR repository |
+    | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
+    | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
+    | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
 
     ## Design decisions
 
-    - **No Terraform stack.** The module creates nothing in AWS, so there is no plan to review and no state to manage. Configuration changes take effect on the next deploy.
+    - **The stack exists only for the image registry.** The worker itself is entirely Helm-owned; the Terraform stack creates the ECR repository a Dockerfile or Railpack build pushes to, and nothing else. On the Pull from image registry path it creates nothing.
+    - **No Nixpacks.** ECS still carries a Nixpacks build source for services created before Railpack existed. EKS has no such history, so Dockerfile and Railpack are the only builders.
     - **No Service and no probes.** A worker exposes no port, so there is nothing to route to and no HTTP endpoint to check. Liveness for a worker is better expressed by letting the process exit on a fatal error and letting Kubernetes restart it.
     - **Autoscaling defaults off.** CPU utilization rarely tracks worker demand. Turning it on by default would produce autoscaling that looks configured but never fires.
     - **Name and namespace are fixed after creation.** Together they identify the Helm release that rollback and history target.

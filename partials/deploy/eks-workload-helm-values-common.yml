@@ -5,7 +5,10 @@
 # error rather than an ignored setting.
 fullnameOverride: << module.input.name >>
 image:
-  repository: << module.input.image_repository >>
+  # On the image_registry path the repository is whatever the module was
+  # configured with. For Dockerfile and Railpack builds it is the ECR
+  # repository the stack created, which is also where the build pushed to.
+  repository: '<< module.input.build_source == "image_registry" ? module.input.image_repository : stack.output.ecr_repository_url >>'
   # image_ref is one field carrying either shape: the chart prefers digest over
   # tag, and each branch blanks the other so exactly one is ever set.
   tag: '<< deploy.input.image_ref contains "sha256:" ? "" : deploy.input.image_ref >>'

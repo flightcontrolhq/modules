@@ -3,8 +3,8 @@ definition:
   name: EKS Web Service
   description: Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
 release:
-  version: 0.1.0
-  description: Initial EKS web service definition - Terraform target group and listener rule against a shared EKS Add-ons ALB, plus Helm deployment of the rvn-eks-web chart.
+  version: 0.2.0
+  description: Add container image builds. Build source now selects Dockerfile, Railpack, or an existing registry image; the first two build from a Git repository and push to an ECR repository the stack creates, and the chart deploys from it. Adds build environment variables with optional Dockerfile build-argument injection, plus builder instance and ECR lifecycle settings.
 module:
   inputs:
     - id: section_cluster
@@ -66,6 +66,7 @@ module:
       type: boolean
       description: Route this service through the shared public ALB. Turn off to use the shared private ALB.
       default: true
+    - $include: ../../partials/inputs/eks-workload-build-inputs.yml
     - $include: ../../partials/inputs/eks-workload-image-inputs.yml
     - id: section_health
       label: Health check
@@ -271,6 +272,7 @@ module:
         autoscaling_enabled: false
       default: 1
     - $include: ../../partials/inputs/eks-workload-runtime-inputs.yml
+    - $include: ../../partials/inputs/eks-workload-builder-ecr-inputs.yml
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
@@ -279,43 +281,41 @@ module:
     with:
       base_path: compute/eks_service
       terraform_variables:
-        ...overrides: << module.input.advanced_terraform_variables >>
-        name: << module.input.name >>
-        region: << module.input.aws_region >>
-        vpc_id: << module.input.vpc_id >>
-        container_port: << module.input.container_port >>
-        listener_arn: >-
-          << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
-          module.input.public_alb_http_listener_arn) : (module.input.private_alb_https_listener_arn ||
-          module.input.private_alb_http_listener_arn) >>
-        listener_rule_priority: << module.input.listener_rule_priority >>
-        listener_rule_conditions: >-
-          << (module.input.host_header_values != nil && module.input.host_header_values != [] ?
-          [{type: "host-header", values: module.input.host_header_values}] : []) |
-          concat(module.input.path_pattern_values != nil && module.input.path_pattern_values != [] ?
-          [{type: "path-pattern", values: module.input.path_pattern_values}] :
-          (module.input.host_header_values != nil && module.input.host_header_values != [] ? [] :
-          [{type: "path-pattern", values: ["/*"]}])) >>
-        target_group_deregistration_delay: << module.input.target_group_deregistration_delay >>
-        target_group_slow_start: << module.input.target_group_slow_start >>
-        health_check:
-          enabled: true
-          path: << module.input.health_check_path >>
-          matcher: << module.input.health_check_matcher >>
-          interval: << module.input.health_check_interval >>
-          timeout: << module.input.health_check_timeout >>
-          healthy_threshold: << module.input.healthy_threshold >>
-          unhealthy_threshold: << module.input.unhealthy_threshold >>
-        stickiness:
-          enabled: << module.input.target_group_stickiness_enabled >>
-          # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
-          # (show_when) and renders null, but the Terraform variable validation requires a
-          # non-null type whether or not stickiness is on.
-          type: '<< module.input.target_group_stickiness_enabled ? module.input.target_group_stickiness_type : "lb_cookie" >>'
-          cookie_duration: '<< module.input.target_group_stickiness_cookie_duration != nil ? module.input.target_group_stickiness_cookie_duration : 86400 >>'
-          cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
-        tags:
-          $include: ../../partials/stack/ravion-tags.yml
+        $merge:
+          - ../../partials/stack/eks-workload-common-terraform-variables.yml
+          - container_port: << module.input.container_port >>
+            listener_arn: >-
+              << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
+              module.input.public_alb_http_listener_arn) : (module.input.private_alb_https_listener_arn ||
+              module.input.private_alb_http_listener_arn) >>
+            listener_rule_priority: << module.input.listener_rule_priority >>
+            listener_rule_conditions: >-
+              << (module.input.host_header_values != nil && module.input.host_header_values != [] ?
+              [{type: "host-header", values: module.input.host_header_values}] : []) |
+              concat(module.input.path_pattern_values != nil && module.input.path_pattern_values != [] ?
+              [{type: "path-pattern", values: module.input.path_pattern_values}] :
+              (module.input.host_header_values != nil && module.input.host_header_values != [] ? [] :
+              [{type: "path-pattern", values: ["/*"]}])) >>
+            target_group_deregistration_delay: << module.input.target_group_deregistration_delay >>
+            target_group_slow_start: << module.input.target_group_slow_start >>
+            health_check:
+              enabled: true
+              path: << module.input.health_check_path >>
+              matcher: << module.input.health_check_matcher >>
+              interval: << module.input.health_check_interval >>
+              timeout: << module.input.health_check_timeout >>
+              healthy_threshold: << module.input.healthy_threshold >>
+              unhealthy_threshold: << module.input.unhealthy_threshold >>
+            stickiness:
+              enabled: << module.input.target_group_stickiness_enabled >>
+              # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
+              # (show_when) and renders null, but the Terraform variable validation requires a
+              # non-null type whether or not stickiness is on.
+              type: '<< module.input.target_group_stickiness_enabled ? module.input.target_group_stickiness_type : "lb_cookie" >>'
+              cookie_duration: '<< module.input.target_group_stickiness_cookie_duration != nil ? module.input.target_group_stickiness_cookie_duration : 86400 >>'
+              cookie_name: '<< module.input.target_group_stickiness_type == "app_cookie" ? module.input.target_group_stickiness_cookie_name : nil >>'
+  build:
+    $include: ../../partials/build/eks-workload-image-build.yml
   deploy:
     $merge:
       - ../../partials/deploy/eks-workload-deploy-common.yml
@@ -449,13 +449,14 @@ module:
 
     ## Overview
 
-    EKS Web Service runs an HTTP application on an existing Ravion EKS cluster. You bring a container image; Ravion brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-web` chart, which renders a Deployment, a Service, a ServiceAccount, an optional HorizontalPodAutoscaler, and the `TargetGroupBinding` that puts your pods behind the load balancer.
+    EKS Web Service runs an HTTP application on an existing Ravion EKS cluster. Ravion builds the image from your repository - or takes one you already have - and brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-web` chart, which renders a Deployment, a Service, a ServiceAccount, an optional HorizontalPodAutoscaler, and the `TargetGroupBinding` that puts your pods behind the load balancer.
 
-    The module has two halves that update independently:
+    The module has three parts that update independently:
 
-    | Half | Owns | Changes when |
+    | Part | Owns | Changes when |
     | ---- | ---- | ------------ |
-    | Terraform stack | Load balancer target group and listener rule | You change routing, health checks, or the container port |
+    | Terraform stack | Load balancer target group, listener rule, and the ECR repository | You change routing, health checks, the container port, or the build source |
+    | Build | The container image, from a Dockerfile or Railpack | Every build, unless the build source is an existing registry image |
     | Helm deploy | Deployment, Service, HPA, secrets wiring | Every release, and whenever runtime settings change |
 
     Routing follows the same shape as ECS Web Server: Terraform owns the `aws_lb_target_group` and `aws_lb_listener_rule` against a shared load balancer, and the AWS Load Balancer Controller registers pod IPs into that target group. The chart does not create an Ingress, so no per-service load balancer is provisioned.
@@ -512,13 +513,42 @@ module:
 
     The Kubernetes probes all use the Health check path. **Readiness probe** and **Liveness probe** are on by default. **Probe initial delay (secs)** defaults to 5. For an app with a slow or variable boot, enable the **Startup probe** rather than raising the initial delay: it suspends the liveness probe until the app answers once, and **Startup probe failure threshold** multiplied by five seconds is the boot budget.
 
-    ## Image
+    ## Build and image options
 
-    Provide the **Image repository** without a tag, such as `123456789012.dkr.ecr.us-east-1.amazonaws.com/api`. At deploy time, provide the **Image tag or digest**. A value beginning with `sha256:` is used as a digest and everything else as a tag. Pinning by digest is what makes a redeploy reproducible.
+    | Build source | When to use it |
+    | ------------ | -------------- |
+    | Dockerfile | Build from a Dockerfile in the selected repository |
+    | Railpack | Let Ravion detect the app stack and build an image from source with Railpack |
+    | Pull from image registry | Deploy an existing image from Docker Hub, GHCR, ECR, or another registry |
 
-    Use **Image pull secret names** for private registries. Each entry names a Kubernetes Secret of type `kubernetes.io/dockerconfigjson` that already exists in the release namespace.
+    For Dockerfile and Railpack builds, provide **Git repository** and optionally **Source base path**. The stack creates an ECR repository named after the service, Ravion pushes each build to it, and the chart deploys the resulting digest. Nothing else needs configuring: the repository URL reaches the chart from the stack output, and nodes pull from same-account ECR with their own credentials, so no pull secret is involved.
 
-    Use **Start command** to override the image entrypoint and **Start command arguments** to override its default arguments.
+    **Railpack** settings optionally pin the Railpack version and override the install, build, and start commands. Leave them blank for Railpack's own detection.
+
+    Use **Build environment variables** for values the build itself needs - a private registry token, a source map upload key, a `NODE_ENV` that changes what gets compiled. Values can be plain strings or references loaded from Parameter Store or Secrets Manager. For Dockerfile builds, turn on **Inject environment variables in Dockerfile** to pass them to the build as Docker build arguments; without it they are visible to the builder but not to `docker build`.
+
+    These are separate from **Runtime environment variables** further down, and deliberately so: a credential needed to install dependencies has no business being in the running pod's environment, and a value the build bakes in does not need re-supplying at runtime. Anything both halves need has to be set in both places.
+
+    For **Pull from image registry**, provide the **Image repository** without a tag, such as `123456789012.dkr.ecr.us-east-1.amazonaws.com/api`, and use **Image pull secret names** for a private registry - each entry names a Kubernetes Secret of type `kubernetes.io/dockerconfigjson` that already exists in the release namespace.
+
+    Whichever source you choose, the deploy takes an **Image tag or digest**. A value beginning with `sha256:` is used as a digest and everything else as a tag. Pinning by digest is what makes a redeploy reproducible, and it is what a Dockerfile or Railpack build passes automatically.
+
+    Use **Start command** to override the image entrypoint and **Start command arguments** to override its default arguments. Both apply to built and pulled images alike.
+
+    ## Builder settings
+
+    Builder settings apply to Dockerfile and Railpack builds only.
+
+    | Field | Default | Description |
+    | ----- | ------- | ----------- |
+    | Builder instance type | ec2 | Use EC2 for predictable availability or EC2 spot for lower cost |
+    | Builder instance size | c7a.4xlarge | EC2 instance size used for builds |
+    | Builder execution environment | Cluster value | Optional override for where image builds run |
+    | Builder AMI | Default image | Optional AMI override for build runners |
+
+    Start with the default builder size, then adjust based on build duration and the resource usage report at the end of a build.
+
+    **Scan images on push** asks ECR to run its basic vulnerability scan on every pushed image. **Force delete image repository** lets the repository be destroyed while it still holds images; without it, destroying the module fails until the repository is emptied.
 
     ## Resources and scaling
 
@@ -559,8 +589,19 @@ module:
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
     | Create namespace | No | true | Create the namespace if it does not exist |
     | Public web service | No | true | Use the shared public ALB; turn off for the private ALB |
-    | Image repository | Yes | - | Image repository without a tag |
-    | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace |
+    | Build source | Yes | dockerfile | Dockerfile, Railpack, or Pull from image registry |
+    | Git repository | Yes* | - | Required for Dockerfile and Railpack builds |
+    | Source base path | No | . | Repository-relative source and build root |
+    | Dockerfile path | No | Dockerfile | Path to the Dockerfile, for Dockerfile builds |
+    | Docker build context path | No | . | Docker build context, for Dockerfile builds |
+    | Build environment variables | No | - | Values available during Dockerfile and Railpack builds |
+    | Inject environment variables in Dockerfile | No | false | Pass build environment variables to `docker build` as build arguments |
+    | Railpack version | No | Ravion default | Optional pin for Railpack builds |
+    | Install command | No | Railpack default | Optional Railpack dependency install command |
+    | Build command | No | Railpack default | Optional Railpack build command |
+    | Start command (Railpack) | No | Railpack default | Optional Railpack start command |
+    | Image repository | Yes* | - | Image repository without a tag; required for Pull from image registry |
+    | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace, for Pull from image registry |
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
     | Container port | Yes | 8080 | Port the application listens on |
@@ -585,7 +626,13 @@ module:
     | Pods | No | 1 | Fixed pod count when autoscaling is disabled |
     | Runtime environment variables | No | - | Array of {name, value} objects |
     | Runtime secrets | No | - | Array of {name, value_from} ARN references |
-    | Tags | No | Standard Ravion tags | Additional tags applied to load balancer resources |
+    | Builder instance type | No | ec2 | EC2 or EC2 spot capacity for builds |
+    | Builder instance size | No | c7a.4xlarge | EC2 instance size used for builds |
+    | Builder execution environment | No | Cluster value | Optional override for where builds run |
+    | Builder AMI | No | Default image | Optional AMI override for build runners |
+    | Scan images on push | No | true | ECR basic vulnerability scan on every push |
+    | Force delete image repository | No | false | Allow destroying the repository while it holds images |
+    | Tags | No | Standard Ravion tags | Additional tags applied to the load balancer and ECR resources |
     | Advanced Terraform variables | No | {} | Raw lower-level overrides for exceptional cases |
     | OpenTofu version override | No | Ravion default | Override the OpenTofu version for the stack |
     | Ravion Terraform workspace name | No | {project}-{env}-{module} | Override the state backend workspace name |
@@ -595,6 +642,8 @@ module:
     - **The chart emits no Ingress.** Terraform owns the target group and listener rule so one shared load balancer serves many services, matching ECS Web Server. An Ingress-driven ALB per service would be simpler to configure and considerably more expensive.
     - **One target group, no blue/green.** ECS Web Server keeps a production and an alternate target group so the ECS controller can shift traffic between them. EKS releases roll through the Kubernetes Deployment controller instead, so there is no alternate target group and no traffic-shift strategy to choose.
     - **`helm upgrade --atomic`.** A failed release reverts rather than leaving the cluster half-updated. The tradeoff is that a failing deploy takes the full rollout timeout before it reports failure.
+    - **One ECR repository per module, created only when Ravion builds.** A build needs somewhere to push, and a per-module repository keeps image lifecycle and access scoped to the service. On the Pull from image registry path nothing is built, so no repository is created.
+    - **No Nixpacks.** ECS still carries a Nixpacks build source for services created before Railpack existed. EKS has no such history, so Dockerfile and Railpack are the only builders.
     - **Service name and container port are fixed after creation.** Both feed target group identity; changing them would orphan the existing target group and its registrations.
     - **Pod Identity, not IRSA.** The chart emits a stable ServiceAccount name and no role annotation, so an `aws_eks_pod_identity_association` can bind an IAM role to it by namespace and name.
 

@@ -139,10 +139,11 @@ variable "stickiness" {
 
 variable "listener_arn" {
   type        = string
-  description = "ARN of the shared load balancer listener the rule is attached to. Comes from the EKS Add-ons module's public or private ALB."
+  description = "ARN of the shared load balancer listener the rule is attached to. Comes from the EKS Add-ons module's public or private ALB. When null, no target group, listener rule, or load balancer lookup is created, which is how the worker and cron workloads use this module."
+  default     = null
 
   validation {
-    condition     = can(regex("^arn:aws[a-zA-Z-]*:elasticloadbalancing:", var.listener_arn))
+    condition     = var.listener_arn == null || can(regex("^arn:aws[a-zA-Z-]*:elasticloadbalancing:", var.listener_arn))
     error_message = "The listener_arn must be an elasticloadbalancing ARN."
   }
 }
@@ -188,4 +189,49 @@ variable "listener_rule_conditions" {
     ])
     error_message = "Each listener rule condition must have at least one value."
   }
+}
+
+################################################################################
+# ECR Repository
+################################################################################
+
+variable "ecr_repository_creation_enabled" {
+  type        = bool
+  description = "Create an ECR repository for this workload's container image. When true, a repository is provisioned via the containers/ecr submodule."
+  default     = false
+}
+
+variable "ecr_repository_name" {
+  type        = string
+  description = "Name of the ECR repository. If null, defaults to var.name."
+  default     = null
+}
+
+variable "ecr_image_tag_mutability" {
+  type        = string
+  description = "Tag mutability setting for the ECR repository."
+  default     = "MUTABLE"
+
+  validation {
+    condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
+    error_message = "The ecr_image_tag_mutability must be 'MUTABLE' or 'IMMUTABLE'."
+  }
+}
+
+variable "ecr_scan_on_push_enabled" {
+  type        = bool
+  description = "Scan images for vulnerabilities on push."
+  default     = true
+}
+
+variable "ecr_force_deletion_enabled" {
+  type        = bool
+  description = "Allow the ECR repository to be deleted even when it contains images."
+  default     = false
+}
+
+variable "ecr_default_lifecycle_policy_enabled" {
+  type        = bool
+  description = "Apply the submodule's built-in lifecycle policy (expire untagged images and cap retained tagged images)."
+  default     = false
 }
