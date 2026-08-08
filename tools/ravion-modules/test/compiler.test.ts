@@ -140,6 +140,45 @@ describe("compiler", () => {
     assert.deepEqual(findInput(mappedInputs, "mapped").applies_on, ["stack"]);
   });
 
+  it("attributes indexed and lambda element references to individual children", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        {
+          id: "listeners",
+          type: "object_array",
+          item_inputs: [
+            { id: "stack_child", type: "string" },
+            { id: "deploy_child", type: "string" },
+            {
+              id: "mapped_parent",
+              type: "$ref:example",
+              mapped_inputs: [{ id: "mapped_child", type: "string" }],
+            },
+          ],
+        },
+      ],
+      stack: {
+        indexed: "<< module.input.listeners[0].stack_child >>",
+        lambda: '<< map(module.input.listeners, {"value": #.stack_child}) >>',
+        mapped: '<< map(module.input.listeners, {"value": #.mapped_child}) >>',
+      },
+      deploy: {
+        indexed: "<< module.input.listeners[0].deploy_child >>",
+      },
+    };
+
+    deriveAppliesOn(module);
+
+    const listeners = findInput(getModuleInputs(module), "listeners");
+    const children = (listeners.item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(listeners.applies_on, ["stack", "deploy"]);
+    assert.deepEqual(findInput(children, "stack_child").applies_on, ["stack"]);
+    assert.deepEqual(findInput(children, "deploy_child").applies_on, ["deploy"]);
+    const mappedParent = findInput(children, "mapped_parent");
+    const mappedChildren = (mappedParent.mapped_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(findInput(mappedChildren, "mapped_child").applies_on, ["stack"]);
+  });
+
   it("preserves authored overrides and warns when they omit derived phases", () => {
     const module: Record<string, unknown> = {
       inputs: [{ id: "override", type: "string", applies_on: ["stack", "build", "deploy"] }, { id: "warning", type: "string", applies_on: ["stack"] }],
