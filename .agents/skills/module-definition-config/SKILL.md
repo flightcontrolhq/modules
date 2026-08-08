@@ -159,10 +159,15 @@ Keep operational and product-level controls mutable even when they can create/de
 The compiler derives each value-producing input's `applies_on` metadata from
 references to that input in `module.stack`, `module.build`, and
 `module.deploy`. Normally, do not author it: compile the definition and let
-static analysis stamp the derived phases. An authored value is legitimate when
-static analysis cannot see a valid dependency, such as an indirect or
-runtime-defined reference. The compiler warns when an authored override omits a
-phase that it can derive statically.
+static analysis stamp the derived phases. Static analysis only sees those
+references, not what a stack or deploy-time operation does with the resulting
+value. Author an override when a value reaches the running application through
+a deploy-time step that is not represented by a direct `module.deploy`
+reference. For example, the EC2 runtime environment variables and secrets are
+rendered into the app environment file during deploy, so their authored
+`[stack, deploy]` metadata supplements their stack-only static references. The
+compiler warns when an authored override omits a phase that it can derive
+statically; a superset of the derived phases is allowed.
 
 An explicit `applies_on: []` means the input is a known no-op for the current
 stack, build, and deploy configuration. An absent `applies_on` field means the
