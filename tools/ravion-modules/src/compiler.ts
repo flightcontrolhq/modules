@@ -81,6 +81,7 @@ interface InputAnalysis {
   input: Record<string, unknown>;
   nestedKind?: "item_inputs" | "mapped_inputs";
   direct: Set<ApplyPhase>;
+  elementDirect: Set<ApplyPhase>;
   children: InputAnalysis[];
   derived: Set<ApplyPhase>;
 }
@@ -118,7 +119,7 @@ function createInputAnalysis(input: Record<string, unknown>, nestedKind?: InputA
       );
     }
   }
-  return { input, nestedKind, direct: new Set(), children, derived: new Set() };
+  return { input, nestedKind, direct: new Set(), elementDirect: new Set(), children, derived: new Set() };
 }
 
 function collectInputReferences(
@@ -134,31 +135,63 @@ function collectInputReferences(
   if (typeof value === "string") {
     const referencePattern = /\bmodule\.input\.([A-Za-z0-9_-]+(?:(?:\.[A-Za-z0-9_-]+)|(?:\[[^\]]+\]))*)/g;
     const references = [...value.matchAll(referencePattern)]
-      .map((match) => match[1])
-      .filter((path): path is string => Boolean(path))
-      .map(parseInputReferencePath);
+      .map((match) => ({
+        end: (match.index ?? 0) + match[0].length,
+        path: match[1],
+        start: match.index ?? 0,
+      }))
+      .filter((reference): reference is { end: number; path: string; start: number } => Boolean(reference.path))
+      .map((reference) => ({ ...reference, parts: parseInputReferencePath(reference.path) }));
     const elementReferences = [...value.matchAll(/#\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)/g)]
-      .map((match) => match[1])
-      .filter((path): path is string => Boolean(path))
-      .map((path) => path.split("."));
+      .map((match) => ({
+        path: match[1],
+        start: match.index ?? 0,
+      }))
+      .filter((reference): reference is { path: string; start: number } => Boolean(reference.path))
+      .map((reference) => ({ ...reference, parts: reference.path.split(".") }));
+    const mapReferences = findMapReferences(value);
 
-    for (const path of references) {
-      const hasElementAccess = path.some((part) => part.startsWith("["));
+    for (const reference of references) {
+      const hasElementAccess = reference.parts.some((part) => part.startsWith("["));
       if (hasElementAccess) {
-        markInputReference(path, phase, analyses, ambiguousNestedIds);
+        markInputReference(reference.parts, phase, analyses, ambiguousNestedIds);
         continue;
       }
-      if (elementReferences.length > 0) {
-        const [id] = path;
-        const analysis = id ? analyses.find((candidate) => candidate.input.id === id) : undefined;
-        if (analysis) {
-          for (const elementReference of elementReferences) {
-            markNestedInputReference(analysis, elementReference, phase, ambiguousNestedIds);
-          }
-          continue;
+      const mapReference = mapReferences.find(
+        (candidate) =>
+          candidate.argumentStart <= reference.start &&
+          reference.end <= candidate.argumentEnd &&
+          candidate.elementReferences.some(
+            (elementReference) =>
+              candidate.start <= elementReference.start && elementReference.start < candidate.end,
+          ),
+      );
+      markInputReference(reference.parts, phase, analyses, ambiguousNestedIds, !mapReference);
+    }
+
+    for (const elementReference of elementReferences) {
+      const containingMaps = mapReferences
+        .filter((candidate) => candidate.start <= elementReference.start && elementReference.start < candidate.end)
+        .sort((left, right) => left.end - left.start - (right.end - right.start));
+      const mapReference = containingMaps[0];
+      if (!mapReference?.collectionPath) {
+        const candidates = analyses.filter((analysis) => analysis.children.length > 0);
+        warnAmbiguousElementReference(elementReference.path, ambiguousNestedIds);
+        for (const analysis of candidates) {
+          markNestedInputReference(analysis, elementReference.parts, phase, ambiguousNestedIds);
         }
+        continue;
       }
-      markInputReference(path, phase, analyses, ambiguousNestedIds);
+      const [id, ...nestedPath] = mapReference.collectionPath;
+      const analysis = analyses.find((candidate) => candidate.input.id === id);
+      if (!analysis) {
+        warnAmbiguousElementReference(elementReference.path, ambiguousNestedIds);
+        for (const candidate of analyses.filter((candidate) => candidate.children.length > 0)) {
+          markNestedInputReference(candidate, elementReference.parts, phase, ambiguousNestedIds);
+        }
+        continue;
+      }
+      markNestedInputReference(analysis, nestedPath.concat(elementReference.parts), phase, ambiguousNestedIds);
     }
     return;
   }
@@ -173,6 +206,7 @@ function markInputReference(
   phase: ApplyPhase,
   analyses: InputAnalysis[],
   ambiguousNestedIds: Set<string>,
+  inheritToChildren = true,
 ): void {
   const [id, ...nestedPath] = path;
   if (!id) {
@@ -180,7 +214,7 @@ function markInputReference(
   }
   const analysis = analyses.find((candidate) => candidate.input.id === id);
   if (analysis) {
-    markNestedInputReference(analysis, nestedPath, phase, ambiguousNestedIds);
+    markNestedInputReference(analysis, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
     return;
   }
   const nestedMatches = findMappedInputAnalyses(id, analyses);
@@ -193,7 +227,7 @@ function markInputReference(
   }
   const nestedAnalysis = nestedMatches[0];
   if (nestedAnalysis) {
-    markNestedInputReference(nestedAnalysis, nestedPath, phase, ambiguousNestedIds);
+    markNestedInputReference(nestedAnalysis, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
   }
 }
 
@@ -213,19 +247,20 @@ function markNestedInputReference(
   path: string[],
   phase: ApplyPhase,
   ambiguousNestedIds: Set<string>,
+  inheritToChildren = true,
 ): void {
   if (path.length === 0) {
-    analysis.direct.add(phase);
+    (inheritToChildren ? analysis.direct : analysis.elementDirect).add(phase);
     return;
   }
   const [id, ...nestedPath] = path;
   if (id?.startsWith("[")) {
-    markNestedInputReference(analysis, nestedPath, phase, ambiguousNestedIds);
+    markNestedInputReference(analysis, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
     return;
   }
   const child = analysis.children.find((candidate) => candidate.input.id === id);
   if (child) {
-    markNestedInputReference(child, nestedPath, phase, ambiguousNestedIds);
+    markNestedInputReference(child, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
     return;
   }
   const mappedMatches = findMappedInputAnalyses(id, analysis.children);
@@ -238,9 +273,9 @@ function markNestedInputReference(
   }
   const mappedChild = mappedMatches[0];
   if (mappedChild) {
-    markNestedInputReference(mappedChild, nestedPath, phase, ambiguousNestedIds);
+    markNestedInputReference(mappedChild, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
   } else {
-    analysis.direct.add(phase);
+    (inheritToChildren ? analysis.direct : analysis.elementDirect).add(phase);
   }
 }
 
@@ -248,8 +283,106 @@ function parseInputReferencePath(path: string): string[] {
   return path.match(/[A-Za-z0-9_-]+|\[[^\]]+\]/g) ?? [];
 }
 
+interface MapReference {
+  argumentEnd: number;
+  argumentStart: number;
+  collectionPath?: string[];
+  elementReferences: { start: number }[];
+  end: number;
+  start: number;
+}
+
+function findMapReferences(value: string): MapReference[] {
+  const references: MapReference[] = [];
+  for (const match of value.matchAll(/\bmap\s*\(/g)) {
+    const start = match.index ?? 0;
+    const open = start + match[0].length - 1;
+    const end = findMatchingParenthesis(value, open);
+    if (end === undefined) {
+      continue;
+    }
+    const comma = findTopLevelComma(value, open, end);
+    if (comma === undefined) {
+      continue;
+    }
+    const argumentStart = open + 1;
+    const argument = value.slice(argumentStart, comma).trim();
+    const collectionMatch = argument.match(/^module\.input\.([A-Za-z0-9_-]+(?:(?:\.[A-Za-z0-9_-]+)|(?:\[[^\]]+\]))*)$/);
+    const elementReferences = [...value.slice(comma + 1, end).matchAll(/#\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)/g)].map(
+      (elementReference) => ({ start: comma + 1 + (elementReference.index ?? 0) }),
+    );
+    references.push({
+      argumentEnd: comma,
+      argumentStart,
+      collectionPath: collectionMatch?.[1] ? parseInputReferencePath(collectionMatch[1]) : undefined,
+      elementReferences,
+      end,
+      start,
+    });
+  }
+  return references;
+}
+
+function findMatchingParenthesis(value: string, open: number): number | undefined {
+  let depth = 0;
+  let quote: string | undefined;
+  for (let index = open; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote) {
+      if (character === "\\" && index + 1 < value.length) {
+        index += 1;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")" && --depth === 0) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function findTopLevelComma(value: string, open: number, end: number): number | undefined {
+  let depth = 0;
+  let quote: string | undefined;
+  for (let index = open + 1; index < end; index += 1) {
+    const character = value[index];
+    if (quote) {
+      if (character === "\\" && index + 1 < end) {
+        index += 1;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+    } else if (character === "," && depth === 0) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function warnAmbiguousElementReference(path: string, ambiguousNestedIds: Set<string>): void {
+  const warningKey = `element:${path}`;
+  if (!ambiguousNestedIds.has(warningKey)) {
+    ambiguousNestedIds.add(warningKey);
+    console.warn(`Ambiguous collection element reference: ${path}`);
+  }
+}
+
 function resolveInputAnalysis(analysis: InputAnalysis, inherited: Set<ApplyPhase>): Set<ApplyPhase> {
-  const phases = new Set(analysis.direct);
+  const phases = new Set([...analysis.direct, ...analysis.elementDirect]);
   const childInheritance = analysis.direct.size > 0 ? analysis.direct : inherited;
   for (const child of analysis.children) {
     const childPhases = resolveInputAnalysis(child, childInheritance);

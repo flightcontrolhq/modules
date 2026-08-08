@@ -179,6 +179,93 @@ describe("compiler", () => {
     assert.deepEqual(findInput(mappedChildren, "mapped_child").applies_on, ["stack"]);
   });
 
+  it("attributes element references without dropping unrelated top-level references", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        {
+          id: "listeners",
+          type: "object_array",
+          item_inputs: [
+            { id: "listener_port", type: "number" },
+            { id: "unused_child", type: "string" },
+          ],
+        },
+        { id: "unrelated", type: "string" },
+      ],
+      stack: {
+        value: '<< map(module.input.listeners, {"port": #.listener_port}) >> << module.input.unrelated >>',
+      },
+    };
+
+    deriveAppliesOn(module);
+
+    const inputs = getModuleInputs(module);
+    const listeners = findInput(inputs, "listeners");
+    const children = (listeners.item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(listeners.applies_on, ["stack"]);
+    assert.deepEqual(findInput(children, "listener_port").applies_on, ["stack"]);
+    assert.deepEqual(findInput(children, "unused_child").applies_on, []);
+    assert.deepEqual(findInput(inputs, "unrelated").applies_on, ["stack"]);
+  });
+
+  it("attributes element references to the collection that owns each map", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        {
+          id: "first",
+          type: "object_array",
+          item_inputs: [{ id: "first_child", type: "string" }],
+        },
+        {
+          id: "second",
+          type: "object_array",
+          item_inputs: [{ id: "second_child", type: "string" }],
+        },
+      ],
+      stack: {
+        value:
+          '<< map(module.input.first, {"value": #.first_child}) >> << map(module.input.second, {"value": #.second_child}) >>',
+      },
+    };
+
+    deriveAppliesOn(module);
+
+    const inputs = getModuleInputs(module);
+    const firstChildren = (findInput(inputs, "first").item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    const secondChildren = (findInput(inputs, "second").item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(findInput(firstChildren, "first_child").applies_on, ["stack"]);
+    assert.deepEqual(findInput(secondChildren, "second_child").applies_on, ["stack"]);
+  });
+
+  it("attributes nested element references to the innermost map", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        {
+          id: "outer",
+          type: "object_array",
+          item_inputs: [{ id: "outer_child", type: "string" }],
+        },
+        {
+          id: "inner",
+          type: "object_array",
+          item_inputs: [{ id: "inner_child", type: "string" }],
+        },
+      ],
+      stack: {
+        value:
+          '<< map(module.input.outer, {"value": map(module.input.inner, {"value": #.inner_child})}) >>',
+      },
+    };
+
+    deriveAppliesOn(module);
+
+    const inputs = getModuleInputs(module);
+    const outerChildren = (findInput(inputs, "outer").item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    const innerChildren = (findInput(inputs, "inner").item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(findInput(outerChildren, "outer_child").applies_on, []);
+    assert.deepEqual(findInput(innerChildren, "inner_child").applies_on, ["stack"]);
+  });
+
   it("preserves authored overrides and warns when they omit derived phases", () => {
     const module: Record<string, unknown> = {
       inputs: [{ id: "override", type: "string", applies_on: ["stack", "build", "deploy"] }, { id: "warning", type: "string", applies_on: ["stack"] }],
