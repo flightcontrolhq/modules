@@ -124,7 +124,7 @@ function createInventory(): RemoteModuleInventory {
           version: "1.2.0",
           description: "Import VPC definition.",
           config: {
-            inputs: [{ id: "name", type: "string", label: "Name" }],
+            inputs: [{ id: "name", type: "string", label: "Name", applies_on: [] }],
             stack: {
               type: "opentofu",
               source: {

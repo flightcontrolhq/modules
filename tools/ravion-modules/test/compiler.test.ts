@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
-import { compileAllDefinitions, CompileError, compileDefinitionFile } from "../src/compiler.js";
+import { compileAllDefinitions, CompileError, compileDefinitionFile, deriveAppliesOn } from "../src/compiler.js";
 
 const fixturesDir = join(process.cwd(), "test", "fixtures", "compile");
 const repoRoot = resolve(process.cwd(), "../..");
@@ -17,8 +17,8 @@ describe("compiler", () => {
     assert.equal(compiled.releaseDescription, "Add subnet options.");
     assert.deepEqual(compiled.module, {
       inputs: [
-        { id: "name", type: "string", label: "Name", required: true },
-        { id: "environment", type: "string", label: "Environment", required: true },
+        { id: "name", type: "string", label: "Name", required: true, applies_on: [] },
+        { id: "environment", type: "string", label: "Environment", required: true, applies_on: [] },
         { id: "networking", type: "section", label: "Networking" },
         {
           id: "vpc",
@@ -27,6 +27,7 @@ describe("compiler", () => {
           outputs: {
             vpc_id: "VPC ID",
           },
+          applies_on: [],
         },
         {
           id: "advanced",
@@ -35,6 +36,7 @@ describe("compiler", () => {
           properties: {
             enabled: { type: "boolean", default: true },
           },
+          applies_on: [],
         },
       ],
       stack: {
@@ -69,6 +71,95 @@ describe("compiler", () => {
         },
       },
     });
+  });
+
+  it("derives phase metadata across expressions and nested inputs", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        { id: "stack_only", type: "string" },
+        { id: "deploy_only", type: "string" },
+        { id: "both", type: "string" },
+        { id: "build_deploy", type: "string" },
+        {
+          id: "nested",
+          type: "object_array",
+          item_inputs: [
+            { id: "inherited", type: "string" },
+            { id: "direct", type: "string" },
+          ],
+        },
+        {
+          id: "ref_input",
+          type: "$ref:example",
+          mapped_inputs: [{ id: "mapped", type: "string" }],
+        },
+        { id: "unused", type: "string" },
+        { id: "section", type: "section" },
+      ],
+      stack: {
+        terraform_variables: {
+          stack_only: "<< module.input.stack_only >>",
+          both: "<< module.input.both >>",
+          nested: "<< module.input.nested >>",
+          mapped: "<< module.input.mapped >>",
+        },
+      },
+      build: {
+        builder: "<< module.input.build_deploy >>",
+      },
+      deploy: {
+        payload: {
+          deploy_only: "prefix <<module.input.deploy_only.suffix>>",
+          both: "<< module.input.both >>",
+          build_deploy: "<< module.input.build_deploy >>",
+          nested: "<< module.input.nested >>",
+          direct: "<< module.input.nested.direct >>",
+          ref_input: "<< module.input.ref_input >>",
+        },
+      },
+    };
+
+    deriveAppliesOn(module);
+
+    assert.deepEqual(findInput(getModuleInputs(module), "stack_only").applies_on, ["stack"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "deploy_only").applies_on, ["deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "both").applies_on, ["stack", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "build_deploy").applies_on, ["build", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "unused").applies_on, []);
+    assert.equal(findInput(getModuleInputs(module), "section").applies_on, undefined);
+
+    const nested = findInput(getModuleInputs(module), "nested");
+    assert.deepEqual(nested.applies_on, ["stack", "deploy"]);
+    const nestedChildren = (nested.item_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(findInput(nestedChildren, "inherited").applies_on, ["stack", "deploy"]);
+    assert.deepEqual(findInput(nestedChildren, "direct").applies_on, ["deploy"]);
+
+    const refInput = findInput(getModuleInputs(module), "ref_input");
+    assert.deepEqual(refInput.applies_on, ["stack", "deploy"]);
+    const mappedInputs = (refInput.mapped_inputs as Record<string, unknown>[] | undefined) ?? [];
+    assert.deepEqual(findInput(mappedInputs, "mapped").applies_on, ["stack"]);
+  });
+
+  it("preserves authored overrides and warns when they omit derived phases", () => {
+    const module: Record<string, unknown> = {
+      inputs: [{ id: "override", type: "string", applies_on: ["stack", "build", "deploy"] }, { id: "warning", type: "string", applies_on: ["stack"] }],
+      stack: { value: "<< module.input.override >>" },
+      build: { value: "<< module.input.warning >>" },
+      deploy: { value: "<< module.input.warning >>" },
+    };
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (message: string) => warnings.push(message);
+    try {
+      deriveAppliesOn(module, "override.yml");
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    assert.deepEqual(findInput(getModuleInputs(module), "override").applies_on, ["stack", "build", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "warning").applies_on, ["stack"]);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? "", /override\.yml.*warning.*build, deploy/);
   });
 
   it("compiles all colocated definitions under module category directories", async () => {

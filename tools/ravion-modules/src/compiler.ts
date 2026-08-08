@@ -61,6 +61,7 @@ export async function compileDefinitionFile(filePath: string): Promise<CompiledD
   }
 
   rejectLeakedCompilerSyntax(module, absoluteFilePath, "module");
+  deriveAppliesOn(module, absoluteFilePath);
 
   return {
     filePath: absoluteFilePath,
@@ -71,6 +72,139 @@ export async function compileDefinitionFile(filePath: string): Promise<CompiledD
     releaseDescription: definition.release.description,
     module,
   };
+}
+
+const APPLY_PHASES = ["stack", "build", "deploy"] as const;
+type ApplyPhase = (typeof APPLY_PHASES)[number];
+
+interface InputAnalysis {
+  input: Record<string, unknown>;
+  direct: Set<ApplyPhase>;
+  children: InputAnalysis[];
+  derived: Set<ApplyPhase>;
+}
+
+export function deriveAppliesOn(module: Record<string, unknown>, filePath = "<module>"): void {
+  const inputs = module.inputs;
+  if (!Array.isArray(inputs)) {
+    return;
+  }
+
+  const analyses = inputs
+    .filter((input): input is Record<string, unknown> => isRecord(input) && input.type !== "section")
+    .map((input) => createInputAnalysis(input));
+
+  for (const phase of APPLY_PHASES) {
+    collectInputReferences(module[phase], phase, analyses);
+  }
+
+  for (const analysis of analyses) {
+    resolveInputAnalysis(analysis, new Set());
+    stampInputAnalysis(analysis, filePath);
+  }
+}
+
+function createInputAnalysis(input: Record<string, unknown>): InputAnalysis {
+  const children = [];
+  for (const key of ["item_inputs", "mapped_inputs"]) {
+    const nested = input[key];
+    if (Array.isArray(nested)) {
+      children.push(
+        ...nested.filter((child): child is Record<string, unknown> => isRecord(child)).map((child) => createInputAnalysis(child)),
+      );
+    }
+  }
+  return { input, direct: new Set(), children, derived: new Set() };
+}
+
+function collectInputReferences(value: unknown, phase: ApplyPhase, analyses: InputAnalysis[]): void {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectInputReferences(item, phase, analyses));
+    return;
+  }
+  if (typeof value === "string") {
+    const referencePattern = /\bmodule\.input\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)/g;
+    for (const match of value.matchAll(referencePattern)) {
+      const path = match[1];
+      if (path) {
+        markInputReference(path.split("."), phase, analyses);
+      }
+    }
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+  Object.values(value).forEach((child) => collectInputReferences(child, phase, analyses));
+}
+
+function markInputReference(path: string[], phase: ApplyPhase, analyses: InputAnalysis[]): void {
+  const [id, ...nestedPath] = path;
+  if (!id) {
+    return;
+  }
+  const analysis = analyses.find((candidate) => candidate.input.id === id) ?? findNestedInputAnalysis(id, analyses);
+  if (analysis) {
+    markNestedInputReference(analysis, nestedPath, phase);
+  }
+}
+
+function findNestedInputAnalysis(id: string, analyses: InputAnalysis[]): InputAnalysis | undefined {
+  for (const analysis of analyses) {
+    const match = analysis.children.find((child) => child.input.id === id) ?? findNestedInputAnalysis(id, analysis.children);
+    if (match) {
+      return match;
+    }
+  }
+  return undefined;
+}
+
+function markNestedInputReference(analysis: InputAnalysis, path: string[], phase: ApplyPhase): void {
+  if (path.length === 0) {
+    analysis.direct.add(phase);
+    return;
+  }
+  const [id, ...nestedPath] = path;
+  const child = analysis.children.find((candidate) => candidate.input.id === id);
+  if (child) {
+    markNestedInputReference(child, nestedPath, phase);
+  } else {
+    analysis.direct.add(phase);
+  }
+}
+
+function resolveInputAnalysis(analysis: InputAnalysis, inherited: Set<ApplyPhase>): Set<ApplyPhase> {
+  const phases = new Set(analysis.direct);
+  const childInheritance = analysis.direct.size > 0 ? analysis.direct : inherited;
+  for (const child of analysis.children) {
+    const childPhases = resolveInputAnalysis(child, childInheritance);
+    for (const phase of childPhases) {
+      phases.add(phase);
+    }
+  }
+  if (phases.size === 0) {
+    for (const phase of inherited) {
+      phases.add(phase);
+    }
+  }
+  analysis.derived = phases;
+  return phases;
+}
+
+function stampInputAnalysis(analysis: InputAnalysis, filePath: string): void {
+  const derived = APPLY_PHASES.filter((phase) => analysis.derived.has(phase));
+  const authored = analysis.input.applies_on;
+  if (Array.isArray(authored)) {
+    const missing = derived.filter((phase) => !authored.includes(phase));
+    if (missing.length > 0) {
+      console.warn(
+        `${filePath}: input ${String(analysis.input.id)} authored applies_on is missing statically derived phase(s): ${missing.join(", ")}`,
+      );
+    }
+  } else {
+    analysis.input.applies_on = derived;
+  }
+  analysis.children.forEach((child) => stampInputAnalysis(child, filePath));
 }
 
 export async function compileAllDefinitions(rootPath = process.cwd()): Promise<CompiledDefinition[]> {
