@@ -4,7 +4,7 @@ definition:
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
   version: 1.0.2
-  description: Clarify that instance disks are durable for the life of the instance, and that EFS is for shared files rather than a requirement for keeping local state.
+  description: Clarify that instance disks are durable for the life of the instance, that an AMI change applies only to instances launched later, and that EFS is for shared files rather than a requirement for keeping local state.
 module:
   inputs:
     - id: network
@@ -810,7 +810,7 @@ module:
 
     Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule. Web services can attach to a standalone Application Load Balancer or reuse the public or private ALB from an ECS cluster. The selected network and load balancer must use the same AWS account, region, and VPC.
 
-    Instances are as stable as an EC2 instance you launch yourself in the AWS console. Deploys, app restarts, and stack updates never replace them, so each instance keeps its root and optional data volume, and everything on those disks, for its whole life. Instances are replaced only when you deliberately recycle them to pick up a launch template change such as a new AMI, when the group scales in, or when an instance fails its Auto Scaling health check (EC2 by default, or load balancer health when `health_check_type` is set to `ELB`). Because the volumes are deleted with the instance, take regular EBS snapshots or back up off-instance if critical data lives on the disk.
+    Instances are as stable as an EC2 instance you launch yourself in the AWS console. Deploys, app restarts, and stack updates do not replace them, so each instance keeps its root and optional data volume, and everything on those disks, for its whole life. Even changing the AMI leaves running instances alone: the change becomes a new launch template version that only applies to instances launched later, because the module does not run an instance refresh. An instance is replaced when you deliberately terminate or recycle it, for example to roll out that new AMI, when the group scales in, or when it fails its Auto Scaling health check (EC2 by default, or load balancer health when `health_check_type` is set to `ELB`). Replacement is what destroys the volumes, so take regular EBS snapshots or back up off-instance if critical data lives on the disk.
 
     Terraform source: [ravionhq/modules/compute/ec2_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ec2_service)
 
@@ -949,7 +949,7 @@ module:
 
     The Auto Scaling Group replaces instances that fail EC2 health checks. Load-balancer-based instance replacement is intentionally off by default because in-place deploys briefly deregister instances; override with Advanced Terraform variables (`health_check_type`) if you prefer it.
 
-    Launch template changes such as a new AMI, instance type, volume setting, or Additional user data apply to newly launched instances only. The module does not perform an instance refresh, so recycle existing instances deliberately when a host-level change must roll out.
+    Launch template changes such as a new AMI, instance type, volume setting, or Additional user data apply to newly launched instances only. The module does not perform an instance refresh, so a stack update alone never rolls a new AMI onto running instances; recycle them deliberately when a host-level change must go out. Recycling replaces the instance, which deletes its root and data volumes, so restore from a snapshot or backup afterwards if the instance held state you need.
 
     ## Application configuration
 
