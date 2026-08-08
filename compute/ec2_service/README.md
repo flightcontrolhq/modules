@@ -115,7 +115,7 @@ aws ssm send-command \
 ## Storage and durability
 
 - The root volume and optional data volume are per-instance EBS. They are durable for the life of the instance: deploys, restarts, and stack updates never replace an instance, so local files such as an embedded database stay in place at local-disk latency, exactly as on an EC2 instance you launch yourself.
-- They are deleted with the instance, which happens only when you recycle it (for example to roll out a new AMI), when the group scales in, or when it fails its EC2 health check. Keep backups (EBS snapshots, dumps to S3) for critical data instead of avoiding local storage.
+- They are deleted with the instance, which happens only when you recycle it (for example to roll out a new AMI), when the group scales in, or when it fails its Auto Scaling health check (`EC2` by default, or load balancer health with `health_check_type = "ELB"`). Keep backups (EBS snapshots, dumps to S3) for critical data instead of avoiding local storage.
 - Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
 - Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh.
 

@@ -810,7 +810,7 @@ module:
 
     Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule. Web services can attach to a standalone Application Load Balancer or reuse the public or private ALB from an ECS cluster. The selected network and load balancer must use the same AWS account, region, and VPC.
 
-    Instances are as stable as an EC2 instance you launch yourself in the AWS console. Deploys, app restarts, and stack updates never replace them, so each instance keeps its root and optional data volume, and everything on those disks, for its whole life. Instances are replaced only when you deliberately recycle them to pick up a launch template change such as a new AMI, when the group scales in, or when an instance fails its EC2 health check. Because the volumes are deleted with the instance, take regular EBS snapshots or back up off-instance if critical data lives on the disk.
+    Instances are as stable as an EC2 instance you launch yourself in the AWS console. Deploys, app restarts, and stack updates never replace them, so each instance keeps its root and optional data volume, and everything on those disks, for its whole life. Instances are replaced only when you deliberately recycle them to pick up a launch template change such as a new AMI, when the group scales in, or when an instance fails its Auto Scaling health check (EC2 by default, or load balancer health when `health_check_type` is set to `ELB`). Because the volumes are deleted with the instance, take regular EBS snapshots or back up off-instance if critical data lives on the disk.
 
     Terraform source: [ravionhq/modules/compute/ec2_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ec2_service)
 
@@ -939,7 +939,7 @@ module:
 
     Root and Data volumes are encrypted gp3 EBS volumes attached to the instance. They are durable for the life of the instance: nothing in the normal deploy or update path replaces an instance, so files written to disk stay there, at local-disk latency. This is the same durability model as an EC2 instance you create yourself in the AWS console.
 
-    Both volumes are deleted with the instance, and an instance goes away when you recycle it to roll out a launch template change such as a new AMI, when the group scales in, or when it fails its EC2 health check. Keep backups of critical data on the disk — an EBS snapshot schedule, database dumps to S3, or a periodic sync — rather than avoiding local storage.
+    Both volumes are deleted with the instance, and an instance goes away when you recycle it to roll out a launch template change such as a new AMI, when the group scales in, or when it fails its Auto Scaling health check (EC2 by default, or load balancer health when `health_check_type` is set to `ELB`). Keep backups of critical data on the disk — an EBS snapshot schedule, database dumps to S3, or a periodic sync — rather than avoiding local storage.
 
     Enable EFS and select a Ravion EFS module when several instances must share the same files, or when a replacement instance must find the data already in place. The service mounts the file system through its access point when present and attaches the EFS client security group to each instance. Container mode bind-mounts the Data and EFS host paths into the app container at the same paths. EFS is a network file system, so latency-sensitive local state such as an embedded database is usually better on the instance's own volume with backups.
 
