@@ -59,20 +59,20 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 
 | Definition | Name | Version | Module path |
 | ---------- | ---- | ------- | ----------- |
-| `rvn-acm-certificate` | ACM Certificate | v1.0.1 | `security/acm_certificate/` |
-| `rvn-aurora` | Aurora Database | v1.2.0 | `database/aurora/` |
-| `rvn-aws-alb` | AWS Application Load Balancer | v1.0.1 | `networking/alb/` |
-| `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.1 | `security/iam_policy/` |
-| `rvn-aws-iam-role` | AWS IAM Role | v1.0.1 | `security/iam/` |
-| `rvn-aws-network` | VPC Network | v1.0.1 | `networking/vpc/` |
-| `rvn-aws-static` | Static Hosting | v1.0.1 | `hosting/static_site/` |
-| `rvn-cloudfront` | CloudFront CDN | v1.0.1 | `cdn/cloudfront/` |
-| `rvn-ec2-service` | EC2 Service | v1.0.1 | `compute/ec2_service/` |
-| `rvn-ecs-cluster` | ECS Cluster | v1.0.1 | `compute/ecs_cluster/` |
-| `rvn-ecs-nlb` | ECS Network Service | v1.0.1 | `compute/ecs_service/` |
-| `rvn-ecs-web` | ECS Web Service | v1.0.1 | `compute/ecs_service/` |
-| `rvn-ecs-worker` | ECS Worker | v1.0.1 | `compute/ecs_service/` |
-| `rvn-efs` | EFS File System | v1.0.1 | `storage/efs/` |
+| `rvn-acm-certificate` | ACM Certificate | v1.0.2 | `security/acm_certificate/` |
+| `rvn-aurora` | Aurora Database | v1.2.1 | `database/aurora/` |
+| `rvn-aws-alb` | AWS Application Load Balancer | v1.0.2 | `networking/alb/` |
+| `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.2 | `security/iam_policy/` |
+| `rvn-aws-iam-role` | AWS IAM Role | v1.0.2 | `security/iam/` |
+| `rvn-aws-network` | VPC Network | v1.0.2 | `networking/vpc/` |
+| `rvn-aws-static` | Static Hosting | v1.0.2 | `hosting/static_site/` |
+| `rvn-cloudfront` | CloudFront CDN | v1.0.2 | `cdn/cloudfront/` |
+| `rvn-ec2-service` | EC2 Service | v1.0.2 | `compute/ec2_service/` |
+| `rvn-ecs-cluster` | ECS Cluster | v1.0.2 | `compute/ecs_cluster/` |
+| `rvn-ecs-nlb` | ECS Network Service | v1.0.2 | `compute/ecs_service/` |
+| `rvn-ecs-web` | ECS Web Service | v1.0.2 | `compute/ecs_service/` |
+| `rvn-ecs-worker` | ECS Worker | v1.0.2 | `compute/ecs_service/` |
+| `rvn-efs` | EFS File System | v1.0.2 | `storage/efs/` |
 | `rvn-elasticache` | ElastiCache | v1.0.1 | `cache/elasticache/` |
 | `rvn-lambda` | Lambda Function | v1.0.1 | `compute/lambda/` |
 | `rvn-rds` | RDS Database | v1.2.0 | `database/rds/` |

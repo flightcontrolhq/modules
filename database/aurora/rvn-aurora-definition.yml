@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon Aurora cluster. Supports Aurora PostgreSQL and Aurora MySQL with provisioned or Serverless v2 capacity.
 
 release:
-  version: 1.2.0
-  description: Add optional RDS Proxy connection pooling.
+  version: 1.2.1
+  description: Derive per-input apply-phase metadata in the compiled module definition.
 module:
   inputs:
     - id: network
