@@ -939,15 +939,29 @@ module:
 
     Root and Data volumes are encrypted gp3 EBS volumes attached to the instance. They are durable for the life of the instance: nothing in the normal deploy or update path replaces an instance, so files written to disk stay there, at local-disk latency. This is the same durability model as an EC2 instance you create yourself in the AWS console.
 
-    Both volumes are deleted with the instance, and an instance goes away when you recycle it to roll out a launch template change such as a new AMI, when the group scales in, or when it fails its Auto Scaling health check (EC2 by default, or load balancer health when `health_check_type` is set to `ELB`). Keep backups of critical data on the disk — an EBS snapshot schedule, database dumps to S3, or a periodic sync — rather than avoiding local storage.
+    Both volumes are deleted with the instance, which only happens for the three reasons in Instance replacement below. Keep backups of critical data on the disk — an EBS snapshot schedule, database dumps to S3, or a periodic sync — rather than avoiding local storage.
 
     Enable EFS and select a Ravion EFS module when several instances must share the same files, or when a replacement instance must find the data already in place. The service mounts the file system through its access point when present and attaches the EFS client security group to each instance. Container mode bind-mounts the Data and EFS host paths into the app container at the same paths. EFS is a network file system, so latency-sensitive local state such as an embedded database is usually better on the instance's own volume with backups.
+
+    ## Instance replacement
+
+    Only three things replace a running instance. Everything else — deploys, app crashes and restarts, configuration changes, stack updates — leaves the instance and its disks in place.
+
+    | Trigger | When it happens | How often to expect it |
+    | --- | --- | --- |
+    | You terminate or recycle the instance | Deliberate operator action, typically to roll out a launch template change such as a new AMI | Only when you choose to |
+    | The group scales in | CPU autoscaling scales down, or you lower Minimum/Desired instances | Never with a fixed one-instance group and autoscaling off |
+    | The Auto Scaling health check fails | The instance fails its EC2 status checks | Rare |
+
+    The default `EC2` health check reflects the AWS instance and system status checks: the instance is unreachable, its network or boot state is broken, or the underlying host has failed. It says nothing about your application. A crashed app process does not fail it, because supervisord restarts the process on the same instance, and a failing HTTP health check does not fail it either.
+
+    In practice that makes health-driven replacement an infrequent event tied to underlying hardware or hypervisor failure, not something a bad release or a wedged app triggers. The tradeoff is that a standalone EC2 instance you launch in the console would instead sit impaired until you noticed, while the Auto Scaling Group recovers automatically with a fresh instance and an empty disk.
+
+    Load-balancer health checks do not replace instances. `health_check_type` is `EC2` by default on purpose, because in-place deploys briefly deregister an instance from the target group and ELB health checks would read that as unhealthy and replace it mid-deploy. Set `health_check_type` to `ELB` through Advanced Terraform variables only if you accept that, and expect replacement — and disk loss — whenever the ALB considers an instance unhealthy.
 
     ## Scaling and instance health
 
     Minimum instances and Maximum instances bound the group. Enable CPU autoscaling to target average EC2 CPU utilization. When autoscaling is off, Desired instances sets the initial group size; later external scaling changes are preserved. Instance health check grace period controls how long new instances have before Auto Scaling begins health evaluation.
-
-    The Auto Scaling Group replaces instances that fail EC2 health checks. Load-balancer-based instance replacement is intentionally off by default because in-place deploys briefly deregister instances; override with Advanced Terraform variables (`health_check_type`) if you prefer it.
 
     Launch template changes such as a new AMI, instance type, volume setting, or Additional user data apply to newly launched instances only. The module does not perform an instance refresh, so a stack update alone never rolls a new AMI onto running instances; recycle them deliberately when a host-level change must go out. Recycling replaces the instance, which deletes its root and data volumes, so restore from a snapshot or backup afterwards if the instance held state you need.
 
