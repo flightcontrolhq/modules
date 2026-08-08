@@ -8,7 +8,7 @@ output "distribution_ids" {
 }
 
 output "cache_policy_id" {
-  description = "The ID of the cache policy attached to the default behavior, including the module-managed Accept-aware policy when enabled."
+  description = "The ID of the cache policy attached to the default behavior, including the module-managed normalized Markdown cache-key policy when enabled."
   value       = local.effective_default_cache_policy_id
 }
 
@@ -42,13 +42,13 @@ output "distribution_etags" {
 ################################################################################
 
 output "redirect_function_arn" {
-  description = "The ARN of the managed viewer-request redirect function, or null when redirect rules are disabled."
-  value       = try(aws_cloudfront_function.redirect[0].arn, null)
+  description = "The ARN of the managed viewer-request function, or null when redirects and Accept cache-key normalization are disabled."
+  value       = try(aws_cloudfront_function.viewer_request[0].arn, null)
 }
 
 output "redirect_function_name" {
-  description = "The name of the managed viewer-request redirect function, or null when redirect rules are disabled."
-  value       = try(aws_cloudfront_function.redirect[0].name, null)
+  description = "The name of the managed viewer-request function, or null when redirects and Accept cache-key normalization are disabled."
+  value       = try(aws_cloudfront_function.viewer_request[0].name, null)
 }
 
 output "distribution_id" {

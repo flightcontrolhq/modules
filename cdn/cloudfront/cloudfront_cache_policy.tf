@@ -1,8 +1,8 @@
 resource "aws_cloudfront_cache_policy" "accept_header" {
-  count = var.accept_header_cache_policy_creation_enabled ? 1 : 0
+  count = var.accept_header_cache_key_creation_enabled ? 1 : 0
 
   name    = "${var.name}-accept-header"
-  comment = "Use origin cache control headers and include Accept in the cache key"
+  comment = "Use origin cache control headers and include normalized Markdown negotiation in the cache key"
 
   min_ttl     = 0
   default_ttl = 0
@@ -19,7 +19,7 @@ resource "aws_cloudfront_cache_policy" "accept_header" {
     headers_config {
       header_behavior = "whitelist"
       headers {
-        items = ["Accept"]
+        items = ["x-md"]
       }
     }
 

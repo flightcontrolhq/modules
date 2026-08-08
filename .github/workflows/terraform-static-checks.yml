@@ -52,8 +52,8 @@ jobs:
           tofu -chdir=cdn/cloudfront init -backend=false
           tofu -chdir=cdn/cloudfront test
 
-      - name: Test CloudFront redirect function
-        run: node --test cdn/cloudfront/functions/redirect.test.js
+      - name: Test CloudFront viewer-request function
+        run: node --test cdn/cloudfront/functions/viewer_request.test.js
 
       - name: Lint modules
         run: tflint --recursive

@@ -41,7 +41,7 @@ mock_provider "aws" {
   }
 
   override_resource {
-    target = aws_cloudfront_function.redirect
+    target = aws_cloudfront_function.viewer_request
     values = {
       arn    = "arn:aws:cloudfront::123456789012:function/test-cf-redirect"
       status = "DEPLOYED"
@@ -1074,17 +1074,17 @@ run "test_redirect_rules_create_function" {
   }
 
   assert {
-    condition     = length(aws_cloudfront_function.redirect) == 1
+    condition     = length(aws_cloudfront_function.viewer_request) == 1
     error_message = "A redirect function should be created when redirect rules are configured."
   }
 
   assert {
-    condition     = aws_cloudfront_function.redirect[0].publish == true
+    condition     = aws_cloudfront_function.viewer_request[0].publish == true
     error_message = "The redirect function should be published."
   }
 
   assert {
-    condition     = strcontains(aws_cloudfront_function.redirect[0].code, "docs.example.com")
+    condition     = strcontains(aws_cloudfront_function.viewer_request[0].code, "docs.example.com")
     error_message = "The redirect function code should contain the configured rules."
   }
 
@@ -1424,7 +1424,7 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = length(aws_cloudfront_function.redirect) == 0
+    condition     = length(aws_cloudfront_function.viewer_request) == 0
     error_message = "No redirect function should be created by default."
   }
 
@@ -1439,13 +1439,18 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = var.accept_header_cache_policy_creation_enabled == false
-    error_message = "accept_header_cache_policy_creation_enabled should default to false."
+    condition     = var.accept_header_cache_key_creation_enabled == false
+    error_message = "accept_header_cache_key_creation_enabled should default to false."
   }
 
   assert {
     condition     = length(aws_cloudfront_cache_policy.accept_header) == 0
-    error_message = "The Accept-aware cache policy should not be created by default."
+    error_message = "The normalized Markdown cache-key policy should not be created by default."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_function.viewer_request) == 0
+    error_message = "The viewer-request function should not be created by default."
   }
 }
 
@@ -1453,17 +1458,27 @@ run "test_accept_header_cache_policy_enabled" {
   command = plan
 
   variables {
-    accept_header_cache_policy_creation_enabled = true
+    accept_header_cache_key_creation_enabled = true
   }
 
   assert {
     condition     = length(aws_cloudfront_cache_policy.accept_header) == 1
-    error_message = "The Accept-aware cache policy should be created when enabled."
+    error_message = "The normalized Markdown cache-key policy should be created when enabled."
   }
 
   assert {
     condition     = aws_cloudfront_distribution.this["primary"].default_cache_behavior[0].cache_policy_id == "accept-header-cache-policy-test"
-    error_message = "The managed Accept-aware cache policy should be attached to the default behavior."
+    error_message = "The managed normalized Markdown cache-key policy should be attached to the default behavior."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_function.viewer_request) == 1
+    error_message = "The viewer-request function should be created when cache-key normalization is enabled."
+  }
+
+  assert {
+    condition     = strcontains(aws_cloudfront_function.viewer_request[0].code, "x-md")
+    error_message = "The normalized Markdown cache-key logic should be included in the viewer-request function."
   }
 }
 
@@ -1471,7 +1486,7 @@ run "test_accept_header_cache_policy_rejects_explicit_policy" {
   command = plan
 
   variables {
-    accept_header_cache_policy_creation_enabled = true
+    accept_header_cache_key_creation_enabled = true
     default_cache_behavior = {
       target_origin_id       = "s3-origin"
       viewer_protocol_policy = "redirect-to-https"
@@ -1480,6 +1495,51 @@ run "test_accept_header_cache_policy_rejects_explicit_policy" {
   }
 
   expect_failures = [
-    var.accept_header_cache_policy_creation_enabled,
+    var.accept_header_cache_key_creation_enabled,
+  ]
+}
+
+run "test_accept_header_cache_key_rejects_function_conflict" {
+  command = plan
+
+  variables {
+    accept_header_cache_key_creation_enabled = true
+    default_cache_behavior = {
+      target_origin_id       = "s3-origin"
+      viewer_protocol_policy = "redirect-to-https"
+      function_associations = [
+        {
+          event_type   = "viewer-request"
+          function_arn = "arn:aws:cloudfront::123456789012:function/existing"
+        }
+      ]
+    }
+  }
+
+  expect_failures = [
+    aws_cloudfront_distribution.this["primary"],
+  ]
+}
+
+run "test_accept_header_cache_key_rejects_lambda_conflict" {
+  command = plan
+
+  variables {
+    accept_header_cache_key_creation_enabled = true
+    default_cache_behavior = {
+      target_origin_id       = "s3-origin"
+      viewer_protocol_policy = "redirect-to-https"
+      lambda_function_associations = [
+        {
+          event_type             = "viewer-request"
+          lambda_arn             = "arn:aws:lambda:us-east-1:123456789012:function:existing:1"
+          body_inclusion_enabled = false
+        }
+      ]
+    }
+  }
+
+  expect_failures = [
+    aws_cloudfront_distribution.this["primary"],
   ]
 }

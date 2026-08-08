@@ -77,7 +77,7 @@ resource "aws_cloudfront_distribution" "this" {
     trusted_key_groups         = var.default_cache_behavior.trusted_key_groups
 
     dynamic "function_association" {
-      for_each = concat(var.default_cache_behavior.function_associations, local.redirect_function_associations)
+      for_each = concat(var.default_cache_behavior.function_associations, local.viewer_request_function_associations)
       content {
         event_type   = function_association.value.event_type
         function_arn = function_association.value.function_arn
@@ -109,7 +109,7 @@ resource "aws_cloudfront_distribution" "this" {
       trusted_key_groups         = ordered_cache_behavior.value.trusted_key_groups
 
       dynamic "function_association" {
-        for_each = concat(ordered_cache_behavior.value.function_associations, local.redirect_function_associations)
+        for_each = concat(ordered_cache_behavior.value.function_associations, local.viewer_request_function_associations)
         content {
           event_type   = function_association.value.event_type
           function_arn = function_association.value.function_arn
@@ -164,13 +164,13 @@ resource "aws_cloudfront_distribution" "this" {
 
   lifecycle {
     precondition {
-      condition = !local.redirects_enabled || !(
+      condition = !local.viewer_request_function_enabled || !(
         local.default_viewer_request_function_conflict ||
         local.default_viewer_request_lambda_conflict ||
         local.ordered_viewer_request_function_conflict ||
         local.ordered_viewer_request_lambda_conflict
       )
-      error_message = "redirect_rules cannot be enabled when a default or ordered cache behavior already has a viewer-request CloudFront Function or Lambda@Edge association."
+      error_message = "redirect_rules or Accept cache-key normalization cannot be enabled when a default or ordered cache behavior already has a viewer-request CloudFront Function or Lambda@Edge association."
     }
   }
 }
