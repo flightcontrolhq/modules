@@ -206,12 +206,16 @@ variable "records" {
           coalesce(v.records, []),
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
-          # Only TXT and SPF support sequences of quoted character strings. Other record
-          # types, such as CAA, use quotes within structured values.
-        ) : !contains(["TXT", "SPF"], v.type) || !strcontains(value, "\"") || can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
+          # All record values must have balanced quotes. TXT and SPF additionally require
+          # quoted values to consist only of complete character strings.
+          ) : length(regexall("\"", value)) % 2 == 0 && (
+          !contains(["TXT", "SPF"], v.type) ||
+          !strcontains(value, "\"") ||
+          can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
+        )
       ]
     ]))
-    error_message = "A TXT or SPF record value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
+    error_message = "Each DNS record value must have balanced double quotes. A TXT or SPF value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
   }
 
   validation {

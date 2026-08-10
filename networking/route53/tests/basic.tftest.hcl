@@ -321,6 +321,24 @@ run "quoted_caa_value_succeeds" {
   }
 }
 
+run "unbalanced_structured_record_quotes_fail" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "example.com"
+        type    = "CAA"
+        ttl     = 300
+        records = ["0 issue \"amazon.com"]
+      }
+    ]
+  }
+
+  expect_failures = [var.records]
+}
+
 run "long_unquoted_txt_value_is_split_into_quoted_strings" {
   command = plan
 
