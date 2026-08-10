@@ -11,7 +11,7 @@ pipelines:
       branch: main
       execution_environment_id: << module.input.execution_environment_id >>
       ref: $local.module_tag
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       stack_id: <<stack.id>>
       terraform_variables: $with.terraform_variables
       tool: opentofu

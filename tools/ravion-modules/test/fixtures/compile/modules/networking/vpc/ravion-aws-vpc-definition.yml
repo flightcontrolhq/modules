@@ -29,12 +29,12 @@ module:
       - ravion_state_backend_workspace: "<< module.given_id >>"
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
+      repo: https://github.com/ravionhq/modules
       ref: $local.module_tag
       base_path: networking/vpc
   deploy:
     $include: ../../partials/deploy/defaults.yml
-  readme: Terraform source https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc
+  readme: Terraform source https://github.com/ravionhq/modules/tree/$local.module_tag/networking/vpc
   settings:
     $merge:
       - ../../partials/settings/base.yml

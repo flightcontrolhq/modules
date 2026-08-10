@@ -5,6 +5,7 @@ import { type CompiledDefinition } from "../src/compiler.js";
 import { type RemoteModuleDefinition, type RemoteModuleVersion } from "../src/generate-definitions.js";
 import {
   createDefaultRavionApiClient,
+  dryRunModuleVersions,
   formatPublishPlanMarkdown,
   PublishPlanError,
   publishDefinitions,
@@ -30,14 +31,14 @@ describe("publish", () => {
     assert.deepEqual(client.createdVersions.map(({ moduleDefinitionId, version, description, config }) => ({ moduleDefinitionId, version, description, config })), [
       { moduleDefinitionId: "definition-1", version: "1.2.3", description: "Add subnet options.", config: { inputs: [{ id: "name", type: "string", label: "Name" }] } },
     ]);
-    assert.deepEqual(client.validatedVersions, [
+    assert.deepEqual(client.dryRunVersions, [
       { moduleDefinitionId: "definition-1", version: "1.2.3", description: "Add subnet options.", config: { inputs: [{ id: "name", type: "string", label: "Name" }] } },
     ]);
   });
 
   it("does not globally publish a new definition when its first version fails validation", async () => {
     const client = new MockRavionClient();
-    client.onValidateVersion = async () => {
+    client.onDryRunVersion = async () => {
       throw new Error("Config is invalid");
     };
 
@@ -62,7 +63,7 @@ describe("publish", () => {
       /Version creation failed/,
     );
 
-    assert.equal(client.validatedVersions.length, 1);
+    assert.equal(client.dryRunVersions.length, 1);
     assert.equal(client.patchedDefinitions.length, 0);
   });
 
@@ -137,6 +138,78 @@ describe("publish", () => {
     assert.match(markdown, /\+isGlobalPublished: true/);
   });
 
+  it("validates pending module versions through the server dry-run API", async () => {
+    const client = new MockRavionClient({
+      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
+    });
+
+    const results = await dryRunModuleVersions([createCompiledDefinition()], client);
+
+    assert.deepEqual(results, [{
+      type: "ravion-aws-vpc",
+      version: "1.2.3",
+      status: "validated",
+      message: "Module version config passed server-side dry-run validation.",
+    }]);
+    assert.deepEqual(client.dryRunVersions, [{
+      moduleDefinitionId: "vpc",
+      version: "1.2.3",
+      description: "Add subnet options.",
+      config: { inputs: [{ id: "name", type: "string", label: "Name" }] },
+    }]);
+  });
+
+  it("aggregates server dry-run validation failures", async () => {
+    const definitions = [
+      createCompiledDefinition({ type: "ravion-aws-vpc" }),
+      createCompiledDefinition({ type: "ravion-aws-ecs" }),
+    ];
+    const client = new MockRavionClient({
+      definitions: [
+        { id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." },
+        { id: "ecs", type: "ravion-aws-ecs", name: "AWS ECS", description: "AWS ECS." },
+      ],
+    });
+    client.onDryRunVersion = async (input) => {
+      throw new Error(`Invalid config for ${input.moduleDefinitionId}`);
+    };
+
+    const results = await dryRunModuleVersions(definitions, client);
+
+    assert.deepEqual(results.map(({ type, status, message }) => ({ type, status, message })), [
+      { type: "ravion-aws-ecs", status: "failed", message: "Error: Invalid config for ecs" },
+      { type: "ravion-aws-vpc", status: "failed", message: "Error: Invalid config for vpc" },
+    ]);
+    assert.equal(client.dryRunVersions.length, 2);
+  });
+
+  it("skips already-published and brand-new module definitions", async () => {
+    const compiled = [
+      createCompiledDefinition(),
+      createCompiledDefinition({ type: "ravion-aws-new" }),
+    ];
+    const client = new MockRavionClient({
+      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
+      versionsByDefinitionId: { vpc: [createRemoteVersion()] },
+    });
+
+    const results = await dryRunModuleVersions(compiled, client);
+
+    assert.deepEqual(results.map(({ type, status, message }) => ({ type, status, message })), [
+      {
+        type: "ravion-aws-new",
+        status: "skipped",
+        message: "Remote module definition does not exist yet; no module definition ID is available for dry-run validation.",
+      },
+      {
+        type: "ravion-aws-vpc",
+        status: "skipped",
+        message: "Release version is already published remotely.",
+      },
+    ]);
+    assert.equal(client.dryRunVersions.length, 0);
+  });
+
   it("patches metadata changes before publishing versions", async () => {
     const client = new MockRavionClient({ definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "Old name", description: "Old description" }] });
 
@@ -156,99 +229,6 @@ describe("publish", () => {
 
     assert.deepEqual(result.items.map(({ action }) => action), ["skip-version"]);
     assert.equal(client.createdVersions.length, 0);
-  });
-
-  it("validates create-version items remotely during dry run when requested", async () => {
-    const client = new MockRavionClient({
-      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
-    });
-
-    const result = await publishDefinitions([createCompiledDefinition()], client, { dryRun: true, validateRemote: true });
-
-    assert.deepEqual(result.items.map(({ action, dryRun }) => ({ action, dryRun })), [{ action: "create-version", dryRun: true }]);
-    assert.deepEqual(client.validatedVersions, [
-      { moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: { inputs: [{ id: "name", type: "string", label: "Name" }] } },
-    ]);
-    assert.equal(client.createdVersions.length, 0);
-  });
-
-  it("fails the dry run with validation details when the API rejects a config", async () => {
-    const client = new MockRavionClient({
-      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
-    });
-    client.onValidateVersion = async () => {
-      throw new Error('POST /module-versions failed with HTTP 422: inputs.0.required: field is not allowed');
-    };
-
-    await assert.rejects(
-      publishDefinitions([createCompiledDefinition()], client, { dryRun: true, validateRemote: true }),
-      (error: unknown) => {
-        assert.ok(error instanceof PublishPlanError);
-        assert.deepEqual(error.result.validationErrors, [
-          { type: "ravion-aws-vpc", version: "1.2.3", message: "Error: POST /module-versions failed with HTTP 422: inputs.0.required: field is not allowed" },
-        ]);
-        const markdown = formatPublishPlanMarkdown(error.result);
-        assert.match(markdown, /Remote Validation Failures/);
-        assert.match(markdown, /field is not allowed/);
-        return true;
-      },
-    );
-    assert.equal(client.createdVersions.length, 0);
-  });
-
-  it("includes valid plan items and diffs alongside remote validation failures", async () => {
-    const client = new MockRavionClient({
-      definitions: [
-        { id: "invalid", type: "aaa-invalid", name: "Invalid", description: "Invalid module." },
-        { id: "valid", type: "bbb-valid", name: "Valid", description: "Valid module." },
-      ],
-    });
-    client.onValidateVersion = async (input) => {
-      if (input.moduleDefinitionId === "invalid") {
-        throw new Error("Config is invalid");
-      }
-    };
-
-    await assert.rejects(
-      publishDefinitions(
-        [
-          createCompiledDefinition({ type: "aaa-invalid", name: "Invalid", description: "Invalid module." }),
-          createCompiledDefinition({ type: "bbb-valid", name: "Valid", description: "Valid module." }),
-        ],
-        client,
-        { dryRun: true, validateRemote: true },
-      ),
-      (error: unknown) => {
-        assert.ok(error instanceof PublishPlanError);
-        const markdown = formatPublishPlanMarkdown(error.result);
-        assert.match(markdown, /Remote Validation Failures/);
-        assert.match(markdown, /\| `aaa-invalid` \| n\/a \| `1\.2\.3` \| Add subnet options\. \|/);
-        assert.match(markdown, /\| `bbb-valid` \| n\/a \| `1\.2\.3` \| Add subnet options\. \|/);
-        assert.match(markdown, /#### aaa-invalid n\/a -> 1\.2\.3/);
-        assert.match(markdown, /#### bbb-valid n\/a -> 1\.2\.3/);
-        return true;
-      },
-    );
-  });
-
-  it("skips remote validation for definitions that do not exist remotely yet", async () => {
-    const client = new MockRavionClient();
-
-    const result = await publishDefinitions([createCompiledDefinition()], client, { dryRun: true, validateRemote: true });
-
-    assert.deepEqual(result.items.map(({ action }) => action), ["create-definition", "create-version"]);
-    assert.equal(client.validatedVersions.length, 0);
-    assert.equal(client.createdVersions.length, 0);
-  });
-
-  it("does not validate remotely during dry run when not requested", async () => {
-    const client = new MockRavionClient({
-      definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
-    });
-
-    await publishDefinitions([createCompiledDefinition()], client, { dryRun: true });
-
-    assert.equal(client.validatedVersions.length, 0);
   });
 
   it("fails with structured conflict details when an existing version has different config", async () => {
@@ -535,6 +515,10 @@ describe("publish", () => {
         return jsonResponse({ data: { id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "New description." } });
       }
       if (String(url).endsWith("/module-versions")) {
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        if (body?.data?.dryRun === true) {
+          return jsonResponse({ data: { moduleDefinitionId: "vpc", version: "1.2.3", config: { inputs: [] } } }, 202);
+        }
         return jsonResponse({ data: { id: "version", moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} } }, 201);
       }
       throw new Error(`Unexpected fetch URL ${url}`);
@@ -547,6 +531,7 @@ describe("publish", () => {
       await client.createModuleDefinition({ type: "ravion-aws-new", name: "New", description: "New module." });
       await client.patchModuleDefinition({ id: "vpc", name: "AWS VPC", description: "New description." });
       await client.createModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} });
+      await client.dryRunModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -561,48 +546,10 @@ describe("publish", () => {
         method: "POST",
         body: { data: { moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} } },
       },
-    ]);
-  });
-
-  it("sends HTTP module-version validation as a dry-run request and requires HTTP 202", async () => {
-    const calls: Array<{ url: string; method: string; body?: unknown }> = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (url, init) => {
-      calls.push({ url: String(url), method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      return jsonResponse({}, 202);
-    };
-
-    try {
-      const client = await createDefaultRavionApiClient({ baseUrl: "https://api.example.test", token: "token" });
-      await client.validateModuleVersion({
-        moduleDefinitionId: "vpc",
-        version: "1.2.3",
-        description: "Add subnet options.",
-        config: { inputs: [] },
-      });
-
-      globalThis.fetch = async () => jsonResponse({}, 200);
-      await assert.rejects(
-        () => client.validateModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} }),
-        /returned HTTP 200 instead of 202/,
-      );
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-
-    assert.deepEqual(calls, [
       {
         url: "https://api.example.test/module-versions",
         method: "POST",
-        body: {
-          data: {
-            moduleDefinitionId: "vpc",
-            version: "1.2.3",
-            description: "Add subnet options.",
-            config: { inputs: [] },
-            dryRun: true,
-          },
-        },
+        body: { data: { moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {}, dryRun: true } },
       },
     ]);
   });
@@ -680,10 +627,10 @@ class MockRavionClient implements RavionModuleApiClient {
   createdDefinitions: ModuleDefinitionInput[] = [];
   patchedDefinitions: ModuleDefinitionPatchInput[] = [];
   createdVersions: ModuleVersionInput[] = [];
-  validatedVersions: ModuleVersionInput[] = [];
+  dryRunVersions: ModuleVersionInput[] = [];
   onListModuleVersions?: (moduleDefinitionId: string) => Promise<RemoteModuleVersion[]>;
   onCreateVersion?: (input: ModuleVersionInput) => Promise<void>;
-  onValidateVersion?: (input: ModuleVersionInput) => Promise<void>;
+  onDryRunVersion?: (input: ModuleVersionInput) => Promise<void>;
 
   constructor(options: { definitions?: RemoteModuleDefinition[]; versionsByDefinitionId?: Record<string, RemoteModuleVersion[]> } = {}) {
     this.definitions = options.definitions ?? [];
@@ -729,10 +676,15 @@ class MockRavionClient implements RavionModuleApiClient {
     return version;
   }
 
-  async validateModuleVersion(input: ModuleVersionInput): Promise<void> {
-    if (this.onValidateVersion) {
-      await this.onValidateVersion(input);
+  async dryRunModuleVersion(input: ModuleVersionInput) {
+    this.dryRunVersions.push(input);
+    if (this.onDryRunVersion) {
+      await this.onDryRunVersion(input);
     }
-    this.validatedVersions.push(input);
+    return {
+      moduleDefinitionId: input.moduleDefinitionId,
+      version: input.version,
+      config: input.config,
+    };
   }
 }

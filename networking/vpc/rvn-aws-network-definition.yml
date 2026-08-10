@@ -3,8 +3,8 @@ definition:
   name: VPC Network
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
-  version: 0.2.2
-  description: Use non-deprecated AWS region lookup.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -160,7 +160,7 @@ module:
     - **VPC Flow Logs** for network traffic monitoring and SOC 2 compliance
     - **VPC Peering** to connect with existing VPCs across accounts or regions
 
-     Terraform source: [flightcontrolhq/modules/networking/vpc](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/vpc)
+     Terraform source: [ravionhq/modules/networking/vpc](https://github.com/ravionhq/modules/tree/$local.module_tag/networking/vpc)
 
     ## Use cases
 

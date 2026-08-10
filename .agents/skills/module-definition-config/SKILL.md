@@ -246,7 +246,7 @@ stack:
     defaults:
       variant: standard
       input:
-        repo: https://github.com/flightcontrolhq/modules
+        repo: https://github.com/ravionhq/modules
         branch: main
         ref: $local.module_tag
         base_path: <module source path>

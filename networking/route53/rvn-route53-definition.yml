@@ -3,8 +3,8 @@ definition:
   name: Route 53 DNS
   description: Manage Route 53 hosted zones, DNS records, query logging, and DNSSEC.
 release:
-  version: 0.2.1
-  description: Correct the documented default hosted zone comment to Managed in Ravion.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -589,4 +589,4 @@ module:
     - [Route 53 hosted zones](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zones-working-with.html)
     - [Route 53 resource record sets](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/rrsets-working-with.html)
     - [Route 53 DNSSEC signing](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-dnssec.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/route53)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/networking/route53)

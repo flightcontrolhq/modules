@@ -10,7 +10,8 @@ import { generateDefinitionsFromInventory, readInventoryFile } from "./generate-
 import { createPlannedGitHubReleases, planGitHubReleases, readTagPlanFile } from "./github-releases.js";
 import { runMigrationGuardrails } from "./guardrails.js";
 import { selectLocalDevSourceRef } from "./local-dev-source-ref.js";
-import { createDefaultRavionApiClient, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
+import { createDefaultRavionApiClient, dryRunModuleVersions, formatPublishPlanMarkdown, isPublishPlanError, loadRemoteInventory, publishDefinitions } from "./publish.js";
+import { syncReadme } from "./readme.js";
 import { getReleaseStatuses, validateReleaseStatuses } from "./release.js";
 import { createPlannedTags, getCurrentCommit, listExistingTags, planTags, pushPlannedTags } from "./tags.js";
 
@@ -91,7 +92,7 @@ if (command === "validate") {
   const outputPath = getArgValue(args, "--output");
   let result;
   try {
-    result = await publishDefinitions(compiled, client, { dryRun: localDev ? args.includes("--dry-run") : !args.includes("--apply"), validateRemote: args.includes("--validate-remote"), localDev, localDevForce: args.includes("--force"), localDevSourceRef, logger: (message) => console.error(`[publish] ${message}`) });
+    result = await publishDefinitions(compiled, client, { dryRun: localDev ? args.includes("--dry-run") : !args.includes("--apply"), localDev, localDevForce: args.includes("--force"), localDevSourceRef, logger: (message) => console.error(`[publish] ${message}`) });
   } catch (error) {
     if (isPublishPlanError(error)) {
       const output = format === "markdown" ? formatPublishPlanMarkdown(error.result) : JSON.stringify(error.result, null, 2);
@@ -108,6 +109,34 @@ if (command === "validate") {
     await writeFile(outputPath, output);
   } else {
     console.log(output);
+  }
+} else if (command === "version-dry-run") {
+  const definitionFilePaths = getPositionalArgs(args, new Set<string>());
+  const resolvedDefinitionFilePaths = await resolveDefinitionFileArgs(definitionFilePaths);
+  const compiled = resolvedDefinitionFilePaths.length > 0 ? await Promise.all(resolvedDefinitionFilePaths.map((filePath) => compileDefinitionFile(filePath))) : await compileAllDefinitions();
+  const localDev = args.includes("--local-dev");
+  const client = await createDefaultRavionApiClient({ baseUrl: localDev ? (process.env.RAVION_API_URL ?? "http://localhost:8080") : undefined, requireToken: !localDev });
+  const localDevSourceRef = localDev ? await resolveLocalDevSourceRef() : undefined;
+  const results = await dryRunModuleVersions(compiled, client, {
+    localDev,
+    localDevForce: args.includes("--force"),
+    localDevSourceRef,
+    logger: (message) => console.error(`[version-dry-run] ${message}`),
+  });
+  console.log(JSON.stringify(results, null, 2));
+  const failures = results.filter((result) => result.status === "failed");
+  if (failures.length > 0) {
+    throw new Error(
+      `Module version dry-run validation failed for ${failures.length} definition${failures.length === 1 ? "" : "s"}:\n${failures.map((result) => `- ${result.type}@${result.version}: ${result.message}`).join("\n")}`,
+    );
+  }
+} else if (command === "readme") {
+  const rootPath = getRootArg(args);
+  const check = args.includes("--check");
+  const result = await syncReadme({ rootPath, write: !check });
+  console.log(JSON.stringify({ readmePath: result.readmePath, changed: result.changed, mode: check ? "check" : "write" }, null, 2));
+  if (check && result.changed) {
+    throw new Error("README module definitions table is out of date. Run `node tools/ravion-modules/dist/src/cli.js readme` and commit the result.");
   }
 } else if (command === "generate-definitions") {
   const inventoryPath = args.find((arg) => !arg.startsWith("--"));
@@ -157,7 +186,7 @@ if (command === "validate") {
   await writeFile(outputPath, stringifyYaml(authoringDefinition));
   console.log(JSON.stringify({ sourceType, targetType, outputPath, version: version.version }, null, 2));
 } else {
-  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|generate-definitions|pull-definition> <*-definition.yml...>");
+  console.error("Usage: ravion-modules <validate|compile|guardrails|status|tags|push-tags|github-releases|publish|version-dry-run|readme|generate-definitions|pull-definition> <*-definition.yml...>");
   process.exitCode = 1;
 }
 }

@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 0.4.3
-  description: Correct the documented defaults for instance class and CloudWatch alarms in the configuration table.
+  version: 1.2.0
+  description: Add optional RDS Proxy connection pooling.
 module:
   inputs:
     - id: network
@@ -337,6 +337,133 @@ module:
       show_when:
         security_group_creation_enabled: true
       type: string_array
+    - id: section_proxy
+      label: Connection pooling
+      show_when:
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: section
+    - default: false
+      description: Create an RDS Proxy in front of the database for connection pooling and improved failover handling. Applications keep connecting to the database endpoint until you update their connection string to the proxy endpoint output.
+      id: proxy_creation_enabled
+      label: RDS Proxy
+      show_when:
+        engine:
+          - mysql
+          - postgres
+          - mariadb
+          - sqlserver-ee
+          - sqlserver-se
+          - sqlserver-ex
+          - sqlserver-web
+      type: boolean
+    - add_button_label: Add secret ARN
+      collapsible: true
+      description: Secrets Manager secrets containing database credentials for the proxy. Leave blank to use the managed master user secret.
+      id: proxy_auth_secret_arns
+      label: Auth secret ARNs
+      placeholder: arn:aws:secretsmanager:...
+      required: false
+      show_when:
+        proxy_creation_enabled: true
+      type: string_array
+    - add_button_label: Add KMS key ARN
+      collapsible: true
+      description: KMS keys used to encrypt the auth secrets when using customer-managed keys. The master user secret KMS key is included automatically.
+      id: proxy_secret_kms_key_arns
+      label: Auth secret KMS key ARNs
+      placeholder: arn:aws:kms:...
+      required: false
+      show_when:
+        proxy_creation_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Require IAM authentication for client connections to the proxy.
+      id: proxy_iam_auth_enabled
+      label: IAM authentication
+      show_when:
+        proxy_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      default: true
+      description: Require TLS for client connections to the proxy.
+      id: proxy_tls_requirement_enabled
+      label: Require TLS
+      show_when:
+        proxy_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Log detailed connection information, including SQL statements, to CloudWatch Logs.
+      id: proxy_debug_logging_enabled
+      label: Debug logging
+      show_when:
+        proxy_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      default: 1800
+      id: proxy_idle_client_timeout
+      label: Idle client timeout (seconds)
+      max: 28800
+      min: 1
+      show_when:
+        proxy_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 120
+      id: proxy_connection_borrow_timeout
+      label: Connection borrow timeout (seconds)
+      min: 0
+      show_when:
+        proxy_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 100
+      description: Maximum size of the connection pool as a percentage of the database max_connections setting.
+      id: proxy_max_connections_percent
+      label: Max connections (%)
+      max: 100
+      min: 1
+      show_when:
+        proxy_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: 50
+      description: Maximum idle connections kept open, as a percentage of the database max_connections setting.
+      id: proxy_max_idle_connections_percent
+      label: Max idle connections (%)
+      max: 100
+      min: 0
+      show_when:
+        proxy_creation_enabled: true
+      type: number
+    - add_button_label: Add filter
+      collapsible: true
+      id: proxy_session_pinning_filters
+      label: Session pinning filters
+      required: false
+      show_when:
+        proxy_creation_enabled: true
+      type: string_array
+      values:
+        - label: EXCLUDE_VARIABLE_SETS
+          value: EXCLUDE_VARIABLE_SETS
+    - collapsible: true
+      description: SQL statements the proxy runs when opening each new database connection.
+      id: proxy_init_query
+      label: Initialization query
+      placeholder: SET time_zone = 'UTC'
+      required: false
+      show_when:
+        proxy_creation_enabled: true
+      type: string
     - id: section_availability
       label: Availability & replicas
       type: section
@@ -412,12 +539,26 @@ module:
     - id: section_auth
       label: Credentials & authentication
       type: section
+    - default: true
+      description: Let AWS generate and manage the master password in Secrets Manager. Disable before importing a database whose existing password is managed externally.
+      id: master_user_password_management_enabled
+      label: Manage password in Secrets Manager
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Preserve the externally managed password of an imported database. Ravion verifies that the named database already exists in AWS.
+      id: master_user_password_preservation_enabled
+      label: Preserve existing master password
+      show_when:
+        master_user_password_management_enabled: false
+      type: boolean
     - collapsible: true
       id: master_user_secret_kms_key_id
       label: Secrets Manager KMS key ARN
       placeholder: arn:aws:kms:...
       required: false
       show_when:
+        master_user_password_management_enabled: true
         restore_mode: none
       type: string
     - collapsible: true
@@ -957,7 +1098,8 @@ module:
         kms_key_id: << module.input.kms_key_id >>
         license_model: '<< module.input.engine == "oracle-ee" || module.input.engine == "oracle-se2" || module.input.engine == "oracle-se2-cdb" ? module.input.license_model_oracle : module.input.license_model_sqlserver >>'
         maintenance_window: << module.input.maintenance_window >>
-        master_user_password_management_enabled: true
+        master_user_password_management_enabled: << module.input.master_user_password_management_enabled >>
+        master_user_password_preservation_enabled: << module.input.master_user_password_preservation_enabled || false >>
         master_user_secret_kms_key_id: << module.input.master_user_secret_kms_key_id >>
         max_allocated_storage: << module.input.max_allocated_storage >>
         monitoring_interval: << module.input.monitoring_interval >>
@@ -975,6 +1117,18 @@ module:
         performance_insights_kms_key_id: << module.input.performance_insights_kms_key_id >>
         performance_insights_retention_period: << module.input.performance_insights_retention_period >>
         port: << module.input.port >>
+        proxy_auth_secret_arns: << module.input.proxy_auth_secret_arns >>
+        proxy_connection_borrow_timeout: << module.input.proxy_connection_borrow_timeout >>
+        proxy_creation_enabled: << module.input.proxy_creation_enabled >>
+        proxy_debug_logging_enabled: << module.input.proxy_debug_logging_enabled >>
+        proxy_iam_auth_enabled: << module.input.proxy_iam_auth_enabled >>
+        proxy_idle_client_timeout: << module.input.proxy_idle_client_timeout >>
+        proxy_init_query: << module.input.proxy_init_query >>
+        proxy_max_connections_percent: << module.input.proxy_max_connections_percent >>
+        proxy_max_idle_connections_percent: << module.input.proxy_max_idle_connections_percent >>
+        proxy_secret_kms_key_arns: << module.input.proxy_secret_kms_key_arns >>
+        proxy_session_pinning_filters: << module.input.proxy_session_pinning_filters >>
+        proxy_tls_requirement_enabled: << module.input.proxy_tls_requirement_enabled >>
         public_access_enabled: << module.input.public_access_enabled >>
         read_replica_availability_zones: << module.input.read_replica_availability_zones >>
         read_replica_count: << module.input.read_replica_count >>
@@ -1099,7 +1253,7 @@ module:
 
     ## Credentials and security
 
-    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Disable it only when you need to provide a master password yourself.
+    Manage password in Secrets Manager is enabled by default, so AWS creates and stores the master password for the database. Before importing a database whose existing password is managed outside Secrets Manager, disable password management and enable Preserve existing master password. Leaving password management enabled causes AWS to generate a new master password. Preservation verifies that the named database already exists in AWS, preventing a new database from reaching AWS without any source of master credentials.
 
     Storage encryption is enabled by default. Provide a storage KMS key ARN when you need a customer-managed key for storage. IAM database authentication is shown only for MySQL and PostgreSQL.
 
@@ -1116,6 +1270,12 @@ module:
     Performance insights is enabled by default with 7 days of retention. Enhanced monitoring can be enabled by setting a monitoring interval.
 
     CloudWatch alarms are optional. When enabled, the module can alarm on CPU utilization, free storage space, and database connections. The free storage alarm threshold is entered in GiB in Ravion and converted to bytes for Terraform. The Ravion UI also shows RDS CloudWatch metrics for CPU, free storage, connections, read IOPS, and write IOPS.
+
+    ## Connection pooling
+
+    Enable RDS Proxy to place a managed connection pool in front of the database. The proxy authenticates with the Secrets Manager master user secret by default, requires TLS, and allows the same security group and CIDR sources configured for the database. Pool sizing, idle timeouts, session pinning, IAM authentication, and custom auth secrets are configurable in the Connection pooling section. RDS Proxy is not available for Oracle engines.
+
+    Creating the proxy does not change how applications reach the database. Update your application connection string to the proxy endpoint output to route traffic through the pool.
 
     ## Configuration
 
@@ -1136,12 +1296,14 @@ module:
     | Security group creation | No | true | Creates ingress rules from allowed security groups and CIDRs. |
     | Multi-AZ | No | false | Enables high availability standby. |
     | Read replicas | No | false | Creates read replicas when supported by the engine. |
-    | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. |
+    | Manage password in Secrets Manager | No | true | Stores generated master credentials in AWS Secrets Manager. Disable before importing an externally managed password. |
+    | Preserve existing master password | No | false | Verifies the database exists in AWS and leaves its externally managed password unchanged. |
     | Backup retention days | No | 7 | Set to 0 to disable automated backups. |
     | Deletion protection | No | true | Helps prevent accidental deletion. |
     | Performance insights | No | true | Enables AWS Performance Insights. |
     | CloudWatch alarms | No | true | Adds CPU, free storage, and connection alarms. |
     | Free storage alarm threshold | No | 5 GiB | Converted to bytes before Terraform runs. |
+    | RDS Proxy | No | false | Creates an RDS Proxy connection pool in front of the database. Not available for Oracle engines. |
     | Tags | No | Blank | Merged with Ravion standard tags. |
 
     ## Advanced configuration
@@ -1162,4 +1324,4 @@ module:
     - [RDS DB instance classes](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html)
     - [RDS security](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.html)
     - [RDS monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Monitoring.html)
-    - [Terraform source](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/database/rds)
+    - [Terraform source](https://github.com/ravionhq/modules/tree/$local.module_tag/database/rds)

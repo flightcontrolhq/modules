@@ -19,7 +19,7 @@ This module can be used both standalone (called directly by users) and internall
 
 ```hcl
 module "security_group" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "my-app"
   name_suffix = "web"
@@ -55,7 +55,7 @@ module "security_group" {
 
 ```hcl
 module "database_sg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "my-db"
   name_suffix = "postgres"
@@ -100,7 +100,7 @@ module "database_sg" {
 
 ```hcl
 module "cache_sg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "my-cache"
   name_suffix = "elasticache"
@@ -151,7 +151,7 @@ module "cache_sg" {
 
 ```hcl
 module "alb_sg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "main"
   name_suffix = "alb"
@@ -205,7 +205,7 @@ module "alb_sg" {
 
 ```hcl
 module "cluster_sg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "my-cluster"
   name_suffix = "internal_load_balancer_enabled"
@@ -234,7 +234,7 @@ module "cluster_sg" {
 
 ```hcl
 module "ecs_service_sg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/security-groups?ref=v1.0.0"
 
   name        = "my-service"
   name_suffix = "ecs-service"

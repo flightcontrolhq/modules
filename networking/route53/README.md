@@ -21,7 +21,7 @@ supports optional VPC associations, query logging, and DNSSEC signing.
 
 ```hcl
 module "dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   name = "example.com"
 
@@ -35,7 +35,7 @@ module "dns" {
 
 ```hcl
 module "dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   name = "example.com"
 
@@ -80,7 +80,7 @@ module "dns" {
 
 ```hcl
 module "app_dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   zone_creation_enabled = false
   zone_id     = "Z1234567890ABC"
@@ -100,7 +100,7 @@ module "app_dns" {
 
 ```hcl
 module "internal_dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   name         = "internal_load_balancer_enabled.example.com"
   private_zone_enabled = true
@@ -266,7 +266,7 @@ Each record supports:
 | name | The record name (FQDN or relative to the zone) | `string` | yes |
 | type | Record type: `A`, `AAAA`, `CNAME`, `CAA`, `MX`, `NAPTR`, `NS`, `PTR`, `SOA`, `SPF`, `SRV`, `TXT`, `DS` | `string` | yes |
 | ttl | TTL in seconds (required unless using `alias`) | `number` | conditional |
-| records | Record values (required unless using `alias`). CNAME and SOA records must have exactly one value. | `list(string)` | conditional |
+| records | Record values (required unless using `alias`). CNAME and SOA records must have exactly one value. Long TXT and SPF values are split into 255-character strings automatically; see [Long record values](#long-record-values). | `list(string)` | conditional |
 | alias | Alias target `{ name, zone_id, evaluate_target_health }` (use instead of `ttl`/`records`). `name` is the AWS target DNS name. `zone_id` is the AWS target resource hosted zone ID, not this domain's hosted zone ID. For ALB/NLB use the load balancer canonical hosted zone ID; for CloudFront use `Z2FDTNDATAQYW2`; API Gateway and S3 website endpoints use service and region-specific IDs. | `object` | conditional |
 | set_identifier | Unique ID for routing-policy records | `string` | no |
 | health_check_id | Route53 health check ID | `string` | no |
@@ -276,6 +276,33 @@ Each record supports:
 | latency_routing_policy | `{ region }` | `object` | no |
 | geolocation_routing_policy | `{ continent, country, subdivision }` | `object` | no |
 | multivalue_answer_routing_policy | Enable multivalue answer routing | `bool` | no |
+
+#### Long record values
+
+Route53 accepts at most 255 characters per character string in a record value, and at
+most 65535 bytes across all values of a single record. `TXT` and `SPF` values are
+allowed to be a sequence of quoted strings that resolvers rejoin, so this module splits
+oversized `TXT` and `SPF` values into 255-character quoted strings automatically. Pass a
+DKIM key or long SPF record exactly as your provider gives it to you:
+
+```hcl
+records = [
+  {
+    name    = "selector._domainkey.example.com"
+    type    = "TXT"
+    ttl     = 300
+    records = ["v=DKIM1; k=rsa; p=<full 400-character key>"]
+  }
+]
+
+# sent to Route53 as: "v=DKIM1; k=rsa; p=<first 255 characters>" "<remaining characters>"
+```
+
+Values that already contain quotes are used exactly as written, so you can control the
+split yourself. For record types that cannot be expressed as multiple character strings,
+a value longer than 255 characters fails during planning with an explanatory message
+instead of failing the apply. Unbalanced quotes and oversized total record data are
+validated the same way.
 
 ### Query Logging
 

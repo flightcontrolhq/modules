@@ -232,7 +232,7 @@ variable "master_username" {
 }
 
 variable "master_password" {
-  description = "Password for the master DB user. Required when master_user_password_management_enabled is false. Must be 8-128 characters."
+  description = "Optional password for the master DB user when Secrets Manager password management is disabled. Leave null when importing or restoring a cluster whose existing password must remain unmanaged by Terraform."
   type        = string
   default     = null
   sensitive   = true
@@ -244,9 +244,20 @@ variable "master_password" {
 }
 
 variable "master_user_password_management_enabled" {
-  description = "Whether to manage the master user password with Secrets Manager. Default is true."
+  description = "Whether Amazon Aurora manages the master user password with Secrets Manager. Disable this before importing a cluster whose existing password is managed externally."
   type        = bool
   default     = true
+}
+
+variable "master_user_password_preservation_enabled" {
+  description = "Whether to preserve an existing externally managed master password by omitting password configuration. The named cluster must already exist in AWS, and master user password management must be disabled."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.master_user_password_preservation_enabled || !var.master_user_password_management_enabled
+    error_message = "master_user_password_preservation_enabled and master_user_password_management_enabled cannot both be true."
+  }
 }
 
 variable "master_user_secret_kms_key_id" {
@@ -834,6 +845,117 @@ variable "iam_role_associations" {
     feature_name = string
   }))
   default = {}
+}
+
+################################################################################
+# RDS Proxy
+################################################################################
+
+variable "proxy_creation_enabled" {
+  type        = bool
+  description = "Whether to create an RDS Proxy in front of the cluster. Requires master_user_password_management_enabled or proxy_auth_secret_arns."
+  default     = false
+}
+
+variable "proxy_auth_secret_arns" {
+  type        = list(string)
+  description = "List of Secrets Manager secret ARNs containing database credentials for the proxy. Defaults to the managed master user secret when master_user_password_management_enabled is true."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.proxy_auth_secret_arns : startswith(arn, "arn:")])
+    error_message = "All proxy_auth_secret_arns must be valid Secrets Manager secret ARNs."
+  }
+}
+
+variable "proxy_secret_kms_key_arns" {
+  type        = list(string)
+  description = "List of KMS key ARNs used to encrypt the proxy auth secrets when using customer-managed keys. The master user secret KMS key is included automatically."
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.proxy_secret_kms_key_arns : startswith(arn, "arn:")])
+    error_message = "All proxy_secret_kms_key_arns must be valid KMS key ARNs."
+  }
+}
+
+variable "proxy_iam_auth_enabled" {
+  type        = bool
+  description = "Whether clients must use IAM authentication to connect to the proxy."
+  default     = false
+}
+
+variable "proxy_tls_requirement_enabled" {
+  type        = bool
+  description = "Whether Transport Layer Security (TLS) encryption is required for connections to the proxy."
+  default     = true
+}
+
+variable "proxy_debug_logging_enabled" {
+  type        = bool
+  description = "Whether the proxy logs detailed connection information, including SQL statements, to CloudWatch Logs."
+  default     = false
+}
+
+variable "proxy_idle_client_timeout" {
+  type        = number
+  description = "The number of seconds a client connection to the proxy can be idle before the proxy disconnects it."
+  default     = 1800
+
+  validation {
+    condition     = var.proxy_idle_client_timeout >= 1 && var.proxy_idle_client_timeout <= 28800
+    error_message = "The proxy_idle_client_timeout must be between 1 and 28800 seconds."
+  }
+}
+
+variable "proxy_connection_borrow_timeout" {
+  type        = number
+  description = "The number of seconds the proxy waits for a connection to become available in the connection pool before returning a timeout error."
+  default     = 120
+
+  validation {
+    condition     = var.proxy_connection_borrow_timeout >= 0
+    error_message = "The proxy_connection_borrow_timeout must be greater than or equal to 0."
+  }
+}
+
+variable "proxy_init_query" {
+  type        = string
+  description = "One or more SQL statements for the proxy to run when opening each new database connection."
+  default     = null
+}
+
+variable "proxy_max_connections_percent" {
+  type        = number
+  description = "The maximum size of the proxy connection pool as a percentage of the max_connections setting of the target database."
+  default     = 100
+
+  validation {
+    condition     = var.proxy_max_connections_percent >= 1 && var.proxy_max_connections_percent <= 100
+    error_message = "The proxy_max_connections_percent must be between 1 and 100."
+  }
+}
+
+variable "proxy_max_idle_connections_percent" {
+  type        = number
+  description = "The maximum percentage of idle database connections the proxy keeps open, as a percentage of the max_connections setting of the target database."
+  default     = 50
+
+  validation {
+    condition     = var.proxy_max_idle_connections_percent >= 0 && var.proxy_max_idle_connections_percent <= 100
+    error_message = "The proxy_max_idle_connections_percent must be between 0 and 100."
+  }
+}
+
+variable "proxy_session_pinning_filters" {
+  type        = list(string)
+  description = "Session pinning filters for the proxy. Valid value: EXCLUDE_VARIABLE_SETS."
+  default     = []
+
+  validation {
+    condition     = alltrue([for f in var.proxy_session_pinning_filters : f == "EXCLUDE_VARIABLE_SETS"])
+    error_message = "The only valid session pinning filter is EXCLUDE_VARIABLE_SETS."
+  }
 }
 
 variable "region" {

@@ -189,7 +189,7 @@ Brief description of what this module creates.
 
 \`\`\`hcl
 module "example" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//category/module?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//category/module?ref=v1.0.0"
 
   name = "example"
   # other required inputs
@@ -228,6 +228,11 @@ When adding, modifying, or removing modules:
 4. Remove entries for deleted modules
 
 This is **critical** for maintaining accurate documentation.
+
+The **Published Module Definitions** table in the root `README.md` is generated. After changing a
+definition's `release.version` (or adding/removing a definition), refresh it with `make readme` and
+commit the result. CI checks it with `ravion-modules readme --check` on pull requests and refreshes it
+on `main` after publishing.
 
 ### Before Committing
 

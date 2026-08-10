@@ -128,14 +128,14 @@ function createInventory(): RemoteModuleInventory {
             stack: {
               type: "opentofu",
               source: {
-                repo: "https://github.com/flightcontrolhq/modules",
+                repo: "https://github.com/ravionhq/modules",
                 ref: "abc123",
                 base_path: "networking/vpc",
               },
               pipelines: {
                 defaults: {
                   input: {
-                    repo: "https://github.com/flightcontrolhq/modules",
+                    repo: "https://github.com/ravionhq/modules",
                     ref: "abc123",
                     base_path: "networking/vpc",
                   },
