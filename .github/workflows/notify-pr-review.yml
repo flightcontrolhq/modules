@@ -4,7 +4,8 @@ on:
   pull_request_review:
     types: [submitted]
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   notify:
@@ -14,6 +15,13 @@ jobs:
       }}
     runs-on: ubuntu-latest
     steps:
+      - name: Check out reviewer map
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/reviewer-slack-map.yml
+          sparse-checkout-cone-mode: false
+
       - name: Send Slack notifications
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -87,6 +95,12 @@ jobs:
 
           if [[ "$(jq 'length' <<<"${recipients}")" == "0" ]]; then
             exit 0
+          fi
+
+          map_file=".github/reviewer-slack-map.yml"
+          if [[ ! -f "${map_file}" || ! -r "${map_file}" ]]; then
+            echo "::error::Reviewer Slack map is missing or unreadable: ${map_file}"
+            exit 1
           fi
 
           if ! command -v yq >/dev/null 2>&1; then
