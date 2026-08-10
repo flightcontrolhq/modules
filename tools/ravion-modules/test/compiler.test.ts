@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { compileAllDefinitions, CompileError, compileDefinitionFile, deriveAppliesOn } from "../src/compiler.js";
+import { compileAllDefinitions, CompileError, compileDefinitionFile, deriveAppliesOn, findDefinitionFiles } from "../src/compiler.js";
 
 const fixturesDir = join(process.cwd(), "test", "fixtures", "compile");
 const repoRoot = resolve(process.cwd(), "../..");
@@ -80,6 +81,7 @@ describe("compiler", () => {
         { id: "deploy_only", type: "string" },
         { id: "both", type: "string" },
         { id: "build_deploy", type: "string" },
+        { id: "build_only", type: "string" },
         {
           id: "nested",
           type: "object_array",
@@ -105,7 +107,7 @@ describe("compiler", () => {
         },
       },
       build: {
-        builder: "<< module.input.build_deploy >>",
+        builder: "<< module.input.build_deploy >> << module.input.build_only >>",
       },
       deploy: {
         payload: {
@@ -125,6 +127,7 @@ describe("compiler", () => {
     assert.deepEqual(findInput(getModuleInputs(module), "deploy_only").applies_on, ["deploy"]);
     assert.deepEqual(findInput(getModuleInputs(module), "both").applies_on, ["stack", "deploy"]);
     assert.deepEqual(findInput(getModuleInputs(module), "build_deploy").applies_on, ["build", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "build_only").applies_on, ["build", "deploy"]);
     assert.deepEqual(findInput(getModuleInputs(module), "unused").applies_on, []);
     assert.equal(findInput(getModuleInputs(module), "section").applies_on, undefined);
 
@@ -288,6 +291,59 @@ describe("compiler", () => {
     assert.match(warnings[0] ?? "", /override\.yml.*warning.*build, deploy/);
   });
 
+  it("derives deploy for stack Terraform variables re-executed by deploy", () => {
+    const module: Record<string, unknown> = {
+      inputs: [
+        { id: "environment_variables", type: "array" },
+        { id: "secrets", type: "array" },
+        { id: "unrelated", type: "string" },
+      ],
+      stack: {
+        pipelines: {
+          defaults: {
+            input: {
+              terraform_variables: {
+                environment_variables: "<< module.input.environment_variables || [] >>",
+                secrets: "<< module.input.secrets || [] >>",
+              },
+            },
+          },
+        },
+      },
+      deploy: {
+        $deploy_reexecutes_stack_terraform_variables: ["environment_variables", "secrets"],
+      },
+    };
+
+    deriveAppliesOn(module);
+
+    assert.deepEqual(findInput(getModuleInputs(module), "environment_variables").applies_on, ["stack", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "secrets").applies_on, ["stack", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "unrelated").applies_on, []);
+    assert.equal((module.deploy as Record<string, unknown>).$deploy_reexecutes_stack_terraform_variables, undefined);
+  });
+
+  it("rejects deploy re-execution directives for unknown or input-free Terraform variables", () => {
+    assert.throws(
+      () =>
+        deriveAppliesOn({
+          inputs: [{ id: "value", type: "string" }],
+          stack: { terraform_variables: { other: "literal" } },
+          deploy: { $deploy_reexecutes_stack_terraform_variables: ["missing"] },
+        }),
+      (error) => error instanceof CompileError && error.message.includes("not found"),
+    );
+    assert.throws(
+      () =>
+        deriveAppliesOn({
+          inputs: [{ id: "value", type: "string" }],
+          stack: { terraform_variables: { other: "literal" } },
+          deploy: { $deploy_reexecutes_stack_terraform_variables: ["other"] },
+        }),
+      (error) => error instanceof CompileError && error.message.includes("does not reference a module input"),
+    );
+  });
+
   it("does not attribute ambiguous bare mapped input references", () => {
     const module: Record<string, unknown> = {
       inputs: [
@@ -330,6 +386,33 @@ describe("compiler", () => {
     const compiled = await compileAllDefinitions(join(fixturesDir, "modules"));
 
     assert.deepEqual(compiled.map((definition) => definition.type), ["ravion-aws-cluster", "ravion-aws-vpc"]);
+  });
+
+  it("derives composed EC2 and static-site lifecycle metadata without source overrides", async () => {
+    const ec2 = await compileDefinitionFile(join(repoRoot, "compute", "ec2_service", "rvn-ec2-service-definition.yml"));
+    const staticSite = await compileDefinitionFile(join(repoRoot, "hosting", "static_site", "rvn-aws-static-definition.yml"));
+
+    assert.deepEqual(findInput(getModuleInputs(ec2.module), "environment_variables").applies_on, [
+      "stack",
+      "deploy",
+    ]);
+    assert.deepEqual(findInput(getModuleInputs(ec2.module), "secrets").applies_on, [
+      "stack",
+      "deploy",
+    ]);
+    assert.deepEqual(
+      findInput(getModuleInputs(staticSite.module), "build_environment_variables").applies_on,
+      ["build", "deploy"],
+    );
+    assert.doesNotMatch(JSON.stringify(ec2.module), /\$deploy_reexecutes_stack_terraform_variables/);
+  });
+
+  it("has no authored applies_on metadata in definition sources", async () => {
+    const definitionFiles = await findDefinitionFiles(repoRoot);
+    for (const filePath of definitionFiles) {
+      const source = await readFile(filePath, "utf8");
+      assert.doesNotMatch(source, /^\s+applies_on\s*:/m, filePath);
+    }
   });
 
   it("compiles the RDS storage alarm threshold with a fallback when the input is hidden", async () => {

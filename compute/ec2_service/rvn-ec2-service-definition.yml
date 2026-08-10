@@ -3,7 +3,7 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.2.1
+  version: 1.2.2
   description: Derive per-input apply-phase metadata in the compiled module definition.
 module:
   inputs:
@@ -609,16 +609,10 @@ module:
       label: Runtime environment variables
       type: array
       description: Plain, single-line environment variables written to each instance at boot and refreshed on every deploy.
-      applies_on:
-        - stack
-        - deploy
     - id: secrets
       label: Runtime secrets
       type: array
       description: Secret environment variables as {name, value_from} objects fetched on each instance.
-      applies_on:
-        - stack
-        - deploy
     - id: section_networking
       label: Networking
       type: section
@@ -776,6 +770,9 @@ module:
     $merge: ../../partials/build/ecs-service-image-build.yml
     type: '<< module.input.deploy_type == "manual" || module.input.build_source == "image_registry" ? "disabled" : "image" >>'
   deploy:
+    $deploy_reexecutes_stack_terraform_variables:
+      - environment_variables
+      - secrets
     type: aws:ec2
     concurrency:
       queue_overflow: oldest

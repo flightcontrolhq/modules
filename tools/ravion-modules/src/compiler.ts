@@ -21,7 +21,8 @@ export class CompileError extends Error {
   }
 }
 
-const DIRECTIVE_KEYS = new Set(["$include", "$merge", "$template"]);
+const DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES = "$deploy_reexecutes_stack_terraform_variables";
+const DIRECTIVE_KEYS = new Set(["$include", "$merge", "$template", DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES]);
 const LOCAL_TOKEN_PATTERN = /\$local\.[A-Za-z0-9_.-]+/g;
 const WITH_TOKEN_PATTERN = /^\$with\.([A-Za-z0-9_.-]+)$/;
 const WITH_TOKEN_LEAK_PATTERN = /\$with\.[A-Za-z0-9_.-]+/;
@@ -60,8 +61,9 @@ export async function compileDefinitionFile(filePath: string): Promise<CompiledD
     throw new CompileError(`${absoluteFilePath}: module compiled to a non-object value.`);
   }
 
+  const deployReexecutionVariables = consumeDeployReexecutionDirective(module, absoluteFilePath);
   rejectLeakedCompilerSyntax(module, absoluteFilePath, "module");
-  deriveAppliesOn(module, absoluteFilePath);
+  deriveAppliesOn(module, absoluteFilePath, deployReexecutionVariables);
 
   return {
     filePath: absoluteFilePath,
@@ -86,7 +88,11 @@ interface InputAnalysis {
   derived: Set<ApplyPhase>;
 }
 
-export function deriveAppliesOn(module: Record<string, unknown>, filePath = "<module>"): void {
+export function deriveAppliesOn(
+  module: Record<string, unknown>,
+  filePath = "<module>",
+  deployReexecutionVariables = consumeDeployReexecutionDirective(module, filePath),
+): void {
   const inputs = module.inputs;
   if (!Array.isArray(inputs)) {
     return;
@@ -100,11 +106,116 @@ export function deriveAppliesOn(module: Record<string, unknown>, filePath = "<mo
   for (const phase of APPLY_PHASES) {
     collectInputReferences(module[phase], phase, analyses, ambiguousNestedIds);
   }
+  collectDeployReexecutionReferences(module, deployReexecutionVariables, analyses, filePath);
 
   for (const analysis of analyses) {
     resolveInputAnalysis(analysis, new Set());
+    normalizeInputAnalysis(analysis);
     stampInputAnalysis(analysis, filePath);
   }
+}
+
+function consumeDeployReexecutionDirective(module: Record<string, unknown>, filePath: string): string[] {
+  const deploy = module.deploy;
+  if (!isRecord(deploy) || !(DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES in deploy)) {
+    return [];
+  }
+
+  const value = deploy[DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES];
+  delete deploy[DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES];
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((variable): variable is string => typeof variable !== "string" || variable.trim().length === 0)
+  ) {
+    throw new CompileError(
+      `${filePath} module.deploy.${DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES}: expected a non-empty array of Terraform variable names.`,
+    );
+  }
+
+  const variables = value as string[];
+  if (new Set(variables).size !== variables.length) {
+    throw new CompileError(
+      `${filePath} module.deploy.${DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES}: variable names must be unique.`,
+    );
+  }
+  return variables;
+}
+
+function collectDeployReexecutionReferences(
+  module: Record<string, unknown>,
+  variables: string[],
+  analyses: InputAnalysis[],
+  filePath: string,
+): void {
+  if (variables.length === 0) {
+    return;
+  }
+
+  const terraformVariables = findTerraformVariableMaps(module.stack);
+  const availableVariables = new Set(terraformVariables.flatMap((map) => Object.keys(map)));
+  const missingVariables = variables.filter((variable) => !availableVariables.has(variable));
+  if (missingVariables.length > 0) {
+    throw new CompileError(
+      `${filePath} module.deploy.${DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES}: Terraform variable(s) not found in module.stack: ${missingVariables.join(", ")}.`,
+    );
+  }
+
+  for (const variable of variables) {
+    const values = terraformVariables.flatMap((map) => (variable in map ? [map[variable]] : []));
+    let feedsInput = false;
+    for (const value of values) {
+      const directiveAnalyses = analyses.map((analysis) => createInputAnalysisTree(analysis.input));
+      const directiveAmbiguities = new Set<string>();
+      for (const directiveAnalysis of directiveAnalyses) {
+        collectInputReferences(value, "deploy", [directiveAnalysis], directiveAmbiguities);
+        resolveInputAnalysis(directiveAnalysis, new Set());
+        normalizeInputAnalysis(directiveAnalysis);
+      }
+      if (directiveAnalyses.some((analysis) => hasDerivedPhase(analysis, "deploy"))) {
+        feedsInput = true;
+      }
+      collectInputReferences(value, "deploy", analyses, new Set());
+    }
+    if (!feedsInput) {
+      throw new CompileError(
+        `${filePath} module.deploy.${DEPLOY_REEXECUTES_STACK_TERRAFORM_VARIABLES}: Terraform variable ${variable} does not reference a module input.`,
+      );
+    }
+  }
+}
+
+function findTerraformVariableMaps(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((child) => findTerraformVariableMaps(child));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const maps = Object.entries(value).flatMap(([key, child]) =>
+    key === "terraform_variables" && isRecord(child) ? [child] : findTerraformVariableMaps(child),
+  );
+  return maps;
+}
+
+function createInputAnalysisTree(input: Record<string, unknown>, nestedKind?: InputAnalysis["nestedKind"]): InputAnalysis {
+  const children = [];
+  for (const key of ["item_inputs", "mapped_inputs"] as const) {
+    const nested = input[key];
+    if (Array.isArray(nested)) {
+      children.push(
+        ...nested
+          .filter((child): child is Record<string, unknown> => isRecord(child))
+          .map((child) => createInputAnalysisTree(child, key)),
+      );
+    }
+  }
+  return { input, nestedKind, direct: new Set(), elementDirect: new Set(), children, derived: new Set() };
+}
+
+function hasDerivedPhase(analysis: InputAnalysis, phase: ApplyPhase): boolean {
+  return analysis.derived.has(phase) || analysis.children.some((child) => hasDerivedPhase(child, phase));
 }
 
 function createInputAnalysis(input: Record<string, unknown>, nestedKind?: InputAnalysis["nestedKind"]): InputAnalysis {
@@ -397,6 +508,13 @@ function resolveInputAnalysis(analysis: InputAnalysis, inherited: Set<ApplyPhase
   }
   analysis.derived = phases;
   return phases;
+}
+
+function normalizeInputAnalysis(analysis: InputAnalysis): void {
+  if (analysis.derived.has("build")) {
+    analysis.derived.add("deploy");
+  }
+  analysis.children.forEach((child) => normalizeInputAnalysis(child));
 }
 
 function stampInputAnalysis(analysis: InputAnalysis, filePath: string): void {
