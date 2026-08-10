@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.0.1
-  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  version: 1.1.0
+  description: Add an Endpoint link to the module UI when HTTP traffic is enabled, using the first domain host rule or the attached ALB's DNS name.
 module:
   inputs:
     - id: network
@@ -260,6 +260,24 @@ module:
           label: ALB ARN suffix
           required: true
           type: string
+        - default: <<ref.stack.output.alb_dns_name>>
+          id: alb_dns_name
+          immutable: true
+          label: ALB DNS name
+          required: false
+          type: string
+        - default: <<ref.input.http_listener_port>>
+          id: alb_http_listener_port
+          immutable: true
+          label: ALB HTTP listener port
+          required: false
+          type: number
+        - default: <<ref.input.https_listener_port>>
+          id: alb_https_listener_port
+          immutable: true
+          label: ALB HTTPS listener port
+          required: false
+          type: number
       required: true
       show_when:
         http_traffic_enabled: true
@@ -280,6 +298,18 @@ module:
           id: private_alb_arn_suffix
           immutable: true
           label: Private ALB ARN suffix
+          type: string
+        - default: <<ref.stack.output.public_alb_dns_name>>
+          id: public_alb_dns_name
+          immutable: true
+          label: Public ALB DNS name
+          required: false
+          type: string
+        - default: <<ref.stack.output.private_alb_dns_name>>
+          id: private_alb_dns_name
+          immutable: true
+          label: Private ALB DNS name
+          required: false
           type: string
       required: true
       show_when:
@@ -789,6 +819,35 @@ module:
       region: << stack.output.region >>
       target_group_arn: << stack.output.target_group_arn >>
   ui:
+    links: |-
+      <<
+      !module.input.http_traffic_enabled ? [] :
+      len(module.input.host_header_values || []) > 0 ?
+      (module.input.host_header_values[0] contains "*" ? [] :
+      [{"name":"Endpoint","href":
+      ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_https_listener_arn :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_https_listener_arn :
+      module.input.private_alb_https_listener_arn) ? "https://" : "http://") +
+      module.input.host_header_values[0] +
+      (module.input.load_balancer_source != "standalone_alb" ? "" :
+      module.input.alb_https_listener_arn ?
+      ((module.input.alb_https_listener_port || 443) == 443 ? "" : ":" + string(module.input.alb_https_listener_port)) :
+      ((module.input.alb_http_listener_port || 80) == 80 ? "" : ":" + string(module.input.alb_http_listener_port)))}]) :
+      ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_dns_name :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_dns_name :
+      module.input.private_alb_dns_name) ?
+      [{"name":"Endpoint","href":
+      ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_https_listener_arn :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_https_listener_arn :
+      module.input.private_alb_https_listener_arn) ? "https://" : "http://") +
+      (module.input.load_balancer_source == "standalone_alb" ? module.input.alb_dns_name :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_dns_name :
+      module.input.private_alb_dns_name) +
+      (module.input.load_balancer_source != "standalone_alb" ? "" :
+      module.input.alb_https_listener_arn ?
+      ((module.input.alb_https_listener_port || 443) == 443 ? "" : ":" + string(module.input.alb_https_listener_port)) :
+      ((module.input.alb_http_listener_port || 80) == 80 ? "" : ":" + string(module.input.alb_http_listener_port)))}] : [])
+      >>
     logs:
       - id: app_logs
         name: App logs
