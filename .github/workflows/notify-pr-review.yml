@@ -1,0 +1,80 @@
+name: Notify Brandon of PR reviews
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions: {}
+
+jobs:
+  notify:
+    if: >-
+      ${{
+        contains(fromJSON('["approved", "changes_requested"]'), github.event.review.state) &&
+        github.event.review.user.login != 'flybayer' &&
+        github.event.review.user.login != github.event.pull_request.user.login &&
+        (
+          github.event.pull_request.user.login == 'devin-ai-integration[bot]' ||
+          github.event.pull_request.user.login == 'flybayer'
+        )
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL: U032P6W1SB0
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REVIEWER: ${{ github.event.review.user.login }}
+          REPOSITORY: ${{ github.repository }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SLACK_BOT_TOKEN}" ]]; then
+            echo "::error::SLACK_BOT_TOKEN is empty"
+            exit 1
+          fi
+
+          review_state="$(printf '%s' "${REVIEW_STATE}" | tr '[:upper:]' '[:lower:]')"
+          case "${review_state}" in
+            approved)
+              decision="approved"
+              ;;
+            changes_requested)
+              decision="requested changes on"
+              ;;
+            *)
+              echo "::error::Unsupported review state: ${REVIEW_STATE}"
+              exit 1
+              ;;
+          esac
+
+          message="*${REVIEWER}* ${decision} <${PR_URL}|${REPOSITORY}: ${PR_TITLE}>"
+          payload="$(jq -n \
+            --arg channel "${SLACK_CHANNEL}" \
+            --arg text "${message}" \
+            '{channel: $channel, text: $text}')"
+
+          response="$(
+            curl --silent --show-error \
+              --header "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+              --header "Content-Type: application/json; charset=utf-8" \
+              --data "${payload}" \
+              --write-out $'\n%{http_code}' \
+              https://slack.com/api/chat.postMessage
+          )"
+          http_status="${response##*$'\n'}"
+          response_body="${response%$'\n'*}"
+
+          if [[ "${http_status}" != "200" ]]; then
+            echo "::error::Slack API returned HTTP ${http_status}: ${response_body}"
+            exit 1
+          fi
+
+          if [[ "$(jq -r '.ok // false' <<<"${response_body}")" != "true" ]]; then
+            slack_error="$(jq -r '.error // "unknown Slack API error"' <<<"${response_body}")"
+            echo "::error::Slack API request failed: ${slack_error}"
+            exit 1
+          fi
