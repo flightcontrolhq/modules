@@ -79,6 +79,14 @@ RUN_ARGS+=(-v ${data_volume_mount_path}:${data_volume_mount_path})
 %{ if efs_mount_path != "" ~}
 RUN_ARGS+=(-v ${efs_mount_path}:${efs_mount_path})
 %{ endif ~}
+%{ if docker_socket_mount_enabled ~}
+DOCKER_GROUP_GID=$(getent group docker | awk -F: 'NR==1 {print $3}' || true)
+if [ -z "$DOCKER_GROUP_GID" ]; then
+  echo "The host docker group could not be found; refusing to start the container" >&2
+  exit 1
+fi
+RUN_ARGS+=(--group-add "$DOCKER_GROUP_GID" -v /var/run/docker.sock:/var/run/docker.sock)
+%{ endif ~}
 exec docker run "$${RUN_ARGS[@]}" "$IMAGE_URI" ${start_command}
 APP_RUNNER
 chmod 755 "${app_runner_path}"

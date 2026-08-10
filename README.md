@@ -66,8 +66,8 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-aws-iam-role` | AWS IAM Role | v1.0.1 | `security/iam/` |
 | `rvn-aws-network` | VPC Network | v1.0.1 | `networking/vpc/` |
 | `rvn-aws-static` | Static Hosting | v1.0.1 | `hosting/static_site/` |
-| `rvn-cloudfront` | CloudFront CDN | v1.0.1 | `cdn/cloudfront/` |
-| `rvn-ec2-service` | EC2 Service | v1.0.1 | `compute/ec2_service/` |
+| `rvn-cloudfront` | CloudFront CDN | v1.1.0 | `cdn/cloudfront/` |
+| `rvn-ec2-service` | EC2 Service | v1.2.0 | `compute/ec2_service/` |
 | `rvn-ecs-cluster` | ECS Cluster | v1.0.1 | `compute/ecs_cluster/` |
 | `rvn-ecs-nlb` | ECS Network Service | v1.0.1 | `compute/ecs_service/` |
 | `rvn-ecs-web` | ECS Web Service | v1.0.1 | `compute/ecs_service/` |
@@ -77,7 +77,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-lambda` | Lambda Function | v1.0.1 | `compute/lambda/` |
 | `rvn-rds` | RDS Database | v1.2.0 | `database/rds/` |
 | `rvn-rds-proxy` | RDS Proxy | v0.1.0 | `database/rds-proxy/` |
-| `rvn-route53` | Route 53 DNS | v1.0.1 | `networking/route53/` |
+| `rvn-route53` | Route 53 DNS | v1.0.2 | `networking/route53/` |
 | `rvn-s3` | S3 Bucket | v1.0.1 | `storage/s3/` |
 | `rvn-stack` | Terraform Stack | v1.2.4 | `stack/terraform/` |
 

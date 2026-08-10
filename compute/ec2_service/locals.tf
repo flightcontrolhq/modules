@@ -86,23 +86,24 @@ locals {
   })
 
   deploy_script = local.container_runtime ? templatefile("${path.module}/templates/deploy_container.sh.tpl", {
-    name                      = var.name
-    region                    = local.region
-    app_port                  = var.app_port
-    start_command             = var.container_start_command != null ? var.container_start_command : ""
-    deploy_health_check_path  = var.deploy_health_check_path != null ? var.deploy_health_check_path : ""
-    env_file_script           = local.env_file_script
-    env_file_path             = local.env_file_path
-    app_runner_path           = local.app_runner_path
-    deployment_log_script     = local.deployment_log_script
-    image_ref_path            = local.image_ref_path
-    supervisor_conf           = local.supervisor_conf
-    supervisor_install_script = local.supervisor_install_script
-    supervisor_program        = local.supervisor_program
-    supervisor_program_script = local.supervisor_program_script
-    target_group_arn          = local.load_balancer_creation_enabled ? aws_lb_target_group.app[0].arn : ""
-    data_volume_mount_path    = var.data_volume_creation_enabled ? var.data_volume_mount_path : ""
-    efs_mount_path            = var.efs_enabled ? var.efs_mount_path : ""
+    name                        = var.name
+    region                      = local.region
+    app_port                    = var.app_port
+    start_command               = var.container_start_command != null ? var.container_start_command : ""
+    deploy_health_check_path    = var.deploy_health_check_path != null ? var.deploy_health_check_path : ""
+    env_file_script             = local.env_file_script
+    env_file_path               = local.env_file_path
+    app_runner_path             = local.app_runner_path
+    deployment_log_script       = local.deployment_log_script
+    image_ref_path              = local.image_ref_path
+    supervisor_conf             = local.supervisor_conf
+    supervisor_install_script   = local.supervisor_install_script
+    supervisor_program          = local.supervisor_program
+    supervisor_program_script   = local.supervisor_program_script
+    target_group_arn            = local.load_balancer_creation_enabled ? aws_lb_target_group.app[0].arn : ""
+    data_volume_mount_path      = var.data_volume_creation_enabled ? var.data_volume_mount_path : ""
+    efs_mount_path              = var.efs_enabled ? var.efs_mount_path : ""
+    docker_socket_mount_enabled = var.docker_socket_mount_enabled
   }) : null
 
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
