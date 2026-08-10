@@ -109,7 +109,18 @@ jobs:
           fi
           yq --version
 
-          message="*${REVIEWER}* ${decision} <${PR_URL}|${REPOSITORY}: ${PR_TITLE}>"
+          escape_slack_text() {
+            local value="$1"
+            value="${value//&/&amp;}"
+            value="${value//</&lt;}"
+            value="${value//>/&gt;}"
+            printf '%s' "${value}"
+          }
+
+          escaped_reviewer="$(escape_slack_text "${REVIEWER}")"
+          escaped_repository="$(escape_slack_text "${REPOSITORY}")"
+          escaped_title="$(escape_slack_text "${PR_TITLE}")"
+          message="*${escaped_reviewer}* ${decision} <${PR_URL}|${escaped_repository}: ${escaped_title}>"
           failed_logins=()
           failed_reasons=()
 
