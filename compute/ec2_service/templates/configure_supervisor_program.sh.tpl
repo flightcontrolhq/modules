@@ -1,3 +1,5 @@
+${supervisor_exit_listener_script}
+
 cat > "${supervisor_conf}" <<SUPERVISOR_PROGRAM
 [program:${supervisor_program}]
 command=${app_runner_path}
@@ -10,7 +12,8 @@ stopwaitsecs=30
 stopasgroup=true
 killasgroup=true
 stdout_logfile=$LOG_PATH
-stdout_logfile_maxbytes=0
+stdout_logfile_maxbytes=${log_rotation_max_size_mb}MB
+stdout_logfile_backups=${log_rotation_backup_count}
 redirect_stderr=true
 environment=RAVION_DEPLOYMENT_ID="$${DEPLOY_ID}"
 SUPERVISOR_PROGRAM

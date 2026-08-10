@@ -36,6 +36,12 @@ App stdout and stderr are shipped to `/ravion/ec2/<name>`. Streams use `deployme
 
 New instances launched by the Auto Scaling Group boot from the launch template but hold no release until the orchestrator repeats the deploy against them.
 
+## App logs and process exits
+
+Supervisord rotates the on-instance app log rather than letting a crash-looping process fill the root volume: `log_rotation_max_size_mb` (default 20) and `log_rotation_backup_count` (default 5) bound on-instance usage to `(backups + 1) * max size` per deployment log. The module writes the supervisord program config on every deploy, after any deploy commands run, so these settings cannot be overridden from a deploy command; change them through the module inputs instead. Replacement instances get the same configuration from the launch template.
+
+`startretries` only covers a process that never stays up for `startsecs`. A process that starts cleanly and then crashes repeatedly is invisible to it, so every instance also runs a supervisord event listener that appends one JSON line per unexpected exit to `/var/log/ravion/<name>/process-events.log`. The CloudWatch agent ships that file to the `process-events/instance/<instance-id>` stream in the app log group, and a metric filter turns those lines into the `Ravion/EC2Service` / `UnexpectedProcessExits` metric, dimensioned by `ServiceName`. Set `process_exit_alarm_enabled = true` (with `process_exit_alarm_threshold`, `process_exit_alarm_period`, `process_exit_alarm_evaluation_periods`, and `cloudwatch_alarm_actions`) to alarm on repeated exits, or build your own alarm on the metric.
+
 ## Usage
 
 ### Web service running a container
@@ -181,6 +187,14 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | ecr_force_deletion_enabled | Delete the ECR repository even with images | `bool` | `false` | no |
 | ecr_scan_on_push_enabled | Scan images for vulnerabilities after push | `bool` | `true` | no |
 | log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
+| log_rotation_max_size_mb | Size at which supervisord rotates the on-instance app log | `number` | `20` | no |
+| log_rotation_backup_count | Rotated app log files kept on the instance | `number` | `5` | no |
+| process_exit_alarm_enabled | Alarm on repeated unexpected app process exits | `bool` | `false` | no |
+| process_exit_alarm_threshold | Unexpected exits per period that trigger the alarm | `number` | `3` | no |
+| process_exit_alarm_period | Period in seconds for counting unexpected exits | `number` | `300` | no |
+| process_exit_alarm_evaluation_periods | Breaching periods before the alarm fires | `number` | `1` | no |
+| cloudwatch_alarm_actions | ARNs notified when alarms enter ALARM | `list(string)` | `[]` | no |
+| cloudwatch_ok_actions | ARNs notified when alarms return to OK | `list(string)` | `[]` | no |
 
 ## Outputs
 
@@ -198,5 +212,8 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | instance_role_arn | ARN of the instance IAM role |
 | log_group_name | CloudWatch log group receiving app logs |
 | log_stream_prefix | Prefix of deployment- and instance-scoped app log streams |
+| process_exit_metric_namespace | CloudWatch namespace of the unexpected process exit metric |
+| process_exit_metric_name | Name of the unexpected process exit metric |
+| process_exit_alarm_arn | ARN of the unexpected process exit alarm (when enabled) |
 | aws_account_id | AWS account ID |
 | region | AWS region |

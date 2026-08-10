@@ -83,6 +83,25 @@ output "log_stream_prefix" {
 }
 
 ################################################################################
+# Process Exit Monitoring
+################################################################################
+
+output "process_exit_metric_namespace" {
+  description = "The CloudWatch namespace of the unexpected process exit metric."
+  value       = local.process_exit_metric_namespace
+}
+
+output "process_exit_metric_name" {
+  description = "The name of the unexpected process exit metric, dimensioned by ServiceName."
+  value       = local.process_exit_metric_name
+}
+
+output "process_exit_alarm_arn" {
+  description = "The ARN of the unexpected process exit alarm, when enabled."
+  value       = var.process_exit_alarm_enabled ? aws_cloudwatch_metric_alarm.process_exit[0].arn : null
+}
+
+################################################################################
 # Context
 ################################################################################
 

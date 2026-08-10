@@ -96,6 +96,92 @@ run "container_is_supervised_and_logs_per_deployment" {
     error_message = "The log stream output must select all deployment-scoped streams."
   }
 
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "stdout_logfile_maxbytes=20MB") && strcontains(aws_ssm_document.deploy.content, "stdout_logfile_backups=5")
+    error_message = "Container deploys must bound the app log with nonzero Supervisor rotation settings."
+  }
+
+  assert {
+    condition     = !strcontains(aws_ssm_document.deploy.content, "stdout_logfile_maxbytes=0")
+    error_message = "Rotation must never be disabled for the app log."
+  }
+
+  assert {
+    condition = alltrue([
+      for setting in ["stopsignal=TERM", "stopwaitsecs=30", "stopasgroup=true", "killasgroup=true", "redirect_stderr=true"] :
+      strcontains(aws_ssm_document.deploy.content, setting)
+    ])
+    error_message = "Rotation must not disturb the existing shutdown and stream-merging behavior."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "[eventlistener:ravion-supervised-app-exit-events]") && strcontains(aws_ssm_document.deploy.content, "events=PROCESS_STATE_EXITED")
+    error_message = "Deploys must install the Supervisor event listener that records unexpected process exits."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "[eventlistener:ravion-supervised-app-exit-events]")
+    error_message = "Replacement instances must record unexpected process exits from first boot."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_metric_filter.process_exit.log_group_name == aws_cloudwatch_log_group.app.name && aws_cloudwatch_log_metric_filter.process_exit.metric_transformation[0].name == "UnexpectedProcessExits"
+    error_message = "Unexpected process exits must be turned into an alarmable CloudWatch metric."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.process_exit) == 0
+    error_message = "The process exit alarm must stay opt-in."
+  }
+}
+
+run "log_rotation_settings_are_configurable" {
+  command = plan
+
+  variables {
+    runtime                   = "container"
+    log_rotation_max_size_mb  = 50
+    log_rotation_backup_count = 2
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "stdout_logfile_maxbytes=50MB") && strcontains(aws_ssm_document.deploy.content, "stdout_logfile_backups=2")
+    error_message = "Configured rotation settings must reach the generated Supervisor program config."
+  }
+}
+
+run "log_rotation_rejects_disabling_rotation" {
+  command = plan
+
+  variables {
+    runtime                  = "container"
+    log_rotation_max_size_mb = 0
+  }
+
+  expect_failures = [var.log_rotation_max_size_mb]
+}
+
+run "process_exit_alarm_is_available" {
+  command = plan
+
+  variables {
+    runtime                               = "container"
+    process_exit_alarm_enabled            = true
+    process_exit_alarm_threshold          = 5
+    process_exit_alarm_period             = 900
+    process_exit_alarm_evaluation_periods = 2
+    cloudwatch_alarm_actions              = ["arn:aws:sns:us-east-1:123456789012:alerts"]
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.process_exit[0].threshold == 5 && aws_cloudwatch_metric_alarm.process_exit[0].period == 900 && aws_cloudwatch_metric_alarm.process_exit[0].evaluation_periods == 2
+    error_message = "The process exit alarm must use the configured threshold, period, and evaluation periods."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.process_exit[0].dimensions["ServiceName"] == "supervised-app" && aws_cloudwatch_metric_alarm.process_exit[0].alarm_actions == toset(["arn:aws:sns:us-east-1:123456789012:alerts"])
+    error_message = "The process exit alarm must be scoped to this service and notify the configured actions."
+  }
 }
 
 run "manual_start_command_is_supervised" {

@@ -522,3 +522,80 @@ variable "log_retention_in_days" {
     error_message = "The log_retention_in_days must be at least 1."
   }
 }
+
+variable "log_rotation_max_size_mb" {
+  type        = number
+  description = "Maximum size of the on-instance app log file before supervisord rotates it. Bounds disk usage when a process restarts repeatedly."
+  default     = 20
+
+  validation {
+    condition     = var.log_rotation_max_size_mb >= 1 && var.log_rotation_max_size_mb <= 1024
+    error_message = "The log_rotation_max_size_mb must be between 1 and 1024."
+  }
+}
+
+variable "log_rotation_backup_count" {
+  type        = number
+  description = "Number of rotated app log files supervisord keeps on the instance. Total on-instance app log usage is bounded by (backups + 1) * log_rotation_max_size_mb."
+  default     = 5
+
+  validation {
+    condition     = var.log_rotation_backup_count >= 1 && var.log_rotation_backup_count <= 100
+    error_message = "The log_rotation_backup_count must be between 1 and 100."
+  }
+}
+
+################################################################################
+# Process Exit Alarm
+################################################################################
+
+variable "process_exit_alarm_enabled" {
+  type        = bool
+  description = "Alarm on repeated unexpected app process exits. Covers crashes after the process passed startsecs, which startretries does not."
+  default     = false
+}
+
+variable "process_exit_alarm_threshold" {
+  type        = number
+  description = "Number of unexpected process exits within a period that puts the alarm into ALARM state."
+  default     = 3
+
+  validation {
+    condition     = var.process_exit_alarm_threshold >= 1
+    error_message = "The process_exit_alarm_threshold must be at least 1."
+  }
+}
+
+variable "process_exit_alarm_period" {
+  type        = number
+  description = "The period in seconds over which unexpected process exits are counted."
+  default     = 300
+
+  validation {
+    condition     = contains([60, 300, 900, 3600], var.process_exit_alarm_period)
+    error_message = "The process_exit_alarm_period must be one of: 60, 300, 900, or 3600 seconds."
+  }
+}
+
+variable "process_exit_alarm_evaluation_periods" {
+  type        = number
+  description = "Number of periods the unexpected exit count must breach the threshold before the alarm fires."
+  default     = 1
+
+  validation {
+    condition     = var.process_exit_alarm_evaluation_periods >= 1
+    error_message = "The process_exit_alarm_evaluation_periods must be at least 1."
+  }
+}
+
+variable "cloudwatch_alarm_actions" {
+  type        = list(string)
+  description = "List of ARNs notified when alarms transition to ALARM state (e.g., SNS topics)."
+  default     = []
+}
+
+variable "cloudwatch_ok_actions" {
+  type        = list(string)
+  description = "List of ARNs notified when alarms transition to OK state."
+  default     = []
+}
