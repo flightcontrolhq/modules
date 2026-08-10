@@ -266,6 +266,18 @@ module:
           label: ALB DNS name
           required: false
           type: string
+        - default: <<ref.input.http_listener_port>>
+          id: alb_http_listener_port
+          immutable: true
+          label: ALB HTTP listener port
+          required: false
+          type: number
+        - default: <<ref.input.https_listener_port>>
+          id: alb_https_listener_port
+          immutable: true
+          label: ALB HTTPS listener port
+          required: false
+          type: number
       required: true
       show_when:
         http_traffic_enabled: true
@@ -816,7 +828,11 @@ module:
       ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_https_listener_arn :
       module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_https_listener_arn :
       module.input.private_alb_https_listener_arn) ? "https://" : "http://") +
-      module.input.host_header_values[0]}]) :
+      module.input.host_header_values[0] +
+      (module.input.load_balancer_source != "standalone_alb" ? "" :
+      module.input.alb_https_listener_arn ?
+      ((module.input.alb_https_listener_port || 443) == 443 ? "" : ":" + string(module.input.alb_https_listener_port)) :
+      ((module.input.alb_http_listener_port || 80) == 80 ? "" : ":" + string(module.input.alb_http_listener_port)))}]) :
       ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_dns_name :
       module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_dns_name :
       module.input.private_alb_dns_name) ?
@@ -826,7 +842,11 @@ module:
       module.input.private_alb_https_listener_arn) ? "https://" : "http://") +
       (module.input.load_balancer_source == "standalone_alb" ? module.input.alb_dns_name :
       module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_dns_name :
-      module.input.private_alb_dns_name)}] : [])
+      module.input.private_alb_dns_name) +
+      (module.input.load_balancer_source != "standalone_alb" ? "" :
+      module.input.alb_https_listener_arn ?
+      ((module.input.alb_https_listener_port || 443) == 443 ? "" : ":" + string(module.input.alb_https_listener_port)) :
+      ((module.input.alb_http_listener_port || 80) == 80 ? "" : ":" + string(module.input.alb_http_listener_port)))}] : [])
       >>
     logs:
       - id: app_logs
