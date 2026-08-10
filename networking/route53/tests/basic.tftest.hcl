@@ -300,6 +300,27 @@ run "nested_routing_policy_requires_set_identifier" {
 # Record value character-string limits
 ################################################################################
 
+run "quoted_caa_value_succeeds" {
+  command = plan
+
+  variables {
+    name = "example.com"
+    records = [
+      {
+        name    = "example.com"
+        type    = "CAA"
+        ttl     = 300
+        records = ["0 issue \"amazon.com\""]
+      }
+    ]
+  }
+
+  assert {
+    condition     = aws_route53_record.this["CAA-example.com"].records == toset(["0 issue \"amazon.com\""])
+    error_message = "CAA values should preserve the quoted authority required by Route 53"
+  }
+}
+
 run "long_unquoted_txt_value_is_split_into_quoted_strings" {
   command = plan
 

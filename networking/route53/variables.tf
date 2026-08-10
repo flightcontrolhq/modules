@@ -206,12 +206,12 @@ variable "records" {
           coalesce(v.records, []),
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
-          # A value that uses quotes must be a complete sequence of quoted strings, so no
-          # unquoted text is silently passed through to Route 53 unchecked.
-        ) : !strcontains(value, "\"") || can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
+          # Only TXT and SPF support sequences of quoted character strings. Other record
+          # types, such as CAA, use quotes within structured values.
+        ) : !contains(["TXT", "SPF"], v.type) || !strcontains(value, "\"") || can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
       ]
     ]))
-    error_message = "A DNS record value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
+    error_message = "A TXT or SPF record value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
   }
 
   validation {
