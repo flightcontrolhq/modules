@@ -1,6 +1,6 @@
 # EC2 Service
 
-Runs an app on a stable group of EC2 instances behind an optional Application Load Balancer, with in-place deploys pushed through SSM Run Command. Instances are managed by an Auto Scaling Group but are never replaced by deploys, so per-instance state (root volume, optional data volume) survives every release.
+Runs an app on a stable group of EC2 instances behind an optional Application Load Balancer, with in-place deploys pushed through SSM Run Command. Instances are managed by an Auto Scaling Group but are never replaced by deploys, so per-instance state (root volume, optional data volume) persists for the life of each instance.
 
 Two runtimes are supported:
 
@@ -112,11 +112,13 @@ aws ssm send-command \
   --parameters commands='["cd /srv/app && git pull","cd /srv/app && ./bin/migrate"]'
 ```
 
-## Stable storage
+## Storage and durability
 
-- The root volume and optional data volume are per-instance EBS. They survive every in-place deploy because instances are not replaced, but they are lost when the Auto Scaling Group terminates the instance.
-- For storage that must survive instance termination, mount an EFS file system (`efs_*` variables); it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
-- Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh.
+- The root volume and optional data volume are per-instance EBS. They are durable for the life of the instance: deploys, restarts, and stack updates never replace an instance, so local files such as an embedded database stay in place at local-disk latency, exactly as on an EC2 instance you launch yourself.
+- They are deleted with the instance, which happens for exactly three reasons: you terminate or recycle it (for example to roll out a new AMI), the group scales in, or it fails its Auto Scaling health check. Keep backups (EBS snapshots, dumps to S3) for critical data instead of avoiding local storage.
+- `health_check_type` defaults to `EC2`, which is the AWS instance/system status check — unreachable instance, broken boot or network state, failed underlying host. It ignores application state: a crashed app is restarted in place by supervisord, and a failing HTTP health check never replaces an instance. So health-driven replacement is rare and tied to hardware or hypervisor failure. Setting `health_check_type = "ELB"` makes load balancer health replace instances instead, which also breaks in-place deploys (they briefly deregister the instance).
+- Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
+- Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh, so applying a new AMI never replaces running instances by itself. Recycling instances to pick up the new AMI is a replacement, and it deletes their volumes.
 
 ## Requirements
 
