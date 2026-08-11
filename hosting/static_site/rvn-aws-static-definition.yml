@@ -4,7 +4,7 @@ definition:
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
   version: 1.0.2
-  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  description: Add the Builder IAM policies input, attaching extra IAM managed policies to the EC2 build runner role for the duration of each build.
 module:
   build:
     builder: >-
