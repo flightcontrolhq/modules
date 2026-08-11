@@ -26,7 +26,7 @@ jobs:
 
       - name: Send Slack notifications
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          INTERNAL_SLACK_BOT_TOKEN: ${{ secrets.INTERNAL_SLACK_BOT_TOKEN }}
           REVIEW_STATE: ${{ github.event.review.state }}
           REVIEWER: ${{ github.event.review.user.login }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -39,8 +39,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ -z "${SLACK_BOT_TOKEN}" ]]; then
-            echo "::error::SLACK_BOT_TOKEN is empty"
+          if [[ -z "${INTERNAL_SLACK_BOT_TOKEN}" ]]; then
+            echo "::error::INTERNAL_SLACK_BOT_TOKEN is empty"
             exit 1
           fi
 
@@ -144,7 +144,7 @@ jobs:
 
             if ! response="$(
               curl --silent --show-error \
-                --header "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+                --header "Authorization: Bearer ${INTERNAL_SLACK_BOT_TOKEN}" \
                 --header "Content-Type: application/json; charset=utf-8" \
                 --data "${payload}" \
                 --write-out $'\n%{http_code}' \
