@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 1.0.1
-  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  version: 1.0.2
+  description: Add the Builder IAM policies input, attaching extra IAM managed policies to the EC2 build runner role for the duration of each build.
 module:
   inputs:
     - id: section_cluster
