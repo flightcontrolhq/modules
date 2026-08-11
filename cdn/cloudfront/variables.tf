@@ -295,7 +295,7 @@ variable "default_cache_behavior" {
 
 variable "accept_header_cache_key_creation_enabled" {
   type        = bool
-  description = "Whether to create and use a module-managed cache policy and viewer-request function that normalize Markdown negotiation into the cache key."
+  description = "Whether to create and use a module-managed cache policy and viewer-request function that preserve the UseOriginCacheControlHeaders-QueryStrings cache key and add normalized Markdown negotiation."
   default     = false
 
   validation {

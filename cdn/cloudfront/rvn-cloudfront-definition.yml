@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 release:
-  version: 1.2.1
-  description: Prevent applies from failing with CloudFront in-use errors when changing a cache policy or disabling a module-managed feature.
+  version: 1.2.2
+  description: Fix the managed Markdown cache policy.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -362,7 +362,7 @@ module:
       default: managed_accept
       values:
         - label: UseOriginCacheControlHeaders-QueryStrings with normalized Markdown negotiation (recommended)
-          description: Caches only responses with Cache-Control headers from your app. Query strings and a normalized Markdown preference are part of the cache key.
+          description: Caches only responses with Cache-Control headers from your app. Host, cookies, query strings, and a normalized Markdown preference are part of the cache key.
           value: managed_accept
         - label: UseOriginCacheControlHeaders-QueryStrings
           description: Caches only responses with Cache-Control headers from your app. Query strings are part of the cache key.
@@ -913,7 +913,7 @@ module:
     | Allowed methods | Read only | Only GET and HEAD reach the origin; choose Read and OPTIONS or All methods to accept form posts and API writes |
     | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
 
-    With the recommended cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. The normalized Markdown negotiation option creates a module-managed policy and viewer-request function that keep HTML and Markdown in two separate cache entries. The selected origin request policy must forward the Accept header, or the origin cannot negotiate Markdown and may return HTML for every request. Choose the plain UseOriginCacheControlHeaders-QueryStrings policy when the origin does not serve Markdown, CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
+    With the recommended cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. The normalized Markdown negotiation option preserves the Host, Origin, method-override headers, cookies, and query strings from UseOriginCacheControlHeaders-QueryStrings, then adds a normalized Markdown preference so HTML and Markdown use separate cache entries. Preserving Host keeps load balancer listener rules working, and preserving cookies and Host keeps cached responses isolated across sessions and domains. The selected origin request policy must forward the Accept header, or the origin cannot negotiate Markdown and may return HTML for every request. Choose the plain UseOriginCacheControlHeaders-QueryStrings policy when the origin does not serve Markdown, CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
 
     Response headers policy is optional and adds headers such as the SecurityHeadersPolicy set or CORS headers to every response.
 
