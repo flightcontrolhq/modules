@@ -40,3 +40,12 @@
   required: false
   show_when: $with.show_when
   type: string
+- add_button_label: Add policy ARN
+  collapsible: true
+  default: []
+  description: IAM managed policy ARNs attached to the EC2 build runner role for the duration of each build, in addition to the step default policies.
+  id: build_iam_policy_attach
+  label: Builder IAM policies
+  required: false
+  show_when: $with.show_when
+  type: string_array
