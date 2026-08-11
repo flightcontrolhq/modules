@@ -1,0 +1,287 @@
+definition:
+  type: rvn-kms
+  name: KMS Key
+  description: Creates a customer-managed AWS KMS key with an alias and a key policy scoped to the principals you name.
+release:
+  version: 1.0.0
+  description: Initial release.
+module:
+  inputs:
+    - $include: ../../partials/inputs/aws-account.yml
+    - $merge:
+        - ../../partials/inputs/aws-region.yml
+      description: KMS keys are regional. The key can only be used in this region unless it is a multi-Region key.
+    - id: section_key
+      label: Key
+      type: section
+    - default: <<project.given_id>>-<<environment.given_id>>-<<module.given_id>>
+      description: Name for the key. Used as the alias suffix and in the key's tags.
+      id: name
+      label: Name slug
+      patterns:
+        - message: Use 1-64 letters, numbers, hyphens, underscores, or forward slashes.
+          pattern: ^[a-zA-Z0-9/_-]{1,64}$
+      required: true
+      type: string
+    - description: Free-form description shown on the key in the AWS console. Defaults to a generated string referencing the name.
+      id: description
+      label: Description
+      placeholder: Signing key for release artifacts
+      type: string
+    - collapsible: true
+      description: Alias name without the `alias/` prefix. Defaults to the name slug. Consumers should reference the alias rather than the key ID, because the alias survives key replacement.
+      id: alias
+      label: Alias
+      patterns:
+        - message: Use letters, numbers, hyphens, underscores, or forward slashes.
+          pattern: ^[a-zA-Z0-9/_-]+$
+      placeholder: my-signing-key
+      type: string
+    - id: section_cryptographic_configuration
+      label: Cryptographic configuration
+      type: section
+    - default: ENCRYPT_DECRYPT
+      description: What the key is used for. Must be supported by the chosen key type. Changing this replaces the key, so it cannot be changed after the first apply.
+      id: key_usage
+      immutable: true
+      label: Key usage
+      required: true
+      type: string
+      values:
+        - label: Encrypt and decrypt
+          description: Symmetric or RSA key used to protect data.
+          value: ENCRYPT_DECRYPT
+        - label: Sign and verify
+          description: RSA, ECC, or SM2 key used to produce and check signatures.
+          value: SIGN_VERIFY
+        - label: Generate and verify MAC
+          description: HMAC key used to produce and check message authentication codes.
+          value: GENERATE_VERIFY_MAC
+        - label: Key agreement
+          description: ECC or SM2 key used to derive a shared secret with another party.
+          value: KEY_AGREEMENT
+    - default: SYMMETRIC_DEFAULT
+      description: Cryptographic type of the key material. Each option lists the key usages AWS allows with it. Changing this replaces the key, so it cannot be changed after the first apply.
+      id: key_spec
+      immutable: true
+      label: Key type
+      required: true
+      type: string
+      values:
+        - label: Symmetric (AES-256)
+          description: Encrypt and decrypt. The AWS default, and the only type that supports automatic rotation.
+          value: SYMMETRIC_DEFAULT
+        - label: RSA 2048
+          description: Sign and verify, or encrypt and decrypt. Smallest RSA key, fastest operations.
+          value: RSA_2048
+        - label: RSA 3072
+          description: Sign and verify, or encrypt and decrypt.
+          value: RSA_3072
+        - label: RSA 4096
+          description: Sign and verify, or encrypt and decrypt. Strongest RSA key, slowest operations.
+          value: RSA_4096
+        - label: ECC NIST P-256
+          description: Sign and verify, or key agreement. Compact signatures, widely supported.
+          value: ECC_NIST_P256
+        - label: ECC NIST P-384
+          description: Sign and verify, or key agreement.
+          value: ECC_NIST_P384
+        - label: ECC NIST P-521
+          description: Sign and verify, or key agreement.
+          value: ECC_NIST_P521
+        - label: ECC SECG P-256k1
+          description: Sign and verify. The curve used by Bitcoin and Ethereum.
+          value: ECC_SECG_P256K1
+        - label: HMAC 224
+          description: Generate and verify MAC.
+          value: HMAC_224
+        - label: HMAC 256
+          description: Generate and verify MAC.
+          value: HMAC_256
+        - label: HMAC 384
+          description: Generate and verify MAC.
+          value: HMAC_384
+        - label: HMAC 512
+          description: Generate and verify MAC.
+          value: HMAC_512
+        - label: SM2
+          description: Encrypt and decrypt, sign and verify, or key agreement. Available in China regions only.
+          value: SM2
+    - default: true
+      description: Rotate the key material automatically every year. AWS only supports automatic rotation for symmetric keys.
+      id: key_rotation_enabled
+      label: Automatic key rotation
+      show_when:
+        key_spec: SYMMETRIC_DEFAULT
+      type: boolean
+    - default: false
+      description: Create the key as a multi-Region primary, so replicas can be created in other regions later. Changing this replaces the key, so it cannot be changed after the first apply.
+      id: multi_region_enabled
+      immutable: true
+      label: Multi-Region key
+      type: boolean
+    - default: 30
+      description: Waiting period before a scheduled deletion becomes permanent. During this window the deletion can still be cancelled and the key recovered.
+      id: deletion_window_in_days
+      label: Deletion waiting period (days)
+      max: 30
+      min: 7
+      type: number
+    - id: section_access
+      label: Access
+      type: section
+    - add_button_label: Add role ARN
+      collapsible: true
+      default: []
+      description: IAM roles that may use the key for the cryptographic operations its usage allows, such as encrypt and decrypt, or verify. Signing is granted separately below. Leave empty to provision the key before its consumers exist.
+      id: key_user_role_arns
+      label: Key users
+      patterns:
+        - message: Use an IAM ARN, for example arn:aws:iam::123456789012:role/my-role.
+          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+      placeholder: arn:aws:iam::123456789012:role/my-service
+      type: string_array
+    - add_button_label: Add role ARN
+      collapsible: true
+      default: []
+      description: IAM roles that may sign with the key, or generate MACs. Applies only when the key usage is sign and verify, or generate and verify MAC. Granted alongside describe and get-public-key so signers can introspect the key.
+      id: signer_role_arns
+      label: Signers
+      patterns:
+        - message: Use an IAM ARN, for example arn:aws:iam::123456789012:role/my-role.
+          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+      placeholder: arn:aws:iam::123456789012:role/my-signer
+      type: string_array
+    - add_button_label: Add role ARN
+      collapsible: true
+      default: []
+      description: IAM roles that may read the public half of an asymmetric key. Does not grant signing or verification, so a compromised reader cannot forge or check signatures.
+      id: public_key_reader_role_arns
+      label: Public key readers
+      patterns:
+        - message: Use an IAM ARN, for example arn:aws:iam::123456789012:role/my-role.
+          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+      placeholder: arn:aws:iam::123456789012:role/my-jwks-publisher
+      type: string_array
+    - add_button_label: Add role ARN
+      collapsible: true
+      default: []
+      description: IAM roles that may administer the key, including alias management, policy updates, and scheduling deletion. Does not grant cryptographic operations. Leave empty to rely on the account's own IAM permissions, which is the standard AWS pattern.
+      id: key_administrator_role_arns
+      label: Key administrators
+      patterns:
+        - message: Use an IAM ARN, for example arn:aws:iam::123456789012:role/my-role.
+          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+      placeholder: arn:aws:iam::123456789012:role/platform-admin
+      type: string_array
+    - $include: ../../partials/inputs/misc-section.yml
+    - $include: ../../partials/inputs/tags.yml
+    - $include: ../../partials/inputs/terraform-settings.yml
+    - $merge:
+        - ../../partials/inputs/execution-environment.yml
+      description: Override the VPC, subnet, and security group for Terraform runners. Must use the same AWS account as selected above.
+  stack:
+    $template: ../../partials/templates/opentofu-stack.yml
+    with:
+      base_path: security/kms
+      terraform_variables:
+        ...overrides: << module.input.advanced_terraform_variables >>
+        alias: << module.input.alias >>
+        deletion_window_in_days: << module.input.deletion_window_in_days >>
+        description: << module.input.description >>
+        key_administrator_role_arns: << module.input.key_administrator_role_arns || [] >>
+        key_rotation_enabled: << module.input.key_rotation_enabled >>
+        key_spec: << module.input.key_spec >>
+        key_usage: << module.input.key_usage >>
+        key_user_role_arns: << module.input.key_user_role_arns || [] >>
+        multi_region_enabled: << module.input.multi_region_enabled >>
+        name: << module.input.name >>
+        public_key_reader_role_arns: << module.input.public_key_reader_role_arns || [] >>
+        region: << module.input.aws_region >>
+        signer_role_arns: << module.input.signer_role_arns || [] >>
+        tags:
+          $include: ../../partials/stack/ravion-tags.yml
+  readme: |
+    Creates a customer-managed AWS KMS key with an alias and a key policy scoped to the principals you name.
+
+    ## Overview
+
+    Use this module when a service needs its own encryption, signing, or MAC key rather than an AWS-managed one. The module creates the key, an alias that stays stable across key replacement, and a key policy built from the roles you list.
+
+    Key material is generated inside AWS KMS and can never be exported. Every use of the key is recorded in CloudTrail.
+
+    ## Use cases
+
+    | Scenario | Key type and usage |
+    | --- | --- |
+    | Envelope encryption for application data | Symmetric (AES-256), encrypt and decrypt |
+    | Signing JWTs for an identity provider | RSA 2048, sign and verify |
+    | Signing release artifacts | RSA 3072, sign and verify |
+    | Compact signatures for device or token flows | ECC NIST P-256, sign and verify |
+    | Message authentication codes | HMAC 256, generate and verify MAC |
+
+    ## Choosing the key type
+
+    Key type and Key usage must be a pair AWS supports. Each Key type option lists the usages allowed with it: symmetric keys encrypt and decrypt, RSA keys either sign or encrypt, ECC keys sign or derive shared secrets, and HMAC keys produce MACs.
+
+    Both settings are fixed after the first apply. AWS cannot change the cryptographic shape of an existing key, so a change would mean destroying the key and creating a new one, which permanently loses the ability to decrypt existing data or to verify existing signatures.
+
+    ## Access
+
+    The key policy grants nothing by default beyond the account's standard root delegation, which is what lets IAM policies in the account grant access to the key. Add roles to the lists to grant access in the key policy itself:
+
+    | List | Grants |
+    | --- | --- |
+    | Key users | The cryptographic operations the key's usage allows, such as encrypt and decrypt, or verify |
+    | Signers | Signing, or MAC generation, plus describe and get-public-key |
+    | Public key readers | Reading the public half of an asymmetric key, and nothing else |
+    | Key administrators | Alias management, policy updates, and scheduling deletion, but no cryptographic operations |
+
+    Every list is empty by default, so the key can be provisioned before the roles that consume it exist. Roles created later can also be granted access through their own IAM policies without changing this module.
+
+    ## Rotation
+
+    Automatic key rotation applies to symmetric keys only, and is on by default for them. AWS rotates the key material annually while keeping the key ID and alias unchanged, so consumers need no change and older data stays decryptable.
+
+    Asymmetric and HMAC keys cannot rotate automatically. Rotate them by creating a new key, publishing it alongside the old one, moving consumers over, and then retiring the old key.
+
+    ## Deletion
+
+    KMS keys cannot be deleted immediately. A deletion is scheduled, and the waiting period, 30 days by default, is how long you have to cancel it. Shorten it only when the key protects nothing you would need to recover.
+
+    ## Configuration
+
+    | Setting | Required | Default | Notes |
+    | --- | --- | --- | --- |
+    | AWS account | Yes | None | AWS account where the key is created. |
+    | Region | Yes | None | KMS keys are regional. |
+    | Name slug | Yes | Project, environment, and module given IDs | Alias suffix and tag value. |
+    | Description | No | Generated from the name | Shown on the key in the AWS console. |
+    | Alias | No | Name slug | Stable handle consumers should reference. |
+    | Key usage | Yes | Encrypt and decrypt | Fixed after the first apply. |
+    | Key type | Yes | Symmetric (AES-256) | Fixed after the first apply. |
+    | Automatic key rotation | No | true | Symmetric keys only. |
+    | Multi-Region key | No | false | Fixed after the first apply. |
+    | Deletion waiting period | No | 30 | Between 7 and 30 days. |
+    | Key users | No | Empty | Cryptographic operations for the key's usage. |
+    | Signers | No | Empty | Signing or MAC generation. |
+    | Public key readers | No | Empty | Public half only. |
+    | Key administrators | No | Empty | Administration without key use. |
+    | Tags | No | Standard Ravion tags | Merged with Ravion ownership and identity tags. |
+    | Advanced Terraform variables | No | Empty object | Escape hatch for one-off Terraform variable overrides. |
+    | Ravion Terraform workspace name | No | Generated from project, environment, module, and stack IDs | Override only when you need a specific backend workspace name. |
+
+    ## Design decisions
+
+    Access lists are separated by capability rather than exposing a raw key policy document. Signing is split from key use, and reading a public key is split from both, so a consumer that only needs the public half cannot sign with the key.
+
+    The deletion waiting period defaults to the AWS maximum. A key is often the only way to recover data or to verify past signatures, so the default favors the longest possible recovery window.
+
+    Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
+
+    ## Learn more
+
+    - [AWS KMS key types and usage](https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose.html)
+    - [AWS KMS key policies](https://docs.aws.amazon.com/kms/latest/developerguide/key-policies.html)
+    - [Rotating AWS KMS keys](https://docs.aws.amazon.com/kms/latest/developerguide/rotate-keys.html)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/security/kms)

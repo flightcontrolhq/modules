@@ -74,6 +74,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-ecs-worker` | ECS Worker | v1.1.0 | `compute/ecs_service/` |
 | `rvn-efs` | EFS File System | v1.0.1 | `storage/efs/` |
 | `rvn-elasticache` | ElastiCache | v1.0.1 | `cache/elasticache/` |
+| `rvn-kms` | KMS Key | v1.0.0 | `security/kms/` |
 | `rvn-lambda` | Lambda Function | v1.1.0 | `compute/lambda/` |
 | `rvn-rds` | RDS Database | v1.2.0 | `database/rds/` |
 | `rvn-rds-proxy` | RDS Proxy | v0.1.0 | `database/rds-proxy/` |
