@@ -78,9 +78,11 @@ jobs:
           recipients="$(
             jq -cn \
               --arg reviewer "${REVIEWER}" \
+              --arg requested_by "${requested_by_login}" \
               --argjson requested "${REQUESTED_REVIEWERS}" \
               --argjson assignees "${ASSIGNEES}" '
-                (($requested + $assignees)
+                (($requested + $assignees +
+                    (if $requested_by == "" then [] else [{login: $requested_by}] end))
                   | map(.login)
                   | map(select(type == "string"))
                   | map(select((ascii_downcase) != ($reviewer | ascii_downcase)))
