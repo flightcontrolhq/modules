@@ -31,6 +31,111 @@ describe("publish", () => {
     assert.deepEqual(client.createdVersions.map(({ moduleDefinitionId, version, description, config }) => ({ moduleDefinitionId, version, description, config })), [
       { moduleDefinitionId: "definition-1", version: "1.2.3", description: "Add subnet options.", config: { inputs: [{ id: "name", type: "string", label: "Name" }] } },
     ]);
+    assert.deepEqual(client.dryRunVersions, [
+      { moduleDefinitionId: "definition-1", version: "1.2.3", description: "Add subnet options.", config: { inputs: [{ id: "name", type: "string", label: "Name" }] } },
+    ]);
+  });
+
+  it("does not globally publish a new definition when its first version fails validation", async () => {
+    const client = new MockRavionClient();
+    client.onDryRunVersion = async () => {
+      throw new Error("Config is invalid");
+    };
+
+    await assert.rejects(
+      () => publishDefinitions([createCompiledDefinition()], client, { dryRun: false }),
+      /Config is invalid/,
+    );
+
+    assert.equal(client.createdDefinitions.length, 1);
+    assert.equal(client.createdVersions.length, 0);
+    assert.equal(client.patchedDefinitions.length, 0);
+  });
+
+  it("does not globally publish a new definition when its first version fails creation", async () => {
+    const client = new MockRavionClient();
+    client.onCreateVersion = async () => {
+      throw new Error("Version creation failed");
+    };
+
+    await assert.rejects(
+      () => publishDefinitions([createCompiledDefinition()], client, { dryRun: false }),
+      /Version creation failed/,
+    );
+
+    assert.equal(client.dryRunVersions.length, 1);
+    assert.equal(client.patchedDefinitions.length, 0);
+  });
+
+  it("globally publishes an existing private definition after confirming its version", async () => {
+    const compiled = createCompiledDefinition();
+    const client = new MockRavionClient({
+      definitions: [
+        {
+          id: "vpc",
+          type: "ravion-aws-vpc",
+          name: "AWS VPC",
+          description: "AWS VPC and subnets.",
+          isGlobalPublished: false,
+        },
+      ],
+      versionsByDefinitionId: { vpc: [createRemoteVersion({ config: compiled.module })] },
+    });
+
+    const result = await publishDefinitions([compiled], client, { dryRun: false });
+
+    assert.deepEqual(result.items.map(({ action }) => action), ["skip-version", "patch-definition"]);
+    assert.deepEqual(client.patchedDefinitions, [{ id: "vpc", isGlobalPublished: true }]);
+  });
+
+  it("shows global publication of an existing private definition in the dry-run plan", async () => {
+    const compiled = createCompiledDefinition();
+    const client = new MockRavionClient({
+      definitions: [
+        {
+          id: "vpc",
+          type: "ravion-aws-vpc",
+          name: "AWS VPC",
+          description: "AWS VPC and subnets.",
+          isGlobalPublished: false,
+        },
+      ],
+      versionsByDefinitionId: { vpc: [createRemoteVersion({ config: compiled.module })] },
+    });
+
+    const result = await publishDefinitions([compiled], client);
+    const markdown = formatPublishPlanMarkdown(result);
+
+    assert.match(markdown, /\| `ravion-aws-vpc` \| `1\.2\.3` \| `1\.2\.3` \| Make the module definition available globally\. \|/);
+    assert.match(markdown, /-isGlobalPublished: false/);
+    assert.match(markdown, /\+isGlobalPublished: true/);
+    assert.equal(client.patchedDefinitions.length, 0);
+  });
+
+  it("shows global publication when an existing private definition needs a new version", async () => {
+    const compiled = createCompiledDefinition();
+    const client = new MockRavionClient({
+      definitions: [
+        {
+          id: "vpc",
+          type: "ravion-aws-vpc",
+          name: "AWS VPC",
+          description: "AWS VPC and subnets.",
+          isGlobalPublished: false,
+        },
+      ],
+      versionsByDefinitionId: {
+        vpc: [createRemoteVersion({ version: "1.2.2", config: { inputs: [] } })],
+      },
+    });
+
+    const result = await publishDefinitions([compiled], client);
+    const markdown = formatPublishPlanMarkdown(result);
+
+    assert.deepEqual(result.items.map(({ action }) => action), ["create-version", "patch-definition"]);
+    assert.match(markdown, /\| `ravion-aws-vpc` \| `1\.2\.2` \| `1\.2\.3` \| Add subnet options\. \|/);
+    assert.match(markdown, /-isGlobalPublished: false/);
+    assert.match(markdown, /\+isGlobalPublished: true/);
   });
 
   it("validates pending module versions through the server dry-run API", async () => {
