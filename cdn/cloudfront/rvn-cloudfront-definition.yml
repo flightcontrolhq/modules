@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 release:
-  version: 1.1.0
-  description: Add standalone ALB origins, including optional private VPC origins.
+  version: 1.2.0
+  description: Make normalized Markdown negotiation the recommended CloudFront cache policy.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -357,11 +357,14 @@ module:
     - id: cache_policy
       label: Cache policy
       type: string
-      description: Controls edge caching for the default behavior. The default respects your app's Cache-Control headers, so nothing is cached unless the app asks for it.
+      description: Controls edge caching for the default behavior. The recommended option respects your app's Cache-Control headers and keeps HTML and Markdown in separate cache entries.
       required: true
-      default: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
+      default: managed_accept
       values:
-        - label: UseOriginCacheControlHeaders-QueryStrings (recommended)
+        - label: UseOriginCacheControlHeaders-QueryStrings with normalized Markdown negotiation (recommended)
+          description: Caches only responses with Cache-Control headers from your app. Query strings and a normalized Markdown preference are part of the cache key.
+          value: managed_accept
+        - label: UseOriginCacheControlHeaders-QueryStrings
           description: Caches only responses with Cache-Control headers from your app. Query strings are part of the cache key.
           value: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
         - label: UseOriginCacheControlHeaders
@@ -695,14 +698,15 @@ module:
       base_path: cdn/cloudfront
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
+        accept_header_cache_key_creation_enabled: << module.input.cache_policy == "managed_accept" >>
         default_cache_behavior:
           allowed_methods: >-
             << module.input.allowed_methods == "all" ? ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH",
             "POST", "PUT"] : module.input.allowed_methods == "read_options" ? ["GET", "HEAD", "OPTIONS"] :
             ["GET", "HEAD"] >>
           cache_policy_id: >-
-            << module.input.cache_policy == "custom" ? module.input.cache_policy_custom_id :
-            module.input.cache_policy >>
+            << module.input.cache_policy == "managed_accept" ? nil : module.input.cache_policy == "custom" ?
+            module.input.cache_policy_custom_id : module.input.cache_policy >>
           origin_request_policy_id: >-
             << module.input.origin_request_policy == "custom" ?
             module.input.origin_request_policy_custom_id : module.input.origin_request_policy == "none" ? nil :
@@ -877,7 +881,7 @@ module:
 
     Redirect rules run at viewer request time before CloudFront checks its cache or contacts an origin. Rules are evaluated in order and the first match wins. Sources and destinations accept absolute HTTPS URLs or host-agnostic paths. Use `:name` to capture one path segment and a final `:name*` to capture the remaining path, then place those named values anywhere in the destination. Query preservation is optional and disabled by default.
 
-    The managed redirect function is attached to the default cache behavior and every custom cache behavior so redirects cover every request path. CloudFront allows only one viewer-request edge association per behavior, so redirect rules cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
+    The managed viewer-request function is attached to the default cache behavior and every custom cache behavior. It handles redirects when configured and can normalize Markdown negotiation into a two-value cache key when the managed cache policy is selected. CloudFront allows only one viewer-request edge association per behavior, so these features cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
 
     The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
 
@@ -903,13 +907,13 @@ module:
 
     | Setting | Default | Why |
     | --- | --- | --- |
-    | Cache policy | UseOriginCacheControlHeaders-QueryStrings | Caches only responses where the app sends Cache-Control headers |
+    | Cache policy | UseOriginCacheControlHeaders-QueryStrings with normalized Markdown negotiation | Caches only responses where the app sends Cache-Control headers and keeps HTML and Markdown in separate cache entries |
     | Origin request policy | AllViewer | Forwards Host, cookies, and query strings so app sessions and ALB routing work |
     | Require signed URLs | false | Allows public viewer access unless enabled with trusted key groups |
     | Allowed methods | Read only | Only GET and HEAD reach the origin; choose Read and OPTIONS or All methods to accept form posts and API writes |
     | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
 
-    With the default cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
+    With the recommended cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. The normalized Markdown negotiation option creates a module-managed policy and viewer-request function that keep HTML and Markdown in two separate cache entries. The selected origin request policy must forward the Accept header, or the origin cannot negotiate Markdown and may return HTML for every request. Choose the plain UseOriginCacheControlHeaders-QueryStrings policy when the origin does not serve Markdown, CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
 
     Response headers policy is optional and adds headers such as the SecurityHeadersPolicy set or CORS headers to every response.
 
@@ -971,7 +975,7 @@ module:
     | Redirect rules | No | [] | Ordered URL-pattern redirects returned before contacting an origin |
     | Viewer protocol policy | Yes | Redirect to HTTPS | How viewers connect to CloudFront |
     | Allowed methods | Yes | Read only | GET and HEAD only; switch to Read and OPTIONS or All methods for apps that write |
-    | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings | AWS managed policies by name, or a custom policy ID |
+    | Cache policy | Yes | UseOriginCacheControlHeaders-QueryStrings with normalized Markdown negotiation | AWS managed policies by name, a module-managed normalized Markdown policy, or a custom policy ID |
     | Origin request policy | Yes | AllViewer | AWS managed policies by name, or a custom policy ID |
     | Require signed URLs | No | false | Requires signed URLs or signed cookies on the default behavior |
     | Trusted key group IDs | When signed URLs are enabled | [] | Existing CloudFront key groups trusted for signatures |
