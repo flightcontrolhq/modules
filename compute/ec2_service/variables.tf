@@ -95,6 +95,17 @@ variable "runtime" {
   }
 }
 
+variable "docker_socket_mount_enabled" {
+  type        = bool
+  description = "Mount the host Docker socket into the container and add the host docker group's GID. This grants the container root-equivalent control of the instance: it can start privileged containers, read the host filesystem, and use the instance role. Only meaningful for the container runtime."
+  default     = false
+
+  validation {
+    condition     = !var.docker_socket_mount_enabled || var.runtime == "container"
+    error_message = "The docker_socket_mount_enabled can only be true when runtime is 'container'."
+  }
+}
+
 variable "app_port" {
   type        = number
   description = "Port the app listens on. Required when a load balancer is attached or a local health check path is set."
