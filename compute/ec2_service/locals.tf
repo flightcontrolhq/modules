@@ -44,9 +44,11 @@ locals {
   })
 
   supervisor_program_script = templatefile("${path.module}/templates/configure_supervisor_program.sh.tpl", {
-    app_runner_path    = local.app_runner_path
-    supervisor_conf    = local.supervisor_conf
-    supervisor_program = local.supervisor_program
+    app_runner_path           = local.app_runner_path
+    log_rotation_backup_count = var.log_rotation_backup_count
+    log_rotation_max_size_mb  = var.log_rotation_max_size_mb
+    supervisor_conf           = local.supervisor_conf
+    supervisor_program        = local.supervisor_program
   })
 
   # Env-file builder script shared by instance boot and both deploy modes.

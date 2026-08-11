@@ -36,6 +36,10 @@ App stdout and stderr are shipped to `/ravion/ec2/<name>`. Streams use `deployme
 
 New instances launched by the Auto Scaling Group boot from the launch template but hold no release until the orchestrator repeats the deploy against them.
 
+## App log rotation
+
+Supervisord rotates the on-instance app log rather than letting a crash-looping process fill the root volume: `log_rotation_max_size_mb` (default 20) and `log_rotation_backup_count` (default 5) bound on-instance usage to `(backups + 1) * max size` per deployment log. The module writes the supervisord program config on every deploy, after any deploy commands run, so these settings cannot be overridden from a deploy command; change them through the module inputs instead. Replacement instances get the same configuration from the launch template.
+
 ## Usage
 
 ### Web service running a container
@@ -181,6 +185,8 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | ecr_force_deletion_enabled | Delete the ECR repository even with images | `bool` | `false` | no |
 | ecr_scan_on_push_enabled | Scan images for vulnerabilities after push | `bool` | `true` | no |
 | log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
+| log_rotation_max_size_mb | Size at which supervisord rotates the on-instance app log | `number` | `20` | no |
+| log_rotation_backup_count | Rotated app log files kept on the instance | `number` | `5` | no |
 
 ## Outputs
 

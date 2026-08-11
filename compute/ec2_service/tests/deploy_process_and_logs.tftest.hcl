@@ -96,6 +96,65 @@ run "container_is_supervised_and_logs_per_deployment" {
     error_message = "The log stream output must select all deployment-scoped streams."
   }
 
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "stdout_logfile_maxbytes=20MB") && strcontains(aws_ssm_document.deploy.content, "stdout_logfile_backups=5")
+    error_message = "Container deploys must bound the app log with nonzero Supervisor rotation settings."
+  }
+
+  assert {
+    condition     = !strcontains(aws_ssm_document.deploy.content, "stdout_logfile_maxbytes=0")
+    error_message = "Rotation must never be disabled for the app log."
+  }
+
+  assert {
+    condition = alltrue([
+      for setting in ["stopsignal=TERM", "stopwaitsecs=30", "stopasgroup=true", "killasgroup=true", "redirect_stderr=true"] :
+      strcontains(aws_ssm_document.deploy.content, setting)
+    ])
+    error_message = "Rotation must not disturb the existing shutdown and stream-merging behavior."
+  }
+
+}
+
+run "log_rotation_settings_are_configurable" {
+  command = plan
+
+  variables {
+    runtime                   = "container"
+    log_rotation_max_size_mb  = 50
+    log_rotation_backup_count = 2
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.deploy.content, "stdout_logfile_maxbytes=50MB") && strcontains(aws_ssm_document.deploy.content, "stdout_logfile_backups=2")
+    error_message = "Configured rotation settings must reach the generated Supervisor program config."
+  }
+}
+
+run "log_rotation_rejects_disabling_rotation" {
+  command = plan
+
+  variables {
+    runtime                  = "container"
+    log_rotation_max_size_mb = 0
+  }
+
+  expect_failures = [var.log_rotation_max_size_mb]
+}
+
+run "log_rotation_rejects_fractional_values" {
+  command = plan
+
+  variables {
+    runtime                   = "container"
+    log_rotation_max_size_mb  = 1.5
+    log_rotation_backup_count = 2.5
+  }
+
+  expect_failures = [
+    var.log_rotation_max_size_mb,
+    var.log_rotation_backup_count,
+  ]
 }
 
 run "manual_start_command_is_supervised" {

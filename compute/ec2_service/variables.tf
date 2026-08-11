@@ -522,3 +522,25 @@ variable "log_retention_in_days" {
     error_message = "The log_retention_in_days must be at least 1."
   }
 }
+
+variable "log_rotation_max_size_mb" {
+  type        = number
+  description = "Maximum size of the on-instance app log file before supervisord rotates it. Bounds disk usage when a process restarts repeatedly."
+  default     = 20
+
+  validation {
+    condition     = var.log_rotation_max_size_mb == floor(var.log_rotation_max_size_mb) && var.log_rotation_max_size_mb >= 1 && var.log_rotation_max_size_mb <= 1024
+    error_message = "The log_rotation_max_size_mb must be a whole number between 1 and 1024."
+  }
+}
+
+variable "log_rotation_backup_count" {
+  type        = number
+  description = "Number of rotated app log files supervisord keeps on the instance. Total on-instance app log usage is bounded by (backups + 1) * log_rotation_max_size_mb."
+  default     = 5
+
+  validation {
+    condition     = var.log_rotation_backup_count == floor(var.log_rotation_backup_count) && var.log_rotation_backup_count >= 1 && var.log_rotation_backup_count <= 100
+    error_message = "The log_rotation_backup_count must be a whole number between 1 and 100."
+  }
+}
