@@ -22,7 +22,7 @@ This module creates an AWS Network Load Balancer (NLB) with optional access logg
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "main"
   vpc_id     = module.vpc.vpc_id
@@ -35,7 +35,7 @@ module "nlb" {
 
 # Service modules create their own listeners and target groups
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   # ... service configuration ...
 
@@ -58,7 +58,7 @@ module "api_service" {
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "internal"
   vpc_id     = module.vpc.vpc_id
@@ -82,7 +82,7 @@ resource "aws_eip" "nlb" {
 }
 
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "static-ip"
   vpc_id     = module.vpc.vpc_id
@@ -97,7 +97,7 @@ module "nlb" {
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "logged"
   vpc_id     = module.vpc.vpc_id
@@ -113,7 +113,7 @@ module "nlb" {
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "logged"
   vpc_id     = module.vpc.vpc_id
@@ -131,7 +131,7 @@ Enable cross-zone load balancing to distribute traffic evenly across all targets
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "cross-zone"
   vpc_id     = module.vpc.vpc_id
@@ -147,7 +147,7 @@ The module creates a managed security group that can be referenced by downstream
 
 ```hcl
 module "nlb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/nlb?ref=v1.0.0"
 
   name       = "secured"
   vpc_id     = module.vpc.vpc_id

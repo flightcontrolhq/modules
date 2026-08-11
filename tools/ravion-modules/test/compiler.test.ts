@@ -43,7 +43,7 @@ describe("compiler", () => {
             variant: "standard",
             input: {
               source: {
-                repo: "https://github.com/flightcontrolhq/modules",
+                repo: "https://github.com/ravionhq/modules",
                 ref: "ravion-aws-vpc@1.2.3",
                 base_path: "networking/vpc",
               },
@@ -54,7 +54,7 @@ describe("compiler", () => {
         ravion_state_backend_workspace: "<< module.given_id >>",
         type: "opentofu",
         source: {
-          repo: "https://github.com/flightcontrolhq/modules",
+          repo: "https://github.com/ravionhq/modules",
           ref: "ravion-aws-vpc@1.2.3",
           base_path: "networking/vpc",
         },
@@ -62,7 +62,7 @@ describe("compiler", () => {
       deploy: {
         strategy: "rolling",
       },
-      readme: "Terraform source https://github.com/flightcontrolhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
+      readme: "Terraform source https://github.com/ravionhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
       settings: {
         advanced: {
           retries: 2,
@@ -92,6 +92,20 @@ describe("compiler", () => {
     assert.equal(
       getTerraformVariable(compiled.module, "cloudwatch_alarm_memory_threshold"),
       "<< module.input.cloudwatch_alarm_memory_threshold_mib != null ? int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) : 268435456 >>",
+    );
+  });
+
+  it("compiles database password preservation with a false fallback when the input is hidden", async () => {
+    const rds = await compileDefinitionFile(join(repoRoot, "database", "rds", "rvn-rds-definition.yml"));
+    const aurora = await compileDefinitionFile(join(repoRoot, "database", "aurora", "rvn-aurora-definition.yml"));
+
+    assert.equal(
+      getTerraformVariable(rds.module, "master_user_password_preservation_enabled"),
+      "<< module.input.master_user_password_preservation_enabled || false >>",
+    );
+    assert.equal(
+      getTerraformVariable(aurora.module, "master_user_password_preservation_enabled"),
+      "<< module.input.master_user_password_preservation_enabled || false >>",
     );
   });
 

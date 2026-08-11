@@ -3,11 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 1.0.0
-  description: >-
-    First stable release. Assign ALB listener rule priorities at apply time when
-    no explicit priority is set, so multiple services can share a listener
-    without priority conflicts.
+  version: 1.1.0
+  description: Add Builder IAM policies inputs that attach extra IAM managed policies to the EC2 build runner role or replace the step default policies entirely for the duration of each build.
 module:
   inputs:
     - id: section_cluster
@@ -318,7 +315,7 @@ module:
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
           ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
+          repo: https://github.com/ravionhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
             $merge:
@@ -587,7 +584,7 @@ module:
 
     The module is intentionally focused on web services behind an Application Load Balancer. It uses the selected ECS cluster to inherit AWS account, region, VPC, subnets, capacity providers, load balancer listeners, and load balancer security groups.
 
-    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+    Terraform source: [ravionhq/modules/compute/ecs_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ecs_service)
 
     ## Use cases
 

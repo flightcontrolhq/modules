@@ -1,6 +1,6 @@
 # EC2 Service
 
-Runs an app on a stable group of EC2 instances behind an optional Application Load Balancer, with in-place deploys pushed through SSM Run Command. Instances are managed by an Auto Scaling Group but are never replaced by deploys, so per-instance state (root volume, optional data volume) survives every release.
+Runs an app on a stable group of EC2 instances behind an optional Application Load Balancer, with in-place deploys pushed through SSM Run Command. Instances are managed by an Auto Scaling Group but are never replaced by deploys, so per-instance state (root volume, optional data volume) persists for the life of each instance.
 
 Two runtimes are supported:
 
@@ -8,6 +8,8 @@ Two runtimes are supported:
 - **manual** — deploys can check out an authenticated Git source, run release preparation commands, then start the configured long-lived command under supervisord.
 
 Instances install the prerequisites for both runtimes at launch, so `runtime` can switch between `container` and `manual` without replacing the instance group. Supervisord owns the app in both modes and restarts it after an unexpected exit.
+
+Container workloads that need to orchestrate sibling containers can enable `docker_socket_mount_enabled`. The deploy runner then bind-mounts `/var/run/docker.sock` at the identical path inside the app container and adds the host `docker` group's GID at container-start time. The image must include a `docker` CLI. This is Docker-outside-of-Docker: mounting the host Docker socket grants the container root-equivalent control of the instance, including the ability to start privileged containers, read the host filesystem, and use the instance role. Leave it disabled unless this level of access is required.
 
 ## How deploys work
 
@@ -40,7 +42,7 @@ New instances launched by the Auto Scaling Group boot from the launch template b
 
 ```hcl
 module "web" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ec2_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//compute/ec2_service?ref=v1.0.0"
 
   name       = "my-web"
   vpc_id     = "vpc-0123456789abcdef0"
@@ -87,7 +89,7 @@ module "web" {
 
 ```hcl
 module "worker" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//compute/ec2_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//compute/ec2_service?ref=v1.0.0"
 
   name       = "my-worker"
   vpc_id     = "vpc-0123456789abcdef0"
@@ -112,11 +114,14 @@ aws ssm send-command \
   --parameters commands='["cd /srv/app && git pull","cd /srv/app && ./bin/migrate"]'
 ```
 
-## Stable storage
+## Storage and durability
 
-- The root volume and optional data volume are per-instance EBS. They survive every in-place deploy because instances are not replaced, but they are lost when the Auto Scaling Group terminates the instance.
-- For storage that must survive instance termination, mount an EFS file system (`efs_*` variables); it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
-- Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh.
+- The root volume and optional data volume are per-instance EBS. They are durable for the life of the instance: deploys, restarts, and stack updates never replace an instance, so local files such as an embedded database stay in place at local-disk latency, exactly as on an EC2 instance you launch yourself.
+- They are deleted with the instance, which happens for exactly three reasons: you terminate or recycle it (for example to roll out a new AMI), the group scales in, or it fails its Auto Scaling health check. Keep backups (EBS snapshots, dumps to S3) for critical data instead of avoiding local storage.
+- `health_check_type` defaults to `EC2`, which is the AWS instance/system status check — unreachable instance, broken boot or network state, failed underlying host. It ignores application state: a crashed app is restarted in place by supervisord, and a failing HTTP health check never replaces an instance. So health-driven replacement is rare and tied to hardware or hypervisor failure. Setting `health_check_type = "ELB"` makes load balancer health replace instances instead, which also breaks in-place deploys (they briefly deregister the instance).
+- Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
+- When `docker_socket_mount_enabled` is enabled, the data volume and EFS host paths are mapped identically inside the app container. This lets sibling containers started through the host Docker socket resolve those same host-path binds correctly.
+- Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh, so applying a new AMI never replaces running instances by itself. Recycling instances to pick up the new AMI is a replacement, and it deletes their volumes.
 
 ## Requirements
 
@@ -140,6 +145,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | additional_security_group_ids | Extra security groups on the instances | `list(string)` | `[]` | no |
 | direct_access_cidr_blocks | IPv4 CIDRs allowed to reach the app port directly | `list(string)` | `[]` | no |
 | runtime | `container` or `manual` | `string` | n/a | yes |
+| docker_socket_mount_enabled | Mount the host Docker socket and add the host `docker` group GID (container mode only; grants root-equivalent control of the instance) | `bool` | `false` | no |
 | app_port | Port the app listens on | `number` | `null` | no |
 | container_start_command | Optional container start command overriding the image CMD | `string` | `null` | no |
 | manual_start_command | Long-running foreground manual app command managed by supervisord | `string` | `null` | yes for manual |

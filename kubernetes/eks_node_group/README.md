@@ -13,7 +13,7 @@ else.
 
 ```hcl
 module "system_nodes" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//kubernetes/eks_node_group?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//kubernetes/eks_node_group?ref=v1.0.0"
 
   cluster_name = module.eks.cluster_name
   name         = "system"

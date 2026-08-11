@@ -64,7 +64,7 @@ Every deployment is **versioned**. A CloudFront KeyValueStore holds a `host -> v
 
 ```hcl
 module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
   name = "my-app"
 
@@ -83,7 +83,7 @@ The viewer-response function automatically classifies every response as HTML or 
 
 ```hcl
 module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
   name    = "my-docs"
   routing = "filesystem"
@@ -101,7 +101,7 @@ module "site" {
 
 ```hcl
 module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
   name = "my-app"
 
@@ -273,7 +273,7 @@ CloudFront allows exactly one response-headers policy per cache behavior, so pre
 
 ```hcl
 module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
   name = "my-app"
 
@@ -327,7 +327,7 @@ For org-wide CSP/security baselines managed centrally, pass the existing policy 
 
 ```hcl
 module "site" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//hosting/static_site?ref=v1.0.0"
 
   name = "my-app"
 

@@ -21,7 +21,7 @@ supports optional VPC associations, query logging, and DNSSEC signing.
 
 ```hcl
 module "dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   name = "example.com"
 
@@ -35,7 +35,7 @@ module "dns" {
 
 ```hcl
 module "dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   name = "example.com"
 
@@ -76,11 +76,15 @@ module "dns" {
 }
 ```
 
+Long ASCII TXT and SPF values are split into 255-byte character strings automatically. To split a
+value manually, use the AWS provider's internal quote separator without surrounding quotes, for
+example `first-part" "second-part`.
+
 ### Manage records in an existing hosted zone
 
 ```hcl
 module "app_dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   zone_creation_enabled = false
   zone_id     = "Z1234567890ABC"
@@ -100,7 +104,7 @@ module "app_dns" {
 
 ```hcl
 module "internal_dns" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//networking/route53?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//networking/route53?ref=v1.0.0"
 
   name         = "internal_load_balancer_enabled.example.com"
   private_zone_enabled = true

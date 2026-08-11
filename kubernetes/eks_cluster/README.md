@@ -22,7 +22,7 @@ Node groups, Fargate profiles, and Karpenter are separate modules
 
 ```hcl
 module "eks" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//kubernetes/eks_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//kubernetes/eks_cluster?ref=v1.0.0"
 
   name               = "platform"
   kubernetes_version = "1.31"

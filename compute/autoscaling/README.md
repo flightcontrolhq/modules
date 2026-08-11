@@ -23,7 +23,7 @@ This module creates an AWS Auto Scaling Group with optional launch template, sca
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -43,7 +43,7 @@ module "asg" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -81,7 +81,7 @@ module "asg" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -113,7 +113,7 @@ module "asg" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -142,7 +142,7 @@ module "asg" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -180,7 +180,7 @@ module "asg" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -216,7 +216,7 @@ module "asg" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "ecs-asg"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
@@ -255,7 +255,7 @@ resource "aws_ecs_capacity_provider" "this" {
 
 ```hcl
 module "asg" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/autoscaling?ref=v1.0.0"
 
   name                = "my-app"
   vpc_zone_identifier = ["subnet-1a2b3c4d", "subnet-5e6f7g8h"]
