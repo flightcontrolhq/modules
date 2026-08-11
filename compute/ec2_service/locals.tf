@@ -44,11 +44,11 @@ locals {
   })
 
   supervisor_program_script = templatefile("${path.module}/templates/configure_supervisor_program.sh.tpl", {
-    app_runner_path                 = local.app_runner_path
-    log_rotation_backup_count       = var.log_rotation_backup_count
-    log_rotation_max_size_mb        = var.log_rotation_max_size_mb
-    supervisor_conf                 = local.supervisor_conf
-    supervisor_program              = local.supervisor_program
+    app_runner_path           = local.app_runner_path
+    log_rotation_backup_count = var.log_rotation_backup_count
+    log_rotation_max_size_mb  = var.log_rotation_max_size_mb
+    supervisor_conf           = local.supervisor_conf
+    supervisor_program        = local.supervisor_program
   })
 
   # Env-file builder script shared by instance boot and both deploy modes.
@@ -109,17 +109,17 @@ locals {
   }) : null
 
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
-    name                            = var.name
-    region                          = local.region
-    env_file_script                 = local.env_file_script
-    env_file_path                   = local.env_file_path
-    supervisor_install_script       = local.supervisor_install_script
-    data_volume_creation_enabled    = var.data_volume_creation_enabled
-    data_volume_mount_path          = var.data_volume_mount_path
-    efs_enabled                     = var.efs_enabled
-    efs_file_system_id              = var.efs_file_system_id != null ? var.efs_file_system_id : ""
-    efs_access_point_id             = var.efs_access_point_id != null ? var.efs_access_point_id : ""
-    efs_mount_path                  = var.efs_mount_path
-    additional_user_data            = var.additional_user_data
+    name                         = var.name
+    region                       = local.region
+    env_file_script              = local.env_file_script
+    env_file_path                = local.env_file_path
+    supervisor_install_script    = local.supervisor_install_script
+    data_volume_creation_enabled = var.data_volume_creation_enabled
+    data_volume_mount_path       = var.data_volume_mount_path
+    efs_enabled                  = var.efs_enabled
+    efs_file_system_id           = var.efs_file_system_id != null ? var.efs_file_system_id : ""
+    efs_access_point_id          = var.efs_access_point_id != null ? var.efs_access_point_id : ""
+    efs_mount_path               = var.efs_mount_path
+    additional_user_data         = var.additional_user_data
   }))
 }
