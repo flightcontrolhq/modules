@@ -65,19 +65,19 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.2 | `security/iam_policy/` |
 | `rvn-aws-iam-role` | AWS IAM Role | v1.0.2 | `security/iam/` |
 | `rvn-aws-network` | VPC Network | v1.0.2 | `networking/vpc/` |
-| `rvn-aws-static` | Static Hosting | v1.0.3 | `hosting/static_site/` |
-| `rvn-cloudfront` | CloudFront CDN | v1.1.1 | `cdn/cloudfront/` |
-| `rvn-ec2-service` | EC2 Service | v1.2.2 | `compute/ec2_service/` |
+| `rvn-aws-static` | Static Hosting | v1.1.2 | `hosting/static_site/` |
+| `rvn-cloudfront` | CloudFront CDN | v1.2.2 | `cdn/cloudfront/` |
+| `rvn-ec2-service` | EC2 Service | v1.3.1 | `compute/ec2_service/` |
 | `rvn-ecs-cluster` | ECS Cluster | v1.0.2 | `compute/ecs_cluster/` |
-| `rvn-ecs-nlb` | ECS Network Service | v1.0.2 | `compute/ecs_service/` |
-| `rvn-ecs-web` | ECS Web Service | v1.0.2 | `compute/ecs_service/` |
-| `rvn-ecs-worker` | ECS Worker | v1.0.2 | `compute/ecs_service/` |
+| `rvn-ecs-nlb` | ECS Network Service | v1.1.1 | `compute/ecs_service/` |
+| `rvn-ecs-web` | ECS Web Service | v1.1.1 | `compute/ecs_service/` |
+| `rvn-ecs-worker` | ECS Worker | v1.1.1 | `compute/ecs_service/` |
 | `rvn-efs` | EFS File System | v1.0.2 | `storage/efs/` |
 | `rvn-elasticache` | ElastiCache | v1.0.2 | `cache/elasticache/` |
-| `rvn-lambda` | Lambda Function | v1.0.2 | `compute/lambda/` |
+| `rvn-lambda` | Lambda Function | v1.1.1 | `compute/lambda/` |
 | `rvn-rds` | RDS Database | v1.2.1 | `database/rds/` |
 | `rvn-rds-proxy` | RDS Proxy | v0.1.1 | `database/rds-proxy/` |
-| `rvn-route53` | Route 53 DNS | v1.0.2 | `networking/route53/` |
+| `rvn-route53` | Route 53 DNS | v1.0.3 | `networking/route53/` |
 | `rvn-s3` | S3 Bucket | v1.0.2 | `storage/s3/` |
 | `rvn-stack` | Terraform Stack | v1.2.5 | `stack/terraform/` |
 

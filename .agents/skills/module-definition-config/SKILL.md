@@ -85,6 +85,8 @@ release:
   description: Add configurable access logs.
 ```
 
+Write `release.description` as concise, user-facing release-note copy: describe the fix or capability from the user's point of view, never the implementation mechanism. Good: `Prevent applies from failing with CloudFront in-use errors when disabling a managed feature.` Bad: `Add create_before_destroy to order resource deletion.`
+
 Use semantic versioning for released module definitions. For local development publishes, do not bump `release.version` just to publish a new local copy; the local publish tooling automatically appends the next numeric prerelease suffix to the authored version, such as `0.2.1-1`, `0.2.1-2`, and so on.
 
 ## Input Patterns
@@ -154,9 +156,9 @@ Common module-specific immutable fields:
 
 Keep operational and product-level controls mutable even when they can create/delete supporting resources, cause downtime, trigger a rollout, or replace lower-level resources. Examples that should generally remain mutable include execution environments, VPC NAT gateway settings and supplied NAT EIPs, VPC peering maps, VPC Flow Logs, CloudFront aliases, CloudFront ACM certificate ARN, static default version seed, access logging, ECS cluster EC2 capacity settings, ECS cluster load balancer toggles and NLB Elastic IP settings, ECS service public/private routing selection, ECS service build type, generated-vs-existing ECS IAM role override ARNs, health checks, autoscaling thresholds, cache headers, price class, IAM trust/policy documents, tags, descriptions, log retention, CPU/memory sizing, and deployment rollout settings.
 
-## Apply Phases (`applies_on`)
+## Apply Phases (`applied_by`)
 
-The compiler derives each value-producing input's `applies_on` metadata from
+The compiler derives each value-producing input's `applied_by` metadata from
 references to that input in `module.stack`, `module.build`, and
 `module.deploy`. Never author it as part of normal definition work: compile the
 definition and let static analysis stamp the derived phases. If derivation looks
@@ -164,15 +166,15 @@ wrong, correct the module's executable wiring. For a stack-rendered artifact
 that is re-executed during deploy but is not represented by a direct
 `module.deploy` reference, use
 `$deploy_reexecutes_stack_terraform_variables` in `module.deploy` to name the
-Terraform variables whose inputs are re-executed. A hand-authored `applies_on`
+Terraform variables whose inputs are re-executed. A hand-authored `applied_by`
 override is a last resort for behavior that cannot be represented truthfully in
 the module wiring or that directive, and must be justified in review. The
 compiler warns whenever an override is authored, and emits a stronger warning
 when it omits a phase that static analysis derives; a superset of the derived
 phases is allowed.
 
-An explicit `applies_on: []` means the input is a known no-op for the current
-stack, build, and deploy configuration. An absent `applies_on` field means the
+An explicit `applied_by: []` means the input is a known no-op for the current
+stack, build, and deploy configuration. An absent `applied_by` field means the
 definition predates this metadata and is unknown to downstream consumers; do
 not use absence to imply that a change requires nothing.
 
@@ -184,7 +186,7 @@ make modules-tools-build
 node tools/ravion-modules/dist/src/cli.js compile \
   compute/ecs_service/rvn-ecs-web-definition.yml > /tmp/rvn-ecs-web-compiled.json
 jq -r '.. | objects | select(.id? == "task_cpu") |
-  [.id, ((.applies_on // "<absent>") | tostring)] | @tsv' \
+  [.id, ((.applied_by // "<absent>") | tostring)] | @tsv' \
   /tmp/rvn-ecs-web-compiled.json
 ```
 
@@ -362,7 +364,7 @@ The local publish path targets `RAVION_API_URL` or `http://localhost:8080` by de
 - Unit conversions use the exact Terraform default as their hidden-input fallback and have compiler regression coverage.
 - Fields intentionally omitted to preserve safe Terraform defaults are not also emitted in `terraform_variables`.
 - Destructive identity, target, state, and core topology inputs are marked `immutable: true`; `advanced_terraform_variables`, `execution_environment_id`, and observability/logging toggles remain mutable.
-- Derived `applies_on` phases match the stack, build, and deploy references for every new or moved input; no authored overrides are present unless they are a justified last resort, and any such override is intentional and complete.
+- Derived `applied_by` phases match the stack, build, and deploy references for every new or moved input; no authored overrides are present unless they are a justified last resort, and any such override is intentional and complete.
 - `aws_account_id` and `aws_region` are nulled when an execution environment is selected.
 - Source fields use the intended repo, base path, and `$local.module_tag` or explicit source ref.
 - UI metrics use stable CloudWatch namespace, metric name, dimensions, account, and region expressions.

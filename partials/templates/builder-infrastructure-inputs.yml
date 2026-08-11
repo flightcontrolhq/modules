@@ -40,3 +40,18 @@
   required: false
   show_when: $with.show_when
   type: string
+- default: true
+  description: The step's built-in policies (ECR/S3 access, CloudWatch agent) stay attached alongside your Builder IAM policies. Turn off to run the build with only the policies listed below.
+  id: build_default_policies_enabled
+  label: Include default build policies
+  show_when: $with.show_when
+  type: boolean
+- add_button_label: Add policy ARN
+  collapsible: true
+  default: []
+  description: IAM managed policy ARNs for the EC2 build runner role, applied for the duration of each build.
+  id: build_iam_policy_arns
+  label: Builder IAM policies
+  required: false
+  show_when: $with.show_when
+  type: string_array

@@ -18,8 +18,8 @@ describe("compiler", () => {
     assert.equal(compiled.releaseDescription, "Add subnet options.");
     assert.deepEqual(compiled.module, {
       inputs: [
-        { id: "name", type: "string", label: "Name", required: true, applies_on: [] },
-        { id: "environment", type: "string", label: "Environment", required: true, applies_on: [] },
+        { id: "name", type: "string", label: "Name", required: true, applied_by: [] },
+        { id: "environment", type: "string", label: "Environment", required: true, applied_by: [] },
         { id: "networking", type: "section", label: "Networking" },
         {
           id: "vpc",
@@ -28,7 +28,7 @@ describe("compiler", () => {
           outputs: {
             vpc_id: "VPC ID",
           },
-          applies_on: [],
+          applied_by: [],
         },
         {
           id: "advanced",
@@ -37,7 +37,7 @@ describe("compiler", () => {
           properties: {
             enabled: { type: "boolean", default: true },
           },
-          applies_on: [],
+          applied_by: [],
         },
       ],
       stack: {
@@ -123,24 +123,24 @@ describe("compiler", () => {
 
     deriveAppliesOn(module);
 
-    assert.deepEqual(findInput(getModuleInputs(module), "stack_only").applies_on, ["stack"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "deploy_only").applies_on, ["deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "both").applies_on, ["stack", "deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "build_deploy").applies_on, ["build", "deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "build_only").applies_on, ["build", "deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "unused").applies_on, []);
-    assert.equal(findInput(getModuleInputs(module), "section").applies_on, undefined);
+    assert.deepEqual(findInput(getModuleInputs(module), "stack_only").applied_by, ["stack"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "deploy_only").applied_by, ["deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "both").applied_by, ["stack", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "build_deploy").applied_by, ["build", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "build_only").applied_by, ["build", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "unused").applied_by, []);
+    assert.equal(findInput(getModuleInputs(module), "section").applied_by, undefined);
 
     const nested = findInput(getModuleInputs(module), "nested");
-    assert.deepEqual(nested.applies_on, ["stack", "deploy"]);
+    assert.deepEqual(nested.applied_by, ["stack", "deploy"]);
     const nestedChildren = (nested.item_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(findInput(nestedChildren, "inherited").applies_on, ["stack", "deploy"]);
-    assert.deepEqual(findInput(nestedChildren, "direct").applies_on, ["deploy"]);
+    assert.deepEqual(findInput(nestedChildren, "inherited").applied_by, ["stack", "deploy"]);
+    assert.deepEqual(findInput(nestedChildren, "direct").applied_by, ["deploy"]);
 
     const refInput = findInput(getModuleInputs(module), "ref_input");
-    assert.deepEqual(refInput.applies_on, ["stack", "deploy"]);
+    assert.deepEqual(refInput.applied_by, ["stack", "deploy"]);
     const mappedInputs = (refInput.mapped_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(findInput(mappedInputs, "mapped").applies_on, ["stack"]);
+    assert.deepEqual(findInput(mappedInputs, "mapped").applied_by, ["stack"]);
   });
 
   it("attributes indexed and lambda element references to individual children", () => {
@@ -174,12 +174,12 @@ describe("compiler", () => {
 
     const listeners = findInput(getModuleInputs(module), "listeners");
     const children = (listeners.item_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(listeners.applies_on, ["stack", "deploy"]);
-    assert.deepEqual(findInput(children, "stack_child").applies_on, ["stack"]);
-    assert.deepEqual(findInput(children, "deploy_child").applies_on, ["deploy"]);
+    assert.deepEqual(listeners.applied_by, ["stack", "deploy"]);
+    assert.deepEqual(findInput(children, "stack_child").applied_by, ["stack"]);
+    assert.deepEqual(findInput(children, "deploy_child").applied_by, ["deploy"]);
     const mappedParent = findInput(children, "mapped_parent");
     const mappedChildren = (mappedParent.mapped_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(findInput(mappedChildren, "mapped_child").applies_on, ["stack"]);
+    assert.deepEqual(findInput(mappedChildren, "mapped_child").applied_by, ["stack"]);
   });
 
   it("attributes element references without dropping unrelated top-level references", () => {
@@ -205,10 +205,10 @@ describe("compiler", () => {
     const inputs = getModuleInputs(module);
     const listeners = findInput(inputs, "listeners");
     const children = (listeners.item_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(listeners.applies_on, ["stack"]);
-    assert.deepEqual(findInput(children, "listener_port").applies_on, ["stack"]);
-    assert.deepEqual(findInput(children, "unused_child").applies_on, []);
-    assert.deepEqual(findInput(inputs, "unrelated").applies_on, ["stack"]);
+    assert.deepEqual(listeners.applied_by, ["stack"]);
+    assert.deepEqual(findInput(children, "listener_port").applied_by, ["stack"]);
+    assert.deepEqual(findInput(children, "unused_child").applied_by, []);
+    assert.deepEqual(findInput(inputs, "unrelated").applied_by, ["stack"]);
   });
 
   it("attributes element references to the collection that owns each map", () => {
@@ -236,8 +236,8 @@ describe("compiler", () => {
     const inputs = getModuleInputs(module);
     const firstChildren = (findInput(inputs, "first").item_inputs as Record<string, unknown>[] | undefined) ?? [];
     const secondChildren = (findInput(inputs, "second").item_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(findInput(firstChildren, "first_child").applies_on, ["stack"]);
-    assert.deepEqual(findInput(secondChildren, "second_child").applies_on, ["stack"]);
+    assert.deepEqual(findInput(firstChildren, "first_child").applied_by, ["stack"]);
+    assert.deepEqual(findInput(secondChildren, "second_child").applied_by, ["stack"]);
   });
 
   it("attributes nested element references to the innermost map", () => {
@@ -265,13 +265,13 @@ describe("compiler", () => {
     const inputs = getModuleInputs(module);
     const outerChildren = (findInput(inputs, "outer").item_inputs as Record<string, unknown>[] | undefined) ?? [];
     const innerChildren = (findInput(inputs, "inner").item_inputs as Record<string, unknown>[] | undefined) ?? [];
-    assert.deepEqual(findInput(outerChildren, "outer_child").applies_on, []);
-    assert.deepEqual(findInput(innerChildren, "inner_child").applies_on, ["stack"]);
+    assert.deepEqual(findInput(outerChildren, "outer_child").applied_by, []);
+    assert.deepEqual(findInput(innerChildren, "inner_child").applied_by, ["stack"]);
   });
 
   it("preserves authored overrides and warns against authoring them", () => {
     const module: Record<string, unknown> = {
-      inputs: [{ id: "override", type: "string", applies_on: ["stack", "build", "deploy"] }, { id: "warning", type: "string", applies_on: ["stack"] }],
+      inputs: [{ id: "override", type: "string", applied_by: ["stack", "build", "deploy"] }, { id: "warning", type: "string", applied_by: ["stack"] }],
       stack: { value: "<< module.input.override >>" },
       build: { value: "<< module.input.warning >>" },
       deploy: { value: "<< module.input.warning >>" },
@@ -285,13 +285,27 @@ describe("compiler", () => {
       console.warn = originalWarn;
     }
 
-    assert.deepEqual(findInput(getModuleInputs(module), "override").applies_on, ["stack", "build", "deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "warning").applies_on, ["stack"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "override").applied_by, ["stack", "build", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "warning").applied_by, ["stack"]);
     assert.equal(warnings.length, 3);
-    assert.match(warnings[0] ?? "", /override\.yml.*override.*authors applies_on.*prefer compiler derivation/);
+    assert.match(warnings[0] ?? "", /override\.yml.*override.*authors applied_by.*prefer compiler derivation/);
     assert.match(warnings[0] ?? "", /stack-rendered deploy artifacts/);
-    assert.match(warnings[1] ?? "", /override\.yml.*warning.*authors applies_on.*prefer compiler derivation/);
+    assert.match(warnings[1] ?? "", /override\.yml.*warning.*authors applied_by.*prefer compiler derivation/);
     assert.match(warnings[2] ?? "", /override\.yml.*warning.*build, deploy/);
+  });
+
+  it("rejects the renamed field's old name", () => {
+    assert.throws(
+      () =>
+        deriveAppliesOn(
+          {
+            inputs: [{ id: "legacy", type: "string", applies_on: ["stack"] }],
+            stack: { value: "<< module.input.legacy >>" },
+          },
+          "legacy.yml",
+        ),
+      /legacy\.yml.*legacy.*old applies_on field.*applied_by/,
+    );
   });
 
   it("derives deploy for stack Terraform variables re-executed by deploy", () => {
@@ -320,9 +334,9 @@ describe("compiler", () => {
 
     deriveAppliesOn(module);
 
-    assert.deepEqual(findInput(getModuleInputs(module), "environment_variables").applies_on, ["stack", "deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "secrets").applies_on, ["stack", "deploy"]);
-    assert.deepEqual(findInput(getModuleInputs(module), "unrelated").applies_on, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "environment_variables").applied_by, ["stack", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "secrets").applied_by, ["stack", "deploy"]);
+    assert.deepEqual(findInput(getModuleInputs(module), "unrelated").applied_by, []);
     assert.equal((module.deploy as Record<string, unknown>).$deploy_reexecutes_stack_terraform_variables, undefined);
   });
 
@@ -364,8 +378,8 @@ describe("compiler", () => {
       console.warn = originalWarn;
     }
 
-    assert.deepEqual(findInput(getModuleInputs(module), "first").applies_on, []);
-    assert.deepEqual(findInput(getModuleInputs(module), "second").applies_on, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "first").applied_by, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "second").applied_by, []);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0] ?? "", /shared/);
   });
@@ -381,8 +395,8 @@ describe("compiler", () => {
 
     deriveAppliesOn(module);
 
-    assert.deepEqual(findInput(getModuleInputs(module), "first").applies_on, []);
-    assert.deepEqual(findInput(getModuleInputs(module), "second").applies_on, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "first").applied_by, []);
+    assert.deepEqual(findInput(getModuleInputs(module), "second").applied_by, []);
   });
 
   it("compiles all colocated definitions under module category directories", async () => {
@@ -395,26 +409,26 @@ describe("compiler", () => {
     const ec2 = await compileDefinitionFile(join(repoRoot, "compute", "ec2_service", "rvn-ec2-service-definition.yml"));
     const staticSite = await compileDefinitionFile(join(repoRoot, "hosting", "static_site", "rvn-aws-static-definition.yml"));
 
-    assert.deepEqual(findInput(getModuleInputs(ec2.module), "environment_variables").applies_on, [
+    assert.deepEqual(findInput(getModuleInputs(ec2.module), "environment_variables").applied_by, [
       "stack",
       "deploy",
     ]);
-    assert.deepEqual(findInput(getModuleInputs(ec2.module), "secrets").applies_on, [
+    assert.deepEqual(findInput(getModuleInputs(ec2.module), "secrets").applied_by, [
       "stack",
       "deploy",
     ]);
     assert.deepEqual(
-      findInput(getModuleInputs(staticSite.module), "build_environment_variables").applies_on,
+      findInput(getModuleInputs(staticSite.module), "build_environment_variables").applied_by,
       ["build", "deploy"],
     );
     assert.doesNotMatch(JSON.stringify(ec2.module), /\$deploy_reexecutes_stack_terraform_variables/);
   });
 
-  it("has no authored applies_on metadata in definition sources", async () => {
+  it("has no authored applied_by metadata in definition sources", async () => {
     const definitionFiles = await findDefinitionFiles(repoRoot);
     for (const filePath of definitionFiles) {
       const source = await readFile(filePath, "utf8");
-      assert.doesNotMatch(source, /^\s+applies_on\s*:/m, filePath);
+      assert.doesNotMatch(source, /^\s+applied_by\s*:/m, filePath);
     }
   });
 

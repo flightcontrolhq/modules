@@ -62,7 +62,7 @@ module:
 - `definition.type` is the stable unique module type identifier. If the user says module definition `given id`, map it to `definition.type`; `ModuleDefinition` does not have a `givenId` field.
 - `definition.description` is the short catalog summary, not README prose.
 - `release.version` is the next authored semantic version for this definition.
-- `release.description` is the changelog entry for that version.
+- `release.description` is user-facing release-note copy for that version: describe the fix or capability from the user's point of view, never the implementation mechanism. Good: `Prevent applies from failing with CloudFront in-use errors when disabling a managed feature.` Bad: `Add create_before_destroy to order resource deletion.`
 - `ModuleInstance.givenId` is separate and must not be used when creating a definition.
 
 ## Sourcing Reference Definitions

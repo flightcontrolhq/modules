@@ -31,9 +31,9 @@ locals {
   route53_query_log_service_principal = "route53.${data.aws_partition.current.dns_suffix}"
   route53_query_log_hosted_zone_arn   = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${local.zone_id}"
 
-  # Route 53 stores record data as character strings of at most 255 characters. Values longer
-  # than that must be sent as several quoted strings, which the module does automatically for
-  # the record types where multiple character strings are concatenated back into one value.
+  # Route 53 stores record data as character strings of at most 255 characters. The AWS provider
+  # adds the surrounding TXT/SPF quotes, so Terraform values contain only the internal `" "`
+  # separator between chunks that DNS clients concatenate back into one value.
   character_string_max_length = 255
   chunked_record_types        = ["TXT", "SPF"]
 
@@ -59,13 +59,13 @@ locals {
           length(value) > local.character_string_max_length &&
           !strcontains(value, "\"") &&
           can(regex("^[[:ascii:]]*$", value))
-          ) ? join(" ", [
+          ) ? join("\" \"", [
             for i in range(ceil(length(value) / local.character_string_max_length)) :
-            "\"${substr(
+            substr(
               value,
               i * local.character_string_max_length,
               min(local.character_string_max_length, length(value) - i * local.character_string_max_length)
-            )}\""
+            )
         ]) : value
       ]
       set_identifier = (
