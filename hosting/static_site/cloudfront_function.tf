@@ -60,4 +60,9 @@ resource "aws_cloudfront_function" "cache_control" {
   comment = "${var.name} viewer-response Cache-Control writer"
   publish = true
   code    = local.cff_cache_control_code
+
+  # Order distribution detachment before deleting the function.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

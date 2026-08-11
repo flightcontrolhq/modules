@@ -3,7 +3,7 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 release:
-  version: 1.2.1
+  version: 1.2.2
   description: Fix the managed Markdown cache policy.
 module:
   inputs:
