@@ -76,6 +76,10 @@ module "dns" {
 }
 ```
 
+Long ASCII TXT and SPF values are split into 255-byte character strings automatically. To split a
+value manually, use the AWS provider's internal quote separator without surrounding quotes, for
+example `first-part" "second-part`.
+
 ### Manage records in an existing hosted zone
 
 ```hcl

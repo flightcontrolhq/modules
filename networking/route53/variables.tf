@@ -185,18 +185,18 @@ variable "records" {
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
           ) : [
-          # ASCII TXT and SPF values are split into 255-byte quoted strings by the module,
-          # so only quoted values and values the module passes through are checked here.
+          # ASCII TXT and SPF values are split into 255-byte strings by the module. The AWS
+          # provider represents manually split values with only an internal `" "` separator.
           # base64 encoding is used to measure bytes rather than Unicode characters:
           # a base64 string of at most 340 characters encodes at most 255 bytes.
           for chunk in(
-            strcontains(value, "\"") ? [for m in regexall("\"([^\"]*)\"", value) : m[0]] :
-            contains(["TXT", "SPF"], v.type) && can(regex("^[[:ascii:]]*$", value)) ? [] : [value]
+            contains(["TXT", "SPF"], v.type) && strcontains(value, "\" \"") ? split("\" \"", value) :
+            contains(["TXT", "SPF"], v.type) && !strcontains(value, "\"") && can(regex("^[[:ascii:]]*$", value)) ? [] : [value]
           ) : length(base64encode(chunk)) <= 340
         ]
       ]
     ]))
-    error_message = "Each DNS record value must be at most 255 bytes per character string, which is the Route 53 limit. TXT and SPF values that use only ASCII characters are split automatically; otherwise, split the value into quoted strings of at most 255 bytes each, for example \"first-part\" \"second-part\"."
+    error_message = "Each DNS record value must be at most 255 bytes per character string, which is the Route 53 limit. TXT and SPF values that use only ASCII characters are split automatically; otherwise, separate strings of at most 255 bytes with an internal quote separator, for example first-part\" \"second-part."
   }
 
   validation {
@@ -206,16 +206,16 @@ variable "records" {
           coalesce(v.records, []),
           coalesce(v.record_values, []),
           v.record_value == null ? [] : [v.record_value]
-          # All record values must have balanced quotes. TXT and SPF additionally require
-          # quoted values to consist only of complete character strings.
+          # The AWS provider adds the surrounding quotes for TXT and SPF records. Multiple
+          # character strings use only an internal `" "` separator in Terraform configuration.
           ) : length(regexall("\"", value)) % 2 == 0 && (
           !contains(["TXT", "SPF"], v.type) ||
           !strcontains(value, "\"") ||
-          can(regex("^\\s*(\"[^\"]*\"\\s*)+$", value))
+          can(regex("^[^\"]+(\" \"[^\"]+)+$", value))
         )
       ]
     ]))
-    error_message = "Each DNS record value must have balanced double quotes. A TXT or SPF value that uses double quotes must be written as one or more complete quoted strings with no text outside the quotes, for example \"first-part\" \"second-part\"."
+    error_message = "Each DNS record value must have balanced double quotes. In TXT and SPF values, double quotes may only form the internal separator between character strings, for example first-part\" \"second-part."
   }
 
   validation {
