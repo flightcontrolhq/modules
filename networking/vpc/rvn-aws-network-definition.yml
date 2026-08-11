@@ -4,7 +4,7 @@ definition:
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
   version: 1.0.2
-  description: Derive per-input apply-phase metadata in the compiled module definition.
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

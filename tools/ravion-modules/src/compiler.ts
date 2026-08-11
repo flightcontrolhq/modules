@@ -63,7 +63,7 @@ export async function compileDefinitionFile(filePath: string): Promise<CompiledD
 
   const deployReexecutionVariables = consumeDeployReexecutionDirective(module, absoluteFilePath);
   rejectLeakedCompilerSyntax(module, absoluteFilePath, "module");
-  deriveAppliesOn(module, absoluteFilePath, deployReexecutionVariables);
+  deriveAppliedBy(module, absoluteFilePath, deployReexecutionVariables);
 
   return {
     filePath: absoluteFilePath,
@@ -76,19 +76,19 @@ export async function compileDefinitionFile(filePath: string): Promise<CompiledD
   };
 }
 
-const APPLY_PHASES = ["stack", "build", "deploy"] as const;
-type ApplyPhase = (typeof APPLY_PHASES)[number];
+const APPLY_ACTIONS = ["stack", "build", "deploy"] as const;
+type ApplyAction = (typeof APPLY_ACTIONS)[number];
 
 interface InputAnalysis {
   input: Record<string, unknown>;
   nestedKind?: "item_inputs" | "mapped_inputs";
-  direct: Set<ApplyPhase>;
-  elementDirect: Set<ApplyPhase>;
+  direct: Set<ApplyAction>;
+  elementDirect: Set<ApplyAction>;
   children: InputAnalysis[];
-  derived: Set<ApplyPhase>;
+  derived: Set<ApplyAction>;
 }
 
-export function deriveAppliesOn(
+export function deriveAppliedBy(
   module: Record<string, unknown>,
   filePath = "<module>",
   deployReexecutionVariables = consumeDeployReexecutionDirective(module, filePath),
@@ -103,8 +103,8 @@ export function deriveAppliesOn(
     .map((input) => createInputAnalysis(input));
 
   const ambiguousNestedIds = new Set<string>();
-  for (const phase of APPLY_PHASES) {
-    collectInputReferences(module[phase], phase, analyses, ambiguousNestedIds);
+  for (const action of APPLY_ACTIONS) {
+    collectInputReferences(module[action], action, analyses, ambiguousNestedIds);
   }
   collectDeployReexecutionReferences(module, deployReexecutionVariables, analyses, filePath);
 
@@ -206,14 +206,14 @@ function createInputAnalysis(input: Record<string, unknown>, nestedKind?: InputA
 
 function collectInputReferences(
   value: unknown,
-  phase: ApplyPhase,
+  action: ApplyAction,
   analyses: InputAnalysis[],
   ambiguousNestedIds: Set<string>,
 ): boolean {
   if (Array.isArray(value)) {
     let matchedReference = false;
     value.forEach((item) => {
-      matchedReference = collectInputReferences(item, phase, analyses, ambiguousNestedIds) || matchedReference;
+      matchedReference = collectInputReferences(item, action, analyses, ambiguousNestedIds) || matchedReference;
     });
     return matchedReference;
   }
@@ -240,7 +240,7 @@ function collectInputReferences(
     for (const reference of references) {
       const hasElementAccess = reference.parts.some((part) => part.startsWith("["));
       if (hasElementAccess) {
-        const matched = markInputReference(reference.parts, phase, analyses, ambiguousNestedIds);
+      const matched = markInputReference(reference.parts, action, analyses, ambiguousNestedIds);
         if (matched) {
           matchedReference = true;
         }
@@ -255,7 +255,7 @@ function collectInputReferences(
               candidate.start <= elementReference.start && elementReference.start < candidate.end,
           ),
       );
-      const matched = markInputReference(reference.parts, phase, analyses, ambiguousNestedIds, !mapReference);
+      const matched = markInputReference(reference.parts, action, analyses, ambiguousNestedIds, !mapReference);
       if (matched) {
         matchedReference = true;
       }
@@ -271,7 +271,7 @@ function collectInputReferences(
         warnAmbiguousElementReference(elementReference.path, ambiguousNestedIds);
         for (const analysis of candidates) {
           matchedReference =
-            markNestedInputReference(analysis, elementReference.parts, phase, ambiguousNestedIds) || matchedReference;
+            markNestedInputReference(analysis, elementReference.parts, action, ambiguousNestedIds) || matchedReference;
         }
         continue;
       }
@@ -281,12 +281,12 @@ function collectInputReferences(
         warnAmbiguousElementReference(elementReference.path, ambiguousNestedIds);
         for (const candidate of analyses.filter((candidate) => candidate.children.length > 0)) {
           matchedReference =
-            markNestedInputReference(candidate, elementReference.parts, phase, ambiguousNestedIds) || matchedReference;
+            markNestedInputReference(candidate, elementReference.parts, action, ambiguousNestedIds) || matchedReference;
         }
         continue;
       }
       matchedReference =
-        markNestedInputReference(analysis, nestedPath.concat(elementReference.parts), phase, ambiguousNestedIds) ||
+        markNestedInputReference(analysis, nestedPath.concat(elementReference.parts), action, ambiguousNestedIds) ||
         matchedReference;
     }
     return matchedReference;
@@ -296,14 +296,14 @@ function collectInputReferences(
   }
   let matchedReference = false;
   Object.values(value).forEach((child) => {
-    matchedReference = collectInputReferences(child, phase, analyses, ambiguousNestedIds) || matchedReference;
+    matchedReference = collectInputReferences(child, action, analyses, ambiguousNestedIds) || matchedReference;
   });
   return matchedReference;
 }
 
 function markInputReference(
   path: string[],
-  phase: ApplyPhase,
+  action: ApplyAction,
   analyses: InputAnalysis[],
   ambiguousNestedIds: Set<string>,
   inheritToChildren = true,
@@ -314,7 +314,7 @@ function markInputReference(
   }
   const analysis = analyses.find((candidate) => candidate.input.id === id);
   if (analysis) {
-    return markNestedInputReference(analysis, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
+    return markNestedInputReference(analysis, nestedPath, action, ambiguousNestedIds, inheritToChildren);
   }
   const nestedMatches = findMappedInputAnalyses(id, analyses);
   if (nestedMatches.length > 1) {
@@ -326,7 +326,7 @@ function markInputReference(
   }
   const nestedAnalysis = nestedMatches[0];
   if (nestedAnalysis) {
-    return markNestedInputReference(nestedAnalysis, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
+    return markNestedInputReference(nestedAnalysis, nestedPath, action, ambiguousNestedIds, inheritToChildren);
   }
   return false;
 }
@@ -345,21 +345,21 @@ function findMappedInputAnalyses(id: string, analyses: InputAnalysis[]): InputAn
 function markNestedInputReference(
   analysis: InputAnalysis,
   path: string[],
-  phase: ApplyPhase,
+  action: ApplyAction,
   ambiguousNestedIds: Set<string>,
   inheritToChildren = true,
 ): boolean {
   if (path.length === 0) {
-    (inheritToChildren ? analysis.direct : analysis.elementDirect).add(phase);
+    (inheritToChildren ? analysis.direct : analysis.elementDirect).add(action);
     return true;
   }
   const [id, ...nestedPath] = path;
   if (id?.startsWith("[")) {
-    return markNestedInputReference(analysis, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
+    return markNestedInputReference(analysis, nestedPath, action, ambiguousNestedIds, inheritToChildren);
   }
   const child = analysis.children.find((candidate) => candidate.input.id === id);
   if (child) {
-    return markNestedInputReference(child, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
+    return markNestedInputReference(child, nestedPath, action, ambiguousNestedIds, inheritToChildren);
   }
   const mappedMatches = findMappedInputAnalyses(id, analysis.children);
   if (mappedMatches.length > 1) {
@@ -371,9 +371,9 @@ function markNestedInputReference(
   }
   const mappedChild = mappedMatches[0];
   if (mappedChild) {
-    return markNestedInputReference(mappedChild, nestedPath, phase, ambiguousNestedIds, inheritToChildren);
+    return markNestedInputReference(mappedChild, nestedPath, action, ambiguousNestedIds, inheritToChildren);
   } else {
-    (inheritToChildren ? analysis.direct : analysis.elementDirect).add(phase);
+    (inheritToChildren ? analysis.direct : analysis.elementDirect).add(action);
     return true;
   }
 }
@@ -480,22 +480,22 @@ function warnAmbiguousElementReference(path: string, ambiguousNestedIds: Set<str
   }
 }
 
-function resolveInputAnalysis(analysis: InputAnalysis, inherited: Set<ApplyPhase>): Set<ApplyPhase> {
-  const phases = new Set([...analysis.direct, ...analysis.elementDirect]);
+function resolveInputAnalysis(analysis: InputAnalysis, inherited: Set<ApplyAction>): Set<ApplyAction> {
+  const actions = new Set([...analysis.direct, ...analysis.elementDirect]);
   const childInheritance = analysis.direct.size > 0 ? analysis.direct : inherited;
   for (const child of analysis.children) {
-    const childPhases = resolveInputAnalysis(child, childInheritance);
-    for (const phase of childPhases) {
-      phases.add(phase);
+    const childActions = resolveInputAnalysis(child, childInheritance);
+    for (const action of childActions) {
+      actions.add(action);
     }
   }
-  if (phases.size === 0) {
-    for (const phase of inherited) {
-      phases.add(phase);
+  if (actions.size === 0) {
+    for (const action of inherited) {
+      actions.add(action);
     }
   }
-  analysis.derived = phases;
-  return phases;
+  analysis.derived = actions;
+  return actions;
 }
 
 function normalizeInputAnalysis(analysis: InputAnalysis): void {
@@ -506,7 +506,7 @@ function normalizeInputAnalysis(analysis: InputAnalysis): void {
 }
 
 function stampInputAnalysis(analysis: InputAnalysis, filePath: string): void {
-  const derived = APPLY_PHASES.filter((phase) => analysis.derived.has(phase));
+  const derived = APPLY_ACTIONS.filter((action) => analysis.derived.has(action));
   if ("applies_on" in analysis.input) {
     throw new CompileError(
       `${filePath}: input ${String(analysis.input.id)} uses the old applies_on field; use applied_by instead.`,
@@ -517,10 +517,10 @@ function stampInputAnalysis(analysis: InputAnalysis, filePath: string): void {
     console.warn(
       `${filePath}: input ${String(analysis.input.id)} authors applied_by; prefer compiler derivation. Correct the module wiring instead, or use module.deploy.$deploy_reexecutes_stack_terraform_variables for stack-rendered deploy artifacts. Hand-authored applied_by should be a justified last resort.`,
     );
-    const missing = derived.filter((phase) => !authored.includes(phase));
+    const missing = derived.filter((action) => !authored.includes(action));
     if (missing.length > 0) {
       console.warn(
-        `${filePath}: input ${String(analysis.input.id)} authored applied_by is missing statically derived phase(s): ${missing.join(", ")}`,
+        `${filePath}: input ${String(analysis.input.id)} authored applied_by is missing statically derived action(s): ${missing.join(", ")}`,
       );
     }
   } else {

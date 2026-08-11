@@ -5,7 +5,7 @@ definition:
 
 release:
   version: 0.1.1
-  description: Derive per-input apply-phase metadata in the compiled module definition.
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - id: network

@@ -4,7 +4,7 @@ definition:
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
   version: 1.1.1
-  description: Add Builder IAM policies inputs and derive per-input apply-phase metadata in the compiled module definition.
+  description: Add Builder IAM policies inputs and derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

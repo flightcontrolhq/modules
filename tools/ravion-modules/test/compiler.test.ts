@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { compileAllDefinitions, CompileError, compileDefinitionFile, deriveAppliesOn, findDefinitionFiles } from "../src/compiler.js";
+import { compileAllDefinitions, CompileError, compileDefinitionFile, deriveAppliedBy, findDefinitionFiles } from "../src/compiler.js";
 
 const fixturesDir = join(process.cwd(), "test", "fixtures", "compile");
 const repoRoot = resolve(process.cwd(), "../..");
@@ -74,7 +74,7 @@ describe("compiler", () => {
     });
   });
 
-  it("derives phase metadata across expressions and nested inputs", () => {
+  it("derives action metadata across expressions and nested inputs", () => {
     const module: Record<string, unknown> = {
       inputs: [
         { id: "stack_only", type: "string" },
@@ -121,7 +121,7 @@ describe("compiler", () => {
       },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     assert.deepEqual(findInput(getModuleInputs(module), "stack_only").applied_by, ["stack"]);
     assert.deepEqual(findInput(getModuleInputs(module), "deploy_only").applied_by, ["deploy"]);
@@ -170,7 +170,7 @@ describe("compiler", () => {
       },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     const listeners = findInput(getModuleInputs(module), "listeners");
     const children = (listeners.item_inputs as Record<string, unknown>[] | undefined) ?? [];
@@ -200,7 +200,7 @@ describe("compiler", () => {
       },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     const inputs = getModuleInputs(module);
     const listeners = findInput(inputs, "listeners");
@@ -231,7 +231,7 @@ describe("compiler", () => {
       },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     const inputs = getModuleInputs(module);
     const firstChildren = (findInput(inputs, "first").item_inputs as Record<string, unknown>[] | undefined) ?? [];
@@ -260,7 +260,7 @@ describe("compiler", () => {
       },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     const inputs = getModuleInputs(module);
     const outerChildren = (findInput(inputs, "outer").item_inputs as Record<string, unknown>[] | undefined) ?? [];
@@ -280,7 +280,7 @@ describe("compiler", () => {
     const originalWarn = console.warn;
     console.warn = (message: string) => warnings.push(message);
     try {
-      deriveAppliesOn(module, "override.yml");
+      deriveAppliedBy(module, "override.yml");
     } finally {
       console.warn = originalWarn;
     }
@@ -297,7 +297,7 @@ describe("compiler", () => {
   it("rejects the renamed field's old name", () => {
     assert.throws(
       () =>
-        deriveAppliesOn(
+        deriveAppliedBy(
           {
             inputs: [{ id: "legacy", type: "string", applies_on: ["stack"] }],
             stack: { value: "<< module.input.legacy >>" },
@@ -332,7 +332,7 @@ describe("compiler", () => {
       },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     assert.deepEqual(findInput(getModuleInputs(module), "environment_variables").applied_by, ["stack", "deploy"]);
     assert.deepEqual(findInput(getModuleInputs(module), "secrets").applied_by, ["stack", "deploy"]);
@@ -343,7 +343,7 @@ describe("compiler", () => {
   it("rejects deploy re-execution directives for unknown or input-free Terraform variables", () => {
     assert.throws(
       () =>
-        deriveAppliesOn({
+      deriveAppliedBy({
           inputs: [{ id: "value", type: "string" }],
           stack: { terraform_variables: { other: "literal" } },
           deploy: { $deploy_reexecutes_stack_terraform_variables: ["missing"] },
@@ -352,7 +352,7 @@ describe("compiler", () => {
     );
     assert.throws(
       () =>
-        deriveAppliesOn({
+      deriveAppliedBy({
           inputs: [{ id: "value", type: "string" }],
           stack: { terraform_variables: { other: "literal" } },
           deploy: { $deploy_reexecutes_stack_terraform_variables: ["other"] },
@@ -373,7 +373,7 @@ describe("compiler", () => {
     const originalWarn = console.warn;
     console.warn = (message: string) => warnings.push(message);
     try {
-      deriveAppliesOn(module);
+      deriveAppliedBy(module);
     } finally {
       console.warn = originalWarn;
     }
@@ -393,7 +393,7 @@ describe("compiler", () => {
       stack: { value: "<< module.input.shared >>" },
     };
 
-    deriveAppliesOn(module);
+    deriveAppliedBy(module);
 
     assert.deepEqual(findInput(getModuleInputs(module), "first").applied_by, []);
     assert.deepEqual(findInput(getModuleInputs(module), "second").applied_by, []);

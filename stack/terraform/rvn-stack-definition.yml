@@ -4,7 +4,7 @@ definition:
   description: Automate Terraform and OpenTofu workflows with git-driven deployments and managed state.
 release:
   version: 1.2.5
-  description: Derive per-input apply-phase metadata in the compiled module definition.
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - id: section_aws

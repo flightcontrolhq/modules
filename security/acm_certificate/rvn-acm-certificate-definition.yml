@@ -4,7 +4,7 @@ definition:
   description: Requests an AWS Certificate Manager public certificate with DNS validation.
 release:
   version: 1.0.2
-  description: Derive per-input apply-phase metadata in the compiled module definition.
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

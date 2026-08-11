@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 1.1.1
-  description: Add Builder IAM policies inputs and derive per-input apply-phase metadata in the compiled module definition.
+  description: Add Builder IAM policies inputs and derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - id: section_cluster

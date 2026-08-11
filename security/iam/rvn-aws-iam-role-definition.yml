@@ -4,7 +4,7 @@ definition:
   description: AWS IAM role with configurable trust relationships, managed policies, inline policies, permission boundaries, and optional instance profiles.
 release:
   version: 1.0.2
-  description: Derive per-input apply-phase metadata in the compiled module definition.
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

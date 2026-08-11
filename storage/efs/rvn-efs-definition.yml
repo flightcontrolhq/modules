@@ -4,7 +4,7 @@ definition:
   description: Creates and manages an Amazon EFS file system with mount targets, security groups, automatic backups, and an optional access point.
 release:
   version: 1.0.2
-  description: Derive per-input apply-phase metadata in the compiled module definition.
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - id: network

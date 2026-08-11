@@ -4,7 +4,7 @@ definition:
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 release:
   version: 1.2.2
-  description: Prevent applies from failing with CloudFront in-use errors when changing a cache policy or disabling a module-managed feature; derive per-input apply-phase metadata in the compiled module definition.
+  description: Prevent applies from failing with CloudFront in-use errors when changing a cache policy or disabling a module-managed feature; derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
