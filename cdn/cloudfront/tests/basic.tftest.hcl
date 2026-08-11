@@ -1472,6 +1472,23 @@ run "test_accept_header_cache_policy_enabled" {
   }
 
   assert {
+    condition = toset(aws_cloudfront_cache_policy.accept_header[0].parameters_in_cache_key_and_forwarded_to_origin[0].headers_config[0].headers[0].items) == toset([
+      "host",
+      "origin",
+      "x-http-method-override",
+      "x-http-method",
+      "x-method-override",
+      "x-md",
+    ])
+    error_message = "The normalized Markdown policy should preserve the managed policy headers and add x-md."
+  }
+
+  assert {
+    condition     = aws_cloudfront_cache_policy.accept_header[0].parameters_in_cache_key_and_forwarded_to_origin[0].cookies_config[0].cookie_behavior == "all"
+    error_message = "The normalized Markdown policy should preserve the managed policy cookie behavior."
+  }
+
+  assert {
     condition     = length(aws_cloudfront_function.viewer_request) == 1
     error_message = "The viewer-request function should be created when cache-key normalization is enabled."
   }

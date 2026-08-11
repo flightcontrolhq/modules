@@ -13,13 +13,20 @@ resource "aws_cloudfront_cache_policy" "accept_header" {
     enable_accept_encoding_brotli = true
 
     cookies_config {
-      cookie_behavior = "none"
+      cookie_behavior = "all"
     }
 
     headers_config {
       header_behavior = "whitelist"
       headers {
-        items = ["x-md"]
+        items = [
+          "host",
+          "origin",
+          "x-http-method-override",
+          "x-http-method",
+          "x-method-override",
+          "x-md",
+        ]
       }
     }
 
