@@ -18,6 +18,11 @@ resource "aws_cloudfront_key_value_store" "this" {
 
   name    = local.kvs_name
   comment = "${var.name} host -> version lookup"
+
+  # Order function and distribution detachment before deleting the store.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_cloudfrontkeyvaluestore_key" "seed" {
