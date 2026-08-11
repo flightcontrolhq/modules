@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.2.0
-  description: Optionally mount the host Docker socket for container workloads that orchestrate sibling containers.
+  version: 1.2.1
+  description: Add the Builder IAM policies input, attaching extra IAM managed policies to the EC2 build runner role for the duration of each build.
 module:
   inputs:
     - id: network
