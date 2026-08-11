@@ -511,7 +511,7 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 | default_cache_behavior.function_associations | CloudFront Function associations. | `list(object({event_type, function_arn}))` | `[]` | no |
 | default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, body_inclusion_enabled}))` | `[]` | no |
 | default_cache_behavior.realtime_log_config_arn | Real-time log configuration ARN. | `string` | `null` | no |
-| accept_header_cache_key_creation_enabled | Whether to create and use a module-managed cache policy and viewer-request function that normalize Markdown negotiation into the cache key. The origin request policy must forward `Accept`. Cannot be combined with `default_cache_behavior.cache_policy_id`. | `bool` | `false` | no |
+| accept_header_cache_key_creation_enabled | Whether to create and use a module-managed cache policy and viewer-request function that preserve the `UseOriginCacheControlHeaders-QueryStrings` cache key and add normalized Markdown negotiation. The policy includes the viewer `Host`, `Origin`, method-override headers, cookies, and query strings so load balancer routing and cache isolation continue to work. The origin request policy must forward `Accept`. Cannot be combined with `default_cache_behavior.cache_policy_id`. | `bool` | `false` | no |
 
 ### Ordered Cache Behaviors
 
