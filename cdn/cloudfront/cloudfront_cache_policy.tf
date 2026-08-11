@@ -1,11 +1,6 @@
 resource "aws_cloudfront_cache_policy" "accept_header" {
   count = var.accept_header_cache_key_creation_enabled ? 1 : 0
 
-  # Order distribution detachment before deleting the policy.
-  lifecycle {
-    create_before_destroy = true
-  }
-
   name    = "${var.name}-accept-header"
   comment = "Use origin cache control headers and include normalized Markdown negotiation in the cache key"
 
@@ -31,5 +26,10 @@ resource "aws_cloudfront_cache_policy" "accept_header" {
     query_strings_config {
       query_string_behavior = "all"
     }
+  }
+
+  # Order distribution detachment before deleting the policy.
+  lifecycle {
+    create_before_destroy = true
   }
 }

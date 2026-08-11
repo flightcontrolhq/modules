@@ -1,11 +1,6 @@
 resource "aws_cloudfront_vpc_origin" "this" {
   for_each = { for o in var.origins : o.origin_id => o if o.vpc_origin_enabled }
 
-  # Order distribution detachment before deleting the VPC origin.
-  lifecycle {
-    create_before_destroy = true
-  }
-
   vpc_origin_endpoint_config {
     name                   = "${var.name}-${each.key}"
     arn                    = each.value.vpc_origin_arn
@@ -20,4 +15,9 @@ resource "aws_cloudfront_vpc_origin" "this" {
   }
 
   tags = merge(local.tags, { Name = "${var.name}-${each.key}" })
+
+  # Order distribution detachment before deleting the VPC origin.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

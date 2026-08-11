@@ -8,8 +8,8 @@ resource "aws_cloudfront_function" "viewer_request" {
   publish = true
   code    = local.viewer_request_function_code
 
+  # Order distribution detachment before deleting the function.
   lifecycle {
-    # Order distribution detachment before deleting the function.
     create_before_destroy = true
 
     precondition {

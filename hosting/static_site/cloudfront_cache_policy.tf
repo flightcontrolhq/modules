@@ -15,11 +15,6 @@ resource "aws_cloudfront_cache_policy" "this" {
 
   provider = aws.us_east_1
 
-  # Order distribution detachment before deleting the policy.
-  lifecycle {
-    create_before_destroy = true
-  }
-
   name    = local.cache_policy_name
   comment = "Long edge cache for ${var.name} - versioned cache keys make 1-year TTLs safe"
 
@@ -42,5 +37,10 @@ resource "aws_cloudfront_cache_policy" "this" {
     query_strings_config {
       query_string_behavior = "none"
     }
+  }
+
+  # Order distribution detachment before deleting the policy.
+  lifecycle {
+    create_before_destroy = true
   }
 }
