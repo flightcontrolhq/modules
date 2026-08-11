@@ -43,18 +43,24 @@
 - add_button_label: Add policy ARN
   collapsible: true
   default: []
-  description: IAM managed policy ARNs attached to the EC2 build runner role for the duration of each build, in addition to the step default policies.
-  id: build_iam_policy_attach
-  label: Attach Builder IAM policies
+  description: IAM managed policy ARNs for the EC2 build runner role, applied for the duration of each build according to Builder IAM policy mode.
+  id: build_iam_policy_arns
+  label: Builder IAM policies
   required: false
   show_when: $with.show_when
   type: string_array
-- add_button_label: Add policy ARN
-  collapsible: true
-  default: []
-  description: IAM managed policy ARNs the EC2 build runner role uses instead of the step default policies. The build runs with only these policies, so include every permission the build needs, including the defaults this replaces. Takes precedence over Attach Builder IAM policies.
-  id: build_iam_policy_replace
-  label: Replace Builder IAM policies
+- collapsible: true
+  default: attach
+  description: How Builder IAM policies combine with the step default policies.
+  id: build_iam_policy_mode
+  label: Builder IAM policy mode
   required: false
   show_when: $with.show_when
-  type: string_array
+  type: string
+  values:
+    - label: Attach
+      description: The listed policies are added alongside the step default policies.
+      value: attach
+    - label: Replace
+      description: The build runs with only the listed policies. Include every permission the build needs, including the defaults this replaces.
+      value: replace
