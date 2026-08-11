@@ -3,8 +3,8 @@ definition:
   name: Lambda Function
   description: AWS Lambda function with zip or container image deployments, alias-based releases, IAM, logs, and optional function URLs.
 release:
-  version: 1.0.2
-  description: Add the Builder IAM policies input, attaching extra IAM managed policies to the EC2 build runner role for the duration of each build.
+  version: 1.1.0
+  description: Add Builder IAM policies inputs that attach extra IAM managed policies to the EC2 build runner role or replace the step default policies entirely for the duration of each build.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

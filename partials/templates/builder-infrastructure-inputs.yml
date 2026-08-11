@@ -49,3 +49,12 @@
   required: false
   show_when: $with.show_when
   type: string_array
+- add_button_label: Add policy ARN
+  collapsible: true
+  default: []
+  description: IAM managed policy ARNs the EC2 build runner role uses instead of the step default policies. The build runs with only these policies, so include every permission the build needs, including the defaults this replaces. Takes precedence over Builder IAM policies.
+  id: build_iam_policy_replace
+  label: Builder IAM policies (replace)
+  required: false
+  show_when: $with.show_when
+  type: string_array
