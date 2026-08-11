@@ -111,7 +111,6 @@ jobs:
             echo "::error::yq is required to read .github/reviewer-slack-map.yml"
             exit 1
           fi
-          yq --version
 
           escape_slack_text() {
             local value="$1"
@@ -129,7 +128,7 @@ jobs:
           failed_reasons=()
 
           while IFS= read -r login; do
-            slack_channel="$(yq -r --arg login "${login}" '.[$login] // ""' .github/reviewer-slack-map.yml)"
+            slack_channel="$(login="${login}" yq -r '.[strenv(login)] // ""' "${map_file}")"
             if [[ -z "${slack_channel}" || "${slack_channel}" == "null" ]]; then
               echo "::warning::No Slack member mapping for GitHub login @${login}; skipping"
               continue
