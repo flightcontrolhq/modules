@@ -158,16 +158,18 @@ Keep operational and product-level controls mutable even when they can create/de
 
 The compiler derives each value-producing input's `applies_on` metadata from
 references to that input in `module.stack`, `module.build`, and
-`module.deploy`. Normally, do not author it: compile the definition and let
-static analysis stamp the derived phases. Static analysis only sees those
-references, not what a stack or deploy-time operation does with the resulting
-value. Author an override when a value reaches the running application through
-a deploy-time step that is not represented by a direct `module.deploy`
-reference. For example, the EC2 runtime environment variables and secrets are
-rendered into the app environment file during deploy, so their authored
-`[stack, deploy]` metadata supplements their stack-only static references. The
-compiler warns when an authored override omits a phase that it can derive
-statically; a superset of the derived phases is allowed.
+`module.deploy`. Never author it as part of normal definition work: compile the
+definition and let static analysis stamp the derived phases. If derivation looks
+wrong, correct the module's executable wiring. For a stack-rendered artifact
+that is re-executed during deploy but is not represented by a direct
+`module.deploy` reference, use
+`$deploy_reexecutes_stack_terraform_variables` in `module.deploy` to name the
+Terraform variables whose inputs are re-executed. A hand-authored `applies_on`
+override is a last resort for behavior that cannot be represented truthfully in
+the module wiring or that directive, and must be justified in review. The
+compiler warns whenever an override is authored, and emits a stronger warning
+when it omits a phase that static analysis derives; a superset of the derived
+phases is allowed.
 
 An explicit `applies_on: []` means the input is a known no-op for the current
 stack, build, and deploy configuration. An absent `applies_on` field means the
@@ -360,7 +362,7 @@ The local publish path targets `RAVION_API_URL` or `http://localhost:8080` by de
 - Unit conversions use the exact Terraform default as their hidden-input fallback and have compiler regression coverage.
 - Fields intentionally omitted to preserve safe Terraform defaults are not also emitted in `terraform_variables`.
 - Destructive identity, target, state, and core topology inputs are marked `immutable: true`; `advanced_terraform_variables`, `execution_environment_id`, and observability/logging toggles remain mutable.
-- Derived `applies_on` phases match the stack, build, and deploy references for every new or moved input; authored overrides are intentional and complete.
+- Derived `applies_on` phases match the stack, build, and deploy references for every new or moved input; no authored overrides are present unless they are a justified last resort, and any such override is intentional and complete.
 - `aws_account_id` and `aws_region` are nulled when an execution environment is selected.
 - Source fields use the intended repo, base path, and `$local.module_tag` or explicit source ref.
 - UI metrics use stable CloudWatch namespace, metric name, dimensions, account, and region expressions.

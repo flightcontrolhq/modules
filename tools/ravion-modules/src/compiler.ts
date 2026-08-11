@@ -509,6 +509,9 @@ function stampInputAnalysis(analysis: InputAnalysis, filePath: string): void {
   const derived = APPLY_PHASES.filter((phase) => analysis.derived.has(phase));
   const authored = analysis.input.applies_on;
   if (Array.isArray(authored)) {
+    console.warn(
+      `${filePath}: input ${String(analysis.input.id)} authors applies_on; prefer compiler derivation. Correct the module wiring instead, or use module.deploy.$deploy_reexecutes_stack_terraform_variables for stack-rendered deploy artifacts. Hand-authored applies_on should be a justified last resort.`,
+    );
     const missing = derived.filter((phase) => !authored.includes(phase));
     if (missing.length > 0) {
       console.warn(

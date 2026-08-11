@@ -269,7 +269,7 @@ describe("compiler", () => {
     assert.deepEqual(findInput(innerChildren, "inner_child").applies_on, ["stack"]);
   });
 
-  it("preserves authored overrides and warns when they omit derived phases", () => {
+  it("preserves authored overrides and warns against authoring them", () => {
     const module: Record<string, unknown> = {
       inputs: [{ id: "override", type: "string", applies_on: ["stack", "build", "deploy"] }, { id: "warning", type: "string", applies_on: ["stack"] }],
       stack: { value: "<< module.input.override >>" },
@@ -287,8 +287,11 @@ describe("compiler", () => {
 
     assert.deepEqual(findInput(getModuleInputs(module), "override").applies_on, ["stack", "build", "deploy"]);
     assert.deepEqual(findInput(getModuleInputs(module), "warning").applies_on, ["stack"]);
-    assert.equal(warnings.length, 1);
-    assert.match(warnings[0] ?? "", /override\.yml.*warning.*build, deploy/);
+    assert.equal(warnings.length, 3);
+    assert.match(warnings[0] ?? "", /override\.yml.*override.*authors applies_on.*prefer compiler derivation/);
+    assert.match(warnings[0] ?? "", /stack-rendered deploy artifacts/);
+    assert.match(warnings[1] ?? "", /override\.yml.*warning.*authors applies_on.*prefer compiler derivation/);
+    assert.match(warnings[2] ?? "", /override\.yml.*warning.*build, deploy/);
   });
 
   it("derives deploy for stack Terraform variables re-executed by deploy", () => {
