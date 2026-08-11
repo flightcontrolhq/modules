@@ -25,19 +25,12 @@ locals {
 
   log_group_name = "/ravion/ec2/${var.name}"
 
-  process_exit_metric_namespace = "Ravion/EC2Service"
-  process_exit_metric_name      = "UnexpectedProcessExits"
-
   # App layout shared by both deploy modes. Each deployment gets its own
   # app log file and CloudWatch stream under the service log group.
   env_file_path                 = "/etc/ravion/${var.name}.env"
   log_directory                 = "/var/log/ravion/${var.name}"
   supervisor_program            = "ravion-${var.name}"
   supervisor_conf               = "/etc/supervisord.d/${var.name}.ini"
-  exit_listener_program         = "ravion-${var.name}-exit-events"
-  exit_listener_conf            = "/etc/supervisord.d/${var.name}-exit-events.ini"
-  exit_listener_path            = "/usr/local/bin/ravion-${var.name}-exit-listener"
-  process_event_log_path        = "/var/log/ravion/${var.name}/process-events.log"
   app_runner_path               = "/usr/local/bin/ravion-${var.name}-run"
   image_ref_path                = "/etc/ravion/${var.name}.image"
   start_command_path            = "/etc/ravion/${var.name}.start-command"
@@ -50,22 +43,11 @@ locals {
     log_group_name = local.log_group_name
   })
 
-  supervisor_exit_listener_script = templatefile("${path.module}/templates/configure_supervisor_exit_listener.sh.tpl", {
-    exit_listener_conf     = local.exit_listener_conf
-    exit_listener_path     = local.exit_listener_path
-    exit_listener_program  = local.exit_listener_program
-    log_directory          = local.log_directory
-    log_group_name         = local.log_group_name
-    name                   = var.name
-    process_event_log_path = local.process_event_log_path
-  })
-
   supervisor_program_script = templatefile("${path.module}/templates/configure_supervisor_program.sh.tpl", {
     app_runner_path                 = local.app_runner_path
     log_rotation_backup_count       = var.log_rotation_backup_count
     log_rotation_max_size_mb        = var.log_rotation_max_size_mb
     supervisor_conf                 = local.supervisor_conf
-    supervisor_exit_listener_script = local.supervisor_exit_listener_script
     supervisor_program              = local.supervisor_program
   })
 
@@ -132,7 +114,6 @@ locals {
     env_file_script                 = local.env_file_script
     env_file_path                   = local.env_file_path
     supervisor_install_script       = local.supervisor_install_script
-    supervisor_exit_listener_script = local.supervisor_exit_listener_script
     data_volume_creation_enabled    = var.data_volume_creation_enabled
     data_volume_mount_path          = var.data_volume_mount_path
     efs_enabled                     = var.efs_enabled

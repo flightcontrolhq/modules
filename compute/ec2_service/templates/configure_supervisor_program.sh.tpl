@@ -1,5 +1,3 @@
-${supervisor_exit_listener_script}
-
 cat > "${supervisor_conf}" <<SUPERVISOR_PROGRAM
 [program:${supervisor_program}]
 command=${app_runner_path}

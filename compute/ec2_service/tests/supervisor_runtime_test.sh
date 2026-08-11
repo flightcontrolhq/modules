@@ -2,10 +2,9 @@
 # Runtime check for the Supervisor configuration this module generates.
 #
 # The tofu tests assert that nonzero rotation settings are rendered; this
-# script runs a real supervisord with the rendered program stanza and the
-# rendered exit-event listener to confirm the app log actually rotates,
-# the process stays manageable through supervisorctl, and unexpected
-# exits are recorded.
+# script runs a real supervisord with the rendered program stanza to
+# confirm the app log actually rotates and the process stays manageable
+# through supervisorctl.
 #
 # Usage: tests/supervisor_runtime_test.sh
 # Requires: python3 (supervisor is installed into a throwaway virtualenv).
@@ -17,10 +16,8 @@ trap 'supervisorctl_cmd shutdown >/dev/null 2>&1 || true; rm -rf "$WORK_DIR"' EX
 
 SERVICE_NAME="supervised-app"
 PROGRAM="ravion-$SERVICE_NAME"
-LISTENER_PROGRAM="ravion-$SERVICE_NAME-exit-events"
 LOG_DIR="$WORK_DIR/log"
 LOG_PATH="$LOG_DIR/deployment-test.log"
-EVENT_LOG_PATH="$LOG_DIR/process-events.log"
 SUPERVISOR_CONF="$WORK_DIR/supervisord.conf"
 SOCKET="$WORK_DIR/supervisor.sock"
 MAX_SIZE_MB=1
@@ -53,22 +50,6 @@ render_program_config() {
       -e 's|^environment=.*|environment=RAVION_DEPLOYMENT_ID="test"|'
 }
 
-render_listener_stanza() {
-  sed -n '/^\[eventlistener:/,/^EXIT_LISTENER_PROGRAM$/p' "$MODULE_DIR/templates/configure_supervisor_exit_listener.sh.tpl" |
-    sed '$d' |
-    sed \
-      -e "s|\${exit_listener_program}|$LISTENER_PROGRAM|g" \
-      -e "s|\${exit_listener_path}|$WORK_DIR/exit-listener|g" \
-      -e "s|\${process_event_log_path}|$EVENT_LOG_PATH|g" \
-      -e "s|\${name}|$SERVICE_NAME|g" \
-      -e "s|/var/log/supervisor/|$LOG_DIR/|g"
-}
-
-render_listener_script() {
-  sed -n "/<<'EXIT_LISTENER'\$/,/^EXIT_LISTENER\$/p" "$MODULE_DIR/templates/configure_supervisor_exit_listener.sh.tpl" |
-    sed -e '1d' -e '$d'
-}
-
 echo "Installing supervisor into a throwaway virtualenv"
 python3 -m venv "$WORK_DIR/venv"
 "$WORK_DIR/venv/bin/pip" install --quiet supervisor==4.3.0
@@ -84,14 +65,7 @@ done
 APP_RUNNER
 chmod 755 "$WORK_DIR/app-runner"
 
-render_listener_script > "$WORK_DIR/exit-listener"
-chmod 755 "$WORK_DIR/exit-listener"
-
-{
-  render_program_config
-  echo
-  render_listener_stanza
-} > "$WORK_DIR/conf.d/app.ini"
+render_program_config > "$WORK_DIR/conf.d/app.ini"
 
 grep -q "stdout_logfile_maxbytes=${MAX_SIZE_MB}MB" "$WORK_DIR/conf.d/app.ini" ||
   fail "the rendered program config does not carry a nonzero rotation size"
@@ -159,22 +133,11 @@ supervisorctl_cmd restart "$PROGRAM" >/dev/null
 supervisorctl_cmd status "$PROGRAM" | grep -q RUNNING ||
   fail "the program did not come back after a supervisorctl restart"
 
-echo "Checking unexpected exits are recorded"
-APP_PID=$(supervisorctl_cmd pid "$PROGRAM")
-kill -9 "$APP_PID"
-RECORDED=0
-for _ in $(seq 1 30); do
-  if [ -f "$EVENT_LOG_PATH" ] && grep -q '"event": "process_exit"' "$EVENT_LOG_PATH"; then
-    RECORDED=1
-    break
-  fi
-  sleep 1
-done
-[ "$RECORDED" -eq 1 ] || fail "the exit listener did not record the unexpected exit"
-grep -q '"expected": false' "$EVENT_LOG_PATH" ||
-  fail "the recorded exit was not marked unexpected"
+echo "Checking the program survives a crash of the supervised process"
+kill -9 "$(supervisorctl_cmd pid "$PROGRAM")"
+sleep 3
 
 supervisorctl_cmd status "$PROGRAM" >/dev/null ||
   fail "supervisorctl lost track of the program after the crash"
 
-echo "PASS: rotation is bounded, the service stays manageable, and exits are recorded"
+echo "PASS: rotation is bounded and the service stays manageable through supervisorctl"

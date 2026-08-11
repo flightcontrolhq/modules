@@ -51,10 +51,6 @@ ${env_file_script}
 
 dnf install -y amazon-cloudwatch-agent
 
-# Record unexpected app process exits from first boot, before the first
-# deploy reinstalls the same listener.
-${supervisor_exit_listener_script}
-
 %{ if additional_user_data != "" ~}
 # Additional user data
 ${additional_user_data}

@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.3.0
-  description: Bound the on-instance app log with configurable Supervisor rotation, and add an optional alarm on repeated unexpected process exits.
+  version: 1.4.0
+  description: Bound the on-instance app log with configurable Supervisor rotation so a repeatedly restarting service cannot fill the instance disk.
 module:
   inputs:
     - id: network
@@ -696,48 +696,6 @@ module:
       min: 1
       max: 100
       default: 5
-    - id: process_exit_alarm_enabled
-      label: Alarm on repeated process exits
-      type: boolean
-      description: Alarm when the app process exits unexpectedly more than the configured number of times. Covers crashes after startup, which start retries do not.
-      collapsible: true
-      default: false
-    - id: process_exit_alarm_threshold
-      label: Process exit threshold
-      type: number
-      description: Number of unexpected exits within the evaluation period that triggers the alarm.
-      collapsible: true
-      min: 1
-      default: 3
-      show_when:
-        process_exit_alarm_enabled: true
-    - id: process_exit_alarm_period
-      label: Process exit period (seconds)
-      type: number
-      description: Period over which unexpected exits are counted.
-      collapsible: true
-      default: 300
-      values:
-        - label: 1 minute
-          value: 60
-        - label: 5 minutes
-          value: 300
-        - label: 15 minutes
-          value: 900
-        - label: 1 hour
-          value: 3600
-      show_when:
-        process_exit_alarm_enabled: true
-    - id: process_exit_alarm_sns_topic_arns
-      label: Process exit alarm SNS topics
-      type: string_array
-      description: SNS topic ARNs notified when the process exit alarm changes state.
-      add_button_label: Add SNS topic ARN
-      collapsible: true
-      required: false
-      default: []
-      show_when:
-        process_exit_alarm_enabled: true
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
   stack:
@@ -812,11 +770,6 @@ module:
         log_retention_in_days: << module.input.log_retention_in_days >>
         log_rotation_backup_count: << module.input.log_rotation_backup_count >>
         log_rotation_max_size_mb: << module.input.log_rotation_max_size_mb >>
-        process_exit_alarm_enabled: << module.input.process_exit_alarm_enabled || false >>
-        process_exit_alarm_period: << module.input.process_exit_alarm_period || 300 >>
-        process_exit_alarm_threshold: << module.input.process_exit_alarm_threshold || 3 >>
-        cloudwatch_alarm_actions: '<< module.input.process_exit_alarm_enabled ? (module.input.process_exit_alarm_sns_topic_arns || []) : [] >>'
-        cloudwatch_ok_actions: '<< module.input.process_exit_alarm_enabled ? (module.input.process_exit_alarm_sns_topic_arns || []) : [] >>'
         manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.start_command : nil >>'
         max_size: << module.input.max_capacity >>
         min_size: << module.input.min_capacity >>
@@ -1064,8 +1017,6 @@ module:
 
     Supervisord rotates the log file on the instance so a crash-looping process cannot fill the root volume. Log rotation size (MB) and Rotated log files kept bound on-instance usage to (kept + 1) times the rotation size for each deployment log. Ravion writes the supervisord program configuration after Deploy commands run, so rotation cannot be changed from a deploy command; change these fields instead. Newly launched instances receive the same settings from the launch template.
 
-    Start retries only cover a process that never stays up long enough to be considered started. A process that starts cleanly and then crashes repeatedly is invisible to them, so every instance runs a supervisord event listener that records each unexpected exit as a JSON line in the `process-events/instance/<instance-id>` stream of the same log group. A log metric filter turns those lines into the `Ravion/EC2Service` `UnexpectedProcessExits` metric, dimensioned by `ServiceName`. Turn on Alarm on repeated process exits to have Ravion create the CloudWatch alarm on that metric and notify the SNS topics you list.
-
     The dashboard shows desired and in-service instance counts for every service. Web services also show request count, target response time, target 4xx and 5xx responses, and healthy and unhealthy host counts. Worker groups omit load-balancer metrics.
 
     ## Storage and durability
@@ -1199,8 +1150,6 @@ module:
     | Log retention (days) | No | 30 | CloudWatch retention for supervised app logs |
     | Log rotation size (MB) | No | 20 | Size at which supervisord rotates the on-instance app log |
     | Rotated log files kept | No | 5 | Rotated app log files kept on each instance |
-    | Alarm on repeated process exits | No | false | CloudWatch alarm on unexpected app process exits |
-    | Process exit threshold / period / SNS topics | No | 3 / 300 / [] | Alarm sensitivity and notification targets |
     | Tags | No | Standard Ravion tags | Additional tags applied to resources |
     | Advanced Terraform variables | No | {} | Lower-level overrides for exceptional settings |
     | OpenTofu version override | No | Ravion default | Stack OpenTofu version override |
