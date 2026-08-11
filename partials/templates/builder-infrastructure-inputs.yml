@@ -44,7 +44,6 @@
   description: The build runs with only the listed Builder IAM policies. Include every permission the build needs, including the step defaults this replaces. Off means the listed policies are added alongside the step default policies.
   id: build_iam_policy_replace_enabled
   label: Replace step default policies
-  required: false
   show_when: $with.show_when
   type: boolean
 - add_button_label: Add policy ARN
