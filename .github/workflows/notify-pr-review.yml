@@ -9,9 +9,11 @@ permissions:
 
 jobs:
   notify:
+    # Fork review events receive no repository or organization secrets; skip them.
     if: >-
       ${{
-        contains(fromJSON('["approved", "changes_requested"]'), github.event.review.state)
+        contains(fromJSON('["approved", "changes_requested"]'), github.event.review.state) &&
+        github.event.pull_request.head.repo.fork == false
       }}
     runs-on: ubuntu-latest
     steps:
