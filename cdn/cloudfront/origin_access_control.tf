@@ -7,6 +7,11 @@ locals {
 resource "aws_cloudfront_origin_access_control" "this" {
   for_each = local.s3_origin_enableds
 
+  # Order distribution detachment before deleting the access control.
+  lifecycle {
+    create_before_destroy = true
+  }
+
   name                              = "${var.name}-${each.key}"
   description                       = "OAC for ${each.key}"
   origin_access_control_origin_type = var.origin_access_control_origin_type

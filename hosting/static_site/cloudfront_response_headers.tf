@@ -20,6 +20,11 @@ resource "aws_cloudfront_response_headers_policy" "this" {
 
   provider = aws.us_east_1
 
+  # Order distribution detachment before deleting the policy.
+  lifecycle {
+    create_before_destroy = true
+  }
+
   name    = local.response_headers_policy_name
   comment = "Module-managed response headers (security/CORS/custom) for ${var.name}"
 

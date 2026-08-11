@@ -16,6 +16,11 @@
 resource "aws_cloudfront_key_value_store" "this" {
   provider = aws.us_east_1
 
+  # Order function and distribution detachment before deleting the store.
+  lifecycle {
+    create_before_destroy = true
+  }
+
   name    = local.kvs_name
   comment = "${var.name} host -> version lookup"
 }

@@ -3,8 +3,8 @@ definition:
   name: CloudFront CDN
   description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 release:
-  version: 1.2.0
-  description: Make normalized Markdown negotiation the recommended CloudFront cache policy.
+  version: 1.2.1
+  description: Order CloudFront distribution detachment before deleting module-managed resources.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml

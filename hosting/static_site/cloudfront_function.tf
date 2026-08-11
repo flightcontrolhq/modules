@@ -55,6 +55,11 @@ resource "aws_cloudfront_function" "cache_control" {
 
   provider = aws.us_east_1
 
+  # Order distribution detachment before deleting the function.
+  lifecycle {
+    create_before_destroy = true
+  }
+
   name    = local.cff_cache_control_name
   runtime = "cloudfront-js-2.0"
   comment = "${var.name} viewer-response Cache-Control writer"
