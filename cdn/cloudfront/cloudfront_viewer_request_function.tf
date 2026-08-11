@@ -8,7 +8,10 @@ resource "aws_cloudfront_function" "viewer_request" {
   publish = true
   code    = local.viewer_request_function_code
 
+  # Order distribution detachment before deleting the function.
   lifecycle {
+    create_before_destroy = true
+
     precondition {
       condition     = length(local.viewer_request_function_code) <= 10240
       error_message = "The generated viewer-request function exceeds CloudFront Functions' 10 KB code limit. Reduce the number or length of redirect rules or disable Accept cache-key normalization."
