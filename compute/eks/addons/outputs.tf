@@ -231,3 +231,36 @@ output "private_nlb_security_group_id" {
   description = "Security group ID of the shared private NLB (null if disabled)."
   value       = var.private_nlb_enabled ? module.private_nlb[0].security_group_id : null
 }
+
+################################################################################
+# Ravion Beacon
+################################################################################
+
+output "beacon_namespace" {
+  description = "Kubernetes namespace where the Beacon agent is installed (null if disabled)."
+  value       = var.beacon_enabled ? helm_release.beacon[0].namespace : null
+}
+
+output "beacon_chart_version" {
+  description = "Installed version of the Beacon Helm chart (null if disabled). This is the chart version, not the running agent version — the control plane owns that."
+  value       = var.beacon_enabled ? helm_release.beacon[0].version : null
+}
+
+output "beacon_agent_id" {
+  description = "Ravion Beacon agent record id (bagt_...) for this cluster (null if disabled). Required to rotate or revoke the credential."
+  # nonsensitive() because this is an opaque record id, not secret material.
+  # Everything read out of the credential document inherits its sensitivity;
+  # only the two fields the API documents as safe to expose are unwrapped, and
+  # the client secret is deliberately not one of them and is never output.
+  value = var.beacon_enabled ? nonsensitive(local.beacon_enrollment.beaconAgentId) : null
+}
+
+output "beacon_client_id" {
+  description = "WorkOS Connect client id the agent authenticates as (null if disabled). Not a secret: it is the 'sub' claim of every token minted for this agent."
+  value       = var.beacon_enabled ? nonsensitive(local.beacon_enrollment.workosClientId) : null
+}
+
+output "beacon_credential_secret_arn" {
+  description = "ARN of the AWS Secrets Manager secret holding the agent's credential document (null if disabled). The only durable copy of the client secret; Ravion stores none."
+  value       = var.beacon_enabled ? aws_secretsmanager_secret.beacon_credential[0].arn : null
+}

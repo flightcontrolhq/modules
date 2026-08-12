@@ -9,11 +9,12 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | **External Secrets Operator** | `eso_enabled` | `true` | `external-secrets` Helm chart + Pod Identity role scoped to Secrets Manager / Parameter Store reads, plus the cluster-scoped `ravion-aws` and `ravion-aws-parameter-store` `ClusterSecretStore`s |
 | **EBS CSI driver** | `ebs_csi_driver_enabled` | `false` | `aws-ebs-csi-driver` EKS add-on + Pod Identity role |
 | **Container Insights** | `cloudwatch_observability_enabled` | `true` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit) |
+| **Ravion Beacon** | `beacon_enabled` | `false` | Enrolls the cluster with the Ravion control plane, stores the returned WorkOS Connect M2M credential in an AWS Secrets Manager secret and in a Kubernetes `Secret` (local `charts/beacon-credential`), and installs the `beacon` Helm chart — an in-cluster agent that dials Ravion outbound over a single WebSocket |
 | **Shared load balancers** | `public_alb_enabled`, `private_alb_enabled`, `public_nlb_enabled`, `private_nlb_enabled` | `false` | Terraform-managed ALBs/NLBs (via `networking/alb` and `networking/nlb`) that workloads attach to with the load balancer controller's `TargetGroupBinding` CRD, plus cluster security group ingress rules allowing each load balancer to reach pods |
 
-The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the AWS Load Balancer Controller, and the External Secrets Operator additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
+The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the AWS Load Balancer Controller, the External Secrets Operator, and Beacon additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
 
-> **Connectivity contract (Helm add-ons only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled`, `eso_enabled`, `lb_controller_enabled`, and all four load balancer toggles off, no cluster connectivity is needed.
+> **Connectivity contract (Helm add-ons only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled`, `eso_enabled`, `lb_controller_enabled`, `beacon_enabled`, and all four load balancer toggles off, no cluster connectivity is needed. `beacon_enabled` additionally requires `curl` on PATH and reachability to the Ravion API, because enrollment is an HTTP call made during apply.
 >
 > **Authentication:** set `ravion_runner_role_arn` to the cluster's Ravion Runner role (`ravion_runner_role_arn` output of `compute/eks`) and `aws eks get-token` assumes it — the cluster module registers that role as an EKS access entry with cluster-admin, so per-run pipeline roles never need their own access entries. When null, the identity running Terraform is used directly and must already have cluster access.
 
@@ -97,6 +98,97 @@ spec:
 
 **At rest.** The values themselves live only in AWS Secrets Manager / Parameter Store, encrypted with KMS there. The Kubernetes Secrets the operator materializes are stored in etcd under **KMS envelope encryption**, which the [`compute/eks`](..) cluster module enables by default (`secrets_encryption_enabled`, `true`, creating a dedicated CMK per cluster unless `secrets_kms_key_arn` is supplied). Materialized Secrets are still readable by anything with Secret read RBAC in that namespace; mounting values as files via the [AWS Secrets Store CSI driver](https://github.com/aws/secrets-store-csi-driver-provider-aws), which skips the Kubernetes Secret object entirely, is a future hardening option not implemented here.
 
+### Ravion Beacon
+
+Beacon is Ravion's in-cluster agent. It dials the control plane **outbound** over a single WebSocket — the control plane can never dial in, because a private-endpoint EKS API is reachable from nowhere else — and reports workload state. Optionally, and separately, it can perform Ravion's Helm deploys from inside the cluster.
+
+Off by default. `beacon_enabled = true` does three things in one apply:
+
+1. **Enrolls** the cluster with the Ravion API, which provisions a per-cluster WorkOS Connect M2M application and returns a `client_id` + `client_secret` pair.
+2. **Stores** that pair — in an AWS Secrets Manager secret in *your* account (`ravion/beacon/<cluster>/credential`) and in a Kubernetes `Secret` named `ravion-beacon-credential` in `beacon_namespace`, under the keys `clientId` and `clientSecret`.
+3. **Installs** the agent chart, wired to that Secret.
+
+```hcl
+module "eks_addons" {
+  # ...
+  beacon_enabled   = true
+  beacon_api_url   = "https://api.ravion.com/api/v1" # same base URL as the runner's RVN_API_URL
+  beacon_api_token = var.ravion_runner_token         # runner JWT; sensitive
+
+  # Optional: bound what the agent can see to the namespaces Ravion deploys into
+  beacon_namespace_scope = ["app-prod", "app-stg"]
+}
+```
+
+#### The credential, and why it is stored twice
+
+The client secret is minted by WorkOS and returned **exactly once**. Ravion keeps no copy and no hash of it — after this call there is no column in Ravion's database a Beacon secret could be written to. So this module cannot re-fetch it, and a second enrollment call for the same cluster is refused with `409`.
+
+That is why enrollment writes into Secrets Manager. It gives the module a durable, account-local answer to "has this cluster already been enrolled?", which is what makes a re-apply on a fresh runner a no-op instead of a `409`, and what lets a **lost Terraform state be recovered without rotating a live agent's credential**. The stored document is the API response verbatim, envelope included, so a hand-run rotation can be pasted into it without reshaping.
+
+The enrollment call runs from an apply-time provisioner, never a data source: `data "http"` and `data "external"` execute during **plan**, and enrolling a cluster during a plan nobody applies would leave an agent identity that no cluster is running.
+
+The runner therefore needs, in addition to the existing AWS-CLI-on-PATH requirement, **`curl` on PATH** and IAM permission to `secretsmanager:CreateSecret`, `GetSecretValue`, `PutSecretValue`, `DescribeSecret`, `TagResource` and `DeleteSecret` on that secret.
+
+**The client secret is never an output.** `beacon_client_id` and `beacon_agent_id` are — both are opaque identifiers the API documents as safe to expose (the client id is the `sub` claim of every token minted for this agent, not a credential).
+
+#### Testing before the public chart exists
+
+Two overrides, both designed for exactly this:
+
+```hcl
+# A chart directory on disk instead of the ECR Public reference. Anything that
+# is not an `oci://` reference is treated as a filesystem path.
+beacon_chart_source = "/path/to/ravion/packages/beacon/chart/beacon"
+
+# A gateway on your own machine instead of the production endpoint. Reachable
+# from inside the cluster, so a tunnel or an in-cluster address, not localhost.
+beacon_endpoint = "ws://host.docker.internal:3001/beacon/v1/connect"
+
+# And point enrollment at your local API
+beacon_api_url = "http://localhost:3001/api/v1"
+```
+
+`beacon_chart_version` is ignored for a filesystem chart. Note that `beacon_chart_source` must stay **publicly pullable** in production: customer clusters cannot pull from Ravion's private ECR.
+
+#### The image tag is not Terraform's to own
+
+With `beacon_self_update_enabled` on (the default), the control plane rolls each cluster's agent forward by patching Beacon's own Deployment — a namespaced `Role` scoped by `resourceNames` to that one object, and the only write permission the chart creates by default. An apply that re-asserted the image tag would revert every staged rollout, so the release carries:
+
+```hcl
+set = [{ name = "image.tag", value = var.beacon_image_tag }]
+
+lifecycle {
+  ignore_changes = [set]
+}
+```
+
+`set` carries the image tag and nothing else, so ignoring it ignores exactly the tag. `beacon_image_tag` is therefore a **floor, not a pin**: a fresh install starts there and the control plane moves it forward. Consequences worth knowing:
+
+- **Changing `beacon_image_tag` on an existing release does nothing.** Replace the release (`tofu apply -replace='module.eks_addons.helm_release.beacon[0]'`) to move the floor.
+- **To make Terraform the single owner of the version instead**, set `beacon_self_update_enabled = false`, set `beacon_image_tag` explicitly, and remove the `ignore_changes` in `beacon.tf`. You then own keeping the agent current — Ravion supports two agent minor versions back.
+- The running version is reported in every heartbeat, so a cluster stuck on an old build is visible in fleet health rather than discovered during an incident.
+
+#### Namespace scoping and the deploy grant
+
+`beacon_namespace_scope` is the one value that turns a cluster-wide component into a bounded one, and it is enforced by Kubernetes rather than by the agent: non-empty renders **no observation ClusterRole at all**, one namespaced `Role`/`RoleBinding` per entry instead. A scoped install can read no `nodes` and no `namespaces`, so the node count in fleet health is reported as unknown; nothing else changes.
+
+`beacon_deploy_enabled` is the widest grant the chart can create and is off by default. In the namespaces it covers, Beacon can create, update and delete Deployments, Services, Jobs, Ingresses and Secrets. It can never create anything in `rbac.authorization.k8s.io`, no `namespaces`, and nothing cluster-scoped — so it cannot widen itself. It is bounded by `beacon_deploy_namespaces`, falling back to `beacon_namespace_scope`; **if both are empty the apply fails**, because there is deliberately no "deploy everywhere" posture. Declining it leaves a fully working agent and Ravion deploys to the cluster from outside as it always has.
+
+Values this module does not surface directly — `portForward.enabled`, `helmInventory.enabled`, `redaction.extraPatterns`, `image.repository`, resources, tolerations — go through `beacon_helm_values`. Read the chart's `README.md` before enabling any of the opt-in capabilities.
+
+#### Rotating and revoking
+
+| Situation | What to do |
+|---|---|
+| **Routine rotation** | `POST {beacon_api_url}/internal/beacon/client-secrets` with `{"data":{"beaconAgentId":"<beacon_agent_id output>"}}` and a runner JWT. Write the response document verbatim into the Secrets Manager secret (`beacon_credential_secret_arn` output), then apply. The Kubernetes Secret is replaced from it. The outgoing secret stays live by default so there is no reconnect gap; it is pruned by the *next* rotation. |
+| **Compromised secret** | Same call with `"revokeOutgoing": true`. The old secret stops working immediately and the agent reconnects with the new one. |
+| **Credential lost, agent still enrolled** | Enrollment returns `409` and the apply stops with a message saying so. Rotate as above, or revoke and re-apply — the secret cannot be re-read, ever. |
+| **Stop the agent now, without touching Terraform** | Ravion's kill switch. `POST {beacon_api_url}/internal/beacon/revocations` deletes the WorkOS application and sets `disabledAt`: no token can be minted afterwards by anyone holding any secret, and the live connection is closed. A disabled agent that reconnects is still admitted and then immediately handed its disable directive, so re-enabling never requires a customer to run `helm upgrade` during an incident. |
+| **Offboard permanently** | Revoke as above, then `beacon_enabled = false` and apply. That removes both Helm releases (the agent and its Secret) and deletes the Secrets Manager secret with no recovery window — the name is deterministic, so a 30-day window would block re-enabling Beacon on this cluster for a month. |
+
+Disabling the flag alone does **not** revoke the identity: it removes the installation, not the WorkOS application. Revoke first if the cluster is going away.
+
 ## Requirements
 
 | Name               | Version   |
@@ -143,6 +235,21 @@ spec:
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
 | cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity role. | `bool` | `true` | no |
 | cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
+| beacon_enabled | Enroll the cluster and install the Ravion Beacon agent. | `bool` | `false` | no |
+| beacon_api_url | Base URL of the Ravion API serving the internal enrollment endpoints, no trailing slash (same value as the runner's `RVN_API_URL`). | `string` | `null` | when `beacon_enabled` |
+| beacon_api_token | Runner JWT bearer token for the enrollment call. The organization comes from its claims, never from the request body. Never written to state or outputs. | `string` (sensitive) | `null` | when `beacon_enabled` |
+| beacon_endpoint | WebSocket endpoint the agent dials — the single destination an egress policy must allow. | `string` | `"wss://websockets.ravion.com/beacon/v1/connect"` | no |
+| beacon_chart_source | `oci://` reference, or a filesystem path to a chart directory for local testing. | `string` | `"oci://public.ecr.aws/ravion/beacon"` | no |
+| beacon_chart_version | Beacon **chart** version (not the agent version). Null resolves the latest; ignored for a filesystem chart. | `string` | `null` | no |
+| beacon_namespace | Namespace for the agent and its credential Secret (created if missing). | `string` | `"ravion-beacon"` | no |
+| beacon_namespace_scope | Namespaces the agent may observe. Empty is cluster-wide; non-empty renders namespaced Roles and no observation ClusterRole at all. | `list(string)` | `[]` | no |
+| beacon_deploy_enabled | Let Beacon perform Ravion's Helm deploys from inside the cluster. The widest grant the chart can create. | `bool` | `false` | no |
+| beacon_deploy_namespaces | Namespaces Beacon may deploy into. Falls back to `beacon_namespace_scope`; both empty with deploy on fails the apply. | `list(string)` | `[]` | no |
+| beacon_exec_enabled | Grant `create` on `pods/exec` — the only way Beacon can run a command inside a container. | `bool` | `false` | no |
+| beacon_self_update_enabled | Let the control plane roll the agent forward by patching its own Deployment. | `bool` | `true` | no |
+| beacon_image_tag | Agent image tag floor. Not a pin: subsequent changes are ignored (see above). Null uses the chart's `appVersion`. | `string` | `null` | no |
+| beacon_helm_values | Extra YAML docs merged into the Beacon chart values (`portForward`, `helmInventory`, `redaction`, `image.repository`, …). | `list(string)` | `[]` | no |
+| beacon_project_id / beacon_environment_id / beacon_aws_account_id | Ravion record ids recorded on the agent at enrollment. Optional. | `string` | `null` | no |
 | public_subnet_ids | Public subnets for internet-facing load balancers. Required when the public ALB or public NLB is enabled. | `list(string)` | `[]` | no |
 | load_balancer_deletion_protection_enabled | Deletion protection on the shared load balancers. | `bool` | `false` | no |
 | public_alb_enabled / private_alb_enabled | Create a shared public / private ALB. | `bool` | `false` | no |
@@ -179,6 +286,10 @@ All outputs are null when the corresponding add-on is disabled.
 | eso_secrets_manager_store_name / eso_parameter_store_store_name | `ClusterSecretStore` names workload charts reference. |
 | ebs_csi_addon_version / ebs_csi_role_arn | EBS CSI add-on version and Pod Identity role. |
 | cloudwatch_observability_addon_version / cloudwatch_observability_role_arn | Container Insights add-on version and Pod Identity role. |
+| beacon_namespace / beacon_chart_version | Beacon install location and **chart** version (not the running agent version — the control plane owns that). |
+| beacon_agent_id | Ravion agent record id (`bagt_…`). Required to rotate or revoke the credential. |
+| beacon_client_id | WorkOS Connect client id the agent authenticates as. Not a secret: it is the `sub` claim of every token minted for it. |
+| beacon_credential_secret_arn | Secrets Manager secret holding the credential document — the only durable copy of the client secret. |
 | public_alb_arn / dns_name / zone_id / arn_suffix / security_group_id / http_listener_arn / https_listener_arn | Shared public ALB attributes for workload target groups, DNS records, and metrics. |
 | private_alb_arn / dns_name / zone_id / arn_suffix / security_group_id / http_listener_arn / https_listener_arn | Shared private ALB attributes. |
 | public_nlb_arn / dns_name / zone_id / arn_suffix / security_group_id | Shared public NLB attributes. |
@@ -194,4 +305,7 @@ All outputs are null when the corresponding add-on is disabled.
 - For automatic subnet discovery, tag public subnets with `kubernetes.io/role/elb = 1` and private subnets with `kubernetes.io/role/internal-elb = 1`, or specify subnets per Ingress via the `alb.ingress.kubernetes.io/subnets` annotation.
 - Unlike Karpenter, the `external-secrets` chart renders its CRDs as ordinary templates (`installCRDs`, default on), so Helm upgrades them and no separate CRD chart is needed. The `ClusterSecretStore`s are a separate local chart (`charts/external-secrets-resources`) that `depends_on` the operator release, because CRD-kind objects cannot be applied before the operator's CRDs exist and its validating webhook is serving.
 - The External Secrets Operator's `ClusterSecretStore`s carry no `auth` block. The operator resolves credentials through the AWS SDK default credential chain, which the Pod Identity Agent populates from the association this stack creates — so no static AWS credentials exist anywhere in the cluster, and `serviceAccountRef`-style IRSA config is deliberately absent (it conflicts with Pod Identity).
+- Beacon's credential `Secret` is a separate local chart (`charts/beacon-credential`) rather than a `kubernetes_secret` resource, for the same reason as the `ClusterSecretStore`s: the Helm provider is the only Kubernetes access this stack has. The credential reaches it through `values` wrapped in `sensitive()`, not through `set_sensitive` — Helm's `--set` parser splits on `,`, `.` and `=`, which silently truncates a client secret containing any of them.
+- The beacon chart deliberately creates no credential `Secret` of its own, and grants Beacon **no RBAC on Secrets at all**. The kubelet reads that object and projects it into the container as a read-only volume, which is what keeps the base ClusterRole free of Secret access.
+- `beacon_enabled = false` removes the installation but does **not** revoke the agent's WorkOS identity. Revoke through the API first if the cluster is going away; see the rotation table above.
 - There is no ordering concern for the Deployment-kind add-ons here (External Secrets Operator, Karpenter, load balancer controller): this stack deploys against a cluster whose system node group already exists, which is what the `compute/eks` composite's cluster → system node group → Deployment-kind add-on chain guarantees.
