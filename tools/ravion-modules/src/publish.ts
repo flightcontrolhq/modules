@@ -58,6 +58,21 @@ export interface ModuleVersionInput {
   config: Record<string, unknown>;
 }
 
+export interface ModuleVersionDryRunResponse {
+  moduleDefinitionId: string;
+  version: string;
+  config: Record<string, unknown>;
+}
+
+export type ModuleVersionDryRunStatus = "validated" | "skipped" | "failed";
+
+export interface ModuleVersionDryRunResult {
+  type: string;
+  version: string;
+  status: ModuleVersionDryRunStatus;
+  message: string;
+}
+
 export interface RavionApiClientOptions {
   baseUrl?: string;
   token?: string;
@@ -72,6 +87,13 @@ export interface PublishOptions {
   logger?: (message: string) => void;
 }
 
+export interface ModuleVersionDryRunOptions {
+  localDev?: boolean;
+  localDevForce?: boolean;
+  localDevSourceRef?: string;
+  logger?: (message: string) => void;
+}
+
 const DEFAULT_RAVION_API_URL = "https://api.ravion.com";
 
 export interface RavionModuleApiClient {
@@ -80,6 +102,7 @@ export interface RavionModuleApiClient {
   patchModuleDefinition(input: ModuleDefinitionPatchInput): Promise<RemoteModuleDefinition>;
   listModuleVersions(moduleDefinitionId: string): Promise<RemoteModuleVersion[]>;
   createModuleVersion(input: ModuleVersionInput): Promise<RemoteModuleVersion>;
+  dryRunModuleVersion(input: ModuleVersionInput): Promise<ModuleVersionDryRunResponse>;
 }
 
 export class PublishError extends Error {
@@ -132,6 +155,9 @@ export async function publishDefinitions(
     left.type.localeCompare(right.type),
   )) {
     let remoteDefinition = definitionsByType.get(definition.type);
+    const shouldPlanGlobalPublication = remoteDefinition?.isGlobalPublished === false;
+    const shouldPublishDefinitionAfterVersion =
+      !remoteDefinition || remoteDefinition.isGlobalPublished === false;
     if (!remoteDefinition) {
       items.push(
         createItem(
@@ -152,10 +178,6 @@ export async function publishDefinitions(
           type: definition.type,
           name: definition.name,
           description: definition.description,
-        });
-        remoteDefinition = await client.patchModuleDefinition({
-          id: remoteDefinition.id,
-          isGlobalPublished: true,
         });
         definitionsByType.set(remoteDefinition.type, remoteDefinition);
         inventory.versionsByDefinitionId[remoteDefinition.id] = [];
@@ -191,12 +213,30 @@ export async function publishDefinitions(
       }
     }
 
+    const latestRemoteVersion = remoteDefinition
+      ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
+      : undefined;
+    const globalPublicationItem = shouldPlanGlobalPublication
+      ? createItem(
+          definition,
+          "patch-definition",
+          dryRun,
+          `Publish module definition ${definition.type} globally.`,
+          "Make the module definition available globally.",
+          createDiff(
+            { isGlobalPublished: false },
+            { isGlobalPublished: true },
+          ),
+          latestRemoteVersion?.version,
+        )
+      : undefined;
+
     const remoteVersion = remoteDefinition
       ? (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).find(
           (version) => version.version === definition.version,
         )
       : undefined;
-    if (remoteVersion) {
+    if (remoteVersion && remoteDefinition) {
       items.push(
         createItem(
           definition,
@@ -208,12 +248,19 @@ export async function publishDefinitions(
           remoteVersion.version,
         ),
       );
+      if (globalPublicationItem) {
+        items.push(globalPublicationItem);
+      }
+      if (!dryRun && shouldPublishDefinitionAfterVersion) {
+        remoteDefinition = await client.patchModuleDefinition({
+          id: remoteDefinition.id,
+          isGlobalPublished: true,
+        });
+        definitionsByType.set(remoteDefinition.type, remoteDefinition);
+      }
       continue;
     }
 
-    const latestRemoteVersion = remoteDefinition
-      ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
-      : undefined;
     items.push(
       createItem(
         definition,
@@ -225,17 +272,100 @@ export async function publishDefinitions(
         latestRemoteVersion?.version,
       ),
     );
+    if (globalPublicationItem) {
+      items.push(globalPublicationItem);
+    }
     if (!dryRun) {
       if (!remoteDefinition) {
         throw new PublishError(
           `Cannot create ${definition.type}@${definition.version}; module definition was not created.`,
         );
       }
+      if (shouldPublishDefinitionAfterVersion) {
+        await client.dryRunModuleVersion({
+          moduleDefinitionId: remoteDefinition.id,
+          version: definition.version,
+          description: definition.releaseDescription,
+          config: definition.module,
+        });
+      }
       await createVersionOrConfirmDuplicate(client, remoteDefinition.id, definition);
+      if (shouldPublishDefinitionAfterVersion) {
+        remoteDefinition = await client.patchModuleDefinition({
+          id: remoteDefinition.id,
+          isGlobalPublished: true,
+        });
+        definitionsByType.set(remoteDefinition.type, remoteDefinition);
+      }
     }
   }
 
   return { dryRun, items };
+}
+
+export async function dryRunModuleVersions(
+  compiledDefinitions: CompiledDefinition[],
+  client: RavionModuleApiClient,
+  options: ModuleVersionDryRunOptions = {},
+): Promise<ModuleVersionDryRunResult[]> {
+  const inventory = await loadRemoteInventory(client, { logger: options.logger });
+  const definitionsToValidate = options.localDev
+    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main", {
+        force: options.localDevForce,
+      })
+    : compiledDefinitions;
+  const statuses = getReleaseStatuses(definitionsToValidate, { inventory });
+  const results = await Promise.all(
+    statuses.map(async (status) => {
+      if (status.publishState === "published") {
+        return {
+          type: status.type,
+          version: status.version,
+          status: "skipped" as const,
+          message: "Release version is already published remotely.",
+        };
+      }
+      if (!status.remoteDefinitionId) {
+        return {
+          type: status.type,
+          version: status.version,
+          status: "skipped" as const,
+          message: "Remote module definition does not exist yet; no module definition ID is available for dry-run validation.",
+        };
+      }
+      const definition = definitionsToValidate.find((item) => item.type === status.type);
+      if (!definition) {
+        return {
+          type: status.type,
+          version: status.version,
+          status: "failed" as const,
+          message: "Compiled module definition could not be found.",
+        };
+      }
+      try {
+        await client.dryRunModuleVersion({
+          moduleDefinitionId: status.remoteDefinitionId,
+          version: definition.version,
+          description: definition.releaseDescription,
+          config: definition.module,
+        });
+        return {
+          type: status.type,
+          version: status.version,
+          status: "validated" as const,
+          message: "Module version config passed server-side dry-run validation.",
+        };
+      } catch (error) {
+        return {
+          type: status.type,
+          version: status.version,
+          status: "failed" as const,
+          message: formatUnknownError(error),
+        };
+      }
+    }),
+  );
+  return results.sort((left, right) => left.type.localeCompare(right.type));
 }
 
 export async function createDefaultRavionApiClient(
@@ -769,6 +899,12 @@ class HttpRavionModuleApiClient implements RavionModuleApiClient {
 
   async createModuleVersion(input: ModuleVersionInput): Promise<RemoteModuleVersion> {
     return this.call<RemoteModuleVersion>("POST", "/module-versions", { data: input });
+  }
+
+  async dryRunModuleVersion(input: ModuleVersionInput): Promise<ModuleVersionDryRunResponse> {
+    return this.call<ModuleVersionDryRunResponse>("POST", "/module-versions", {
+      data: { ...input, dryRun: true },
+    });
   }
 
   private async list<T>(path: string, query: Record<string, string> = {}): Promise<T[]> {

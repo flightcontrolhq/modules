@@ -59,8 +59,8 @@ jobs:
           tofu -chdir=compute/ecs_service init -backend=false
           tofu -chdir=compute/ecs_service test -filter=tests/managed_domains.tftest.hcl
 
-      - name: Test CloudFront redirect function
-        run: node --test cdn/cloudfront/functions/redirect.test.js
+      - name: Test CloudFront viewer-request function
+        run: node --test cdn/cloudfront/functions/viewer_request.test.js
 
       - name: Lint modules
         run: tflint --recursive

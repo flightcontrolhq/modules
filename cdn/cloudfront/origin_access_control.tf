@@ -12,4 +12,9 @@ resource "aws_cloudfront_origin_access_control" "this" {
   origin_access_control_origin_type = var.origin_access_control_origin_type
   signing_behavior                  = var.origin_access_control_signing_behavior
   signing_protocol                  = var.origin_access_control_signing_protocol
+
+  # Order distribution detachment before deleting the access control.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

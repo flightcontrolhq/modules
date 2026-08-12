@@ -22,7 +22,7 @@ This module creates an AWS Lambda function with broad runtime configuration supp
 
 ```hcl
 module "lambda" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
   name        = "orders-handler"
   package_type = "Zip"
@@ -37,7 +37,7 @@ module "lambda" {
 
 ```hcl
 module "lambda_image" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
   name                            = "image-fn"
   package_type                    = "Image"
@@ -56,7 +56,7 @@ provider "aws" {
 }
 
 module "edge_lambda" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
   name              = "edge-rewrite"
   lambda_at_edge_enabled = true
@@ -79,7 +79,7 @@ module "edge_lambda" {
 
 ```hcl
 module "lambda_with_integrations" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/lambda?ref=v1.0.0"
 
   name         = "processor"
   package_type = "Zip"

@@ -65,18 +65,17 @@ locals {
   # test rule (production conditions + the configured test selector) is always
   # evaluated before the production rule — otherwise ALB, which routes by
   # priority order and not specificity, would match production first and a
-  # test request would never reach green. The production rule's
-  # priority becomes the base (its configured priority, else the default
-  # below) and the test rule sits one slot ahead at base - 1. Both numbers
-  # must be unique across all rules on a shared listener; set an explicit
-  # Listener rule priority per service when several green services share a
-  # listener.
-  green_default_production_priority = 1000
-  green_production_priority = local.green_alb_listener_rule_enabled ? coalesce(
-    var.load_balancer_attachment.listener_rules[0].priority,
-    local.green_default_production_priority,
-  ) : null
-  green_test_priority = local.green_alb_listener_rule_enabled ? local.green_production_priority - 1 : null
+  # test request would never reach green.
+  #
+  # With an explicit priority on listener_rules[0] the production rule takes
+  # it and the test rule sits one slot ahead at priority - 1; both numbers
+  # must then be unique across all rules on the shared listener. Without one,
+  # the pair is resolved at apply time: the test rule is created first with a
+  # provider-assigned priority (highest existing rule + 1) and the production
+  # rule chains one slot after it (see listener_rules.tf), so several green
+  # services can share a listener without colliding on a fixed default.
+  green_explicit_priority = local.green_alb_listener_rule_enabled ? var.load_balancer_attachment.listener_rules[0].priority : null
+  green_test_priority     = local.green_explicit_priority != null ? local.green_explicit_priority - 1 : null
 
   # ARN passed to advanced_configuration.test_listener_rule and exported:
   # the module-created rule when configured, else an externally-managed

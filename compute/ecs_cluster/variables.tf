@@ -453,6 +453,17 @@ variable "public_alb_ingress_ipv6_cidr_blocks" {
   default     = ["::/0"]
 }
 
+variable "public_alb_ingress_security_group_ids" {
+  type        = list(string)
+  description = "Security group IDs whose members are allowed to access the public ALB."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.public_alb_ingress_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All public_alb_ingress_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
+}
+
 variable "public_alb_access_logs_enabled" {
   type        = bool
   description = "Enable access logging for the public ALB."
@@ -540,6 +551,17 @@ variable "private_alb_ingress_ipv6_cidr_blocks" {
   type        = list(string)
   description = "IPv6 CIDR blocks allowed to access the private ALB. Defaults to no IPv6 ingress; RFC1918 has no IPv6 equivalent."
   default     = []
+}
+
+variable "private_alb_ingress_security_group_ids" {
+  type        = list(string)
+  description = "Security group IDs whose members are allowed to access the private ALB. Useful for sources without static CIDRs, such as CloudFront VPC origins."
+  default     = []
+
+  validation {
+    condition     = alltrue([for sg in var.private_alb_ingress_security_group_ids : can(regex("^sg-", sg))])
+    error_message = "All private_alb_ingress_security_group_ids must be valid security group IDs starting with 'sg-'."
+  }
 }
 
 variable "private_alb_access_logs_enabled" {

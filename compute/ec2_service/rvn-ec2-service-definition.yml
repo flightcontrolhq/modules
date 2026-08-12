@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 0.1.1
-  description: Reorganize EC2 service inputs and clarify web and storage configuration.
+  version: 1.4.0
+  description: Bound the on-instance app log with configurable Supervisor rotation so a repeatedly restarting service cannot fill the instance disk.
 module:
   inputs:
     - id: network
@@ -126,6 +126,14 @@ module:
       required: false
       show_when:
         deploy_type: container
+    - id: docker_socket_mount_enabled
+      label: Docker socket mount
+      type: boolean
+      description: "Mount the host Docker socket into the container and add the host docker group's GID. This grants the container root-equivalent control of the instance: it can start privileged containers, read the host filesystem, and use the instance role. The container image must include a docker CLI for this to be useful."
+      collapsible: true
+      show_when:
+        deploy_type: container
+      default: false
     - $template: ../../partials/inputs/dockerfile-build.yml
       with:
         show_when:
@@ -260,6 +268,24 @@ module:
           label: ALB ARN suffix
           required: true
           type: string
+        - default: <<ref.stack.output.alb_dns_name>>
+          id: alb_dns_name
+          immutable: true
+          label: ALB DNS name
+          required: false
+          type: string
+        - default: <<ref.input.http_listener_port>>
+          id: alb_http_listener_port
+          immutable: true
+          label: ALB HTTP listener port
+          required: false
+          type: number
+        - default: <<ref.input.https_listener_port>>
+          id: alb_https_listener_port
+          immutable: true
+          label: ALB HTTPS listener port
+          required: false
+          type: number
       required: true
       show_when:
         http_traffic_enabled: true
@@ -280,6 +306,18 @@ module:
           id: private_alb_arn_suffix
           immutable: true
           label: Private ALB ARN suffix
+          type: string
+        - default: <<ref.stack.output.public_alb_dns_name>>
+          id: public_alb_dns_name
+          immutable: true
+          label: Public ALB DNS name
+          required: false
+          type: string
+        - default: <<ref.stack.output.private_alb_dns_name>>
+          id: private_alb_dns_name
+          immutable: true
+          label: Private ALB DNS name
+          required: false
           type: string
       required: true
       show_when:
@@ -449,11 +487,11 @@ module:
     - id: section_storage
       label: Storage
       type: section
-      description: The root volume is the required boot disk, the data volume adds per-instance storage, and EFS provides shared storage that survives instance replacement.
+      description: The root volume is the required boot disk, the data volume adds per-instance storage that persists for the life of the instance, and EFS provides shared storage that also survives instance replacement.
     - id: root_volume_size
       label: Root volume size (GB)
       type: number
-      description: Required encrypted boot disk for the operating system, Docker, and local files. It is deleted when the instance is terminated.
+      description: Required encrypted boot disk for the operating system, Docker, and local files. Its contents persist across deploys, restarts, and stack updates, and are deleted only if the instance itself is replaced.
       collapsible: true
       max: 16384
       min: 8
@@ -461,12 +499,12 @@ module:
     - id: data_volume_creation_enabled
       label: Data volume
       type: boolean
-      description: Attach a second encrypted EBS disk for per-instance files such as caches or generated artifacts. Each instance gets its own disk, which is deleted with that instance.
+      description: Attach a second encrypted EBS disk to keep application data separate from the boot disk, for example a local database, uploads, or a cache. Each instance gets its own disk, which persists for the life of that instance.
       default: false
     - id: data_volume_size
       label: Data volume size (GB)
       type: number
-      description: Size of the dedicated EBS data volume attached to each instance.
+      description: Size of the dedicated EBS data volume attached to each instance. Take EBS snapshots or back up elsewhere if it holds critical data.
       max: 16384
       min: 1
       show_when:
@@ -486,7 +524,7 @@ module:
     - id: efs_enabled
       label: EFS file system
       type: boolean
-      description: Mount a shared network filesystem that every instance can access. Files survive instance replacement and remain available at the configured mount path.
+      description: Mount a shared network filesystem that every instance can access. Use it when multiple instances need the same files, or when files must survive instance replacement without a restore step.
       default: false
     - id: efs
       label: EFS file system
@@ -642,6 +680,22 @@ module:
       collapsible: true
       min: 1
       default: 30
+    - id: log_rotation_max_size_mb
+      label: Log rotation size (MB)
+      type: number
+      description: Size at which supervisord rotates the app log file on the instance. Bounds disk usage when the process restarts repeatedly.
+      collapsible: true
+      min: 1
+      max: 1024
+      default: 20
+    - id: log_rotation_backup_count
+      label: Rotated log files kept
+      type: number
+      description: Number of rotated app log files kept on the instance. On-instance usage is bounded by (this + 1) times the rotation size.
+      collapsible: true
+      min: 1
+      max: 100
+      default: 5
     - $include: ../../partials/inputs/tags.yml
     - $include: ../../partials/inputs/terraform-settings.yml
   stack:
@@ -714,6 +768,8 @@ module:
           module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_security_group_id :
           module.input.private_alb_security_group_id >>
         log_retention_in_days: << module.input.log_retention_in_days >>
+        log_rotation_backup_count: << module.input.log_rotation_backup_count >>
+        log_rotation_max_size_mb: << module.input.log_rotation_max_size_mb >>
         manual_start_command: '<< module.input.deploy_type == "manual" ? module.input.start_command : nil >>'
         max_size: << module.input.max_capacity >>
         min_size: << module.input.min_capacity >>
@@ -723,6 +779,7 @@ module:
         runtime: << module.input.deploy_type >>
         secrets: << module.input.secrets || [] >>
         container_start_command: '<< module.input.deploy_type == "container" ? (module.input.container_start_command || nil) : nil >>'
+        docker_socket_mount_enabled: '<< module.input.deploy_type == "container" ? (module.input.docker_socket_mount_enabled || false) : false >>'
         subnet_ids: "<< module.input.private_subnet_placement_enabled ? module.input.private_subnet_ids : module.input.public_subnet_ids >>"
         tags:
           $include: ../../partials/stack/ravion-tags.yml
@@ -789,6 +846,35 @@ module:
       region: << stack.output.region >>
       target_group_arn: << stack.output.target_group_arn >>
   ui:
+    links: |-
+      <<
+      !module.input.http_traffic_enabled ? [] :
+      len(module.input.host_header_values || []) > 0 ?
+      (module.input.host_header_values[0] contains "*" ? [] :
+      [{"name":"Endpoint","href":
+      ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_https_listener_arn :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_https_listener_arn :
+      module.input.private_alb_https_listener_arn) ? "https://" : "http://") +
+      module.input.host_header_values[0] +
+      (module.input.load_balancer_source != "standalone_alb" ? "" :
+      module.input.alb_https_listener_arn ?
+      ((module.input.alb_https_listener_port || 443) == 443 ? "" : ":" + string(module.input.alb_https_listener_port)) :
+      ((module.input.alb_http_listener_port || 80) == 80 ? "" : ":" + string(module.input.alb_http_listener_port)))}]) :
+      ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_dns_name :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_dns_name :
+      module.input.private_alb_dns_name) ?
+      [{"name":"Endpoint","href":
+      ((module.input.load_balancer_source == "standalone_alb" ? module.input.alb_https_listener_arn :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_https_listener_arn :
+      module.input.private_alb_https_listener_arn) ? "https://" : "http://") +
+      (module.input.load_balancer_source == "standalone_alb" ? module.input.alb_dns_name :
+      module.input.ecs_cluster_alb_visibility == "public" ? module.input.public_alb_dns_name :
+      module.input.private_alb_dns_name) +
+      (module.input.load_balancer_source != "standalone_alb" ? "" :
+      module.input.alb_https_listener_arn ?
+      ((module.input.alb_https_listener_port || 443) == 443 ? "" : ":" + string(module.input.alb_https_listener_port)) :
+      ((module.input.alb_http_listener_port || 80) == 80 ? "" : ":" + string(module.input.alb_http_listener_port)))}] : [])
+      >>
     logs:
       - id: app_logs
         name: App logs
@@ -808,9 +894,11 @@ module:
 
     The EC2 Service module deploys supervisord-managed workloads across an EC2 Auto Scaling Group. Deploys update the existing hosts in place instead of creating a new task or instance for every release. Container mode replaces a Docker container on each host; Manual mode runs host-level preparation commands and then starts a foreground command. You can switch modes without replacing the group.
 
-    Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule. Web services can attach to a standalone Application Load Balancer or reuse the public or private ALB from an ECS cluster. The selected network and load balancer must use the same AWS account, region, and VPC. The Auto Scaling Group can still terminate instances because of scaling, health failures, or operator action. Root and data EBS volumes survive releases, but not instance termination.
+    Ravion provisions the launch template, Auto Scaling Group, instance role and security group, SSM deploy document, app log group, and optional target group and listener rule. Web services can attach to a standalone Application Load Balancer or reuse the public or private ALB from an ECS cluster. The selected network and load balancer must use the same AWS account, region, and VPC.
 
-    Terraform source: [flightcontrolhq/modules/compute/ec2_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ec2_service)
+    Instances are as stable as an EC2 instance you launch yourself in the AWS console. Deploys, app restarts, and stack updates do not replace them, so each instance keeps its root and optional data volume, and everything on those disks, for its whole life. Even changing the AMI leaves running instances alone: the change becomes a new launch template version that only applies to instances launched later, because the module does not run an instance refresh. An instance is replaced when you deliberately terminate or recycle it, for example to roll out that new AMI, when the group scales in, or when it fails its Auto Scaling health check (EC2 by default, or load balancer health when `health_check_type` is set to `ELB`). Replacement is what destroys the volumes, so take regular EBS snapshots or back up off-instance if critical data lives on the disk.
+
+    Terraform source: [ravionhq/modules/compute/ec2_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ec2_service)
 
     ## Use cases
 
@@ -818,12 +906,13 @@ module:
     | --- | --- | --- |
     | Existing host-installed application | Manual deploys can update files and dependencies directly on every host | A legacy Node, Ruby, or JVM service that is not packaged as a container |
     | Host customization is part of the workload | A custom AMI and Additional user data can install agents, libraries, or host services | A vendor runtime that needs an OS package or host monitoring agent |
-    | Disposable per-host state should survive releases | In-place deploys retain each instance's encrypted root and optional data volume | Model files, build artifacts, or a rebuildable local cache |
+    | Local state on disk should stay put across releases | In-place deploys retain each instance's encrypted root and optional data volume | A SQLite database, model files, build artifacts, or a warm local cache |
+    | The app needs the host itself | Manual mode and Additional user data give full access to the instance, including the Docker socket, kernel features, and host services | An agent runtime that starts its own sandbox containers |
     | A container workload needs stable hosts | Container mode replaces the app container without replacing the EC2 instance | A licensed service tied to host identity, when its license permits scaling |
     | Background processing without HTTP routing | Web service can be disabled, leaving a supervised worker group | A queue consumer that specifically needs host access or local cache |
     | Several services share one ALB | Each service owns a target group and host/path listener rule | `api.example.com` and `admin.example.com` on one shared ALB |
 
-    Do not treat per-instance EBS as durable application storage. Use EFS for shared files that must survive instance replacement, and use a managed database for relational or transactional data.
+    Instance disks are a reasonable place for application state, including a local SQLite database, as long as you back it up. Use EFS when several instances must read and write the same files, or when files must be available immediately on a replacement instance without a restore step. Use a managed database when you need relational or transactional data with its own backups, failover, and read scaling.
 
     ## EC2 Service or ECS?
 
@@ -838,7 +927,8 @@ module:
     | Host access | Direct instance access, custom AMI, and bootstrap script | Tasks are the deployment unit; hosts are abstracted or cluster-managed |
     | Process model | One supervised app per instance group | App container plus optional sidecars and release tasks |
     | Capacity | Dedicated Auto Scaling Group for this app | Fargate, Fargate Spot, or shared/dedicated ECS EC2 capacity |
-    | Local storage | EBS survives deploys but is lost with an instance | Task-local storage is ephemeral; EFS can survive task replacement |
+    | Local storage | Instance EBS volumes keep their contents for the life of the instance, at local-disk latency | Task-local storage is ephemeral; EFS can survive task replacement, over the network |
+    | Host-level access | Full instance access, including the Docker socket and host services | Fargate has no host access; ECS on EC2 hosts are cluster-managed |
     | Deployment safety | Sequential in-place updates; a one-instance service has an interruption | Rolling, blue/green, linear, or canary options, depending on the ECS module |
 
     Selecting EC2 capacity for an ECS service does not make it equivalent to this module. ECS on EC2 still deploys replaceable tasks through the ECS scheduler. This module deploys directly to stable hosts and gives the application the whole instance.
@@ -851,6 +941,8 @@ module:
     | Manual | Build disabled | Run Deploy commands as root on every host, then run Start command under supervisord |
 
     Instances are prepared for both modes at launch. Supervisord owns the long-running process and restarts it after an unexpected exit. In Container mode, Start command override replaces the image CMD but preserves its ENTRYPOINT. In Manual mode, the start command must remain in the foreground and should explicitly drop root privileges when the app should run as another user.
+
+    Container workloads that need to orchestrate sibling containers can enable Docker socket mount. The deploy runner bind-mounts `/var/run/docker.sock` at the identical path inside the app container and adds the host `docker` group's GID at container-start time, so the image must include a `docker` CLI. This is Docker-outside-of-Docker: mounting the host Docker socket grants the container root-equivalent control of the instance, including the ability to start privileged containers, read the host filesystem, and use the instance role. Leave it disabled unless this level of access is required.
 
     ## Build sources
 
@@ -884,11 +976,11 @@ module:
 
     Choose Container mode with a custom AMI or Additional user data when the app is containerized but also needs host software that ECS does not model for the service. A typical web configuration uses at least two instances, App port `3000`, Health check path `/health`, and host or path rules on a shared ALB. Use Dockerfile or Railpack for Ravion builds, or Pull from image registry when an external pipeline already publishes the image.
 
-    If the requirement is only "run my container," use ECS instead. The EC2 choice should come from a real host dependency, stable-host requirement, or manual operational constraint.
+    If the requirement is only "run my container," use ECS instead. The EC2 choice should come from a real host dependency, stable-host requirement, or manual operational constraint. Access to the Docker socket, a local database on disk with local-disk latency, or shelling into a long-lived host with SSM Session Manager all qualify. In Container mode, only the data volume and EFS mount path are bind-mounted into the app container, so a workload that needs the host's Docker socket or other host paths belongs in Manual mode.
 
-    ### Worker with a rebuildable local cache
+    ### Worker with local state on disk
 
-    Turn Web service off, keep Container mode, and enable a Data volume mounted at a path such as `/var/cache/app`. This is appropriate when the worker can recreate the cache after an instance is replaced. It is not appropriate for the only copy of jobs, uploads, or database data.
+    Turn Web service off, keep Container mode, and enable a Data volume mounted at a path such as `/var/lib/app`. Container mode bind-mounts that path into the app container, and its contents stay in place across every deploy and restart. Add a backup for anything you cannot lose, such as an EBS snapshot schedule or a periodic sync to S3, because the volume is deleted if the instance is ever replaced. Choose EFS instead when several instances must share the same files.
 
     ## Load balancing and worker mode
 
@@ -923,27 +1015,45 @@ module:
 
     App stdout and stderr from the supervised process are sent to `/ravion/ec2/<service-name>` in CloudWatch Logs. Every deployment and instance has a distinct stream named `deployment/<deployment-id>/instance/<instance-id>`. SSM preparation and deploy-script stdout and stderr are copied into the same instance stream while remaining available with the deployment command.
 
+    Supervisord rotates the log file on the instance so a crash-looping process cannot fill the root volume. Log rotation size (MB) and Rotated log files kept bound on-instance usage to (kept + 1) times the rotation size for each deployment log. Ravion writes the supervisord program configuration after Deploy commands run, so rotation cannot be changed from a deploy command; change these fields instead. Newly launched instances receive the same settings from the launch template.
+
     The dashboard shows desired and in-service instance counts for every service. Web services also show request count, target response time, target 4xx and 5xx responses, and healthy and unhealthy host counts. Worker groups omit load-balancer metrics.
 
-    ## Stable storage
+    ## Storage and durability
 
-    | Storage | Survives deploys | Survives instance termination |
+    | Storage | Survives deploys, restarts, and stack updates | Survives instance replacement |
     | --- | --- | --- |
     | Root volume | Yes | No |
     | Data volume | Yes | No |
     | EFS file system | Yes | Yes |
 
-    Root and Data volumes are encrypted gp3 EBS volumes with delete-on-termination enabled. Use the Data volume only for independent, rebuildable per-host files such as caches, model downloads, or generated artifacts. Do not use it for the only copy of a database, upload, or job.
+    Root and Data volumes are encrypted gp3 EBS volumes attached to the instance. They are durable for the life of the instance: nothing in the normal deploy or update path replaces an instance, so files written to disk stay there, at local-disk latency. This is the same durability model as an EC2 instance you create yourself in the AWS console.
 
-    Enable EFS and select a Ravion EFS module for shared files that must outlive instances. The service mounts the file system through its access point when present and attaches the EFS client security group to each instance. Container mode bind-mounts the Data and EFS host paths into the app container at the same paths.
+    Both volumes are deleted with the instance, which only happens for the three reasons in Instance replacement below. Keep backups of critical data on the disk — an EBS snapshot schedule, database dumps to S3, or a periodic sync — rather than avoiding local storage.
+
+    Enable EFS and select a Ravion EFS module when several instances must share the same files, or when a replacement instance must find the data already in place. The service mounts the file system through its access point when present and attaches the EFS client security group to each instance. Container mode bind-mounts the Data and EFS host paths into the app container at the same paths. EFS is a network file system, so latency-sensitive local state such as an embedded database is usually better on the instance's own volume with backups.
+
+    ## Instance replacement
+
+    Only three things replace a running instance. Everything else — deploys, app crashes and restarts, configuration changes, stack updates — leaves the instance and its disks in place.
+
+    | Trigger | When it happens | How often to expect it |
+    | --- | --- | --- |
+    | You terminate or recycle the instance | Deliberate operator action, typically to roll out a launch template change such as a new AMI | Only when you choose to |
+    | The group scales in | CPU autoscaling scales down, or you lower Minimum/Desired instances | Never with a fixed one-instance group and autoscaling off |
+    | The Auto Scaling health check fails | The instance fails its EC2 status checks | Rare |
+
+    The default `EC2` health check reflects the AWS instance and system status checks: the instance is unreachable, its network or boot state is broken, or the underlying host has failed. It says nothing about your application. A crashed app process does not fail it, because supervisord restarts the process on the same instance, and a failing HTTP health check does not fail it either.
+
+    In practice that makes health-driven replacement an infrequent event tied to underlying hardware or hypervisor failure, not something a bad release or a wedged app triggers. The tradeoff is that a standalone EC2 instance you launch in the console would instead sit impaired until you noticed, while the Auto Scaling Group recovers automatically with a fresh instance and an empty disk.
+
+    Load-balancer health checks do not replace instances. `health_check_type` is `EC2` by default on purpose, because in-place deploys briefly deregister an instance from the target group and ELB health checks would read that as unhealthy and replace it mid-deploy. Set `health_check_type` to `ELB` through Advanced Terraform variables only if you accept that, and expect replacement — and disk loss — whenever the ALB considers an instance unhealthy.
 
     ## Scaling and instance health
 
     Minimum instances and Maximum instances bound the group. Enable CPU autoscaling to target average EC2 CPU utilization. When autoscaling is off, Desired instances sets the initial group size; later external scaling changes are preserved. Instance health check grace period controls how long new instances have before Auto Scaling begins health evaluation.
 
-    The Auto Scaling Group replaces instances that fail EC2 health checks. Load-balancer-based instance replacement is intentionally off by default because in-place deploys briefly deregister instances; override with Advanced Terraform variables (`health_check_type`) if you prefer it.
-
-    Launch template changes such as a new AMI, instance type, volume setting, or Additional user data apply to newly launched instances only. The module does not perform an instance refresh, so recycle existing instances deliberately when a host-level change must roll out.
+    Launch template changes such as a new AMI, instance type, volume setting, or Additional user data apply to newly launched instances only. The module does not perform an instance refresh, so a stack update alone never rolls a new AMI onto running instances; recycle them deliberately when a host-level change must go out. Recycling replaces the instance, which deletes its root and data volumes, so restore from a snapshot or backup afterwards if the instance held state you need.
 
     ## Application configuration
 
@@ -993,6 +1103,7 @@ module:
     | Railpack install / build / start commands | No | Detected | Optional Railpack command overrides |
     | Image repository | Yes* | - | Repository without tag or digest for registry deployments |
     | Start command override | No | Image CMD | Container command override; preserves image ENTRYPOINT |
+    | Docker socket mount | No | false | Mount the host Docker socket and add its group GID for sibling-container orchestration; requires a Docker CLI in the image and grants root-equivalent control of the instance |
     | Build environment variables | No | {} | Values and secret references available only during image builds |
     | Inject environment variables in Dockerfile | No | false | Pass build environment values as Docker build arguments |
     | Builder instance type / size | Yes* | ec2 / c7a.4xlarge | On-demand or Spot build runner and its EC2 size |
@@ -1032,11 +1143,13 @@ module:
     | --- | --- | --- | --- |
     | Runtime environment variables | No | [] | Plain single-line values refreshed on every deploy |
     | Runtime secrets | No | [] | Same-account Secrets Manager or SSM references fetched on each host |
-    | Root volume size (GB) | No | 30 | Encrypted per-instance gp3 volume deleted with the instance |
-    | Data volume / size / mount path | No | false / 20 / /data | Independent encrypted EBS volume for rebuildable per-host files |
-    | EFS file system | No | false | Enable shared storage that outlives instances |
+    | Root volume size (GB) | No | 30 | Encrypted per-instance gp3 volume that lives as long as the instance |
+    | Data volume / size / mount path | No | false / 20 / /data | Separate encrypted EBS volume for per-instance application data |
+    | EFS file system | No | false | Enable shared storage for files several instances must share |
     | EFS file system reference / mount path | Yes* | - / /mnt/efs | Ravion EFS module and its host/container mount path |
     | Log retention (days) | No | 30 | CloudWatch retention for supervised app logs |
+    | Log rotation size (MB) | No | 20 | Size at which supervisord rotates the on-instance app log |
+    | Rotated log files kept | No | 5 | Rotated app log files kept on each instance |
     | Tags | No | Standard Ravion tags | Additional tags applied to resources |
     | Advanced Terraform variables | No | {} | Lower-level overrides for exceptional settings |
     | OpenTofu version override | No | Ravion default | Stack OpenTofu version override |
@@ -1047,7 +1160,7 @@ module:
     ## Design decisions
 
     - ECS is the default recommendation for stateless container services. Use this module when manual host deployment, host customization, or stable-host behavior is an actual requirement.
-    - Deploys are in place by design. They do not replace instances, but scaling, health recovery, and manual operations still can.
+    - Deploys are in place by design. They do not replace instances, so instance disks are durable for the life of the instance; scaling, health recovery, and deliberate recycling for a launch template change are what replace an instance.
     - Instances are prepared for both deploy modes so the Deploy type can change without replacing the group.
     - Supervisord manages one app process per instance. A one-instance service is interrupted while that process is replaced.
     - Supervisor 4.3.0 is installed from PyPI. Instances need outbound access to PyPI or an equivalent package source during bootstrap and when deploys ensure the pinned version.

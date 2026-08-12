@@ -27,7 +27,7 @@ For ALB attachments, the module provisions the production + alternate target-gro
 
 ```hcl
 module "ecs_cluster" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name               = "my-cluster"
   vpc_id             = "vpc-12345678"
@@ -40,7 +40,7 @@ module "ecs_cluster" {
 }
 
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "api"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -89,7 +89,7 @@ module "api_service" {
 
 ```hcl
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name            = "api"
   cluster_arn     = module.ecs_cluster.cluster_arn
@@ -131,7 +131,7 @@ resource "aws_service_discovery_private_dns_namespace" "main" {
 }
 
 module "backend_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "backend"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -157,7 +157,7 @@ module "backend_service" {
 
 ```hcl
 module "tcp_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "tcp-service"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -188,7 +188,7 @@ module "tcp_service" {
 
 ```hcl
 module "worker_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "worker"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -240,7 +240,7 @@ module "worker_service" {
 
 ```hcl
 module "worker_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   name        = "worker"
   cluster_arn = module.ecs_cluster.cluster_arn
@@ -355,7 +355,7 @@ module "worker_service" {
 The `load_balancer_attachment` object includes:
 - `enabled` - Enable load balancer attachment (default: true)
 - `target_group` - Target group configuration (port, protocol, health_check, stickiness)
-- `listener_rules` - ALB listener rules with conditions. Each rule accepts an optional `priority` (1-50000); when omitted, AWS automatically assigns the next available priority after the current highest rule on the listener.
+- `listener_rules` - ALB listener rules with conditions. Each rule accepts an optional `priority` (1-50000); when omitted, the next available priority after the current highest rule on the listener is assigned at apply time. When the green test rule is enabled (ALB traffic-shift deployments), the test rule and the first listener rule always occupy adjacent priority slots: an explicit `priority` puts the production rule there with the test rule one slot ahead, and an omitted `priority` lets the pair land on the next two free slots so multiple services can share a listener without colliding.
 - `nlb_listeners` - Rolling-only NLB listener configurations. Each item defines an NLB ARN, listener port and protocol, container port, target protocol, and optional TLS settings. Listener and container ports must be unique, and ECS supports at most five listeners per service. Configure the complete list when creating the service; changing it later requires replacing the ECS service because its load balancer attachments are deployment-managed.
 - `container_name` / `container_port` - Override container to attach
 

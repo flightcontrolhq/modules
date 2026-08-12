@@ -33,8 +33,9 @@ module "public_alb" {
   deletion_protection_enabled = var.load_balancer_deletion_protection_enabled
 
   # Security
-  ingress_cidr_blocks      = var.public_alb_ingress_cidr_blocks
-  ingress_ipv6_cidr_blocks = var.public_alb_ingress_ipv6_cidr_blocks
+  ingress_cidr_blocks        = var.public_alb_ingress_cidr_blocks
+  ingress_ipv6_cidr_blocks   = var.public_alb_ingress_ipv6_cidr_blocks
+  ingress_security_group_ids = var.public_alb_ingress_security_group_ids
 
   # Access logs
   access_logs_enabled    = var.public_alb_access_logs_enabled
@@ -79,8 +80,9 @@ module "private_alb" {
   deletion_protection_enabled = var.load_balancer_deletion_protection_enabled
 
   # Security
-  ingress_cidr_blocks      = var.private_alb_ingress_cidr_blocks
-  ingress_ipv6_cidr_blocks = var.private_alb_ingress_ipv6_cidr_blocks
+  ingress_cidr_blocks        = var.private_alb_ingress_cidr_blocks
+  ingress_ipv6_cidr_blocks   = var.private_alb_ingress_ipv6_cidr_blocks
+  ingress_security_group_ids = var.private_alb_ingress_security_group_ids
 
   # Access logs
   access_logs_enabled    = var.private_alb_access_logs_enabled

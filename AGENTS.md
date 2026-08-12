@@ -189,7 +189,7 @@ Brief description of what this module creates.
 
 \`\`\`hcl
 module "example" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//category/module?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/modules.git//category/module?ref=v1.0.0"
 
   name = "example"
   # other required inputs
@@ -228,6 +228,11 @@ When adding, modifying, or removing modules:
 4. Remove entries for deleted modules
 
 This is **critical** for maintaining accurate documentation.
+
+The **Published Module Definitions** table in the root `README.md` is generated. After changing a
+definition's `release.version` (or adding/removing a definition), refresh it with `make readme` and
+commit the result. CI checks it with `ravion-modules readme --check` on pull requests and refreshes it
+on `main` after publishing.
 
 ### Before Committing
 
@@ -291,7 +296,7 @@ For changes to `*-definition.yml` files, update the top-level `release.version` 
 - Before bumping, inspect the current branch diff against its base branch and check whether `release.version` or `release.description` for that same definition has already changed.
 - If the branch already contains a release metadata bump for that definition, update the existing `release.description` only when needed to accurately summarize the combined branch changes; do not bump the version again.
 - If no bump exists yet on the branch, choose the semver bump from the authored version based on the user-facing impact: major for breaking config or behavior changes, minor for new modules/features/optional inputs/outputs, and patch for fixes or documentation-only corrections.
-- Keep `release.description` concise and user-facing. It should summarize the publishable change, not mention local publish attempts or implementation details.
+- Keep `release.description` concise and user-facing release-note copy. Describe what the fix or capability does for users, never the implementation mechanism. Good: `Prevent applies from failing with CloudFront in-use errors when disabling a managed feature.` Bad: `Add create_before_destroy to order resource deletion.`
 - After making module-definition changes, publish a local development version for testing unless the user explicitly says not to. Use `make publish-local-dev MODULE=<definition.type>` or the equivalent tooling path.
 
 For local development publishes, do **not** bump `release.version` just to publish a new local copy. The local publish tooling automatically appends the next numeric prerelease suffix to the authored version, such as `0.2.1-1`, `0.2.1-2`, and so on.

@@ -43,7 +43,7 @@ describe("compiler", () => {
             variant: "standard",
             input: {
               source: {
-                repo: "https://github.com/flightcontrolhq/modules",
+                repo: "https://github.com/ravionhq/modules",
                 ref: "ravion-aws-vpc@1.2.3",
                 base_path: "networking/vpc",
               },
@@ -54,7 +54,7 @@ describe("compiler", () => {
         ravion_state_backend_workspace: "<< module.given_id >>",
         type: "opentofu",
         source: {
-          repo: "https://github.com/flightcontrolhq/modules",
+          repo: "https://github.com/ravionhq/modules",
           ref: "ravion-aws-vpc@1.2.3",
           base_path: "networking/vpc",
         },
@@ -62,7 +62,7 @@ describe("compiler", () => {
       deploy: {
         strategy: "rolling",
       },
-      readme: "Terraform source https://github.com/flightcontrolhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
+      readme: "Terraform source https://github.com/ravionhq/modules/tree/ravion-aws-vpc@1.2.3/networking/vpc",
       settings: {
         advanced: {
           retries: 2,
@@ -92,6 +92,20 @@ describe("compiler", () => {
     assert.equal(
       getTerraformVariable(compiled.module, "cloudwatch_alarm_memory_threshold"),
       "<< module.input.cloudwatch_alarm_memory_threshold_mib != null ? int(module.input.cloudwatch_alarm_memory_threshold_mib * 1048576) : 268435456 >>",
+    );
+  });
+
+  it("compiles database password preservation with a false fallback when the input is hidden", async () => {
+    const rds = await compileDefinitionFile(join(repoRoot, "database", "rds", "rvn-rds-definition.yml"));
+    const aurora = await compileDefinitionFile(join(repoRoot, "database", "aurora", "rvn-aurora-definition.yml"));
+
+    assert.equal(
+      getTerraformVariable(rds.module, "master_user_password_preservation_enabled"),
+      "<< module.input.master_user_password_preservation_enabled || false >>",
+    );
+    assert.equal(
+      getTerraformVariable(aurora.module, "master_user_password_preservation_enabled"),
+      "<< module.input.master_user_password_preservation_enabled || false >>",
     );
   });
 
@@ -165,6 +179,31 @@ describe("compiler", () => {
       ecrRepositoryCreationEnabled,
       '<< module.input.build_source == "dockerfile" || module.input.build_source == "railpack" || module.input.build_source == "nixpacks" >>',
     );
+  });
+
+  it("gates the Lambda ECR repository on build source and seeds image-registry creates from an initial ref", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "lambda", "rvn-lambda-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
+
+    const initialImageRef = findInput(inputs, "initial_image_ref");
+    assert.equal(initialImageRef.label, "Initial image tag or digest");
+    assert.equal(initialImageRef.required, true);
+    assert.equal(getBuildSourceShowWhen(initialImageRef), "image_registry");
+
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "section_ecr")), ["dockerfile", "nixpacks"]);
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "ecr_scan_on_push_enabled")), ["dockerfile", "nixpacks"]);
+    assert.deepEqual(getBuildSourceShowWhen(findInput(inputs, "ecr_force_deletion_enabled")), ["dockerfile", "nixpacks"]);
+
+    assert.equal(
+      getTerraformVariable(compiled.module, "ecr_repository_creation_enabled"),
+      '<< module.input.lambda_type != "edge" && module.input.package_type == "Image" && module.input.build_source != "image_registry" >>',
+    );
+
+    const imageUri = assertString(getTerraformVariable(compiled.module, "image_uri"));
+    assert.match(imageUri, /module\.input\.build_source == "image_registry"/);
+    assert.match(imageUri, /module\.input\.initial_image_ref contains "sha256:"/);
+    assert.match(imageUri, /module\.input\.image_repository \+ "@" \+ module\.input\.initial_image_ref/);
+    assert.match(imageUri, /module\.input\.image_repository \+ ":" \+ module\.input\.initial_image_ref/);
   });
 
   it("compiles Railpack inputs and builder object for static builds", async () => {

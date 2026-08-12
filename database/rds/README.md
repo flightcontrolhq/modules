@@ -337,8 +337,9 @@ module "mysql" {
 | read_replica_count | Number of read replicas to create. | `number` | `1` | no |
 | read_replica_instance_class | Instance class for read replicas. | `string` | `null` | no |
 | read_replica_availability_zones | AZs for read replicas. | `list(string)` | `[]` | no |
-| password | Master password (required if master_user_password_management_enabled is false). | `string` | `null` | no |
-| master_user_password_management_enabled | Use Secrets Manager for master password. | `bool` | `true` | no |
+| password | Optional master password when Secrets Manager management is disabled. Leave null to preserve an imported or restored database's externally managed password. | `string` | `null` | no |
+| master_user_password_management_enabled | Use Secrets Manager for the master password. Disable before importing a database whose existing password is managed externally. | `bool` | `true` | no |
+| master_user_password_preservation_enabled | Preserve an existing externally managed password by omitting password configuration. The named database must already exist in AWS, and password management must be disabled. | `bool` | `false` | no |
 | master_user_secret_kms_key_id | KMS key for Secrets Manager secret. | `string` | `null` | no |
 | iam_database_authentication_enabled | Enable IAM database authentication. | `bool` | `false` | no |
 | db_name | Database name to create. | `string` | `null` | no |
@@ -381,6 +382,18 @@ module "mysql" {
 | option_group_engine_version | Option group major engine version. | `string` | `null` | no |
 | options | Options for the option group. | `list(object)` | `[]` | no |
 | blue_green_update | Blue/Green deployment configuration. | `object` | `null` | no |
+| proxy_creation_enabled | Whether to create an RDS Proxy in front of the database. | `bool` | `false` | no |
+| proxy_auth_secret_arns | Secrets Manager secret ARNs for proxy auth (defaults to the managed master user secret). | `list(string)` | `[]` | no |
+| proxy_secret_kms_key_arns | KMS key ARNs used to encrypt the proxy auth secrets (customer-managed keys). | `list(string)` | `[]` | no |
+| proxy_iam_auth_enabled | Require IAM authentication for proxy connections. | `bool` | `false` | no |
+| proxy_tls_requirement_enabled | Require TLS for proxy connections. | `bool` | `true` | no |
+| proxy_debug_logging_enabled | Log detailed proxy connection information to CloudWatch Logs. | `bool` | `false` | no |
+| proxy_idle_client_timeout | Seconds a client connection can be idle before the proxy disconnects it. | `number` | `1800` | no |
+| proxy_connection_borrow_timeout | Seconds the proxy waits for an available connection in the pool. | `number` | `120` | no |
+| proxy_init_query | SQL statements the proxy runs when opening each new database connection. | `string` | `null` | no |
+| proxy_max_connections_percent | Max proxy connection pool size (% of database max_connections). | `number` | `100` | no |
+| proxy_max_idle_connections_percent | Max idle proxy connections (% of database max_connections). | `number` | `50` | no |
+| proxy_session_pinning_filters | Session pinning filters (EXCLUDE_VARIABLE_SETS). | `list(string)` | `[]` | no |
 
 ## Outputs
 
@@ -414,6 +427,9 @@ module "mysql" {
 | db_option_group_arn | The option group ARN. |
 | enhanced_monitoring_iam_role_arn | The Enhanced Monitoring IAM role ARN. |
 | cloudwatch_alarm_arns | Map of CloudWatch alarm ARNs. |
+| proxy_endpoint | The RDS Proxy endpoint (null when no proxy is created). |
+| proxy_arn | The RDS Proxy ARN (null when no proxy is created). |
+| proxy_security_group_id | The RDS Proxy security group ID (null when no proxy is created). |
 
 ## Security Considerations
 

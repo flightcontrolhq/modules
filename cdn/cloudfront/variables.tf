@@ -293,6 +293,17 @@ variable "default_cache_behavior" {
   }
 }
 
+variable "accept_header_cache_key_creation_enabled" {
+  type        = bool
+  description = "Whether to create and use a module-managed cache policy and viewer-request function that preserve the UseOriginCacheControlHeaders-QueryStrings cache key and add normalized Markdown negotiation."
+  default     = false
+
+  validation {
+    condition     = !var.accept_header_cache_key_creation_enabled || var.default_cache_behavior.cache_policy_id == null
+    error_message = "The accept_header_cache_key_creation_enabled option cannot be used with an explicit default_cache_behavior.cache_policy_id."
+  }
+}
+
 ################################################################################
 # Ordered Cache Behaviors
 ################################################################################

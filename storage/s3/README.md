@@ -20,7 +20,7 @@ This module creates an AWS S3 bucket with enterprise-grade security best practic
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name = "my-application-bucket"
 
@@ -34,7 +34,7 @@ module "s3" {
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name       = "my-encrypted-bucket"
   kms_key_id = aws_kms_key.s3.arn
@@ -49,7 +49,7 @@ module "s3" {
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name               = "my-versioned-bucket"
   versioning_enabled = true
@@ -64,7 +64,7 @@ module "s3" {
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name               = "my-lifecycle-bucket"
   versioning_enabled = true
@@ -110,7 +110,7 @@ module "s3" {
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name = "my-cors-bucket"
 
@@ -134,7 +134,7 @@ module "s3" {
 
 ```hcl
 module "alb_logs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-alb-access-logs"
   force_destroy_enabled = true
@@ -156,7 +156,7 @@ module "alb_logs" {
 
 # Use with ALB module
 module "alb" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//networking/alb?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//networking/alb?ref=v1.0.0"
 
   name                   = "main"
   vpc_id                 = module.vpc.vpc_id
@@ -170,7 +170,7 @@ module "alb" {
 
 ```hcl
 module "flow_logs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-vpc-flow-logs"
   force_destroy_enabled = true
@@ -195,7 +195,7 @@ module "flow_logs" {
 
 ```hcl
 module "nlb_logs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name             = "my-nlb-access-logs"
   force_destroy_enabled = true
@@ -220,7 +220,7 @@ module "nlb_logs" {
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name = "private-attachments"
 
@@ -241,7 +241,7 @@ Create or apply the CloudFront distribution first, then add its distribution ARN
 
 ```hcl
 module "s3" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/s3?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/s3?ref=v1.0.0"
 
   name          = "my-full-config-bucket"
   force_destroy_enabled = false

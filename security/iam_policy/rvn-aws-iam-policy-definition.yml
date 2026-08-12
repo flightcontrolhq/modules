@@ -3,8 +3,8 @@ definition:
   name: AWS IAM Policy
   description: Creates one reusable customer-managed AWS IAM policy from structured statements or a complete JSON policy document.
 release:
-  version: 0.1.0
-  description: Initial module definition with immutable policy identity fields and structured statement support.
+  version: 1.0.1
+  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -276,4 +276,4 @@ module:
     - [IAM managed policies](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html)
     - [IAM JSON policy elements](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html)
     - [IAM permissions boundaries](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html)
-    - [Source module](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/security/iam_policy)
+    - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/security/iam_policy)

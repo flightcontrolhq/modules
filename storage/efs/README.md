@@ -20,7 +20,7 @@ This module creates an AWS EFS file system inside a VPC with mount targets, secu
 
 ```hcl
 module "efs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/efs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/efs?ref=v1.0.0"
 
   name       = "my-app-files"
   vpc_id     = module.vpc.vpc_id
@@ -38,7 +38,7 @@ Attach `module.efs.client_security_group_id` to any workload that should mount t
 
 ```hcl
 module "efs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/efs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/efs?ref=v1.0.0"
 
   name       = "my-app-files"
   vpc_id     = module.vpc.vpc_id
@@ -56,7 +56,7 @@ module "efs" {
 
 ```hcl
 module "efs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//storage/efs?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//storage/efs?ref=v1.0.0"
 
   name       = "my-app-files"
   vpc_id     = module.vpc.vpc_id

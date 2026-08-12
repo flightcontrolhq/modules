@@ -9,6 +9,6 @@ module:
   stack:
     type: opentofu
     source:
-      repo: https://github.com/flightcontrolhq/modules
-      ref: https://github.com/flightcontrolhq/modules/tree/$local.unknown/broken
+      repo: https://github.com/ravionhq/modules
+      ref: https://github.com/ravionhq/modules/tree/$local.unknown/broken
       base_path: broken

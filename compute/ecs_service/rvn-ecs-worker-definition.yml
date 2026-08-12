@@ -3,7 +3,7 @@ definition:
   name: ECS Worker
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
-  version: 0.3.4
+  version: 1.1.1
   description: "Pick up the shared ecs_service module source updates from the managed-domains work (no worker-facing input changes)."
 module:
   inputs:
@@ -59,7 +59,7 @@ module:
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
           ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
+          repo: https://github.com/ravionhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
             $merge:
@@ -152,7 +152,7 @@ module:
 
     The ECS Worker module creates an ECS service for background jobs, queue consumers, event processors, and other private workloads in an existing Ravion ECS cluster. It uses the same ECS service Terraform module as ECS Web Server, but does not create or attach a load balancer target group and does not expose a primary container port.
 
-    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+    Terraform source: [ravionhq/modules/compute/ecs_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ecs_service)
 
     ## Use cases
 

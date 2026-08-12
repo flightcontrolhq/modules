@@ -178,6 +178,61 @@ variable "records" {
   }
 
   validation {
+    condition = alltrue(flatten([
+      for v in var.records : [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+          ) : [
+          # ASCII TXT and SPF values are split into 255-byte strings by the module. The AWS
+          # provider represents manually split values with only an internal `" "` separator.
+          # base64 encoding is used to measure bytes rather than Unicode characters:
+          # a base64 string of at most 340 characters encodes at most 255 bytes.
+          for chunk in(
+            contains(["TXT", "SPF"], v.type) && strcontains(value, "\" \"") ? split("\" \"", value) :
+            contains(["TXT", "SPF"], v.type) && !strcontains(value, "\"") && can(regex("^[[:ascii:]]*$", value)) ? [] : [value]
+          ) : length(base64encode(chunk)) <= 340
+        ]
+      ]
+    ]))
+    error_message = "Each DNS record value must be at most 255 bytes per character string, which is the Route 53 limit. TXT and SPF values that use only ASCII characters are split automatically; otherwise, separate strings of at most 255 bytes with an internal quote separator, for example first-part\" \"second-part."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for v in var.records : [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+          # The AWS provider adds the surrounding quotes for TXT and SPF records. Multiple
+          # character strings use only an internal `" "` separator in Terraform configuration.
+          ) : length(regexall("\"", value)) % 2 == 0 && (
+          !contains(["TXT", "SPF"], v.type) ||
+          !strcontains(value, "\"") ||
+          can(regex("^[^\"]+(\" \"[^\"]+)+$", value))
+        )
+      ]
+    ]))
+    error_message = "Each DNS record value must have balanced double quotes. In TXT and SPF values, double quotes may only form the internal separator between character strings, for example first-part\" \"second-part."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.records :
+      sum(concat([0], [
+        for value in concat(
+          coalesce(v.records, []),
+          coalesce(v.record_values, []),
+          v.record_value == null ? [] : [v.record_value]
+        ) : length(base64encode(value)) / 4 * 3 + 1
+      ])) <= 65535
+    ])
+    error_message = "The combined size of all values for a single DNS record must not exceed 65535 bytes, which is the Route 53 limit on the total record data size."
+  }
+
+  validation {
     condition = alltrue([
       for v in var.records :
       (

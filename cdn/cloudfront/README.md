@@ -367,7 +367,7 @@ Redirect rules run at viewer request time before CloudFront contacts an origin. 
 
 ```hcl
 module "cdn" {
-  source = "git::https://github.com/flightcontrolhq/modules.git//cdn/cloudfront?ref=rvn-cloudfront@0.3.0"
+  source = "git::https://github.com/ravionhq/modules.git//cdn/cloudfront?ref=rvn-cloudfront@0.3.0"
 
   name = "marketing"
 
@@ -511,6 +511,7 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 | default_cache_behavior.function_associations | CloudFront Function associations. | `list(object({event_type, function_arn}))` | `[]` | no |
 | default_cache_behavior.lambda_function_associations | Lambda@Edge associations. | `list(object({event_type, lambda_arn, body_inclusion_enabled}))` | `[]` | no |
 | default_cache_behavior.realtime_log_config_arn | Real-time log configuration ARN. | `string` | `null` | no |
+| accept_header_cache_key_creation_enabled | Whether to create and use a module-managed cache policy and viewer-request function that preserve the `UseOriginCacheControlHeaders-QueryStrings` cache key and add normalized Markdown negotiation. The policy includes the viewer `Host`, `Origin`, method-override headers, cookies, and query strings so load balancer routing and cache isolation continue to work. The origin request policy must forward `Accept`. Cannot be combined with `default_cache_behavior.cache_policy_id`. | `bool` | `false` | no |
 
 ### Ordered Cache Behaviors
 
@@ -598,6 +599,7 @@ Access logging is enabled by default. The default destination is CloudWatch Logs
 
 | Name | Description |
 |------|-------------|
+| cache_policy_id | The ID of the cache policy attached to the default behavior, including the module-managed normalized Markdown cache-key policy when enabled. |
 | distribution_ids | A map of distribution key to CloudFront distribution ID. |
 | distribution_arns | A map of distribution key to CloudFront distribution ARN. |
 | distribution_domain_names | A map of distribution key to CloudFront distribution domain name. |
@@ -608,8 +610,8 @@ Access logging is enabled by default. The default destination is CloudWatch Logs
 | distribution_arn | The distribution ARN when exactly one distribution is created (null otherwise). |
 | distribution_domain_name | The distribution domain name when exactly one distribution is created (null otherwise). |
 | distribution_hosted_zone_id | The Route 53 hosted zone ID when exactly one distribution is created (null otherwise). |
-| redirect_function_arn | The managed redirect function ARN (null when redirects are disabled). |
-| redirect_function_name | The managed redirect function name (null when redirects are disabled). |
+| redirect_function_arn | The managed viewer-request function ARN (null when redirects and Accept cache-key normalization are disabled). |
+| redirect_function_name | The managed viewer-request function name (null when redirects and Accept cache-key normalization are disabled). |
 | origin_access_control_ids | A map of origin_id to OAC ID for S3 origins. |
 | logging_bucket_id | The ID of the logging S3 bucket (null if not created). |
 | logging_bucket_arn | The ARN of the logging S3 bucket (null if not created). |

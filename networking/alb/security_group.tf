@@ -53,6 +53,26 @@ module "security_group" {
         ip_protocol = "tcp"
         cidr_ipv6   = cidr
       }
+    ] : [],
+    # HTTP ingress (security groups)
+    local.create_http_listener ? [
+      for sg in var.ingress_security_group_ids : {
+        description                  = "Allow HTTP traffic from security group ${sg}"
+        from_port                    = var.http_listener_port
+        to_port                      = var.http_listener_port
+        ip_protocol                  = "tcp"
+        referenced_security_group_id = sg
+      }
+    ] : [],
+    # HTTPS ingress (security groups)
+    local.create_https_listener ? [
+      for sg in var.ingress_security_group_ids : {
+        description                  = "Allow HTTPS traffic from security group ${sg}"
+        from_port                    = var.https_listener_port
+        to_port                      = var.https_listener_port
+        ip_protocol                  = "tcp"
+        referenced_security_group_id = sg
+      }
     ] : []
   )
 }

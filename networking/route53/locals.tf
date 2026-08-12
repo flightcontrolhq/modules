@@ -31,6 +31,12 @@ locals {
   route53_query_log_service_principal = "route53.${data.aws_partition.current.dns_suffix}"
   route53_query_log_hosted_zone_arn   = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${local.zone_id}"
 
+  # Route 53 stores record data as character strings of at most 255 characters. The AWS provider
+  # adds the surrounding TXT/SPF quotes, so Terraform values contain only the internal `" "`
+  # separator between chunks that DNS clients concatenate back into one value.
+  character_string_max_length = 255
+  chunked_record_types        = ["TXT", "SPF"]
+
   normalized_records = {
     for v in var.records : join("-", compact([v.type, v.name, (
       v.routing_policy != "simple" ||
@@ -40,10 +46,28 @@ locals {
       v.geolocation_routing_policy != null ||
       coalesce(v.multivalue_answer_routing_policy, false) == true
       ) ? v.set_identifier : null])) => {
-      name    = v.name
-      type    = v.type
-      ttl     = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)
-      records = v.alias != null || v.target_type == "alias" ? null : v.records != null ? v.records : v.record_values != null ? v.record_values : v.record_value != null ? [v.record_value] : null
+      name = v.name
+      type = v.type
+      ttl  = v.alias != null || v.target_type == "alias" ? null : coalesce(v.ttl, v.standard_ttl)
+      records = (
+        v.alias != null ||
+        v.target_type == "alias" ||
+        (v.records == null && v.record_values == null && v.record_value == null)
+        ) ? null : [
+        for value in(v.records != null ? v.records : v.record_values != null ? v.record_values : [v.record_value]) : (
+          contains(local.chunked_record_types, v.type) &&
+          length(value) > local.character_string_max_length &&
+          !strcontains(value, "\"") &&
+          can(regex("^[[:ascii:]]*$", value))
+          ) ? join("\" \"", [
+            for i in range(ceil(length(value) / local.character_string_max_length)) :
+            substr(
+              value,
+              i * local.character_string_max_length,
+              min(local.character_string_max_length, length(value) - i * local.character_string_max_length)
+            )
+        ]) : value
+      ]
       set_identifier = (
         v.routing_policy != "simple" ||
         v.weighted_routing_policy != null ||

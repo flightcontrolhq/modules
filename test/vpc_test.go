@@ -4,7 +4,7 @@ package test
 import (
 	"testing"
 
-	"github.com/flightcontrolhq/modules/test/helpers"
+	"github.com/ravionhq/modules/test/helpers"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"

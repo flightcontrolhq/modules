@@ -38,4 +38,9 @@ resource "aws_cloudfront_cache_policy" "this" {
       query_string_behavior = "none"
     }
   }
+
+  # Order distribution detachment before deleting the policy.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

@@ -3,7 +3,7 @@ definition:
   name: AWS Application Load Balancer
   description: Standalone Application Load Balancer (ALB) with HTTP/HTTPS listeners that multiple services can attach listener rules to.
 release:
-  version: 0.1.1
+  version: 1.1.0
   description: "Ship the managed-domains groundwork in the module source: force_http_to_https_redirect removed in favor of listener-owned redirects, HTTPS listener certificate precondition, and the https_listener_certificate_arn output."
 module:
   inputs:
@@ -273,7 +273,7 @@ module:
 
     The load balancer intentionally serves no traffic by itself. Services that reference this module, such as EC2 services, create their own target groups and listener rules on the shared listeners.
 
-    Terraform source: [flightcontrolhq/modules/networking/alb](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/networking/alb)
+    Terraform source: [ravionhq/modules/networking/alb](https://github.com/ravionhq/modules/tree/$local.module_tag/networking/alb)
 
     ## Use cases
 

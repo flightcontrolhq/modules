@@ -3,7 +3,7 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 0.9.1
+  version: 1.2.0
   description: "Add Ravion-managed domains: service domains ride the cluster wildcard certificate automatically, and custom domains get a dedicated certificate with DNS validation, when the selected cluster has managed domains enabled. The Domains section sits right after the service basics."
 module:
   inputs:
@@ -58,6 +58,16 @@ module:
           collapsible: true
           required: false
           default: <<ref.stack.output.private_alb_zone_id>>
+        - default: <<ref.stack.output.public_alb_arn_suffix>>
+          id: public_alb_arn_suffix
+          immutable: true
+          label: Public ALB ARN suffix
+          type: string
+        - default: <<ref.stack.output.private_alb_arn_suffix>>
+          id: private_alb_arn_suffix
+          immutable: true
+          label: Private ALB ARN suffix
+          type: string
       required: true
     - id: section_service
       label: Web service
@@ -364,7 +374,7 @@ module:
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
           ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
+          repo: https://github.com/ravionhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
             $merge:
@@ -555,6 +565,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: RequestCount
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -567,6 +580,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: HTTPCode_Target_5XX_Count
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -579,6 +595,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: HTTPCode_Target_4XX_Count
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -591,6 +610,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: TargetResponseTime
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -603,6 +625,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: HealthyHostCount
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -615,6 +640,9 @@ module:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             TargetGroup: << stack.output.target_group_arn_suffix >>
+            LoadBalancer: >-
+              << module.input.public_web_service_enabled ? module.input.public_alb_arn_suffix :
+              module.input.private_alb_arn_suffix >>
           name: UnHealthyHostCount
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
@@ -628,7 +656,7 @@ module:
 
     The module is intentionally focused on web services behind an Application Load Balancer. It uses the selected ECS cluster to inherit AWS account, region, VPC, subnets, capacity providers, load balancer listeners, and load balancer security groups.
 
-    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+    Terraform source: [ravionhq/modules/compute/ecs_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ecs_service)
 
     ## Use cases
 

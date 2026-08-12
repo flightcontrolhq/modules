@@ -3,7 +3,7 @@ definition:
   name: Static Hosting
   description: Static file hosting for S3-backed sites and assets delivered through CloudFront.
 release:
-  version: 0.3.6
+  version: 1.2.0
   description: "Surface the Domains section (aliases + ACM certificate) right after the hosting basics instead of inside CloudFront settings."
 module:
   build:
@@ -359,7 +359,7 @@ module:
 
     Every deployment is versioned. The deploy step promotes an S3 directory by updating the CloudFront KeyValueStore active pointer. CloudFront rewrites viewer requests to the active version prefix before it reads from S3.
 
-    Terraform source: [flightcontrolhq/modules/hosting/static_site](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/hosting/static_site)
+    Terraform source: [ravionhq/modules/hosting/static_site](https://github.com/ravionhq/modules/tree/$local.module_tag/hosting/static_site)
 
     ## Use cases
 

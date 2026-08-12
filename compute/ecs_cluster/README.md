@@ -23,7 +23,7 @@ This module creates an Amazon ECS cluster with configurable capacity providers (
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -36,7 +36,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -60,7 +60,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -92,7 +92,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -134,7 +134,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -151,7 +151,7 @@ module "ecs" {
 
 ```hcl
 module "ecs" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_cluster?ref=v1.0.0"
 
   name   = "my-app"
   vpc_id = "vpc-12345678"
@@ -166,7 +166,7 @@ module "ecs" {
 
 # Service modules create their own listeners and target groups
 module "api_service" {
-  source = "git::https://github.com/flightcontrolhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
+  source = "git::https://github.com/ravionhq/ravion-modules.git//compute/ecs_service?ref=v1.0.0"
 
   # ... service configuration ...
 
@@ -263,6 +263,7 @@ module "api_service" {
 | public_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | public_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | public_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["0.0.0.0/0"]` | no |
+| public_alb_ingress_security_group_ids | Security group IDs allowed to access the public ALB | `list(string)` | `[]` | no |
 | public_alb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | public_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 | public_alb_web_acl_arn | WAFv2 Web ACL ARN | `string` | `null` | no |
@@ -277,6 +278,7 @@ module "api_service" {
 | private_alb_ssl_policy | SSL policy for HTTPS | `string` | `"ELBSecurityPolicy-TLS13-1-2-2021-06"` | no |
 | private_alb_idle_timeout | Idle timeout in seconds | `number` | `60` | no |
 | private_alb_ingress_cidr_blocks | Allowed IPv4 CIDR blocks | `list(string)` | `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]` | no |
+| private_alb_ingress_security_group_ids | Security group IDs allowed to access the private ALB (e.g., CloudFront VPC origins) | `list(string)` | `[]` | no |
 | private_alb_access_logs_enabled | Enable access logs | `bool` | `false` | no |
 | private_alb_access_logs_bucket_arn | S3 bucket ARN for access logs | `string` | `null` | no |
 

@@ -3,7 +3,7 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
-  version: 0.3.2
+  version: 1.1.1
   description: "Pick up the shared ecs_service module source updates from the managed-domains work (no NLB-facing input changes)."
 module:
   inputs:
@@ -48,6 +48,14 @@ module:
     - id: listeners
       immutable: true
       label: Listeners
+      moved_from:
+        - listener_port
+        - listener_protocol
+        - container_port
+        - tls_certificate
+        - tls_ssl_policy
+        - tls_alpn_policy
+        - tls_target_protocol
       type: object_array
       description: One to five NLB listeners and the unique container port each listener targets.
       required: true
@@ -275,7 +283,7 @@ module:
           branch: main
           execution_environment_id: << module.input.execution_environment_id >>
           ref: $local.module_tag
-          repo: https://github.com/flightcontrolhq/modules
+          repo: https://github.com/ravionhq/modules
           stack_id: <<stack.id>>
           terraform_variables:
             $merge:
@@ -446,7 +454,7 @@ module:
 
     The module is intentionally focused on Layer 4 services behind a Network Load Balancer. Use ECS Web Service for HTTP host and path routing through an Application Load Balancer.
 
-    Terraform source: [flightcontrolhq/modules/compute/ecs_service](https://github.com/flightcontrolhq/modules/tree/$local.module_tag/compute/ecs_service)
+    Terraform source: [ravionhq/modules/compute/ecs_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/ecs_service)
 
     ## Use cases
 
