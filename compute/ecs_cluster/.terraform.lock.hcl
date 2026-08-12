@@ -1,19 +1,6 @@
 # This file is maintained automatically by "tofu init".
 # Manual edits may be lost in future updates.
 
-provider "provider-cf.siddharthsuresh.dev/ravion/ravion" {
-  version     = "1.0.2"
-  constraints = ">= 1.0.2"
-  hashes = [
-    "h1:ccuiGjAmovmbWHM0xle7Biu4dove9If7Lt0VwZxtlYc=",
-    "zh:45020d14e5f0d83aeb67e573923243dba0459d04440ba6c1a345067e9d3cfddb",
-    "zh:763efec9222a15ea3cfc5839eec6795349c56ccb72a0fda0840d47c91ed5e8e4",
-    "zh:c64dcec53299d21111a3aedc624aeca04c29ce4fce63057c1f89db955263d823",
-    "zh:ca3096e44961db8889d96a43c4910951e62226231ee67e48469e686735f26add",
-    "zh:cafa818df7b15e9b9a2b12e4ae32a8ecb92286fa377cc1a89aa55f1a6c8a46d0",
-  ]
-}
-
 provider "registry.opentofu.org/hashicorp/aws" {
   version     = "6.57.1"
   constraints = ">= 6.0.0"

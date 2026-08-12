@@ -15,8 +15,8 @@ terraform {
       version = ">= 6.21"
     }
     ravion = {
-      source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"
-      version = ">= 1.0.2"
+      source  = "d39sxny1zxb1eh.cloudfront.net/ravion/ravion"
+      version = "0.0.1-rc.1"
     }
   }
 }
