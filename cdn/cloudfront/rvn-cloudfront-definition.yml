@@ -908,7 +908,7 @@ module:
     | Allowed methods | Read only | Only GET and HEAD reach the origin; choose Read and OPTIONS or All methods to accept form posts and API writes |
     | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
 
-    With the recommended cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. Preserving Host keeps load balancer listener rules working, and preserving cookies and Host keeps cached responses isolated across sessions and domains. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache policy you created in your own account.
+    With the recommended cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. The cache key includes query strings, and the origin request policy controls what else reaches the origin, so keep AllViewer selected when load balancer listener rules depend on the viewer Host header. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache policy you created in your own account.
 
     Response headers policy is optional and adds headers such as the SecurityHeadersPolicy set or CORS headers to every response.
 
