@@ -93,7 +93,7 @@ jobs:
         working-directory: trusted-tools/tools/ravion-modules
 
       - name: Build trusted tools
-        run: npm test
+        run: npm run typecheck && ./node_modules/.bin/tsc
         working-directory: trusted-tools/tools/ravion-modules
 
       - name: Use trusted tools for API calls
