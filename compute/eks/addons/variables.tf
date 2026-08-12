@@ -673,3 +673,140 @@ variable "karpenter_default_node_pool" {
     error_message = "The karpenter_default_node_pool.architectures entries must be 'amd64' or 'arm64'."
   }
 }
+
+################################################################################
+# Ravion Beacon
+################################################################################
+
+variable "beacon_enabled" {
+  type        = bool
+  description = "Install the Ravion Beacon agent: enroll the cluster with the Ravion control plane, store the returned WorkOS Connect M2M credential in AWS Secrets Manager and in a Kubernetes Secret, and install the agent's Helm chart. Beacon dials Ravion outbound over a single WebSocket and is read-only unless beacon_deploy_enabled, beacon_exec_enabled, or the equivalent chart values are turned on."
+  default     = false
+  nullable    = false
+}
+
+variable "beacon_api_url" {
+  type        = string
+  description = "Base URL of the Ravion API that serves the internal enrollment endpoints, without a trailing slash. The module appends '/internal/beacon/agents'. Same value as the runner's RVN_API_URL, e.g. 'https://api.ravion.com/api/v1'. Required when beacon_enabled is true."
+  default     = null
+
+  validation {
+    condition     = var.beacon_api_url == null || can(regex("^https?://[^/].*[^/]$", var.beacon_api_url))
+    error_message = "The beacon_api_url must be an http(s) URL with no trailing slash, e.g. 'https://api.ravion.com/api/v1'."
+  }
+}
+
+variable "beacon_api_token" {
+  type        = string
+  description = "Runner JWT bearer token authenticating the enrollment call. The organization the cluster is enrolled into is taken from this token's claims and is never sent in the request body, so a token for one tenant cannot enroll a cluster into another. Never written to state or to outputs; it reaches the enrollment step as provisioner environment only. Required when beacon_enabled is true."
+  default     = null
+  sensitive   = true
+}
+
+variable "beacon_endpoint" {
+  type        = string
+  description = "WebSocket endpoint the agent dials. Outbound 443 only, and the single destination a customer's egress policy has to allow. A domain of its own on purpose, so that address need not change when Ravion moves agent connections into their own deployment. Override for staging, a self-hosted control plane, or a local gateway over ws://."
+  default     = "wss://websockets.ravion.com/beacon/v1/connect"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^wss?://", var.beacon_endpoint))
+    error_message = "The beacon_endpoint must be a WebSocket URL starting with 'wss://' (or 'ws://' for local testing)."
+  }
+}
+
+variable "beacon_chart_source" {
+  type        = string
+  description = "Where the agent's Helm chart comes from. An 'oci://' reference is split into repository and chart name; anything else is treated as a filesystem path to a chart directory, which is how the chart is tested before it is published to ECR Public. Must stay publicly pullable: customer clusters cannot pull from Ravion's private ECR."
+  default     = "oci://public.ecr.aws/ravion/beacon"
+  nullable    = false
+
+  validation {
+    condition     = length(var.beacon_chart_source) > 0
+    error_message = "The beacon_chart_source must not be empty."
+  }
+}
+
+variable "beacon_chart_version" {
+  type        = string
+  description = "Version of the Beacon Helm chart to install. When null, Helm resolves the latest. This is the CHART version, not the agent version: the two move independently, because the control plane rolls the agent image forward per cluster while Terraform owns the chart release."
+  default     = null
+
+  validation {
+    condition     = var.beacon_chart_version == null || can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.beacon_chart_version))
+    error_message = "The beacon_chart_version must be a semantic version like '0.2.0' (no leading 'v')."
+  }
+}
+
+variable "beacon_namespace" {
+  type        = string
+  description = "Kubernetes namespace the agent and its credential Secret are installed into. Created if it does not exist."
+  default     = "ravion-beacon"
+  nullable    = false
+}
+
+variable "beacon_namespace_scope" {
+  type        = list(string)
+  description = "Namespaces the agent may observe. Empty (the default) is the whole cluster. Non-empty renders no observation ClusterRole at all — one namespaced Role and RoleBinding per entry instead — so the restriction is enforced by Kubernetes rather than by the agent. A scoped install can read no nodes and no namespaces, so the node count in fleet health is reported as unknown."
+  default     = []
+  nullable    = false
+}
+
+variable "beacon_deploy_enabled" {
+  type        = bool
+  description = "Let Beacon perform Ravion's Helm upgrades from inside the cluster instead of Ravion reaching in from outside. The widest grant the chart can create: in the namespaces below, the agent can create, update and delete Deployments, Services, Jobs, Ingresses and Secrets. It can never create RBAC objects, namespaces, or anything cluster-scoped. Declining it leaves a fully working agent and deploys continue to run from outside the cluster."
+  default     = false
+  nullable    = false
+}
+
+variable "beacon_deploy_namespaces" {
+  type        = list(string)
+  description = "Namespaces Beacon may deploy into. Required when beacon_deploy_enabled is true, falling back to beacon_namespace_scope when empty. If both are empty the install fails rather than granting cluster-wide write: there is no 'deploy everywhere' posture, by design."
+  default     = []
+  nullable    = false
+}
+
+variable "beacon_exec_enabled" {
+  type        = bool
+  description = "Grant a separate ClusterRole allowing 'create' on pods/exec, the only way Beacon can run a command inside a container. Off by default, recorded on the agent at enrollment as well as granted in the cluster, and scoped with beacon_namespace_scope when that is set."
+  default     = false
+  nullable    = false
+}
+
+variable "beacon_self_update_enabled" {
+  type        = bool
+  description = "Let the control plane roll the agent forward by patching its own Deployment. The only write permission the chart creates by default: a namespaced Role scoped by resourceNames to Beacon's own Deployment. Turning it off pins the agent to whatever this module last applied, and you take on keeping it current — Ravion supports two agent minor versions back."
+  default     = true
+  nullable    = false
+}
+
+variable "beacon_image_tag" {
+  type        = string
+  description = "Agent image tag to install. When null, the chart's appVersion is used. This is a FLOOR, not a pin: with self-update on, the control plane moves the running version forward from here and Terraform deliberately ignores subsequent changes to it, so an apply after a staged rollout is a no-op rather than a revert. Changing this value after the release exists therefore requires replacing the release."
+  default     = null
+}
+
+variable "beacon_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the Beacon chart values (later entries win). The route to values this module does not surface directly, e.g. portForward.enabled, helmInventory.enabled, redaction.extraPatterns, image.repository, resources, or tolerations."
+  default     = []
+  nullable    = false
+}
+
+variable "beacon_project_id" {
+  type        = string
+  description = "Ravion project this cluster belongs to, recorded on the agent at enrollment. Optional; the enrollment endpoint accepts the cluster identity alone."
+  default     = null
+}
+
+variable "beacon_environment_id" {
+  type        = string
+  description = "Ravion environment this cluster belongs to, recorded on the agent at enrollment. Optional."
+  default     = null
+}
+
+variable "beacon_aws_account_id" {
+  type        = string
+  description = "Ravion AWS account record the cluster lives in, recorded on the agent at enrollment. This is the Ravion record id (awsact_...), not the 12-digit AWS account number. Optional."
+  default     = null
+}

@@ -66,6 +66,17 @@
   collapsible: true
   required: true
   default: <<ref.stack.output.ravion_runner_role_arn>>
+- id: ravion_runner_security_group_id
+  immutable: true
+  label: Ravion Runner security group ID
+  type: string
+  description: >-
+    Security group the deploy runner's network interface joins so it can reach the cluster API
+    endpoint. Null when the cluster module did not create one, which is only workable if the
+    endpoint is public or the execution environment supplies its own group.
+  collapsible: true
+  required: false
+  default: <<ref.stack.output.ravion_runner_security_group_id>>
 - id: vpc_id
   immutable: true
   label: VPC ID
