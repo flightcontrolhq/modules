@@ -4,8 +4,8 @@ definition:
   description: Creates and manages an Amazon RDS database. Supports PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server engines.
 
 release:
-  version: 1.2.0
-  description: Add optional RDS Proxy connection pooling.
+  version: 1.2.1
+  description: Derive per-input apply-action metadata in the compiled module definition.
 module:
   inputs:
     - id: network
