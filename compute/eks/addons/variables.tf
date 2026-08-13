@@ -92,8 +92,8 @@ variable "ebs_csi_addon_configuration_values" {
 
 variable "cloudwatch_observability_enabled" {
   type        = bool
-  description = "Install the amazon-cloudwatch-observability add-on (Container Insights) and create its Pod Identity role. Collects node, pod, and container metrics and ships container logs to CloudWatch."
-  default     = true
+  description = "Install the amazon-cloudwatch-observability add-on (Container Insights) and create its Pod Identity role. Collects node, pod, and container metrics and ships container logs to CloudWatch. Off by default: Ravion's own pipelines cover both halves - logs_enabled ships logs to Loki on S3, metrics_enabled ships metrics to Amazon Managed Prometheus - so this duplicates them at CloudWatch prices. Turn it on if you want Container Insights in its own right."
+  default     = false
 }
 
 variable "cloudwatch_observability_addon_version" {
@@ -962,4 +962,165 @@ variable "grafana_source_account_id" {
     condition     = var.grafana_source_account_id == null || can(regex("^[0-9]{12}$", var.grafana_source_account_id))
     error_message = "The grafana_source_account_id must be a 12-digit AWS account id."
   }
+}
+
+################################################################################
+# Workload logs (Loki on S3)
+################################################################################
+
+variable "logs_enabled" {
+  type        = bool
+  description = "Collect container logs with Grafana Alloy into an in-cluster Loki that stores to S3 in this account. Loki is never exposed outside the cluster - Ravion reads it through the Beacon agent's tunnel - so no load balancer, no public endpoint, and no log data leaves the customer's account except in answer to a query."
+  default     = false
+  nullable    = false
+}
+
+variable "loki_s3_bucket" {
+  type        = string
+  description = "Existing S3 bucket to store log chunks and the index in. When null, the module creates 'ravion-loki-<cluster>-<account>'. Bring your own to control naming, encryption, or lifecycle policy yourself - the module then manages neither the bucket nor its retention."
+  default     = null
+}
+
+variable "log_retention_days" {
+  type        = number
+  description = "How long logs are queryable. Enforced by Loki's compactor, which deletes chunks whose retention has expired; the created bucket additionally carries a lifecycle expiration a week later as a backstop for anything the compactor orphans."
+  default     = 30
+  nullable    = false
+
+  validation {
+    condition     = var.log_retention_days >= 1 && var.log_retention_days <= 3650
+    error_message = "The log_retention_days must be between 1 and 3650."
+  }
+}
+
+variable "logs_namespace" {
+  type        = string
+  description = "Kubernetes namespace Loki and Alloy are installed into. When null, Beacon's namespace is used, so Ravion's in-cluster components share one namespace. Created if it does not exist."
+  default     = null
+}
+
+variable "loki_chart_version" {
+  type        = string
+  description = "Version of the grafana/loki Helm chart to install."
+  default     = "7.3.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.loki_chart_version))
+    error_message = "The loki_chart_version must be a semantic version like '7.3.0' (no leading 'v')."
+  }
+}
+
+variable "loki_service_account" {
+  type        = string
+  description = "Service account Loki runs as. The Pod Identity association binds the S3 role to this name, so the chart and the association are driven from this single value."
+  default     = "ravion-loki"
+  nullable    = false
+}
+
+variable "loki_resources" {
+  type = object({
+    cpu_request    = optional(string, "200m")
+    memory_request = optional(string, "512Mi")
+    cpu_limit      = optional(string)
+    memory_limit   = optional(string, "1Gi")
+  })
+  description = "Resource requests and limits for the Loki pod. Sized for a small cluster in single-binary mode; raise the memory limit before raising anything else, because query fan-out over many streams is what pushes Loki over. Null limits are omitted."
+  default     = {}
+  nullable    = false
+}
+
+variable "loki_persistence_enabled" {
+  type        = bool
+  description = "Give Loki a PersistentVolumeClaim for its write-ahead log and index cache. Off by default because it needs a working StorageClass - on a Ravion cluster that means ebs_csi_driver_enabled - and an unschedulable PVC is a worse first run than an ephemeral one. With it off, chunks still land in S3; what is lost on a restart is the few minutes of logs not yet flushed."
+  default     = false
+  nullable    = false
+}
+
+variable "loki_persistence_size" {
+  type        = string
+  description = "Size of Loki's local working volume, which holds the write-ahead log, the compactor's working directory, and the index cache - not the logs themselves, which are in S3. Becomes the PersistentVolumeClaim size when loki_persistence_enabled is true, and the emptyDir size limit when it is false."
+  default     = "10Gi"
+  nullable    = false
+}
+
+variable "loki_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the grafana/loki chart values, after the values this module derives (later entries win). The route to simple-scalable mode, caches, tolerations, or a private image registry."
+  default     = []
+  nullable    = false
+}
+
+variable "alloy_chart_version" {
+  type        = string
+  description = "Version of the grafana/alloy Helm chart to install."
+  default     = "1.11.1"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.alloy_chart_version))
+    error_message = "The alloy_chart_version must be a semantic version like '1.11.1' (no leading 'v')."
+  }
+}
+
+variable "alloy_resources" {
+  type = object({
+    cpu_request    = optional(string, "100m")
+    memory_request = optional(string, "128Mi")
+    cpu_limit      = optional(string)
+    memory_limit   = optional(string, "512Mi")
+  })
+  description = "Resource requests and limits for each Alloy pod. It runs on every node, so this is multiplied by the node count - the defaults are deliberately small. Null limits are omitted."
+  default     = {}
+  nullable    = false
+}
+
+variable "alloy_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the grafana/alloy chart values, after the values this module derives (later entries win). The route to tolerations, node selectors, or extra Alloy components."
+  default     = []
+  nullable    = false
+}
+
+################################################################################
+# In-cluster Grafana
+################################################################################
+
+variable "grafana_enabled" {
+  type        = bool
+  description = "Install Grafana in the cluster, preprovisioned with both Ravion datasources: Amazon Managed Prometheus over SigV4 and the in-cluster Loki. This is the only way to see the logs in Grafana - Amazon Managed Grafana runs outside the cluster and cannot reach Loki, which is deliberately not exposed. No ingress is created; reach it with a port-forward or add one through grafana_helm_values."
+  default     = false
+  nullable    = false
+}
+
+variable "grafana_chart_version" {
+  type        = string
+  description = "Version of the grafana Helm chart to install, from the grafana-community repository - the maintained home of this chart since Grafana Labs deprecated their copy in January 2026."
+  default     = "12.10.4"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.grafana_chart_version))
+    error_message = "The grafana_chart_version must be a semantic version like '12.10.4' (no leading 'v')."
+  }
+}
+
+variable "grafana_namespace" {
+  type        = string
+  description = "Kubernetes namespace Grafana is installed into. When null, Beacon's namespace is used. Created if it does not exist."
+  default     = null
+}
+
+variable "grafana_service_account" {
+  type        = string
+  description = "Service account Grafana runs as. The Pod Identity association binds the Amazon Managed Prometheus read role to this name, so Grafana's SigV4 datasource signs with credentials it never stores."
+  default     = "ravion-grafana"
+  nullable    = false
+}
+
+variable "grafana_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the grafana/grafana chart values, after the values this module derives (later entries win). The route to an ingress, persistence, an admin password from an existing secret, dashboards, or resources."
+  default     = []
+  nullable    = false
 }

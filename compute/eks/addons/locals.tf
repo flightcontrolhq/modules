@@ -21,9 +21,14 @@ locals {
     }]
   })
 
-  # Ravion's in-cluster components share one namespace: Beacon, the metrics
-  # collector and kube-state-metrics. Overriding metrics_namespace splits them.
+  # Ravion's in-cluster components share one namespace by default: Beacon, the
+  # metrics collector, kube-state-metrics, Loki, Alloy, and Grafana. Each has
+  # its own override so a cluster that wants them apart can have that, but the
+  # default keeps them together — one namespace to grant Beacon observation on,
+  # and one place to look when the pipeline is the thing that is wrong.
   metrics_namespace = coalesce(var.metrics_namespace, var.beacon_namespace)
+  logs_namespace    = coalesce(var.logs_namespace, var.beacon_namespace)
+  grafana_namespace = coalesce(var.grafana_namespace, var.beacon_namespace)
 }
 
 ################################################################################
