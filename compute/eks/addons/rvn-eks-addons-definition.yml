@@ -1,10 +1,10 @@
 definition:
   type: rvn-eks-addons
   name: EKS Add-ons
-  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, CloudWatch Container Insights, and shared application/network load balancers, each toggled and configured independently.
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, CloudWatch Container Insights, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.1.0
-  description: Initial EKS add-ons definition with selectable Karpenter, AWS Load Balancer Controller, External Secrets Operator, EBS CSI driver, and CloudWatch Container Insights add-ons, plus optional shared ALBs/NLBs that web workloads attach to via TargetGroupBinding.
+  version: 0.4.0
+  description: Ravion EKS Management is simplified to a single toggle plus deploy settings; the endpoint, chart version, namespace, and observed namespaces are now advanced knobs set through Advanced Terraform variables.
 module:
   inputs:
     - id: cluster
@@ -70,6 +70,31 @@ module:
           type: string_array
       required: true
       type: $ref:rvn-eks
+    - description: Ravion's in-cluster agent, Beacon. It dials Ravion outbound over a single WebSocket - nothing ever reaches into the cluster - and reports workload, rollout, and node state back, which is what makes a private-endpoint cluster observable from Ravion at all. Optionally it also runs Ravion's deploys from inside the cluster. Requires Kubernetes API connectivity from the Terraform runner for the install itself.
+      id: section_beacon
+      label: Ravion EKS Management
+      type: section
+    - default: false
+      description: Register this cluster with the Ravion control plane and install the Beacon agent. Ravion issues the agent's credential during the deployment - there is nothing to paste - and it is written into a Kubernetes secret and mirrored into AWS Secrets Manager in your own account. The agent is read-only unless Beacon-run deployments below are enabled. Advanced settings - the agent WebSocket endpoint, Helm chart version, install namespace, and the namespaces the agent may observe - are available through Advanced Terraform variables.
+      id: beacon_enabled
+      label: Ravion EKS Management
+      type: boolean
+    - default: false
+      description: Let Beacon run Ravion's deploys from inside the cluster instead of Ravion reaching in from outside. In the namespaces below the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. Leaving this off still gives a fully working agent - deploys continue to run from outside the cluster.
+      id: beacon_deploy_enabled
+      label: Beacon-run deployments
+      show_when:
+        beacon_enabled: true
+      type: boolean
+    - add_button_label: Add namespace
+      collapsible: true
+      description: Namespaces Beacon may deploy into. Falls back to the observed namespaces (beacon_namespace_scope) when empty. If both are empty the install fails rather than granting cluster-wide write - there is deliberately no deploy-everywhere posture.
+      id: beacon_deploy_namespaces
+      label: Deploy namespaces
+      placeholder: default
+      show_when:
+        beacon_deploy_enabled: true
+      type: string_array
     - description: Just-in-time node autoscaling. Provisions Karpenter end to end - controller and node IAM roles, Pod Identity association, instance profile, interruption queue, EventBridge rules, the controller Helm charts, and a default NodePool. Requires Kubernetes API connectivity from the Terraform runner.
       id: section_karpenter
       label: Karpenter
@@ -490,6 +515,12 @@ module:
         eso_chart_version: << module.input.eso_chart_version || "2.8.0" >>
         eso_namespace: << module.input.eso_namespace || "external-secrets" >>
         eso_secret_arns: '<< module.input.eso_secret_arns != nil ? module.input.eso_secret_arns : [] >>'
+        beacon_enabled: << module.input.beacon_enabled >>
+        beacon_deploy_enabled: << module.input.beacon_deploy_enabled >>
+        beacon_deploy_namespaces: '<< module.input.beacon_deploy_namespaces != nil ? module.input.beacon_deploy_namespaces : [] >>'
+        beacon_project_id: << project.id >>
+        beacon_environment_id: << environment.id >>
+        beacon_aws_account_id: << module.input.aws_account_id >>
         public_subnet_ids: << module.input.public_subnet_ids >>
         load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
         public_alb_enabled: << module.input.public_alb_enabled >>
@@ -550,9 +581,33 @@ module:
     | **External Secrets Operator** | On | Reference-only secrets: workloads name a Secrets Manager secret or SSM parameter by ARN, and the operator materializes it into a Kubernetes secret using its own scoped Pod Identity role |
     | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
     | **Container Insights** | On | Node, pod, and container metrics plus application/data plane logs via the amazon-cloudwatch-observability EKS add-on; populates the cluster module's Metrics and Logs tabs |
+    | **Ravion EKS Management** | Off | Registers the cluster with the Ravion control plane and installs the Beacon agent, which reports workload and node state outbound over a single WebSocket and can optionally run Ravion's deploys from inside the cluster |
     | **Shared load balancers** | Off | Terraform-managed public/private ALBs and NLBs that web workloads attach to via the load balancer controller's TargetGroupBinding — the same shared-LB pattern the ECS Cluster module uses |
 
-    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the load balancer controller, and the External Secrets Operator additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
+    EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the load balancer controller, the External Secrets Operator, and Ravion EKS Management additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
+
+    ## Ravion EKS Management
+
+    Beacon is Ravion's in-cluster agent. It dials the control plane outbound over a single WebSocket and reports workload, rollout, and node state back — the control plane can never dial in, which is what makes a cluster with a private API endpoint observable from Ravion at all. Outbound 443 to the agent endpoint is the only egress a cluster has to allow.
+
+    Enabling the toggle does three things in one deployment: Ravion issues the agent's credential — server-side, authorized by the pipeline's own credentials, so there is no API key to paste — writes it into the agent's Kubernetes secret and mirrors it into a Secrets Manager secret **in your own AWS account**, and installs the agent's Helm chart. The plaintext is issued exactly once; rotating or revoking it is a redeploy, not an API call.
+
+    By default the agent is read-only. One grant widens it, declined by default:
+
+    - **Beacon-run deployments** — lets Ravion's Helm upgrades run from inside the cluster instead of reaching in from outside. Within the named **deploy namespaces** the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. There is no cluster-wide deploy posture: with no namespace named, the install fails rather than granting one. Leaving this off still gives a fully working agent — deploys continue to run from outside the cluster.
+
+    The project, environment, and AWS account this module belongs to are recorded on the agent automatically when its credential is issued; there is nothing to fill in.
+
+    Everything else about the install is tuning, so it is not on the form. Set these through **Advanced Terraform variables** when a cluster needs them:
+
+    | Terraform variable | Default | What it changes |
+    | ------------------ | ------- | --------------- |
+    | `beacon_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
+    | `beacon_chart_version` | Latest | Beacon **chart** version, not the agent version — Ravion rolls the agent image forward independently |
+    | `beacon_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
+    | `beacon_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
+
+    **Deploy namespaces** falls back to `beacon_namespace_scope` when left empty, so a cluster scoped through the advanced variable also bounds Beacon's deploys by default.
 
     ## External secrets
 
@@ -583,7 +638,7 @@ module:
     ## Prerequisites
 
     - An **EKS Cluster** module.
-    - When a Helm-installed add-on runs (**Karpenter**, the **External Secrets Operator**, or any **shared load balancer** - which installs the **load balancer controller**): a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
+    - When a Helm-installed add-on runs (**Karpenter**, the **External Secrets Operator**, **Ravion EKS Management**, or any **shared load balancer** - which installs the **load balancer controller**): a **Terraform execution environment** that can reach the cluster's Kubernetes API endpoint. For private clusters, the execution environment must run inside the cluster VPC with the cluster's **Ravion Runner security group** attached. The other add-ons need no cluster connectivity.
 
     The Helm installs authenticate by assuming the cluster's **Ravion Runner role** (inherited automatically from the cluster reference) — a stable IAM role the EKS Cluster module registers as an access entry with cluster-admin. Per-run pipeline roles never appear in the cluster's access configuration.
 
@@ -602,6 +657,8 @@ module:
     | Readable secret ARNs   | No       | Account + region     | Scopes which Secrets Manager secrets and SSM parameters the operator may read |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
     | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
+    | Ravion EKS Management  | No       | `false`              | Registers the cluster and installs the Beacon agent    |
+    | Beacon-run deployments | No       | `false`             | Lets Beacon run Ravion's deploys from inside the cluster, scoped to named namespaces |
     | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
     | Private ALB            | No       | `false`              | Shared internal ALB                                    |
     | Public / private NLB   | No       | `false`              | Shared Network Load Balancers for TCP/UDP workloads    |

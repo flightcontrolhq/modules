@@ -680,27 +680,9 @@ variable "karpenter_default_node_pool" {
 
 variable "beacon_enabled" {
   type        = bool
-  description = "Install the Ravion Beacon agent: enroll the cluster with the Ravion control plane, store the returned WorkOS Connect M2M credential in AWS Secrets Manager and in a Kubernetes Secret, and install the agent's Helm chart. Beacon dials Ravion outbound over a single WebSocket and is read-only unless beacon_deploy_enabled, beacon_exec_enabled, or the equivalent chart values are turned on."
+  description = "Install the Ravion Beacon agent: mint the cluster's WorkOS M2M credential through the Ravion provider, write it into a Kubernetes Secret (and mirror it into AWS Secrets Manager), and install the agent's Helm chart. The provider authenticates with RAVION_BASE_URL/RAVION_API_KEY from the environment, which a Ravion pipeline injects — there is no API token input. Beacon dials Ravion outbound over a single WebSocket and is read-only unless beacon_deploy_enabled, beacon_exec_enabled, or the equivalent chart values are turned on."
   default     = false
   nullable    = false
-}
-
-variable "beacon_api_url" {
-  type        = string
-  description = "Base URL of the Ravion API that serves the internal enrollment endpoints, without a trailing slash. The module appends '/internal/beacon/agents'. Same value as the runner's RVN_API_URL, e.g. 'https://api.ravion.com/api/v1'. Required when beacon_enabled is true."
-  default     = null
-
-  validation {
-    condition     = var.beacon_api_url == null || can(regex("^https?://[^/].*[^/]$", var.beacon_api_url))
-    error_message = "The beacon_api_url must be an http(s) URL with no trailing slash, e.g. 'https://api.ravion.com/api/v1'."
-  }
-}
-
-variable "beacon_api_token" {
-  type        = string
-  description = "Runner JWT bearer token authenticating the enrollment call. The organization the cluster is enrolled into is taken from this token's claims and is never sent in the request body, so a token for one tenant cannot enroll a cluster into another. Never written to state or to outputs; it reaches the enrollment step as provisioner environment only. Required when beacon_enabled is true."
-  default     = null
-  sensitive   = true
 }
 
 variable "beacon_endpoint" {
@@ -768,7 +750,7 @@ variable "beacon_deploy_namespaces" {
 
 variable "beacon_exec_enabled" {
   type        = bool
-  description = "Grant a separate ClusterRole allowing 'create' on pods/exec, the only way Beacon can run a command inside a container. Off by default, recorded on the agent at enrollment as well as granted in the cluster, and scoped with beacon_namespace_scope when that is set."
+  description = "Grant a separate ClusterRole allowing 'create' on pods/exec, the only way Beacon can run a command inside a container. Off by default, recorded on the agent's credential as well as granted in the cluster, and scoped with beacon_namespace_scope when that is set."
   default     = false
   nullable    = false
 }
@@ -795,18 +777,18 @@ variable "beacon_helm_values" {
 
 variable "beacon_project_id" {
   type        = string
-  description = "Ravion project this cluster belongs to, recorded on the agent at enrollment. Optional; the enrollment endpoint accepts the cluster identity alone."
+  description = "Ravion project this cluster belongs to, recorded on the agent when its credential is minted. Optional; the cluster identity alone is enough."
   default     = null
 }
 
 variable "beacon_environment_id" {
   type        = string
-  description = "Ravion environment this cluster belongs to, recorded on the agent at enrollment. Optional."
+  description = "Ravion environment this cluster belongs to, recorded on the agent when its credential is minted. Optional."
   default     = null
 }
 
 variable "beacon_aws_account_id" {
   type        = string
-  description = "Ravion AWS account record the cluster lives in, recorded on the agent at enrollment. This is the Ravion record id (awsact_...), not the 12-digit AWS account number. Optional."
+  description = "Ravion AWS account record the cluster lives in, recorded on the agent when its credential is minted. This is the Ravion record id (awsact_...), not the 12-digit AWS account number. Optional."
   default     = null
 }

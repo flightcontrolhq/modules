@@ -247,20 +247,23 @@ output "beacon_chart_version" {
 }
 
 output "beacon_agent_id" {
-  description = "Ravion Beacon agent record id (bagt_...) for this cluster (null if disabled). Required to rotate or revoke the credential."
-  # nonsensitive() because this is an opaque record id, not secret material.
-  # Everything read out of the credential document inherits its sensitivity;
-  # only the two fields the API documents as safe to expose are unwrapped, and
-  # the client secret is deliberately not one of them and is never output.
-  value = var.beacon_enabled ? nonsensitive(local.beacon_enrollment.beaconAgentId) : null
+  description = "Ravion Beacon agent record id (bagt_...) for this cluster (null if disabled). Stable across rotations — correlate agent logs by it."
+  # A computed attribute of the credential resource, not secret material: the
+  # client secret is the only sensitive attribute and is never output.
+  value = var.beacon_enabled ? ravion_beacon_credential.this[0].beacon_agent_id : null
 }
 
 output "beacon_client_id" {
-  description = "WorkOS Connect client id the agent authenticates as (null if disabled). Not a secret: it is the 'sub' claim of every token minted for this agent."
-  value       = var.beacon_enabled ? nonsensitive(local.beacon_enrollment.workosClientId) : null
+  description = "WorkOS M2M client id the agent authenticates as (null if disabled). Not a secret, and identical for every cluster in the organization — the shared application's client id."
+  value       = var.beacon_enabled ? ravion_beacon_credential.this[0].client_id : null
+}
+
+output "beacon_client_secret_id" {
+  description = "WorkOS id of the secret issued to this cluster (null if disabled). Not the secret itself: it identifies which credential a connecting agent is presenting."
+  value       = var.beacon_enabled ? ravion_beacon_credential.this[0].secret_id : null
 }
 
 output "beacon_credential_secret_arn" {
-  description = "ARN of the AWS Secrets Manager secret holding the agent's credential document (null if disabled). The only durable copy of the client secret; Ravion stores none."
+  description = "ARN of the AWS Secrets Manager secret mirroring the agent's credential (null if disabled). An operator recovery copy of what Terraform state holds — nothing reads it back."
   value       = var.beacon_enabled ? aws_secretsmanager_secret.beacon_credential[0].arn : null
 }
