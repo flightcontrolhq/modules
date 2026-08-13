@@ -792,3 +792,174 @@ variable "beacon_aws_account_id" {
   description = "Ravion AWS account record the cluster lives in, recorded on the agent when its credential is minted. This is the Ravion record id (awsact_...), not the 12-digit AWS account number. Optional."
   default     = null
 }
+
+################################################################################
+# Workload metrics (Amazon Managed Prometheus)
+################################################################################
+
+variable "metrics_enabled" {
+  type        = bool
+  description = "Collect workload metrics into Amazon Managed Prometheus. Installs kube-state-metrics and an OpenTelemetry collector that scrapes a curated allow-list (cAdvisor, kube-state-metrics, kubelet resource metrics) and remote-writes it to an AMP workspace over SigV4. Also trims the Container Insights add-on to logs only, since its metrics half would then be a second, coarser copy of the same data."
+  default     = false
+  nullable    = false
+}
+
+variable "amp_workspace_id" {
+  type        = string
+  description = "Existing Amazon Managed Prometheus workspace to write into (ws-...). When null, the module creates one for this cluster. Bring your own to share a workspace between clusters, or to write into a workspace in another region."
+  default     = null
+
+  validation {
+    condition     = var.amp_workspace_id == null || can(regex("^ws-[0-9a-fA-F-]+$", var.amp_workspace_id))
+    error_message = "The amp_workspace_id must be an AMP workspace id like 'ws-12345678-abcd-1234-abcd-123456789012'."
+  }
+}
+
+variable "amp_region" {
+  type        = string
+  description = "Region the AMP workspace lives in. When null, the cluster's region is used. Set this for clusters in regions where AMP is unavailable: remote write works cross-region, at the cost of inter-region data transfer."
+  default     = null
+}
+
+variable "amp_alias" {
+  type        = string
+  description = "Alias for the created AMP workspace. When null, 'ravion-<cluster_name>' is used. Ignored when amp_workspace_id is set."
+  default     = null
+
+  validation {
+    condition     = var.amp_alias == null || can(regex("^[0-9A-Za-z][-._0-9A-Za-z]{0,99}$", var.amp_alias))
+    error_message = "The amp_alias must be 1-100 characters of alphanumerics, hyphens, dots, or underscores."
+  }
+}
+
+variable "metrics_namespace" {
+  type        = string
+  description = "Kubernetes namespace the metrics components (kube-state-metrics, OpenTelemetry collector) are installed into. When null, Beacon's namespace is used, so Ravion's in-cluster components share one namespace. Created if it does not exist."
+  default     = null
+}
+
+variable "scrape_interval_seconds" {
+  type        = number
+  description = "How often the collector scrapes each target. Sample count - and therefore AMP cost - scales inversely with this, so lengthening it is the first cost lever."
+  default     = 60
+  nullable    = false
+
+  validation {
+    condition     = var.scrape_interval_seconds >= 15 && var.scrape_interval_seconds <= 300
+    error_message = "The scrape_interval_seconds must be between 15 and 300."
+  }
+}
+
+variable "metrics_additional_allowlist" {
+  type        = list(string)
+  description = "Extra metric-name regexes appended to the curated allow-list on every scrape job. Anything not matched by the base list or by these is dropped before it enters collector memory, so this is the only way to widen what reaches AMP. Entries are alternation branches in a fully anchored regex - 'my_app_.*', not '.*my_app.*'."
+  default     = []
+  nullable    = false
+}
+
+variable "otel_collector_chart_version" {
+  type        = string
+  description = "Version of the community opentelemetry-collector Helm chart used to run the collector."
+  default     = "0.169.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.otel_collector_chart_version))
+    error_message = "The otel_collector_chart_version must be a semantic version like '0.169.0' (no leading 'v')."
+  }
+}
+
+variable "otel_collector_image_repository" {
+  type        = string
+  description = "Collector image. Defaults to the AWS Distro for OpenTelemetry, which is the distribution that ships the sigv4auth extension the AMP remote write depends on. Point this at a private mirror if the cluster cannot reach ECR Public."
+  default     = "public.ecr.aws/aws-observability/aws-otel-collector"
+  nullable    = false
+}
+
+variable "otel_collector_image_tag" {
+  type        = string
+  description = "Tag of the collector image."
+  default     = "v0.49.0"
+  nullable    = false
+}
+
+variable "otel_collector_command_name" {
+  type        = string
+  description = "Binary the collector container runs, as the chart's command.name (it renders '/<name>'). The ADOT image's entrypoint is /awscollector; the upstream contrib image would need 'otelcol-contrib'."
+  default     = "awscollector"
+  nullable    = false
+}
+
+variable "otel_collector_service_account" {
+  type        = string
+  description = "Service account the collector runs as. The Pod Identity association binds the AMP remote-write role to this name, so the chart and the association are driven from this single value."
+  default     = "ravion-otel-collector"
+  nullable    = false
+}
+
+variable "otel_collector_resources" {
+  type = object({
+    cpu_request    = optional(string, "100m")
+    memory_request = optional(string, "256Mi")
+    cpu_limit      = optional(string)
+    memory_limit   = optional(string, "512Mi")
+  })
+  description = "Resource requests and limits for the collector pod. A memory limit is set by default because the collector's memory_limiter processor sizes itself as a percentage of the container limit - with no limit it would measure against the whole node. Null limits are omitted."
+  default     = {}
+  nullable    = false
+}
+
+variable "otel_collector_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the opentelemetry-collector chart values, after the values this module derives (later entries win). The route to tolerations, node selectors, extra scrape jobs, or a second exporter."
+  default     = []
+  nullable    = false
+}
+
+variable "kube_state_metrics_enabled" {
+  type        = bool
+  description = "Install kube-state-metrics alongside the collector. It is the source of every kube_* series in the allow-list (replica counts, restart reasons, pod phase, node conditions), so turning it off leaves only cAdvisor and kubelet metrics. Only takes effect when metrics_enabled is true."
+  default     = true
+  nullable    = false
+}
+
+variable "kube_state_metrics_chart_version" {
+  type        = string
+  description = "Version of the prometheus-community/kube-state-metrics Helm chart to install."
+  default     = "8.3.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.kube_state_metrics_chart_version))
+    error_message = "The kube_state_metrics_chart_version must be a semantic version like '8.3.0' (no leading 'v')."
+  }
+}
+
+variable "kube_state_metrics_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the kube-state-metrics chart values (later entries win), e.g. a narrowed 'collectors' list or a private image registry."
+  default     = []
+  nullable    = false
+}
+
+################################################################################
+# Grafana read access
+################################################################################
+
+variable "grafana_role_enabled" {
+  type        = bool
+  description = "Create an IAM role that Amazon Managed Grafana can assume to read this cluster's telemetry: query access to the AMP workspace and read access to the Container Insights log groups. No Grafana workspace is created - provisioning one requires IAM Identity Center wiring that belongs at the organization level, not in a cluster module."
+  default     = false
+  nullable    = false
+}
+
+variable "grafana_source_account_id" {
+  type        = string
+  description = "AWS account whose Grafana workspaces may assume the read role, enforced with an aws:SourceAccount condition. When null, this account is used. Set it to the account that hosts the Grafana workspace when that differs from the cluster's account."
+  default     = null
+
+  validation {
+    condition     = var.grafana_source_account_id == null || can(regex("^[0-9]{12}$", var.grafana_source_account_id))
+    error_message = "The grafana_source_account_id must be a 12-digit AWS account id."
+  }
+}

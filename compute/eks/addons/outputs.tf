@@ -40,6 +40,21 @@ output "cloudwatch_observability_role_arn" {
   value       = var.cloudwatch_observability_enabled ? module.cloudwatch_observability_role[0].role_arn : null
 }
 
+output "container_log_group" {
+  description = "CloudWatch log group Fluent Bit ships container stdout/stderr to (null if the add-on is disabled). The dashboard's service log views read this group."
+  value       = var.cloudwatch_observability_enabled ? "/aws/containerinsights/${var.cluster_name}/application" : null
+}
+
+output "log_stream_template" {
+  description = "Shape of a log stream name in container_log_group (null if the add-on is disabled). Fluent Bit writes '<node>-<tail tag>', so the stream is node-first and a per-service reader matches the '_<namespace>_' / '_<container>-' substrings or the kubernetes.* fields inside each event — a stream *prefix* cannot scope to a workload."
+  value       = var.cloudwatch_observability_enabled ? local.container_log_stream_template : null
+}
+
+output "dataplane_log_group" {
+  description = "CloudWatch log group Fluent Bit ships kubelet, containerd, and CNI logs to (null if the add-on is disabled)."
+  value       = var.cloudwatch_observability_enabled ? "/aws/containerinsights/${var.cluster_name}/dataplane" : null
+}
+
 ################################################################################
 # External Secrets Operator
 ################################################################################
@@ -266,4 +281,62 @@ output "beacon_client_secret_id" {
 output "beacon_credential_secret_arn" {
   description = "ARN of the AWS Secrets Manager secret mirroring the agent's credential (null if disabled). An operator recovery copy of what Terraform state holds — nothing reads it back."
   value       = var.beacon_enabled ? aws_secretsmanager_secret.beacon_credential[0].arn : null
+}
+
+################################################################################
+# Workload metrics (Amazon Managed Prometheus)
+################################################################################
+
+output "amp_workspace_id" {
+  description = "Amazon Managed Prometheus workspace the collector writes to (null if metrics are disabled). The created workspace, or the one passed as amp_workspace_id."
+  value       = local.amp_workspace_id
+}
+
+output "amp_workspace_arn" {
+  description = "ARN of the AMP workspace (null if metrics are disabled). What a query role or cross-account grant is scoped to."
+  value       = local.amp_workspace_arn
+}
+
+output "amp_remote_write_endpoint" {
+  description = "SigV4-signed remote-write URL the collector posts to (null if metrics are disabled)."
+  value       = local.amp_remote_write_endpoint
+}
+
+output "amp_query_endpoint" {
+  description = "Prometheus-compatible query base URL for the workspace (null if metrics are disabled). Use it as-is as a Grafana datasource URL; append /api/v1/query for the HTTP API."
+  value       = local.amp_query_endpoint
+}
+
+output "amp_region" {
+  description = "Region the AMP workspace lives in (null if metrics are disabled). May differ from the cluster's region when amp_region is set."
+  value       = var.metrics_enabled ? local.amp_region : null
+}
+
+output "metrics_namespace" {
+  description = "Kubernetes namespace the metrics components are installed into (null if metrics are disabled)."
+  value       = var.metrics_enabled ? local.metrics_namespace : null
+}
+
+output "amp_remote_write_role_arn" {
+  description = "ARN of the collector's Pod Identity role, scoped to aps:RemoteWrite on this workspace alone (null if metrics are disabled)."
+  value       = var.metrics_enabled ? module.amp_remote_write_role[0].role_arn : null
+}
+
+output "otel_collector_chart_version" {
+  description = "Installed version of the opentelemetry-collector Helm chart (null if metrics are disabled)."
+  value       = var.metrics_enabled ? helm_release.otel_collector[0].version : null
+}
+
+output "kube_state_metrics_chart_version" {
+  description = "Installed version of the kube-state-metrics Helm chart (null if not installed)."
+  value       = local.kube_state_metrics_install ? helm_release.kube_state_metrics[0].version : null
+}
+
+################################################################################
+# Grafana read access
+################################################################################
+
+output "grafana_role_arn" {
+  description = "ARN of the role Amazon Managed Grafana assumes to query the AMP workspace and read the Container Insights log groups (null if disabled)."
+  value       = var.grafana_role_enabled ? module.grafana_role[0].role_arn : null
 }

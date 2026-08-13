@@ -9,6 +9,8 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | **External Secrets Operator** | `eso_enabled` | `true` | `external-secrets` Helm chart + Pod Identity role scoped to Secrets Manager / Parameter Store reads, plus the cluster-scoped `ravion-aws` and `ravion-aws-parameter-store` `ClusterSecretStore`s |
 | **EBS CSI driver** | `ebs_csi_driver_enabled` | `false` | `aws-ebs-csi-driver` EKS add-on + Pod Identity role |
 | **Container Insights** | `cloudwatch_observability_enabled` | `true` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit) |
+| **Workload metrics** | `metrics_enabled` | `false` | An Amazon Managed Prometheus workspace, a Pod Identity role scoped to `aps:RemoteWrite` on it, `kube-state-metrics`, and an OpenTelemetry collector (ADOT image) that scrapes a curated allow-list and remote-writes it over SigV4. Also trims the Container Insights add-on to logs only |
+| **Grafana read role** | `grafana_role_enabled` | `false` | An IAM role trusted by `grafana.amazonaws.com` with query access to the AMP workspace and read access to the Container Insights log groups |
 | **Ravion Beacon** | `beacon_enabled` | `false` | Mints the cluster's WorkOS M2M credential through the `ravion` provider (`ravion_beacon_credential`), writes it into a Kubernetes `Secret` (local `charts/beacon-credential`) and mirrors it into an AWS Secrets Manager secret, and installs the `beacon` Helm chart — an in-cluster agent that dials Ravion outbound over a single WebSocket |
 | **Shared load balancers** | `public_alb_enabled`, `private_alb_enabled`, `public_nlb_enabled`, `private_nlb_enabled` | `false` | Terraform-managed ALBs/NLBs (via `networking/alb` and `networking/nlb`) that workloads attach to with the load balancer controller's `TargetGroupBinding` CRD, plus cluster security group ingress rules allowing each load balancer to reach pods |
 
@@ -37,6 +39,10 @@ module "eks_addons" {
   # External Secrets Operator (default on) — narrow the read scope from
   # "everything in this account and region" to one prefix
   eso_secret_arns = ["arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*"]
+
+  # Workload metrics into Amazon Managed Prometheus (off by default). Creates
+  # the workspace, installs the collector, and trims Container Insights to logs.
+  metrics_enabled = true
 
   # Shared public ALB that web workloads bind to via TargetGroupBinding
   public_alb_enabled          = true
@@ -97,6 +103,110 @@ spec:
 **IAM scoping.** The operator's Pod Identity role grants `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret`, `ssm:GetParameter`, and `ssm:GetParameters`. Because workload secrets are created long after this stack applies, the default resource scope is every secret and parameter **in this account and region**. Set `eso_secret_arns` to narrow it to specific ARNs or prefixes — or to reach other regions and accounts, which the default deliberately excludes. Secrets encrypted with a customer-managed KMS key additionally need that key listed in `eso_kms_key_arns`; the AWS-managed `aws/secretsmanager` and `aws/ssm` keys need no explicit grant.
 
 **At rest.** The values themselves live only in AWS Secrets Manager / Parameter Store, encrypted with KMS there. The Kubernetes Secrets the operator materializes are stored in etcd under **KMS envelope encryption**, which the [`compute/eks`](..) cluster module enables by default (`secrets_encryption_enabled`, `true`, creating a dedicated CMK per cluster unless `secrets_kms_key_arn` is supplied). Materialized Secrets are still readable by anything with Secret read RBAC in that namespace; mounting values as files via the [AWS Secrets Store CSI driver](https://github.com/aws/secrets-store-csi-driver-provider-aws), which skips the Kubernetes Secret object entirely, is a future hardening option not implemented here.
+
+### Workload metrics (Amazon Managed Prometheus)
+
+`metrics_enabled` turns on a Prometheus pipeline that lives entirely in the customer's account: an [Amazon Managed Prometheus](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html) workspace, `kube-state-metrics`, and a single-replica OpenTelemetry collector running the [AWS Distro for OpenTelemetry](https://aws-otel.github.io/) image. The collector scrapes three targets, drops everything outside a curated allow-list, and remote-writes the rest to the workspace signed with SigV4.
+
+| Target | Reached via | What it contributes |
+|---|---|---|
+| cAdvisor (`/metrics/cadvisor`) | kubelet, through the **API server proxy** (`/api/v1/nodes/<node>/proxy/...`) | Per-container CPU, throttling, memory, network, OOM kills |
+| `kube-state-metrics` | in-cluster Service | Desired vs. actual replicas, pod phase, restart and termination reasons, HPA state, node conditions and capacity |
+| kubelet `/metrics/resource` | kubelet, through the API server proxy | Node CPU and memory headline numbers |
+
+Scraping through the API server proxy rather than each node's port 10250 is what makes this work on private-endpoint clusters and behind restrictive node security groups: the collector needs a network path to the Kubernetes API and nothing else. The cost is `nodes/proxy` in its ClusterRole, which is the only permission beyond reading the node list.
+
+There is deliberately **no node-exporter**: node capacity comes from `kube_node_status_capacity` and node usage from the kubelet, which covers the curated set without a DaemonSet on every node.
+
+**The allow-list is the design.** AMP bills per sample ingested, and an unfiltered Kubernetes cluster produces tens of thousands of series. The collector keeps ~8 cAdvisor families, ~24 kube-state families, and 2 kubelet families — roughly 75 series per pod — with a `keep` action in `metric_relabel_configs`, which runs *before* samples enter collector memory. cAdvisor's `id`, `name` and `image` labels are dropped (they change on every restart and nobody queries them), and cAdvisor's pod-level aggregate rows — the ones with an empty `container` label — are dropped for the CPU, memory and OOM families, but **kept** for the network families, which only exist on those rows.
+
+The base list lives in `locals.tf`. Widen it with `metrics_additional_allowlist`, whose entries are appended to every scrape job:
+
+```hcl
+metrics_enabled              = true
+metrics_additional_allowlist = ["my_app_requests_total", "my_app_.*_seconds"]
+```
+
+Prometheus anchors relabel regexes at both ends, so each entry must match a **whole** metric name: `my_app_.*`, never `.*my_app.*`.
+
+**Cost levers, in order of effect:** `scrape_interval_seconds` (default `60`; sample count scales inversely), the allow-list, and the number of pods. Expect roughly $25–50/month for a 20-service cluster and $150–250/month for 100 services with the curated set.
+
+**The workspace.** One per cluster, aliased `ravion-<cluster_name>`. Set `amp_workspace_id` to bring an existing one instead — for sharing a workspace across clusters, or for reaching one that already exists. `amp_region` puts the workspace (or points remote write at one) in a different region than the cluster, which is the answer for regions where AMP is not offered: remote write works cross-region, at the cost of inter-region data transfer. AMP's regional availability is not validated by this module, because a static region list rots faster than it helps.
+
+**Identity.** The collector's service account is bound by EKS Pod Identity to a role whose only permission is `aps:RemoteWrite` on that single workspace ARN. The `sigv4auth` extension configures no credentials of its own — it signs with whatever the AWS SDK default credential chain resolves, which the Pod Identity Agent populates.
+
+**Namespace.** The metrics components share Beacon's namespace (`beacon_namespace`, default `ravion-beacon`), so Ravion's in-cluster components live in one place. `metrics_namespace` splits them if that is not wanted.
+
+**Sizing.** One collector Deployment scrapes every node, which is comfortable to roughly 100 nodes at a 60-second interval. Past that, the escape hatch is the chart's target allocator with a StatefulSet — deliberately not in this release. `otel_collector_resources` defaults to requests of `100m` / `256Mi` and a memory limit of `512Mi`; the limit matters because the collector's `memory_limiter` processor sizes itself as a percentage of the container limit, and with no limit it would measure against the whole node.
+
+#### Container Insights becomes logs-only
+
+With `metrics_enabled` on, the `amazon-cloudwatch-observability` add-on is reconfigured to ship **container logs only**:
+
+```json
+{"containerInsights":{"enabled":false},"applicationSignals":{"enabled":false},"containerLogs":{"enabled":true}}
+```
+
+Container Insights and the AMP pipeline measure the same containers, so leaving both on is two bills for one answer — and the coarser of the two is the one billed per metric. Logs stay, because the cluster's Logs tab and the per-service log views read the groups this add-on writes.
+
+Three things worth knowing about that default:
+
+- **It only fills a null.** Setting `cloudwatch_observability_addon_configuration_values` yourself always wins, and re-enabling Container Insights metrics alongside AMP is a supported (if expensive) choice.
+- **It needs add-on v6.0.0 or later.** Those configuration keys do not exist in earlier versions and EKS rejects unknown keys, so pinning `cloudwatch_observability_addon_version` below v6 with `metrics_enabled` on fails the plan with an explicit message rather than an opaque API error. Leaving the version null lets AWS resolve a current one.
+- **The CloudWatch agent DaemonSet keeps running.** It emits no metrics once both features are off, but Fluent Bit's Kubernetes filter resolves pod metadata through it (`Use_Pod_Association On`), so disabling the agent outright would degrade the logs the add-on is being kept for.
+
+The log destinations are outputs, so consumers never reconstruct them:
+
+| Output | Value |
+|---|---|
+| `container_log_group` | `/aws/containerinsights/<cluster>/application` |
+| `dataplane_log_group` | `/aws/containerinsights/<cluster>/dataplane` |
+| `log_stream_template` | `{node_name}-application.var.log.containers.{pod_name}_{namespace}_{container_name}-{container_id}.log` |
+
+The stream name is **node-first**: Fluent Bit writes `log_stream_prefix ${HOST_NAME}-` with the tail input's tag appended, and `HOST_NAME` is `spec.nodeName`. A per-service reader therefore cannot use a stream *prefix* — filter on the `_<namespace>_` / `_<container>-` substring of the stream name, or on the `kubernetes.namespace_name` / `kubernetes.pod_name` / `kubernetes.container_name` fields the Kubernetes filter adds to every event.
+
+### Grafana
+
+`grafana_role_enabled` creates an IAM role that Amazon Managed Grafana can assume to read this cluster's telemetry — PromQL against the AMP workspace, Logs Insights against the Container Insights log groups. It is read-only, and the two halves are independent: with `metrics_enabled` off, the role still carries the log grants.
+
+No Grafana workspace is created. Provisioning one requires IAM Identity Center or SAML wiring that is organization-scoped, and putting an org-level blast radius behind a cluster-level toggle is the wrong trade. The trust policy names `grafana.amazonaws.com` with an `aws:SourceAccount` condition (this account by default, `grafana_source_account_id` to point at another), which is the confused-deputy guard AWS documents for service principals.
+
+**Amazon Managed Grafana.** In the workspace's *Data sources* page, add a Prometheus data source and set the URL to the `amp_query_endpoint` output, with SigV4 auth enabled and the `grafana_role_arn` output as the assumed role:
+
+```
+Type:        Prometheus
+URL:         https://aps-workspaces.<region>.amazonaws.com/workspaces/<amp_workspace_id>
+SigV4 auth:  enabled
+Region:      <amp_region>
+Assume role: <grafana_role_arn>
+```
+
+Add a CloudWatch data source against the same role for the log groups.
+
+**Self-hosted Grafana** signs requests itself, so it needs credentials that can assume the role — an instance profile, IRSA, or Pod Identity whose principal is added to `grafana_source_account_id`'s account. The provisioning file:
+
+```yaml
+apiVersion: 1
+datasources:
+  - name: ravion-amp
+    type: prometheus
+    access: proxy
+    url: https://aps-workspaces.<region>.amazonaws.com/workspaces/<amp_workspace_id>
+    jsonData:
+      httpMethod: POST
+      sigV4Auth: true
+      sigV4AuthType: default
+      sigV4Region: <amp_region>
+      sigV4AssumeRoleArn: <grafana_role_arn>
+  - name: ravion-cloudwatch-logs
+    type: cloudwatch
+    jsonData:
+      authType: default
+      defaultRegion: <region>
+      assumeRoleArn: <grafana_role_arn>
+```
+
+Both snippets take their values from module outputs: `amp_query_endpoint`, `amp_region`, `amp_workspace_id`, `grafana_role_arn`, `container_log_group`.
 
 ### Ravion Beacon
 
@@ -266,6 +376,24 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
 | cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity role. | `bool` | `true` | no |
 | cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
+| metrics_enabled | Collect workload metrics into Amazon Managed Prometheus, and trim the Container Insights add-on to logs only. | `bool` | `false` | no |
+| amp_workspace_id | Existing AMP workspace to write into. Null creates one aliased `ravion-<cluster>`. | `string` | `null` | no |
+| amp_region | Region the AMP workspace lives in. Null uses the cluster's region. | `string` | `null` | no |
+| amp_alias | Alias for the created workspace. Null uses `ravion-<cluster_name>`. | `string` | `null` | no |
+| metrics_namespace | Namespace for the metrics components. Null shares Beacon's namespace. | `string` | `null` | no |
+| scrape_interval_seconds | Scrape interval for every job (15-300). The first cost lever. | `number` | `60` | no |
+| metrics_additional_allowlist | Extra whole-name metric regexes appended to the curated allow-list on every job. | `list(string)` | `[]` | no |
+| otel_collector_chart_version | Community opentelemetry-collector chart version. | `string` | `"0.169.0"` | no |
+| otel_collector_image_repository / otel_collector_image_tag | Collector image (ADOT, which ships the `sigv4auth` extension). | `string` | `"public.ecr.aws/aws-observability/aws-otel-collector"` / `"v0.49.0"` | no |
+| otel_collector_command_name | Binary the chart runs as `/<name>`. ADOT's entrypoint is `awscollector`. | `string` | `"awscollector"` | no |
+| otel_collector_service_account | Collector service account; the Pod Identity association binds to this name. | `string` | `"ravion-otel-collector"` | no |
+| otel_collector_resources | Collector requests and limits. A memory limit is set by default because `memory_limiter` sizes itself against it. | `object` | requests `100m`/`256Mi`, limit `512Mi` | no |
+| otel_collector_helm_values | Extra YAML docs merged into the collector chart values. | `list(string)` | `[]` | no |
+| kube_state_metrics_enabled | Install kube-state-metrics alongside the collector (the source of every `kube_*` series). | `bool` | `true` | no |
+| kube_state_metrics_chart_version | prometheus-community/kube-state-metrics chart version. | `string` | `"8.3.0"` | no |
+| kube_state_metrics_helm_values | Extra YAML docs merged into the kube-state-metrics chart values. | `list(string)` | `[]` | no |
+| grafana_role_enabled | Create the IAM role Amazon Managed Grafana assumes to read the workspace and log groups. | `bool` | `false` | no |
+| grafana_source_account_id | Account whose Grafana workspaces may assume that role (`aws:SourceAccount`). Null uses this account. | `string` | `null` | no |
 | beacon_enabled | Mint the cluster's Beacon credential (via the `ravion` provider) and install the Ravion Beacon agent. | `bool` | `false` | no |
 | beacon_endpoint | WebSocket endpoint the agent dials — the single destination an egress policy must allow. | `string` | `"wss://websockets.ravion.com/beacon/v1/connect"` | no |
 | beacon_chart_source | `oci://` reference, or a filesystem path to a chart directory for local testing. | `string` | `"oci://public.ecr.aws/ravion/beacon"` | no |
@@ -315,6 +443,14 @@ All outputs are null when the corresponding add-on is disabled.
 | eso_secrets_manager_store_name / eso_parameter_store_store_name | `ClusterSecretStore` names workload charts reference. |
 | ebs_csi_addon_version / ebs_csi_role_arn | EBS CSI add-on version and Pod Identity role. |
 | cloudwatch_observability_addon_version / cloudwatch_observability_role_arn | Container Insights add-on version and Pod Identity role. |
+| container_log_group / dataplane_log_group | Container Insights log groups Fluent Bit writes to. |
+| log_stream_template | Shape of a stream name in the application log group. Node-first, so a stream *prefix* cannot scope to a workload. |
+| amp_workspace_id / amp_workspace_arn / amp_region | The AMP workspace this cluster's metrics land in — created, or the one passed in. |
+| amp_remote_write_endpoint / amp_query_endpoint | Where the collector writes, and the Prometheus-compatible base URL to query (a Grafana datasource URL as-is). |
+| amp_remote_write_role_arn | Collector Pod Identity role, scoped to `aps:RemoteWrite` on that one workspace. |
+| metrics_namespace | Namespace the metrics components are installed into. |
+| otel_collector_chart_version / kube_state_metrics_chart_version | Installed chart versions for the metrics pipeline. |
+| grafana_role_arn | Role Amazon Managed Grafana assumes to query the workspace and read the log groups. |
 | beacon_namespace / beacon_chart_version | Beacon install location and **chart** version (not the running agent version — the control plane owns that). |
 | beacon_agent_id | Ravion agent record id (`bagt_…`). Stable across rotations — correlate agent logs by it. |
 | beacon_client_id | WorkOS M2M client id the agent authenticates as. Not a secret, and shared by every cluster in the organization. |
@@ -335,6 +471,10 @@ All outputs are null when the corresponding add-on is disabled.
 - For automatic subnet discovery, tag public subnets with `kubernetes.io/role/elb = 1` and private subnets with `kubernetes.io/role/internal-elb = 1`, or specify subnets per Ingress via the `alb.ingress.kubernetes.io/subnets` annotation.
 - Unlike Karpenter, the `external-secrets` chart renders its CRDs as ordinary templates (`installCRDs`, default on), so Helm upgrades them and no separate CRD chart is needed. The `ClusterSecretStore`s are a separate local chart (`charts/external-secrets-resources`) that `depends_on` the operator release, because CRD-kind objects cannot be applied before the operator's CRDs exist and its validating webhook is serving.
 - The External Secrets Operator's `ClusterSecretStore`s carry no `auth` block. The operator resolves credentials through the AWS SDK default credential chain, which the Pod Identity Agent populates from the association this stack creates — so no static AWS credentials exist anywhere in the cluster, and `serviceAccountRef`-style IRSA config is deliberately absent (it conflicts with Pod Identity).
+- Every Helm chart and container image this module installs is **pinned by a variable with a default**, and the defaults move only in a module release. That includes the metrics pipeline: `otel_collector_chart_version`, `otel_collector_image_tag`, and `kube_state_metrics_chart_version`. Overriding one is supported; letting a chart float is not an option the module offers, because a silent upstream bump is an unreviewable change to what runs in a customer's cluster.
+- The metrics collector scrapes the kubelet through the **API server proxy**, not each node's port 10250. That is why it needs `nodes/proxy` in its ClusterRole and why it works unchanged on private-endpoint clusters — the only network path it requires is to the Kubernetes API.
+- The AMP workspace uses the AWS provider's per-resource `region` argument rather than a second provider configuration, so `amp_region` moves the workspace without any aliased-provider plumbing in consumers.
+- `metrics_enabled` changes the Container Insights add-on's behaviour (metrics off, logs on) but never its presence. Turning metrics back off restores the add-on's full default configuration on the next apply.
 - Beacon's credential `Secret` is a separate local chart (`charts/beacon-credential`) rather than a `kubernetes_secret` resource, for the same reason as the `ClusterSecretStore`s: the Helm provider is the only Kubernetes access this stack has. The credential reaches it through `values` wrapped in `sensitive()`, not through `set_sensitive` — Helm's `--set` parser splits on `,`, `.` and `=`, which silently truncates a client secret containing any of them.
 - The beacon chart deliberately creates no credential `Secret` of its own, and grants Beacon **no RBAC on Secrets at all**. The kubelet reads that object and projects it into the container as a read-only volume, which is what keeps the base ClusterRole free of Secret access.
 - The Beacon credential is a Terraform resource (`ravion_beacon_credential`), not a provisioner. A `local-exec` curl used to enroll the cluster and treat the Secrets Manager copy as the idempotency anchor, because the plaintext is returned once and a re-run on a fresh runner had to answer "already enrolled?" with no local state. The provider dissolves that problem rather than working around it: create is idempotent-by-replacement — a create for an already-registered cluster ARN mints a new secret and revokes the old one — so **state is the anchor and Secrets Manager is only a mirror**. It also means no `curl` on the runner, no API-token module input, and nothing enrolled during a plan nobody applies.
