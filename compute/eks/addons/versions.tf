@@ -16,5 +16,11 @@ terraform {
       source  = "hashicorp/helm"
       version = ">= 3.0"
     }
+    # Ravion's own provider, served from Ravion's provider registry. Used only by
+    # beacon.tf, to mint the Beacon agent credential server-side.
+    ravion = {
+      source  = "providers.ravion.com/ravion/ravion"
+      version = "~> 1.0"
+    }
   }
 }
