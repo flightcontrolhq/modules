@@ -40,21 +40,6 @@ output "cloudwatch_observability_role_arn" {
   value       = var.cloudwatch_observability_enabled ? module.cloudwatch_observability_role[0].role_arn : null
 }
 
-output "container_log_group" {
-  description = "CloudWatch log group Fluent Bit ships container stdout/stderr to (null if the add-on is disabled). The dashboard's service log views read this group."
-  value       = var.cloudwatch_observability_enabled ? "/aws/containerinsights/${var.cluster_name}/application" : null
-}
-
-output "log_stream_template" {
-  description = "Shape of a log stream name in container_log_group (null if the add-on is disabled). Fluent Bit writes '<node>-<tail tag>', so the stream is node-first and a per-service reader matches the '_<namespace>_' / '_<container>-' substrings or the kubernetes.* fields inside each event — a stream *prefix* cannot scope to a workload."
-  value       = var.cloudwatch_observability_enabled ? local.container_log_stream_template : null
-}
-
-output "dataplane_log_group" {
-  description = "CloudWatch log group Fluent Bit ships kubelet, containerd, and CNI logs to (null if the add-on is disabled)."
-  value       = var.cloudwatch_observability_enabled ? "/aws/containerinsights/${var.cluster_name}/dataplane" : null
-}
-
 ################################################################################
 # External Secrets Operator
 ################################################################################
@@ -339,4 +324,67 @@ output "kube_state_metrics_chart_version" {
 output "grafana_role_arn" {
   description = "ARN of the role Amazon Managed Grafana assumes to query the AMP workspace and read the Container Insights log groups (null if disabled)."
   value       = var.grafana_role_enabled ? module.grafana_role[0].role_arn : null
+}
+
+################################################################################
+# Workload logs (Loki on S3)
+################################################################################
+
+output "loki_endpoint" {
+  description = "In-cluster base URL of Loki (null if logs are disabled). Reachable only from inside the cluster, by design — Ravion queries it through the Beacon agent's tunnel, so this is the endpoint Beacon's proxy allowlist names, not something to publish."
+  value       = local.loki_endpoint
+}
+
+output "loki_namespace" {
+  description = "Kubernetes namespace Loki and Alloy are installed into (null if logs are disabled)."
+  value       = var.logs_enabled ? local.logs_namespace : null
+}
+
+output "loki_s3_bucket" {
+  description = "S3 bucket holding the log chunks and index (null if logs are disabled). Created by this module unless loki_s3_bucket brought an existing one."
+  value       = local.loki_bucket_name
+}
+
+output "loki_s3_bucket_arn" {
+  description = "ARN of the log bucket (null if logs are disabled). What the Loki role is scoped to."
+  value       = local.loki_bucket_arn
+}
+
+output "loki_role_arn" {
+  description = "ARN of Loki's Pod Identity role, scoped to read, write, and delete on the log bucket alone (null if logs are disabled). Delete is what lets the compactor enforce retention."
+  value       = var.logs_enabled ? module.loki_role[0].role_arn : null
+}
+
+output "log_retention_days" {
+  description = "How long logs stay queryable (null if logs are disabled). Enforced by Loki's compactor; the bucket lifecycle rule sweeps a week later as a backstop."
+  value       = var.logs_enabled ? var.log_retention_days : null
+}
+
+output "loki_chart_version" {
+  description = "Installed version of the grafana/loki Helm chart (null if logs are disabled)."
+  value       = var.logs_enabled ? helm_release.loki[0].version : null
+}
+
+output "alloy_chart_version" {
+  description = "Installed version of the grafana/alloy Helm chart (null if logs are disabled)."
+  value       = var.logs_enabled ? helm_release.alloy[0].version : null
+}
+
+################################################################################
+# In-cluster Grafana
+################################################################################
+
+output "grafana_namespace" {
+  description = "Kubernetes namespace the in-cluster Grafana is installed into (null if disabled)."
+  value       = var.grafana_enabled ? local.grafana_namespace : null
+}
+
+output "grafana_service" {
+  description = "In-cluster Grafana Service (null if disabled). No ingress is created: reach it with 'kubectl -n <namespace> port-forward svc/<service> 3000:80', or add an ingress through grafana_helm_values."
+  value       = var.grafana_enabled ? local.grafana_release_name : null
+}
+
+output "grafana_amp_role_arn" {
+  description = "ARN of the in-cluster Grafana's Pod Identity role for querying the AMP workspace (null when Grafana or metrics are disabled). Distinct from grafana_role_arn, which is for Amazon Managed Grafana reaching in from outside."
+  value       = var.grafana_enabled && var.metrics_enabled ? module.grafana_workspace_read_role[0].role_arn : null
 }

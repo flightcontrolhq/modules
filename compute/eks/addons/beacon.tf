@@ -232,6 +232,10 @@ resource "helm_release" "beacon" {
         }
       }),
     ],
+    # Names the in-cluster Loki as the one URL Beacon may proxy a query to.
+    # Defined in loki.tf, because what may be reached is a property of the thing
+    # being reached — and PENDING A CHART CONTRACT: see the comment there.
+    local.beacon_log_proxy_values,
     var.beacon_helm_values,
   )
 
