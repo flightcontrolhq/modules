@@ -15,8 +15,8 @@ terraform {
     # Ravion domains provider — only exercised when
     # var.use_ravion_managed_domains = true (see ravion_domains.tf).
     ravion = {
-      source  = "d39sxny1zxb1eh.cloudfront.net/ravion/ravion"
-      version = "0.0.1-rc.1"
+      source  = "providers.ravion.com/ravion/ravion"
+      version = "0.0.2-rc.1"
     }
   }
 }
