@@ -68,7 +68,7 @@ Newest generations reach the largest regions first, so a region can top out a ge
 
 Prefer Graviton whenever the workload can run on it: best price and performance in every family that offers it, and with `ami_id` left null the module reads `supported_architectures` from the selected instance type and resolves the matching `arm64` Amazon Linux 2023 AMI, so no other input changes. A custom `ami_id` is used as given, so it must already match the instance type's architecture. The container image (`container` runtime) or host-installed dependencies (`manual` runtime) must build for `arm64`. Use an Intel or AMD type when something in the stack is `x86_64`-only.
 
-Then right-size from measurement: start with the smallest size in the family that holds the working set, watch CPU and memory, and move up a size or set `cpu_autoscaling_enabled` from there.
+Then right-size from measurement: start with the smallest size in the family that holds the working set, watch the instances' CPU utilization, and move up a size or set `cpu_autoscaling_enabled` from there. Memory is not measurable from AWS by default — the module's CloudWatch agent config ships app logs only, and the instance role has no `cloudwatch:PutMetricData` — so size memory from what the app itself reports, or extend the agent with a metrics config and grant that permission through the instance role.
 
 Changing `instance_type` produces a new launch template version that applies to instances launched afterwards. Running instances keep their current type until recycled, and a Graviton/x86 switch changes the AMI for new instances only, so the group can briefly run both architectures mid-recycle. Either keep multi-architecture images during that window or recycle every instance promptly.
 

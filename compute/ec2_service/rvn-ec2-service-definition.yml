@@ -962,7 +962,7 @@ module:
 
     Prefer Graviton whenever the workload can run on it: it is the best price and performance in every family that offers it, and Ravion resolves the matching `arm64` Amazon Linux 2023 AMI from the instance type automatically, so nothing else needs configuring. A Custom AMI ID is used exactly as given, so set one only when it already matches the instance type's architecture. The requirement is that your container image (Container mode) or host-installed dependencies (Manual mode) build for `arm64`. Choose an Intel or AMD type when something in the stack is `x86_64`-only.
 
-    Then right-size from measurement rather than guessing: start with the smallest size in the chosen family that holds the working set, watch the service CPU and memory metrics, and move up a size or enable CPU autoscaling from there.
+    Then right-size from measurement rather than guessing: start with the smallest size in the chosen family that holds the working set, watch instance CPU utilization in AWS, and move up a size or enable CPU autoscaling from there. Memory is not collected by default, since the instances publish app logs but no custom metrics, so size memory from what the application itself reports.
 
     Changing Instance type later applies to instances launched after the change. Running instances keep their current type until you recycle them, and a Graviton/x86 switch changes the AMI for new instances only, so a group can briefly run both architectures mid-recycle. Container images must work on both architectures during that window, or recycle every instance promptly after the change.
 
