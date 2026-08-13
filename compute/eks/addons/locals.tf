@@ -20,4 +20,90 @@ locals {
       Action    = ["sts:AssumeRole", "sts:TagSession"]
     }]
   })
+
+  # Ravion's in-cluster components share one namespace: Beacon, the metrics
+  # collector and kube-state-metrics. Overriding metrics_namespace splits them.
+  metrics_namespace = coalesce(var.metrics_namespace, var.beacon_namespace)
+}
+
+################################################################################
+# Curated metric allow-list
+#
+# The load-bearing part of the metrics pipeline. Kubernetes exposes tens of
+# thousands of series per cluster; AMP bills per sample ingested, so the
+# collector keeps a named set and drops everything else with a `keep` action in
+# metric_relabel_configs — before the samples enter collector memory, not after.
+#
+# One list per scrape job, because a family only ever comes from one of them.
+# Each is concatenated with `up` (scrape health is the first debugging
+# question) and with var.metrics_additional_allowlist, then joined into a single
+# alternation. Prometheus anchors relabel regexes at both ends, so each branch
+# must match a whole metric name: "my_app_.*", never ".*my_app.*".
+################################################################################
+
+locals {
+  # kubelet /metrics/cadvisor — per-container resource usage.
+  metrics_cadvisor_allowlist = [
+    "container_cpu_usage_seconds_total",
+    "container_cpu_cfs_throttled_periods_total",
+    "container_cpu_cfs_periods_total",
+    "container_memory_working_set_bytes",
+    "container_memory_rss",
+    "container_network_receive_bytes_total",
+    "container_network_transmit_bytes_total",
+    "container_oom_events_total",
+  ]
+
+  # kube-state-metrics — desired vs. actual state of the objects Ravion renders.
+  metrics_kube_state_allowlist = [
+    "kube_pod_info",
+    "kube_pod_owner",
+    "kube_pod_status_phase",
+    "kube_pod_status_ready",
+    "kube_pod_container_status_restarts_total",
+    "kube_pod_container_status_waiting_reason",
+    "kube_pod_container_status_last_terminated_reason",
+    "kube_pod_container_resource_requests",
+    "kube_pod_container_resource_limits",
+    "kube_deployment_spec_replicas",
+    "kube_deployment_status_replicas_available",
+    "kube_deployment_status_replicas_unavailable",
+    "kube_statefulset_replicas",
+    "kube_statefulset_status_replicas_ready",
+    "kube_daemonset_status_desired_number_scheduled",
+    "kube_daemonset_status_number_ready",
+    "kube_job_status_failed",
+    "kube_job_status_succeeded",
+    "kube_horizontalpodautoscaler_spec_max_replicas",
+    "kube_horizontalpodautoscaler_status_current_replicas",
+    "kube_horizontalpodautoscaler_status_desired_replicas",
+    "kube_node_status_condition",
+    "kube_node_status_allocatable",
+    "kube_node_status_capacity",
+  ]
+
+  # kubelet /metrics/resource — node headline usage, which is what makes a
+  # node-exporter DaemonSet unnecessary in this pipeline.
+  metrics_kubelet_resource_allowlist = [
+    "node_cpu_usage_seconds_total",
+    "node_memory_working_set_bytes",
+  ]
+
+  metrics_cadvisor_keep_regex = join("|", concat(
+    local.metrics_cadvisor_allowlist,
+    ["up"],
+    var.metrics_additional_allowlist,
+  ))
+
+  metrics_kube_state_keep_regex = join("|", concat(
+    local.metrics_kube_state_allowlist,
+    ["up"],
+    var.metrics_additional_allowlist,
+  ))
+
+  metrics_kubelet_resource_keep_regex = join("|", concat(
+    local.metrics_kubelet_resource_allowlist,
+    ["up"],
+    var.metrics_additional_allowlist,
+  ))
 }

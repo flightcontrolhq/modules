@@ -1,10 +1,10 @@
 definition:
   type: rvn-eks-addons
   name: EKS Add-ons
-  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, CloudWatch Container Insights, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, CloudWatch Container Insights, workload metrics into Amazon Managed Prometheus, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.4.0
-  description: Ravion EKS Management is simplified to a single toggle plus deploy settings; the endpoint, chart version, namespace, and observed namespaces are now advanced knobs set through Advanced Terraform variables.
+  version: 0.5.0
+  description: Adds workload metrics for EKS clusters. Turning on Metrics collects per-container CPU, memory, network, restart, and scaling metrics into an Amazon Managed Prometheus workspace in your own account, on a curated metric set chosen to keep the bill predictable, and switches Container Insights to logs only so the same containers are not measured and billed twice. An optional read-only role lets Grafana query the workspace and the cluster's log groups.
 module:
   inputs:
     - id: cluster
@@ -166,6 +166,36 @@ module:
       show_when:
         cloudwatch_observability_enabled: true
       type: string
+    - description: Per-container CPU, memory, network, restart, and scaling metrics collected into an Amazon Managed Prometheus workspace in your own AWS account, shown on the service Metrics tabs. Uses a curated metric set chosen to keep the bill predictable, and switches Container Insights to logs only while it is on, so the same containers are not measured and billed twice. Requires Kubernetes API connectivity from the Terraform runner.
+      id: section_metrics
+      label: Metrics (Amazon Managed Prometheus)
+      type: section
+    - default: false
+      description: Create an Amazon Managed Prometheus workspace for this cluster and install the metric collectors into it. Billed per metric sample ingested - roughly $25-50 a month for a 20-service cluster. Advanced settings - scrape interval, extra metric names to keep, chart versions, collector resources, and the install namespace - are available through Advanced Terraform variables.
+      id: metrics_enabled
+      label: Metrics
+      type: boolean
+    - collapsible: true
+      description: Write into an existing Amazon Managed Prometheus workspace instead of creating one. Leave blank to create a workspace for this cluster.
+      id: amp_workspace_id
+      label: Existing workspace ID
+      placeholder: ws-12345678-abcd-1234-abcd-123456789012
+      show_when:
+        metrics_enabled: true
+      type: string
+    - collapsible: true
+      description: Region the workspace lives in. Leave blank to use the cluster's region. Set this when the cluster runs in a region where Amazon Managed Prometheus is not offered - metrics are written across regions, at the cost of inter-region data transfer.
+      id: amp_region
+      label: Workspace region
+      show_when:
+        metrics_enabled: true
+      type: string
+      values: $values:aws/regions
+    - default: false
+      description: Create a read-only IAM role that Amazon Managed Grafana can assume to query this cluster's metrics and logs. No Grafana workspace is created - Grafana workspaces are set up once for an organization, not per cluster.
+      id: grafana_role_enabled
+      label: Grafana read access
+      type: boolean
     - description: Reference-only secrets for workloads. The External Secrets Operator reads the Secrets Manager secrets and SSM parameters that services reference by ARN and materializes them into Kubernetes secrets, so secret values never pass through Ravion, Helm values, or release history. Requires Kubernetes API connectivity from the Terraform runner.
       id: section_external_secrets
       label: External secrets
@@ -511,6 +541,10 @@ module:
         ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
         cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
         cloudwatch_observability_addon_version: << module.input.cloudwatch_observability_addon_version >>
+        metrics_enabled: << module.input.metrics_enabled >>
+        amp_workspace_id: << module.input.amp_workspace_id >>
+        amp_region: << module.input.amp_region >>
+        grafana_role_enabled: << module.input.grafana_role_enabled >>
         eso_enabled: '<< module.input.eso_enabled != nil ? module.input.eso_enabled : true >>'
         eso_chart_version: << module.input.eso_chart_version || "2.8.0" >>
         eso_namespace: << module.input.eso_namespace || "external-secrets" >>
@@ -657,6 +691,9 @@ module:
     | Readable secret ARNs   | No       | Account + region     | Scopes which Secrets Manager secrets and SSM parameters the operator may read |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
     | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
+    | Metrics                | No       | `false`              | Amazon Managed Prometheus workspace, kube-state-metrics, and an OpenTelemetry collector on a curated metric set |
+    | Existing workspace ID  | No       | Creates one          | Write into an existing AMP workspace instead of creating `ravion-<cluster>` |
+    | Grafana read access    | No       | `false`              | Read-only IAM role for Amazon Managed Grafana over the workspace and log groups |
     | Ravion EKS Management  | No       | `false`              | Registers the cluster and installs the Beacon agent    |
     | Beacon-run deployments | No       | `false`             | Lets Beacon run Ravion's deploys from inside the cluster, scoped to named namespaces |
     | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
@@ -677,3 +714,5 @@ module:
     - [External Secrets Operator](https://external-secrets.io/) - Referencing AWS secrets from Kubernetes workloads
     - [Amazon EBS CSI driver](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html) - Persistent volumes on EKS
     - [Container Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContainerInsights.html) - Cluster observability
+    - [Amazon Managed Prometheus](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html) - Managed Prometheus workspaces and pricing
+    - [Querying an AMP workspace from Grafana](https://docs.aws.amazon.com/grafana/latest/userguide/prometheus-data-source.html) - Configuring the data source
