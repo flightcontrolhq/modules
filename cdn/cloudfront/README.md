@@ -598,6 +598,7 @@ Access logging is enabled by default. The default destination is CloudWatch Logs
 
 | Name | Description |
 |------|-------------|
+| cache_policy_id | The configured ID of the cache policy attached to the default behavior. |
 | distribution_ids | A map of distribution key to CloudFront distribution ID. |
 | distribution_arns | A map of distribution key to CloudFront distribution ARN. |
 | distribution_domain_names | A map of distribution key to CloudFront distribution domain name. |
@@ -608,8 +609,8 @@ Access logging is enabled by default. The default destination is CloudWatch Logs
 | distribution_arn | The distribution ARN when exactly one distribution is created (null otherwise). |
 | distribution_domain_name | The distribution domain name when exactly one distribution is created (null otherwise). |
 | distribution_hosted_zone_id | The Route 53 hosted zone ID when exactly one distribution is created (null otherwise). |
-| redirect_function_arn | The managed redirect function ARN (null when redirects are disabled). |
-| redirect_function_name | The managed redirect function name (null when redirects are disabled). |
+| redirect_function_arn | The managed viewer-request function ARN (null when redirects and Accept cache-key normalization are disabled). |
+| redirect_function_name | The managed viewer-request function name (null when redirects and Accept cache-key normalization are disabled). |
 | origin_access_control_ids | A map of origin_id to OAC ID for S3 origins. |
 | logging_bucket_id | The ID of the logging S3 bucket (null if not created). |
 | logging_bucket_arn | The ARN of the logging S3 bucket (null if not created). |

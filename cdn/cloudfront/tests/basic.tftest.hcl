@@ -34,7 +34,7 @@ mock_provider "aws" {
   }
 
   override_resource {
-    target = aws_cloudfront_function.redirect
+    target = aws_cloudfront_function.viewer_request
     values = {
       arn    = "arn:aws:cloudfront::123456789012:function/test-cf-redirect"
       status = "DEPLOYED"
@@ -1067,17 +1067,17 @@ run "test_redirect_rules_create_function" {
   }
 
   assert {
-    condition     = length(aws_cloudfront_function.redirect) == 1
+    condition     = length(aws_cloudfront_function.viewer_request) == 1
     error_message = "A redirect function should be created when redirect rules are configured."
   }
 
   assert {
-    condition     = aws_cloudfront_function.redirect[0].publish == true
+    condition     = aws_cloudfront_function.viewer_request[0].publish == true
     error_message = "The redirect function should be published."
   }
 
   assert {
-    condition     = strcontains(aws_cloudfront_function.redirect[0].code, "docs.example.com")
+    condition     = strcontains(aws_cloudfront_function.viewer_request[0].code, "docs.example.com")
     error_message = "The redirect function code should contain the configured rules."
   }
 
@@ -1417,7 +1417,7 @@ run "test_defaults" {
   }
 
   assert {
-    condition     = length(aws_cloudfront_function.redirect) == 0
+    condition     = length(aws_cloudfront_function.viewer_request) == 0
     error_message = "No redirect function should be created by default."
   }
 
@@ -1429,5 +1429,10 @@ run "test_defaults" {
   assert {
     condition     = length(var.default_cache_behavior.trusted_key_groups) == 0
     error_message = "trusted_key_groups should default to empty list in default_cache_behavior."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_function.viewer_request) == 0
+    error_message = "The viewer-request function should not be created by default."
   }
 }

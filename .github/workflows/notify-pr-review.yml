@@ -1,0 +1,177 @@
+name: Notify PR reviewers
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    # Fork review events receive no repository or organization secrets; skip them.
+    if: >-
+      ${{
+        contains(fromJSON('["approved", "changes_requested"]'), github.event.review.state) &&
+        github.event.pull_request.head.repo.fork == false
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out reviewer map
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/reviewer-slack-map.yml
+          sparse-checkout-cone-mode: false
+
+      - name: Send Slack notifications
+        env:
+          INTERNAL_SLACK_BOT_TOKEN: ${{ secrets.INTERNAL_SLACK_BOT_TOKEN }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REVIEWER: ${{ github.event.review.user.login }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REQUESTED_REVIEWERS: ${{ toJSON(github.event.pull_request.requested_reviewers) }}
+          ASSIGNEES: ${{ toJSON(github.event.pull_request.assignees) }}
+          REPOSITORY: ${{ github.repository }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${INTERNAL_SLACK_BOT_TOKEN}" ]]; then
+            echo "::error::INTERNAL_SLACK_BOT_TOKEN is empty"
+            exit 1
+          fi
+
+          review_state="$(printf '%s' "${REVIEW_STATE}" | tr '[:upper:]' '[:lower:]')"
+          case "${review_state}" in
+            approved)
+              decision="approved"
+              ;;
+            changes_requested)
+              decision="requested changes on"
+              ;;
+            *)
+              echo "::error::Unsupported review state: ${REVIEW_STATE}"
+              exit 1
+              ;;
+          esac
+
+          requested_by_login="$(
+            PR_BODY="${PR_BODY}" python3 - <<'PY'
+          import os
+          import re
+
+          match = re.search(
+              r"^Requested by:\s*@([A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38})\s*$",
+              os.environ["PR_BODY"],
+              re.MULTILINE,
+          )
+          if match:
+              print(match.group(1))
+          PY
+          )"
+
+          if [[ "${PR_AUTHOR,,}" != "devin-ai-integration[bot]" && -z "${requested_by_login}" ]]; then
+            exit 0
+          fi
+
+          recipients="$(
+            jq -cn \
+              --arg reviewer "${REVIEWER}" \
+              --arg requested_by "${requested_by_login}" \
+              --argjson requested "${REQUESTED_REVIEWERS}" \
+              --argjson assignees "${ASSIGNEES}" '
+                (($requested + $assignees +
+                    (if $requested_by == "" then [] else [{login: $requested_by}] end))
+                  | map(.login)
+                  | map(select(type == "string"))
+                  | map(select((ascii_downcase) != ($reviewer | ascii_downcase)))
+                  | reduce .[] as $login
+                      ([];
+                       if any(.[]; ascii_downcase == ($login | ascii_downcase))
+                       then .
+                       else . + [$login]
+                       end))
+              '
+          )"
+
+          if [[ "$(jq 'length' <<<"${recipients}")" == "0" ]]; then
+            exit 0
+          fi
+
+          map_file=".github/reviewer-slack-map.yml"
+          if [[ ! -f "${map_file}" || ! -r "${map_file}" ]]; then
+            echo "::error::Reviewer Slack map is missing or unreadable: ${map_file}"
+            exit 1
+          fi
+
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "::error::yq is required to read .github/reviewer-slack-map.yml"
+            exit 1
+          fi
+
+          escape_slack_text() {
+            local value="$1"
+            value="${value//&/&amp;}"
+            value="${value//</&lt;}"
+            value="${value//>/&gt;}"
+            printf '%s' "${value}"
+          }
+
+          escaped_reviewer="$(escape_slack_text "${REVIEWER}")"
+          escaped_repository="$(escape_slack_text "${REPOSITORY}")"
+          escaped_title="$(escape_slack_text "${PR_TITLE}")"
+          message="*${escaped_reviewer}* ${decision} <${PR_URL}|${escaped_repository}: ${escaped_title}>"
+          failed_logins=()
+          failed_reasons=()
+
+          while IFS= read -r login; do
+            slack_channel="$(login="${login}" yq -r '.[strenv(login)] // ""' "${map_file}")"
+            if [[ -z "${slack_channel}" || "${slack_channel}" == "null" ]]; then
+              echo "::warning::No Slack member mapping for GitHub login @${login}; skipping"
+              continue
+            fi
+
+            payload="$(
+              jq -n \
+                --arg channel "${slack_channel}" \
+                --arg text "${message}" \
+                '{channel: $channel, text: $text}'
+            )"
+
+            if ! response="$(
+              curl --silent --show-error \
+                --header "Authorization: Bearer ${INTERNAL_SLACK_BOT_TOKEN}" \
+                --header "Content-Type: application/json; charset=utf-8" \
+                --data "${payload}" \
+                --write-out $'\n%{http_code}' \
+                https://slack.com/api/chat.postMessage
+            )"; then
+              failed_logins+=("${login}")
+              failed_reasons+=("curl request failed")
+              continue
+            fi
+
+            http_status="${response##*$'\n'}"
+            response_body="${response%$'\n'*}"
+            if [[ "${http_status}" != "200" ]]; then
+              failed_logins+=("${login}")
+              failed_reasons+=("HTTP ${http_status}: ${response_body}")
+              continue
+            fi
+
+            if [[ "$(jq -r '.ok // false' <<<"${response_body}")" != "true" ]]; then
+              slack_error="$(jq -r '.error // "unknown Slack API error"' <<<"${response_body}")"
+              failed_logins+=("${login}")
+              failed_reasons+=("Slack API error: ${slack_error}")
+            fi
+          done < <(jq -r '.[]' <<<"${recipients}")
+
+          if (( ${#failed_logins[@]} > 0 )); then
+            for index in "${!failed_logins[@]}"; do
+              echo "::error::Failed to notify @${failed_logins[index]}: ${failed_reasons[index]}"
+            done
+            exit 1
+          fi

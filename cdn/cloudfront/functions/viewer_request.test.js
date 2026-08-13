@@ -4,11 +4,12 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const template = fs.readFileSync(path.join(__dirname, 'redirect.js'), 'utf8');
+const template = fs.readFileSync(path.join(__dirname, 'viewer_request.js'), 'utf8');
 
 function makeHandler(rules) {
     const context = {};
-    const code = template.replace('${redirect_rules_json}', JSON.stringify(rules));
+    const code = template
+        .replace('${redirect_rules_json}', JSON.stringify(rules));
     vm.runInNewContext(code, context);
     return context.handler;
 }

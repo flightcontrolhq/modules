@@ -7,6 +7,11 @@ output "distribution_ids" {
   value       = { for k, v in aws_cloudfront_distribution.this : k => v.id }
 }
 
+output "cache_policy_id" {
+  description = "The configured ID of the cache policy attached to the default behavior."
+  value       = var.default_cache_behavior.cache_policy_id
+}
+
 output "distribution_arns" {
   description = "A map of distribution key to CloudFront distribution ARN."
   value       = { for k, v in aws_cloudfront_distribution.this : k => v.arn }
@@ -37,13 +42,13 @@ output "distribution_etags" {
 ################################################################################
 
 output "redirect_function_arn" {
-  description = "The ARN of the managed viewer-request redirect function, or null when redirect rules are disabled."
-  value       = try(aws_cloudfront_function.redirect[0].arn, null)
+  description = "The ARN of the managed viewer-request function, or null when redirects are disabled."
+  value       = try(aws_cloudfront_function.viewer_request[0].arn, null)
 }
 
 output "redirect_function_name" {
-  description = "The name of the managed viewer-request redirect function, or null when redirect rules are disabled."
-  value       = try(aws_cloudfront_function.redirect[0].name, null)
+  description = "The name of the managed viewer-request function, or null when redirects are disabled."
+  value       = try(aws_cloudfront_function.viewer_request[0].name, null)
 }
 
 output "distribution_id" {

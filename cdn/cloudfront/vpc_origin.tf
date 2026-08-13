@@ -15,4 +15,9 @@ resource "aws_cloudfront_vpc_origin" "this" {
   }
 
   tags = merge(local.tags, { Name = "${var.name}-${each.key}" })
+
+  # Order distribution detachment before deleting the VPC origin.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

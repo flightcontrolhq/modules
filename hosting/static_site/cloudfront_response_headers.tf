@@ -133,4 +133,9 @@ resource "aws_cloudfront_response_headers_policy" "this" {
       }
     }
   }
+
+  # Order distribution detachment before deleting the policy.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

@@ -85,6 +85,8 @@ release:
   description: Add configurable access logs.
 ```
 
+Write `release.description` as concise, user-facing release-note copy: describe the fix or capability from the user's point of view, never the implementation mechanism. Good: `Prevent applies from failing with CloudFront in-use errors when disabling a managed feature.` Bad: `Add create_before_destroy to order resource deletion.`
+
 Use semantic versioning for released module definitions. For local development publishes, do not bump `release.version` just to publish a new local copy; the local publish tooling automatically appends the next numeric prerelease suffix to the authored version, such as `0.2.1-1`, `0.2.1-2`, and so on.
 
 ## Input Patterns

@@ -1,10 +1,10 @@
 definition:
   type: rvn-cloudfront
   name: CloudFront CDN
-  description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
+  description: CloudFront CDN distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 release:
-  version: 1.0.1
-  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  version: 1.3.0
+  description: Revert the default cache policy to the AWS managed policy.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -47,11 +47,11 @@ module:
     - id: section_origin
       label: Origin
       type: section
-      description: Where CloudFront sends requests. ECS web services and clusters share one load balancer, and private S3 buckets use Origin Access Control.
+      description: Where CloudFront sends requests. Choose an ECS web service, ECS cluster, standalone ALB, private S3 bucket, or custom origin.
     - id: origin_source
       label: Origin source
       type: string
-      description: Choose an existing ECS module, private S3 bucket, or custom origin domain name.
+      description: Choose an existing ECS module, standalone ALB module, private S3 bucket, or custom origin domain name.
       required: true
       default: ecs_web_service
       values:
@@ -61,6 +61,9 @@ module:
         - label: ECS cluster
           description: Use the public ALB of an existing ECS cluster as the origin.
           value: ecs_cluster
+        - label: Application Load Balancer
+          description: Use an existing standalone ALB module as the origin.
+          value: alb
         - label: S3 bucket
           description: Use a private S3 bucket as the origin with CloudFront Origin Access Control.
           value: s3_bucket
@@ -87,17 +90,39 @@ module:
           description: Load balancer ARN from the selected ECS web service, used to create the CloudFront VPC origin when private origin is enabled. If this is empty, update the service to rvn-ecs-web 0.8.0 or later and apply its stack, then re-select the service.
           required: false
           default: <<ref.stack.output.load_balancer_arn>>
+    - id: alb
+      label: Application Load Balancer
+      type: $ref:rvn-aws-alb
+      description: Existing standalone ALB whose DNS name becomes the origin. The ALB must be internal when private origin is enabled.
+      required: false
+      show_when:
+        origin_source: alb
+      mapped_inputs:
+        - id: alb_dns_name
+          label: ALB DNS name
+          type: string
+          description: DNS name from the selected standalone ALB module, used as the origin domain.
+          required: true
+          default: <<ref.stack.output.alb_dns_name>>
+        - id: alb_arn
+          label: ALB ARN
+          type: string
+          description: ARN from the selected standalone ALB module, used to create the CloudFront VPC origin when private origin is enabled.
+          required: false
+          default: <<ref.stack.output.alb_arn>>
     - id: origin_vpc_enabled
       label: Private origin (VPC origin)
       type: boolean
-      description: Connect to the service's load balancer through a CloudFront VPC origin instead of over the public internet. Use when the service runs on a private (internal) load balancer.
+      description: Connect to the ECS web service's load balancer or standalone ALB through a CloudFront VPC origin instead of over the public internet. Use when the load balancer is internal.
       default: false
       show_when:
-        origin_source: ecs_web_service
+        origin_source:
+          - ecs_web_service
+          - alb
     - id: origin_vpc_domain_name
       label: VPC origin domain name
       type: string
-      description: Host name CloudFront uses as the origin domain and Host header. With HTTPS to the origin, it must be covered by the load balancer's TLS certificate and match the service's host-based listener rule. No public DNS record is required.
+      description: Host name CloudFront uses as the origin domain and Host header. With HTTPS to the origin, it must be covered by the load balancer's TLS certificate and match the ECS service's or standalone ALB's host-based listener rule. No public DNS record is required.
       placeholder: my-service.private.example.com
       required: true
       show_when:
@@ -148,6 +173,7 @@ module:
         origin_source:
           - ecs_web_service
           - ecs_cluster
+          - alb
           - custom
       values:
         - label: HTTPS only
@@ -166,6 +192,7 @@ module:
         origin_source:
           - ecs_web_service
           - ecs_cluster
+          - alb
           - custom
       item_label: Custom header
       item_title:
@@ -330,7 +357,7 @@ module:
     - id: cache_policy
       label: Cache policy
       type: string
-      description: Controls edge caching for the default behavior. The default respects your app's Cache-Control headers, so nothing is cached unless the app asks for it.
+      description: Controls edge caching for the default behavior. The recommended option respects your app's Cache-Control headers and includes query strings in the cache key.
       required: true
       default: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
       values:
@@ -674,8 +701,7 @@ module:
             "POST", "PUT"] : module.input.allowed_methods == "read_options" ? ["GET", "HEAD", "OPTIONS"] :
             ["GET", "HEAD"] >>
           cache_policy_id: >-
-            << module.input.cache_policy == "custom" ? module.input.cache_policy_custom_id :
-            module.input.cache_policy >>
+            << module.input.cache_policy == "custom" ? module.input.cache_policy_custom_id : module.input.cache_policy >>
           origin_request_policy_id: >-
             << module.input.origin_request_policy == "custom" ?
             module.input.origin_request_policy_custom_id : module.input.origin_request_policy == "none" ? nil :
@@ -718,14 +744,18 @@ module:
         origins: >-
           << [{"origin_id": "primary", "domain_name": (module.input.origin_source == "ecs_web_service" ?
           (module.input.origin_vpc_enabled == true ? module.input.origin_vpc_domain_name :
-          module.input.ecs_web_alb_dns_name) : module.input.origin_source == "ecs_cluster" ?
+          module.input.ecs_web_alb_dns_name) : module.input.origin_source == "alb" ?
+          (module.input.origin_vpc_enabled == true ? module.input.origin_vpc_domain_name :
+          module.input.alb_dns_name) : module.input.origin_source == "ecs_cluster" ?
           module.input.ecs_cluster_alb_dns_name : module.input.origin_source == "s3_bucket" ?
           module.input.s3_bucket_regional_domain_name : module.input.origin_domain_name),
           "origin_protocol_policy": module.input.origin_protocol_policy, "s3_origin_enabled":
-          module.input.origin_source == "s3_bucket", "vpc_origin_enabled": (module.input.origin_source
-          == "ecs_web_service" && module.input.origin_vpc_enabled == true), "vpc_origin_arn":
+          module.input.origin_source == "s3_bucket", "vpc_origin_enabled": ((module.input.origin_source
+          == "ecs_web_service" || module.input.origin_source == "alb") &&
+          module.input.origin_vpc_enabled == true), "vpc_origin_arn":
           (module.input.origin_source == "ecs_web_service" && module.input.origin_vpc_enabled == true ?
-          module.input.ecs_web_alb_arn : nil), "custom_headers":
+          module.input.ecs_web_alb_arn : module.input.origin_source == "alb" && module.input.origin_vpc_enabled == true ?
+          module.input.alb_arn : nil), "custom_headers":
           (module.input.origin_custom_headers != nil ? module.input.origin_custom_headers : [])}] |
           concat(module.input.additional_origins != nil ? module.input.additional_origins : []) >>
         price_class: << module.input.price_class >>
@@ -768,11 +798,11 @@ module:
       ] : [])
       >>
   readme: |
-    CloudFront distribution that serves web applications and private S3 buckets from ECS services, load balancers, S3 origins, and other custom origins.
+    CloudFront distribution that serves web applications and private S3 buckets from ECS services, standalone ALBs, S3 origins, and other custom origins.
 
     ## Overview
 
-    The CloudFront module puts the AWS CloudFront edge network in front of a dynamic web application or private S3 bucket. Point it at an existing ECS web service, an ECS cluster load balancer, an S3 bucket, or any custom domain, and Ravion provisions the distribution, origin configuration, cache behaviors, optional access logging bucket, and metrics.
+    The CloudFront module puts the AWS CloudFront edge network in front of a dynamic web application or private S3 bucket. Point it at an existing ECS web service, an ECS cluster load balancer, a standalone ALB, an S3 bucket, or any custom domain, and Ravion provisions the distribution, origin configuration, cache behaviors, optional access logging bucket, and metrics.
 
     The default configuration is safe for dynamic apps: responses are cached at the edge only when your app returns Cache-Control headers, and the full viewer request, including the Host header, cookies, and query strings, is forwarded to the origin. You get TLS termination close to users, HTTP/2 and HTTP/3, connection reuse to the origin, optional WAF, and per-path caching for static assets.
 
@@ -784,6 +814,7 @@ module:
     | --- | --- |
     | Fronting one ECS web service | Using the service's load balancer as the origin with one click |
     | Fronting a whole ECS cluster | Serving every service behind the cluster's public ALB through one distribution |
+    | Fronting a standalone ALB | Using an existing ALB module as a public or private CloudFront origin |
     | Restricting direct origin access | Adding a custom header that the load balancer requires before routing requests |
     | Serving private attachments | Using an S3 origin with Origin Access Control and optional signed URLs |
     | Speeding up global users | Terminating TLS and HTTP/3 at the nearest edge location |
@@ -793,9 +824,9 @@ module:
     | Protecting an app | Associating a global WAFv2 web ACL and geo restrictions |
     | Auditing traffic | Viewing CloudFront access logs in Ravion or delivering them to S3 |
 
-    ## How the ECS connection works
+    ## How load balancer connections work
 
-    An ECS cluster load balancer routes requests to services using listener rules that match the request's host and path. CloudFront preserves that behavior: the default origin request policy (AWS managed AllViewer) forwards the viewer's Host header to the load balancer, so the same listener rules keep routing each request to the right service.
+    ECS and standalone ALBs route requests using listener rules that match the request's host and path. CloudFront preserves that behavior: the default origin request policy (AWS managed AllViewer) forwards the viewer's Host header to the load balancer, so the same listener rules keep routing each request to the right service.
 
     That means the origin is really the load balancer, not an individual service:
 
@@ -803,10 +834,11 @@ module:
     | --- | --- |
     | ECS web service | Uses the selected service's load balancer DNS name as the origin. The service must run rvn-ecs-web 0.8.0 or later and have applied its stack so the DNS name output exists. |
     | ECS cluster | Uses the cluster's public ALB DNS name as the origin. Every service behind that ALB is reachable through the distribution. |
+    | Application Load Balancer | Uses the selected standalone ALB module's DNS name as the origin. An internal ALB can use a CloudFront VPC origin. |
     | S3 bucket | Uses the selected bucket's regional S3 domain name as a private origin with CloudFront Origin Access Control. After this CloudFront stack applies, add the distribution ARN to the S3 bucket's CloudFront OAC read policy template. |
     | Custom domain | Any origin domain name, such as an external load balancer, API endpoint, or S3 website endpoint. |
 
-    Both ECS options resolve to the same ALB when the service runs on that cluster, so pick whichever is easier to select. One distribution can front all services behind the load balancer.
+    Both ECS options resolve to the same ALB when the service runs on that cluster, so pick whichever is easier to select. A standalone ALB can be selected directly when it is managed by the rvn-aws-alb module. One distribution can front all services behind the load balancer.
 
     ### Domain aliases and host routing
 
@@ -844,7 +876,7 @@ module:
 
     Redirect rules run at viewer request time before CloudFront checks its cache or contacts an origin. Rules are evaluated in order and the first match wins. Sources and destinations accept absolute HTTPS URLs or host-agnostic paths. Use `:name` to capture one path segment and a final `:name*` to capture the remaining path, then place those named values anywhere in the destination. Query preservation is optional and disabled by default.
 
-    The managed redirect function is attached to the default cache behavior and every custom cache behavior so redirects cover every request path. CloudFront allows only one viewer-request edge association per behavior, so redirect rules cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
+    The managed viewer-request function is attached to the default cache behavior and every custom cache behavior when redirect rules are configured. CloudFront allows only one viewer-request edge association per behavior, so redirects cannot be combined with a viewer-request CloudFront Function or Lambda@Edge association supplied through Advanced Terraform variables.
 
     The module prevents a rule from redirecting back into its own source pattern. It cannot detect cycles spanning multiple independently matching rules, so review rule ordering and destinations when defining bidirectional or multi-domain redirects.
 
@@ -870,13 +902,13 @@ module:
 
     | Setting | Default | Why |
     | --- | --- | --- |
-    | Cache policy | UseOriginCacheControlHeaders-QueryStrings | Caches only responses where the app sends Cache-Control headers |
+    | Cache policy | UseOriginCacheControlHeaders-QueryStrings | Caches only responses where the app sends Cache-Control headers and includes query strings in the cache key |
     | Origin request policy | AllViewer | Forwards Host, cookies, and query strings so app sessions and ALB routing work |
     | Require signed URLs | false | Allows public viewer access unless enabled with trusted key groups |
     | Allowed methods | Read only | Only GET and HEAD reach the origin; choose Read and OPTIONS or All methods to accept form posts and API writes |
     | Viewer protocol policy | Redirect to HTTPS | Viewers are upgraded to HTTPS automatically |
 
-    With the default cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache or origin request policy you created in your own account.
+    With the recommended cache policy, nothing is cached until the app opts in by returning Cache-Control headers such as public, max-age=300. Responses without caching headers always go to the origin. The cache key includes query strings, and the origin request policy controls what else reaches the origin, so keep AllViewer selected when load balancer listener rules depend on the viewer Host header. Choose CachingDisabled to turn off edge caching entirely, or CachingOptimized to cache aggressively regardless of origin headers. Pick Custom policy ID to use a cache policy you created in your own account.
 
     Response headers policy is optional and adds headers such as the SecurityHeadersPolicy set or CORS headers to every response.
 
@@ -926,9 +958,10 @@ module:
     | Name slug | Yes | Generated from project, environment, and module IDs | Prefix for distribution comment, OAC, and logging bucket |
     | Domain aliases | No | [] | Custom domains; empty uses the cloudfront.net domain |
     | ACM certificate | When aliases are set | None | rvn-acm-certificate instance issued in us-east-1 |
-    | Origin source | Yes | ECS web service | ECS web service, ECS cluster, or custom domain |
+    | Origin source | Yes | ECS web service | ECS web service, ECS cluster, standalone ALB, S3 bucket, or custom domain |
     | ECS web service | When origin source is ECS web service | None | Service on rvn-ecs-web 0.8.0 or later |
     | ECS cluster | When origin source is ECS cluster | None | Cluster with a public ALB |
+    | Application Load Balancer | When origin source is ALB | None | Existing rvn-aws-alb module; internal when using a VPC origin |
     | S3 bucket | When origin source is S3 bucket | None | Private bucket served through OAC |
     | Origin domain name | When origin source is custom | None | Any reachable origin domain |
     | Origin protocol policy | Yes | HTTPS only | Origin needs a certificate valid for the forwarded host |
@@ -952,7 +985,7 @@ module:
 
     ## Design decisions
 
-    - The primary origin is always the load balancer or domain you select, with the fixed origin ID primary. ECS references exist to discover the load balancer DNS name, not to create per-service origins, because listener rules already fan traffic out behind one origin.
+    - The primary origin is always the load balancer or domain you select, with the fixed origin ID primary. ECS and ALB references discover an existing load balancer's DNS name and ARN; they do not create per-service origins, because listener rules already fan traffic out behind one origin.
     - Caching is disabled by default. A wrong edge cache on dynamic responses is worse than no cache, so caching is an explicit per-path opt-in.
     - The AllViewer origin request policy is the default so Host-based listener rules, cookies, and query strings keep working unchanged behind CloudFront.
     - Redirects use one managed CloudFront Function shared by the module's distributions and attached to every cache behavior.

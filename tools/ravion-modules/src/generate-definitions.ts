@@ -7,6 +7,7 @@ export interface RemoteModuleDefinition {
   type: string;
   name: string;
   description: string;
+  isGlobalPublished?: boolean;
 }
 
 export interface RemoteModuleVersion {

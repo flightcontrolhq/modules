@@ -95,6 +95,17 @@ variable "runtime" {
   }
 }
 
+variable "docker_socket_mount_enabled" {
+  type        = bool
+  description = "Mount the host Docker socket into the container and add the host docker group's GID. This grants the container root-equivalent control of the instance: it can start privileged containers, read the host filesystem, and use the instance role. Only meaningful for the container runtime."
+  default     = false
+
+  validation {
+    condition     = !var.docker_socket_mount_enabled || var.runtime == "container"
+    error_message = "The docker_socket_mount_enabled can only be true when runtime is 'container'."
+  }
+}
+
 variable "app_port" {
   type        = number
   description = "Port the app listens on. Required when a load balancer is attached or a local health check path is set."
@@ -509,5 +520,27 @@ variable "log_retention_in_days" {
   validation {
     condition     = var.log_retention_in_days >= 1
     error_message = "The log_retention_in_days must be at least 1."
+  }
+}
+
+variable "log_rotation_max_size_mb" {
+  type        = number
+  description = "Maximum size of the on-instance app log file before supervisord rotates it. Bounds disk usage when a process restarts repeatedly."
+  default     = 20
+
+  validation {
+    condition     = var.log_rotation_max_size_mb == floor(var.log_rotation_max_size_mb) && var.log_rotation_max_size_mb >= 1 && var.log_rotation_max_size_mb <= 1024
+    error_message = "The log_rotation_max_size_mb must be a whole number between 1 and 1024."
+  }
+}
+
+variable "log_rotation_backup_count" {
+  type        = number
+  description = "Number of rotated app log files supervisord keeps on the instance. Total on-instance app log usage is bounded by (backups + 1) * log_rotation_max_size_mb."
+  default     = 5
+
+  validation {
+    condition     = var.log_rotation_backup_count == floor(var.log_rotation_backup_count) && var.log_rotation_backup_count >= 1 && var.log_rotation_backup_count <= 100
+    error_message = "The log_rotation_backup_count must be a whole number between 1 and 100."
   }
 }
