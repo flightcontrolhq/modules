@@ -7,6 +7,8 @@
 # Karpenter and the External Secrets Operator are off in every run: they pull in
 # submodules and Helm releases that have nothing to do with what is asserted
 # here, and leaving them on only slows the plan down.
+#
+# The logs pipeline has its own file, logs.tftest.hcl.
 ################################################################################
 
 mock_provider "aws" {
@@ -105,12 +107,11 @@ run "metrics_disabled_renders_nothing" {
     error_message = "Every AMP output must be null while metrics_enabled is false"
   }
 
-  # Asserted on the local rather than on the resource: configuration_values is
-  # optional+computed, so a null one is unknown at plan time and the mock
-  # provider fills it with a random string.
+  # Container Insights is a legacy toggle now, not the log pipeline, so it is
+  # off unless someone asks for it.
   assert {
-    condition     = local.cloudwatch_observability_configuration_values == null
-    error_message = "Container Insights must keep its full default configuration while metrics_enabled is false"
+    condition     = length(aws_eks_addon.cloudwatch_observability) == 0
+    error_message = "The amazon-cloudwatch-observability add-on must be off by default"
   }
 
   assert {
@@ -155,16 +156,6 @@ run "metrics_enabled_creates_workspace_and_collector" {
   assert {
     condition     = aws_eks_pod_identity_association.otel_collector[0].service_account == var.otel_collector_service_account
     error_message = "The Pod Identity association must bind to the collector's service account"
-  }
-
-  assert {
-    condition     = output.container_log_group == "/aws/containerinsights/test-cluster/application"
-    error_message = "The container log group name is part of the dashboard contract"
-  }
-
-  assert {
-    condition     = strcontains(output.log_stream_template, "{node_name}-application.var.log.containers.")
-    error_message = "Fluent Bit writes node-first stream names; the template must say so"
   }
 }
 
@@ -239,47 +230,6 @@ run "amp_region_override_moves_the_endpoint" {
   assert {
     condition     = strcontains(helm_release.otel_collector[0].values[0], "region: \"us-west-2\"")
     error_message = "The sigv4auth extension must sign for the workspace's region, not the cluster's"
-  }
-}
-
-################################################################################
-# Container Insights trim: default applied, explicit override wins.
-################################################################################
-
-run "container_insights_defaults_to_logs_only" {
-  command = plan
-
-  variables {
-    metrics_enabled = true
-  }
-
-  assert {
-    condition     = jsondecode(aws_eks_addon.cloudwatch_observability[0].configuration_values).containerInsights.enabled == false
-    error_message = "With AMP metrics on, the add-on's Container Insights metrics must be switched off"
-  }
-
-  assert {
-    condition     = jsondecode(aws_eks_addon.cloudwatch_observability[0].configuration_values).applicationSignals.enabled == false
-    error_message = "Application Signals is the add-on's other metrics pipeline and must be off too"
-  }
-
-  assert {
-    condition     = jsondecode(aws_eks_addon.cloudwatch_observability[0].configuration_values).containerLogs.enabled == true
-    error_message = "Container logs must survive the trim — the Logs tab reads them"
-  }
-}
-
-run "explicit_configuration_values_win" {
-  command = plan
-
-  variables {
-    metrics_enabled                                     = true
-    cloudwatch_observability_addon_configuration_values = "{\"containerLogs\":{\"enabled\":false}}"
-  }
-
-  assert {
-    condition     = aws_eks_addon.cloudwatch_observability[0].configuration_values == "{\"containerLogs\":{\"enabled\":false}}"
-    error_message = "An explicit configuration_values must not be overwritten by the logs-only default"
   }
 }
 

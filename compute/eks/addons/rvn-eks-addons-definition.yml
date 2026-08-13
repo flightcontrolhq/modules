@@ -1,10 +1,10 @@
 definition:
   type: rvn-eks-addons
   name: EKS Add-ons
-  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, CloudWatch Container Insights, workload metrics into Amazon Managed Prometheus, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload metrics into Amazon Managed Prometheus, workload logs into an in-cluster log store backed by S3, CloudWatch Container Insights, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.5.0
-  description: Adds workload metrics for EKS clusters. Turning on Metrics collects per-container CPU, memory, network, restart, and scaling metrics into an Amazon Managed Prometheus workspace in your own account, on a curated metric set chosen to keep the bill predictable, and switches Container Insights to logs only so the same containers are not measured and billed twice. An optional read-only role lets Grafana query the workspace and the cluster's log groups.
+  version: 0.6.0
+  description: Adds workload metrics and logs for EKS clusters. Metrics collects per-container CPU, memory, network, restart, and scaling metrics into an Amazon Managed Prometheus workspace in your own account, on a curated metric set chosen to keep the bill predictable. Logs collects container output into a log store that runs inside your cluster and keeps every log line in an S3 bucket in your own account, with a retention window you choose; nothing is exposed to the internet. Container Insights is now off by default, since these cover the same ground at lower cost. Grafana can be installed alongside them, wired to both.
 module:
   inputs:
     - id: cluster
@@ -150,11 +150,50 @@ module:
       show_when:
         ebs_csi_driver_enabled: true
       type: string
-    - description: CloudWatch Container Insights via the amazon-cloudwatch-observability EKS add-on - node, pod, and container metrics plus application and data plane logs, shown on the cluster module's Metrics and Logs tabs.
+    - description: Container output collected into a log store that runs inside your cluster and keeps every log line in an S3 bucket in your own AWS account. Nothing is exposed to the internet - Ravion reads the logs through the same agent connection Ravion EKS Management uses, so there is no endpoint to secure and no log data leaves your account except in answer to a query. Requires Kubernetes API connectivity from the Terraform runner.
+      id: section_logs
+      label: Logs
+      type: section
+    - default: false
+      description: Collect container logs into the in-cluster log store. Costs are storage and requests on the S3 bucket plus the pods that run the collector - there is no per-gigabyte ingestion charge. Advanced settings - the install namespace, chart versions, resources, and local disk - are available through Advanced Terraform variables.
+      id: logs_enabled
+      label: Logs
+      type: boolean
+    - default: 30
+      description: How long logs stay searchable. Older logs are deleted from the bucket automatically.
+      id: log_retention_days
+      label: Retention (days)
+      show_when:
+        logs_enabled: true
+      type: number
+    - collapsible: true
+      description: Store logs in an existing S3 bucket instead of creating one. Leave blank to create a bucket for this cluster. When you bring your own, its lifecycle and encryption settings stay yours to manage.
+      id: loki_s3_bucket
+      label: Existing log bucket
+      show_when:
+        logs_enabled: true
+      type: string
+    - description: Grafana access to this cluster's metrics and logs. Ravion's own Metrics and Logs tabs need none of this - these toggles are for teams who already work in Grafana.
+      id: section_grafana
+      label: Grafana
+      type: section
+    - default: false
+      description: Install Grafana inside the cluster, already wired to this cluster's metrics and logs. This is the only way to see the in-cluster logs in Grafana - Amazon Managed Grafana runs outside your cluster and cannot reach the log store. Needs Metrics or Logs to be on, since those are what it shows. No public address is created; reach it with a port-forward.
+      id: grafana_enabled
+      label: In-cluster Grafana
+      type: boolean
+    - default: false
+      description: Create a read-only IAM role that Amazon Managed Grafana can assume to query this cluster's metrics. Metrics only - Amazon Managed Grafana cannot reach the in-cluster log store.
+      id: grafana_role_enabled
+      label: Amazon Managed Grafana access
+      show_when:
+        metrics_enabled: true
+      type: boolean
+    - description: CloudWatch Container Insights via the amazon-cloudwatch-observability EKS add-on - node, pod, and container metrics plus application and data plane logs, in CloudWatch. Off by default, and not required by Ravion - the Metrics and Logs sections above cover the same ground at lower cost. Turn it on if you want Container Insights in its own right, or if you already have alarms and dashboards built on it.
       id: section_container_insights
       label: Container Insights
       type: section
-    - default: true
+    - default: false
       id: cloudwatch_observability_enabled
       label: Container Insights
       type: boolean
@@ -191,11 +230,6 @@ module:
         metrics_enabled: true
       type: string
       values: $values:aws/regions
-    - default: false
-      description: Create a read-only IAM role that Amazon Managed Grafana can assume to query this cluster's metrics and logs. No Grafana workspace is created - Grafana workspaces are set up once for an organization, not per cluster.
-      id: grafana_role_enabled
-      label: Grafana read access
-      type: boolean
     - description: Reference-only secrets for workloads. The External Secrets Operator reads the Secrets Manager secrets and SSM parameters that services reference by ARN and materializes them into Kubernetes secrets, so secret values never pass through Ravion, Helm values, or release history. Requires Kubernetes API connectivity from the Terraform runner.
       id: section_external_secrets
       label: External secrets
@@ -545,6 +579,10 @@ module:
         amp_workspace_id: << module.input.amp_workspace_id >>
         amp_region: << module.input.amp_region >>
         grafana_role_enabled: << module.input.grafana_role_enabled >>
+        logs_enabled: << module.input.logs_enabled >>
+        log_retention_days: '<< module.input.log_retention_days != nil ? module.input.log_retention_days : 30 >>'
+        loki_s3_bucket: << module.input.loki_s3_bucket >>
+        grafana_enabled: << module.input.grafana_enabled >>
         eso_enabled: '<< module.input.eso_enabled != nil ? module.input.eso_enabled : true >>'
         eso_chart_version: << module.input.eso_chart_version || "2.8.0" >>
         eso_namespace: << module.input.eso_namespace || "external-secrets" >>
@@ -690,10 +728,14 @@ module:
     | External Secrets Operator | No    | `true`               | Reference-only secrets, ClusterSecretStores, and a scoped Pod Identity role |
     | Readable secret ARNs   | No       | Account + region     | Scopes which Secrets Manager secrets and SSM parameters the operator may read |
     | EBS CSI driver         | No       | `false`              | EBS persistent volumes add-on and Pod Identity role    |
-    | Container Insights     | No       | `true`               | CloudWatch Observability add-on and Pod Identity role  |
+    | Container Insights     | No       | `false`              | CloudWatch Observability add-on and Pod Identity role  |
     | Metrics                | No       | `false`              | Amazon Managed Prometheus workspace, kube-state-metrics, and an OpenTelemetry collector on a curated metric set |
     | Existing workspace ID  | No       | Creates one          | Write into an existing AMP workspace instead of creating `ravion-<cluster>` |
-    | Grafana read access    | No       | `false`              | Read-only IAM role for Amazon Managed Grafana over the workspace and log groups |
+    | Logs                   | No       | `false`              | In-cluster log store on an S3 bucket in your account, plus the collection agent |
+    | Retention (days)       | No       | `30`                 | How long logs stay searchable before they are deleted from the bucket |
+    | Existing log bucket    | No       | Creates one          | Store logs in an existing bucket instead of `ravion-loki-<cluster>-<account>` |
+    | In-cluster Grafana     | No       | `false`              | Grafana in the cluster, wired to both metrics and logs |
+    | Grafana read access    | No       | `false`              | Read-only IAM role for Amazon Managed Grafana over the AMP workspace |
     | Ravion EKS Management  | No       | `false`              | Registers the cluster and installs the Beacon agent    |
     | Beacon-run deployments | No       | `false`             | Lets Beacon run Ravion's deploys from inside the cluster, scoped to named namespaces |
     | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
@@ -716,3 +758,5 @@ module:
     - [Container Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContainerInsights.html) - Cluster observability
     - [Amazon Managed Prometheus](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html) - Managed Prometheus workspaces and pricing
     - [Querying an AMP workspace from Grafana](https://docs.aws.amazon.com/grafana/latest/userguide/prometheus-data-source.html) - Configuring the data source
+    - [Grafana Loki](https://grafana.com/docs/loki/latest/) - The in-cluster log store
+    - [Grafana Alloy](https://grafana.com/docs/alloy/latest/) - The log collection agent
