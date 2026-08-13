@@ -8,13 +8,15 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | **AWS Load Balancer Controller** | automatic with any load balancer, or `lb_controller_enabled` opt-in | `false` | `aws-load-balancer-controller` Helm chart wired to the Pod Identity role created by the `compute/eks` composite; registers workload pods into shared load balancer target groups (`TargetGroupBinding`); Ingress → ALB, LoadBalancer Service → NLB |
 | **External Secrets Operator** | `eso_enabled` | `true` | `external-secrets` Helm chart + Pod Identity role scoped to Secrets Manager / Parameter Store reads, plus the cluster-scoped `ravion-aws` and `ravion-aws-parameter-store` `ClusterSecretStore`s |
 | **EBS CSI driver** | `ebs_csi_driver_enabled` | `false` | `aws-ebs-csi-driver` EKS add-on + Pod Identity role |
-| **Container Insights** | `cloudwatch_observability_enabled` | `true` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit) |
-| **Workload metrics** | `metrics_enabled` | `false` | An Amazon Managed Prometheus workspace, a Pod Identity role scoped to `aps:RemoteWrite` on it, `kube-state-metrics`, and an OpenTelemetry collector (ADOT image) that scrapes a curated allow-list and remote-writes it over SigV4. Also trims the Container Insights add-on to logs only |
-| **Grafana read role** | `grafana_role_enabled` | `false` | An IAM role trusted by `grafana.amazonaws.com` with query access to the AMP workspace and read access to the Container Insights log groups |
+| **Container Insights** | `cloudwatch_observability_enabled` | `false` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit). A legacy toggle: Ravion's own pipelines cover both metrics and logs, so this now duplicates them at CloudWatch prices |
+| **Workload metrics** | `metrics_enabled` | `false` | An Amazon Managed Prometheus workspace, a Pod Identity role scoped to `aps:RemoteWrite` on it, `kube-state-metrics`, and an OpenTelemetry collector (ADOT image) that scrapes a curated allow-list and remote-writes it over SigV4 |
+| **Workload logs** | `logs_enabled` | `false` | An S3 bucket with a retention lifecycle rule, a Pod Identity role scoped to it, Loki in single-binary mode storing to that bucket, and Grafana Alloy as a collection DaemonSet. Loki is reachable only from inside the cluster |
+| **Grafana read role** | `grafana_role_enabled` | `false` | An IAM role trusted by `grafana.amazonaws.com` with query access to the AMP workspace — for Amazon Managed Grafana, which can read metrics but cannot reach in-cluster Loki |
+| **In-cluster Grafana** | `grafana_enabled` | `false` | A Grafana release preprovisioned with both datasources: AMP over SigV4 (with its own Pod Identity role) and the in-cluster Loki |
 | **Ravion Beacon** | `beacon_enabled` | `false` | Mints the cluster's WorkOS M2M credential through the `ravion` provider (`ravion_beacon_credential`), writes it into a Kubernetes `Secret` (local `charts/beacon-credential`) and mirrors it into an AWS Secrets Manager secret, and installs the `beacon` Helm chart — an in-cluster agent that dials Ravion outbound over a single WebSocket |
 | **Shared load balancers** | `public_alb_enabled`, `private_alb_enabled`, `public_nlb_enabled`, `private_nlb_enabled` | `false` | Terraform-managed ALBs/NLBs (via `networking/alb` and `networking/nlb`) that workloads attach to with the load balancer controller's `TargetGroupBinding` CRD, plus cluster security group ingress rules allowing each load balancer to reach pods |
 
-The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the AWS Load Balancer Controller, the External Secrets Operator, and Beacon additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
+The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the AWS Load Balancer Controller, the External Secrets Operator, Beacon, and the metrics and logs pipelines additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
 
 > **Connectivity contract (Helm add-ons only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled`, `eso_enabled`, `lb_controller_enabled`, `beacon_enabled`, and all four load balancer toggles off, no cluster connectivity is needed. `beacon_enabled` additionally requires reachability to the Ravion API from the Terraform runner, because the `ravion` provider mints the agent's credential during the run — but nothing beyond the provider binary: no `curl`, no API-token input.
 >
@@ -41,8 +43,12 @@ module "eks_addons" {
   eso_secret_arns = ["arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*"]
 
   # Workload metrics into Amazon Managed Prometheus (off by default). Creates
-  # the workspace, installs the collector, and trims Container Insights to logs.
+  # the workspace and installs the collector.
   metrics_enabled = true
+
+  # Workload logs into an in-cluster Loki backed by S3 in this account.
+  logs_enabled       = true
+  log_retention_days = 30
 
   # Shared public ALB that web workloads bind to via TargetGroupBinding
   public_alb_enabled          = true
@@ -139,39 +145,54 @@ Prometheus anchors relabel regexes at both ends, so each entry must match a **wh
 
 **Sizing.** One collector Deployment scrapes every node, which is comfortable to roughly 100 nodes at a 60-second interval. Past that, the escape hatch is the chart's target allocator with a StatefulSet — deliberately not in this release. `otel_collector_resources` defaults to requests of `100m` / `256Mi` and a memory limit of `512Mi`; the limit matters because the collector's `memory_limiter` processor sizes itself as a percentage of the container limit, and with no limit it would measure against the whole node.
 
-#### Container Insights becomes logs-only
+### Workload logs (Loki on S3)
 
-With `metrics_enabled` on, the `amazon-cloudwatch-observability` add-on is reconfigured to ship **container logs only**:
+`logs_enabled` turns on a log pipeline that lives entirely in the customer's account: [Grafana Alloy](https://grafana.com/docs/alloy/latest/) as a DaemonSet reading every container's stdout off its own node, [Loki](https://grafana.com/docs/loki/latest/) in the cluster indexing and serving it, and an S3 bucket holding every chunk.
 
-```json
-{"containerInsights":{"enabled":false},"applicationSignals":{"enabled":false},"containerLogs":{"enabled":true}}
-```
+**Loki is never exposed.** No ingress, no load balancer, not even the chart's nginx gateway — a ClusterIP Service on port 3100 and nothing else. Ravion reads it by asking the Beacon agent to proxy a query over the WebSocket Beacon already holds, so there is no inbound path to open, nothing to put a certificate on, and no log data leaving the account except as the answer to a query. That is also why `loki_endpoint` is an in-cluster URL: it is what Beacon's proxy allowlist names, not something to publish.
 
-Container Insights and the AMP pipeline measure the same containers, so leaving both on is two bills for one answer — and the coarser of the two is the one billed per metric. Logs stay, because the cluster's Logs tab and the per-service log views read the groups this add-on writes.
+#### The label set is a contract
 
-Three things worth knowing about that default:
+Loki indexes labels and stores everything else. A label with many distinct values multiplies streams, and streams are what a Loki runs out of — so the collector attaches exactly three, all of them low-cardinality:
 
-- **It only fills a null.** Setting `cloudwatch_observability_addon_configuration_values` yourself always wins, and re-enabling Container Insights metrics alongside AMP is a supported (if expensive) choice.
-- **It needs add-on v6.0.0 or later.** Those configuration keys do not exist in earlier versions and EKS rejects unknown keys, so pinning `cloudwatch_observability_addon_version` below v6 with `metrics_enabled` on fails the plan with an explicit message rather than an opaque API error. Leaving the version null lets AWS resolve a current one.
-- **The CloudWatch agent DaemonSet keeps running.** It emits no metrics once both features are off, but Fluent Bit's Kubernetes filter resolves pod metadata through it (`Use_Pod_Association On`), so disabling the agent outright would degrade the logs the add-on is being kept for.
+| Label | Source | Why it is safe to index |
+|---|---|---|
+| `namespace` | the pod's namespace | Bounded by the cluster |
+| `app` | `app.kubernetes.io/name`, falling back to `app`, falling back to `workload` | One value per application |
+| `workload` | the pod's controller with the ReplicaSet hash stripped | Stable across rollouts |
 
-The log destinations are outputs, so consumers never reconstruct them:
+Severity is attached as **structured metadata** (`level`), not a label: it is stored and filterable but not indexed, so it does not split one request's lines across several streams. There is deliberately **no pod-name label** — that would turn one stream per workload into one per replica per restart — and Alloy explicitly drops the `filename` label that `loki.source.file` adds, because the path contains the pod UID and would smuggle the same cardinality back in.
 
-| Output | Value |
-|---|---|
-| `container_log_group` | `/aws/containerinsights/<cluster>/application` |
-| `dataplane_log_group` | `/aws/containerinsights/<cluster>/dataplane` |
-| `log_stream_template` | `{node_name}-application.var.log.containers.{pod_name}_{namespace}_{container_name}-{container_id}.log` |
+**Changing these names is a breaking change** for Ravion's log views, which build LogQL selectors on them. `tests/logs.tftest.hcl` asserts the whole set for exactly that reason.
 
-The stream name is **node-first**: Fluent Bit writes `log_stream_prefix ${HOST_NAME}-` with the tail input's tag appended, and `HOST_NAME` is `spec.nodeName`. A per-service reader therefore cannot use a stream *prefix* — filter on the `_<namespace>_` / `_<container>-` substring of the stream name, or on the `kubernetes.namespace_name` / `kubernetes.pod_name` / `kubernetes.container_name` fields the Kubernetes filter adds to every event.
+#### Retention
+
+Two mechanisms, and they are not redundant:
+
+- **Loki's compactor is the authority.** `log_retention_days` becomes `limits_config.retention_period`, and the compactor (`retention_enabled: true`, which is *off* in stock Loki and the single most common reason a Loki bucket grows forever) rewrites the index and deletes expired chunks. This is why Loki's IAM role carries `s3:DeleteObject`.
+- **The bucket lifecycle rule is the backstop**, and expires objects **seven days later** than the compactor would. The gap is deliberate: a rule that expired on the same day could delete an index file the compactor still intends to read. It only ever sweeps up what a compactor that stopped running would have orphaned.
+
+`loki_s3_bucket` brings an existing bucket instead, and the module then manages neither it nor its retention — only the compactor half applies.
+
+#### Sizing and storage
+
+Loki runs in **single-binary mode**: every target in one StatefulSet replica, with the memcached chunk and result caches, the gateway, the canary and the bundled MinIO all off. A simple-scalable deployment is three workloads plus two memcached tiers before it stores a byte, which is the wrong shape for a cluster running twenty services. `loki_helm_values` is the documented escape hatch for larger ones.
+
+`loki_persistence_enabled` is **off** by default. Loki's chunks are in S3 either way; what the local volume holds is the write-ahead log, the compactor's working directory, and the index cache. With persistence off the module mounts an `emptyDir` at `/var/loki` sized by `loki_persistence_size` — necessary, not cosmetic, because the chart only mounts that path when persistence is on and the container runs with a read-only root filesystem. Turning persistence on needs a working `StorageClass`, which on a Ravion cluster means `ebs_csi_driver_enabled`; an unschedulable PVC is a worse first run than an ephemeral volume, hence the default.
+
+#### Container Insights is no longer the log pipeline
+
+`cloudwatch_observability_enabled` now defaults to **`false`**. The add-on used to be how EKS clusters got logs; with Loki for logs and AMP for metrics it duplicates both halves at CloudWatch prices. It stays as a toggle for customers who want Container Insights in its own right, unchanged in behaviour when enabled.
+
+The cluster module's Logs tab keeps the EKS control-plane group (`/aws/eks/<cluster>/cluster`), which is native to EKS and unaffected. The `/aws/containerinsights/<cluster>/application` and `/dataplane` groups only exist when this add-on is enabled.
 
 ### Grafana
 
-`grafana_role_enabled` creates an IAM role that Amazon Managed Grafana can assume to read this cluster's telemetry — PromQL against the AMP workspace, Logs Insights against the Container Insights log groups. It is read-only, and the two halves are independent: with `metrics_enabled` off, the role still carries the log grants.
+There are two Grafana stories here, and which one applies depends on whether you want to see the logs.
 
-No Grafana workspace is created. Provisioning one requires IAM Identity Center or SAML wiring that is organization-scoped, and putting an org-level blast radius behind a cluster-level toggle is the wrong trade. The trust policy names `grafana.amazonaws.com` with an `aws:SourceAccount` condition (this account by default, `grafana_source_account_id` to point at another), which is the confused-deputy guard AWS documents for service principals.
+**Metrics only → Amazon Managed Grafana** (`grafana_role_enabled`). AMG can query AMP perfectly well. The toggle creates an IAM role trusted by `grafana.amazonaws.com` with an `aws:SourceAccount` condition (this account by default, `grafana_source_account_id` to point at another) — the confused-deputy guard AWS documents for service principals. No Grafana workspace is created: provisioning one requires IAM Identity Center or SAML wiring that is organization-scoped, and putting an org-level blast radius behind a cluster-level toggle is the wrong trade.
 
-**Amazon Managed Grafana.** In the workspace's *Data sources* page, add a Prometheus data source and set the URL to the `amp_query_endpoint` output, with SigV4 auth enabled and the `grafana_role_arn` output as the assumed role:
+In the workspace's *Data sources* page, add a Prometheus source with SigV4 auth:
 
 ```
 Type:        Prometheus
@@ -181,9 +202,17 @@ Region:      <amp_region>
 Assume role: <grafana_role_arn>
 ```
 
-Add a CloudWatch data source against the same role for the log groups.
+**Metrics and logs → in-cluster Grafana** (`grafana_enabled`). AMG runs in an AWS-managed VPC and cannot reach a ClusterIP Service, so "the logs, in Grafana" is only answerable by a Grafana inside the cluster. The release is preprovisioned with both datasources — AMP over SigV4, signed with credentials the Pod Identity Agent supplies to its own role, and Loki over plain in-cluster HTTP — and a datasource whose pipeline is not installed is simply not rendered.
 
-**Self-hosted Grafana** signs requests itself, so it needs credentials that can assume the role — an instance profile, IRSA, or Pod Identity whose principal is added to `grafana_source_account_id`'s account. The provisioning file:
+No ingress and no Service type beyond ClusterIP. Reach it with:
+
+```console
+kubectl -n <grafana_namespace> port-forward svc/<grafana_service> 3000:80
+```
+
+The chart generates an admin password into a Secret; `grafana_helm_values` is the route to an ingress, persistence, an existing admin secret, or dashboards. A module that quietly published a Grafana with a default password to the internet would be a bug, not a convenience.
+
+**Self-hosted Grafana elsewhere** can reach AMP the same way AMG does, given credentials that can assume `grafana_role_arn`:
 
 ```yaml
 apiVersion: 1
@@ -198,15 +227,11 @@ datasources:
       sigV4AuthType: default
       sigV4Region: <amp_region>
       sigV4AssumeRoleArn: <grafana_role_arn>
-  - name: ravion-cloudwatch-logs
-    type: cloudwatch
-    jsonData:
-      authType: default
-      defaultRegion: <region>
-      assumeRoleArn: <grafana_role_arn>
 ```
 
-Both snippets take their values from module outputs: `amp_query_endpoint`, `amp_region`, `amp_workspace_id`, `grafana_role_arn`, `container_log_group`.
+It cannot reach Loki unless it runs in the cluster. Note that SigV4 also requires `sigv4_auth_enabled = true` under `[auth]` in `grafana.ini` — the in-cluster release sets that for you, and a datasource that asks for SigV4 without it fails to authenticate with no hint as to why.
+
+Values for every snippet come from module outputs: `amp_query_endpoint`, `amp_region`, `amp_workspace_id`, `grafana_role_arn`, `loki_endpoint`, `grafana_namespace`, `grafana_service`.
 
 ### Ravion Beacon
 
@@ -374,9 +399,9 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | eso_helm_values | Extra YAML docs merged into the external-secrets chart values. | `list(string)` | `[]` | no |
 | ebs_csi_driver_enabled | Install the aws-ebs-csi-driver add-on + Pod Identity role. | `bool` | `false` | no |
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
-| cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity role. | `bool` | `true` | no |
+| cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity role. A legacy toggle: `logs_enabled` and `metrics_enabled` cover the same ground. | `bool` | `false` | no |
 | cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
-| metrics_enabled | Collect workload metrics into Amazon Managed Prometheus, and trim the Container Insights add-on to logs only. | `bool` | `false` | no |
+| metrics_enabled | Collect workload metrics into Amazon Managed Prometheus. | `bool` | `false` | no |
 | amp_workspace_id | Existing AMP workspace to write into. Null creates one aliased `ravion-<cluster>`. | `string` | `null` | no |
 | amp_region | Region the AMP workspace lives in. Null uses the cluster's region. | `string` | `null` | no |
 | amp_alias | Alias for the created workspace. Null uses `ravion-<cluster_name>`. | `string` | `null` | no |
@@ -394,6 +419,24 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | kube_state_metrics_helm_values | Extra YAML docs merged into the kube-state-metrics chart values. | `list(string)` | `[]` | no |
 | grafana_role_enabled | Create the IAM role Amazon Managed Grafana assumes to read the workspace and log groups. | `bool` | `false` | no |
 | grafana_source_account_id | Account whose Grafana workspaces may assume that role (`aws:SourceAccount`). Null uses this account. | `string` | `null` | no |
+| logs_enabled | Collect container logs with Alloy into an in-cluster Loki storing to S3 in this account. | `bool` | `false` | no |
+| loki_s3_bucket | Existing bucket for log chunks and index. Null creates `ravion-loki-<cluster>-<account>`. | `string` | `null` | no |
+| log_retention_days | How long logs stay queryable. Enforced by Loki's compactor; the bucket expires a week later as a backstop. | `number` | `30` | no |
+| logs_namespace | Namespace for Loki and Alloy. Null shares Beacon's namespace. | `string` | `null` | no |
+| loki_chart_version | grafana/loki chart version. | `string` | `"7.3.0"` | no |
+| loki_service_account | Loki's service account; the Pod Identity association binds to this name. | `string` | `"ravion-loki"` | no |
+| loki_resources | Loki requests and limits. | `object` | requests `200m`/`512Mi`, limit `1Gi` | no |
+| loki_persistence_enabled | Give Loki a PVC. Off by default — it needs a working StorageClass (`ebs_csi_driver_enabled`); an `emptyDir` is mounted at `/var/loki` instead. | `bool` | `false` | no |
+| loki_persistence_size | Size of Loki's local working volume — PVC size when persistence is on, `emptyDir` size limit when off. | `string` | `"10Gi"` | no |
+| loki_helm_values | Extra YAML docs merged into the Loki chart values. | `list(string)` | `[]` | no |
+| alloy_chart_version | grafana/alloy chart version. | `string` | `"1.11.1"` | no |
+| alloy_resources | Per-node Alloy requests and limits (multiplied by node count). | `object` | requests `100m`/`128Mi`, limit `512Mi` | no |
+| alloy_helm_values | Extra YAML docs merged into the Alloy chart values. | `list(string)` | `[]` | no |
+| grafana_enabled | Install Grafana in the cluster, preprovisioned with the AMP and Loki datasources. | `bool` | `false` | no |
+| grafana_chart_version | grafana chart version, from the grafana-community repository. | `string` | `"12.10.4"` | no |
+| grafana_namespace | Namespace for the in-cluster Grafana. Null shares Beacon's namespace. | `string` | `null` | no |
+| grafana_service_account | Grafana's service account; the AMP Pod Identity association binds to this name. | `string` | `"ravion-grafana"` | no |
+| grafana_helm_values | Extra YAML docs merged into the Grafana chart values (ingress, persistence, dashboards). | `list(string)` | `[]` | no |
 | beacon_enabled | Mint the cluster's Beacon credential (via the `ravion` provider) and install the Ravion Beacon agent. | `bool` | `false` | no |
 | beacon_endpoint | WebSocket endpoint the agent dials — the single destination an egress policy must allow. | `string` | `"wss://websockets.ravion.com/beacon/v1/connect"` | no |
 | beacon_chart_source | `oci://` reference, or a filesystem path to a chart directory for local testing. | `string` | `"oci://public.ecr.aws/ravion/beacon"` | no |
@@ -443,14 +486,20 @@ All outputs are null when the corresponding add-on is disabled.
 | eso_secrets_manager_store_name / eso_parameter_store_store_name | `ClusterSecretStore` names workload charts reference. |
 | ebs_csi_addon_version / ebs_csi_role_arn | EBS CSI add-on version and Pod Identity role. |
 | cloudwatch_observability_addon_version / cloudwatch_observability_role_arn | Container Insights add-on version and Pod Identity role. |
-| container_log_group / dataplane_log_group | Container Insights log groups Fluent Bit writes to. |
-| log_stream_template | Shape of a stream name in the application log group. Node-first, so a stream *prefix* cannot scope to a workload. |
 | amp_workspace_id / amp_workspace_arn / amp_region | The AMP workspace this cluster's metrics land in — created, or the one passed in. |
 | amp_remote_write_endpoint / amp_query_endpoint | Where the collector writes, and the Prometheus-compatible base URL to query (a Grafana datasource URL as-is). |
 | amp_remote_write_role_arn | Collector Pod Identity role, scoped to `aps:RemoteWrite` on that one workspace. |
 | metrics_namespace | Namespace the metrics components are installed into. |
 | otel_collector_chart_version / kube_state_metrics_chart_version | Installed chart versions for the metrics pipeline. |
-| grafana_role_arn | Role Amazon Managed Grafana assumes to query the workspace and read the log groups. |
+| grafana_role_arn | Role Amazon Managed Grafana assumes to query the AMP workspace. |
+| loki_endpoint | In-cluster base URL of Loki. Reachable only from inside the cluster — it is what Beacon's proxy allowlist names. |
+| loki_namespace | Namespace Loki and Alloy are installed into. |
+| loki_s3_bucket / loki_s3_bucket_arn | Bucket holding the log chunks and index. |
+| loki_role_arn | Loki's Pod Identity role, scoped to read, write, and delete on that bucket alone. |
+| log_retention_days | How long logs stay queryable. |
+| loki_chart_version / alloy_chart_version | Installed chart versions for the logs pipeline. |
+| grafana_namespace / grafana_service | Where the in-cluster Grafana is, for a port-forward. |
+| grafana_amp_role_arn | In-cluster Grafana's Pod Identity role for querying AMP. Distinct from `grafana_role_arn`, which is for AMG reaching in from outside. |
 | beacon_namespace / beacon_chart_version | Beacon install location and **chart** version (not the running agent version — the control plane owns that). |
 | beacon_agent_id | Ravion agent record id (`bagt_…`). Stable across rotations — correlate agent logs by it. |
 | beacon_client_id | WorkOS M2M client id the agent authenticates as. Not a secret, and shared by every cluster in the organization. |
@@ -471,10 +520,12 @@ All outputs are null when the corresponding add-on is disabled.
 - For automatic subnet discovery, tag public subnets with `kubernetes.io/role/elb = 1` and private subnets with `kubernetes.io/role/internal-elb = 1`, or specify subnets per Ingress via the `alb.ingress.kubernetes.io/subnets` annotation.
 - Unlike Karpenter, the `external-secrets` chart renders its CRDs as ordinary templates (`installCRDs`, default on), so Helm upgrades them and no separate CRD chart is needed. The `ClusterSecretStore`s are a separate local chart (`charts/external-secrets-resources`) that `depends_on` the operator release, because CRD-kind objects cannot be applied before the operator's CRDs exist and its validating webhook is serving.
 - The External Secrets Operator's `ClusterSecretStore`s carry no `auth` block. The operator resolves credentials through the AWS SDK default credential chain, which the Pod Identity Agent populates from the association this stack creates — so no static AWS credentials exist anywhere in the cluster, and `serviceAccountRef`-style IRSA config is deliberately absent (it conflicts with Pod Identity).
-- Every Helm chart and container image this module installs is **pinned by a variable with a default**, and the defaults move only in a module release. That includes the metrics pipeline: `otel_collector_chart_version`, `otel_collector_image_tag`, and `kube_state_metrics_chart_version`. Overriding one is supported; letting a chart float is not an option the module offers, because a silent upstream bump is an unreviewable change to what runs in a customer's cluster.
+- The `grafana` Helm chart moved: Grafana Labs deprecated their copy on `grafana.github.io/helm-charts` in January 2026 and handed it to `grafana-community`, which is where this module pulls it from. The `loki` and `alloy` charts did not move and still come from `grafana.github.io/helm-charts`.
+- Loki's compactor is what enforces retention, and it is **off** in stock Loki. That is why the module sets `retention_enabled` explicitly and why Loki's IAM role carries `s3:DeleteObject` — a role scoped to read and write only would let the bucket grow forever while looking correctly least-privilege.
+- Every Helm chart and container image this module installs is **pinned by a variable with a default**, and the defaults move only in a module release. That includes both pipelines: `otel_collector_chart_version`, `otel_collector_image_tag`, `kube_state_metrics_chart_version`, `loki_chart_version`, `alloy_chart_version`, and `grafana_chart_version`. Overriding one is supported; letting a chart float is not an option the module offers, because a silent upstream bump is an unreviewable change to what runs in a customer's cluster.
 - The metrics collector scrapes the kubelet through the **API server proxy**, not each node's port 10250. That is why it needs `nodes/proxy` in its ClusterRole and why it works unchanged on private-endpoint clusters — the only network path it requires is to the Kubernetes API.
 - The AMP workspace uses the AWS provider's per-resource `region` argument rather than a second provider configuration, so `amp_region` moves the workspace without any aliased-provider plumbing in consumers.
-- `metrics_enabled` changes the Container Insights add-on's behaviour (metrics off, logs on) but never its presence. Turning metrics back off restores the add-on's full default configuration on the next apply.
+- Loki is reachable only from inside the cluster, and that is load-bearing rather than incidental: it is what removes the need for an ingress, a certificate, an authentication layer in front of it, and any inbound path into the customer's VPC. The one route in is Beacon's proxy, whose allowlist this module writes.
 - Beacon's credential `Secret` is a separate local chart (`charts/beacon-credential`) rather than a `kubernetes_secret` resource, for the same reason as the `ClusterSecretStore`s: the Helm provider is the only Kubernetes access this stack has. The credential reaches it through `values` wrapped in `sensitive()`, not through `set_sensitive` — Helm's `--set` parser splits on `,`, `.` and `=`, which silently truncates a client secret containing any of them.
 - The beacon chart deliberately creates no credential `Secret` of its own, and grants Beacon **no RBAC on Secrets at all**. The kubelet reads that object and projects it into the container as a read-only volume, which is what keeps the base ClusterRole free of Secret access.
 - The Beacon credential is a Terraform resource (`ravion_beacon_credential`), not a provisioner. A `local-exec` curl used to enroll the cluster and treat the Secrets Manager copy as the idempotency anchor, because the plaintext is returned once and a re-run on a fresh runner had to answer "already enrolled?" with no local state. The provider dissolves that problem rather than working around it: create is idempotent-by-replacement — a create for an already-registered cluster ARN mints a new secret and revokes the old one — so **state is the anchor and Secrets Manager is only a mirror**. It also means no `curl` on the runner, no API-token module input, and nothing enrolled during a plan nobody applies.
