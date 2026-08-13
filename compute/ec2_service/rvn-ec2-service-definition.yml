@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.4.0
-  description: Bound the on-instance app log with configurable Supervisor rotation so a repeatedly restarting service cannot fill the instance disk.
+  version: 1.4.1
+  description: Document how to choose an instance type, so services run on the newest instance generation their region offers instead of an outdated one.
 module:
   inputs:
     - id: network
@@ -39,6 +39,7 @@ module:
     - id: instance_type
       label: Instance type
       type: string
+      description: Pick the family that matches the workload (`t` burstable, `m` general purpose, `c` CPU-bound, `r` memory-bound), then the highest generation number this list offers for it, such as `m8g` rather than `m7g` or `m6i`. Graviton (`g`) types give the best price and performance and need an `arm64` image. Never copy an instance type from an example or from memory; see the README for the full selection guide.
       required: true
       no_options_message: Select a VPC Network, or enter an AWS account and region, to load available EC2 instance types.
       values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
@@ -932,6 +933,38 @@ module:
     | Deployment safety | Sequential in-place updates; a one-instance service has an interruption | Rolling, blue/green, linear, or canary options, depending on the ECS module |
 
     Selecting EC2 capacity for an ECS service does not make it equivalent to this module. ECS on EC2 still deploys replaceable tasks through the ECS scheduler. This module deploys directly to stable hosts and gives the application the whole instance.
+
+    ## Choosing an instance type
+
+    Instance type is the sizing decision this module cannot make for you. Make it in two steps: pick the family that fits the workload, then pick the newest generation of that family that the selected account and region actually offer.
+
+    | Family | Memory per vCPU | Use for |
+    | --- | --- | --- |
+    | `t` burstable | 0.5-4 GB | Small or spiky services, development and staging environments, low-volume workers |
+    | `m` general purpose | 4 GB | Web services and workers with no strong CPU or memory bias |
+    | `c` compute optimized | 2 GB | CPU-bound work such as request-heavy APIs, transcoding, or compilation |
+    | `r` memory optimized | 8 GB | Memory-bound work such as large heaps, in-process caches, or a local database |
+
+    In a name like `m8g.large`, the digit is the generation and the letters after it identify the processor: `g` is AWS Graviton (`arm64`), `i` is Intel, `a` is AMD, and older families such as `m5` or `t3` carry no processor letter. A `-flex` variant such as `m8i-flex` costs less for workloads that do not sustain high CPU.
+
+    **Always take the highest generation number available for the family you chose.** Each generation is faster and cheaper per unit of work than the one below it, so `m8g` beats `m7g`, which beats `m6i`. This is the most common configuration mistake: an instance type copied from an example, an older project, or an AI assistant's memory is usually one or two generations behind, which pays more for less performance. Read the current generation off the Instance type list rather than assuming it. The one exception is burstable: `t4g`, `t3`, and `t3a` are still the newest burstable families, because AWS has not released a newer one.
+
+    The Instance type list shows only what the selected account and region support, which is the authoritative answer for that region. Newest generations reach the largest regions first, so a region may top out a generation behind. To check from the command line before configuring the module:
+
+    ```sh
+    aws ec2 describe-instance-type-offerings \
+      --region us-east-1 \
+      --location-type region \
+      --filters Name=instance-type,Values='m*.large' \
+      --query 'InstanceTypeOfferings[].InstanceType' \
+      --output text | tr '\t' '\n' | sort -V
+    ```
+
+    Prefer Graviton whenever the workload can run on it: it is the best price and performance in every family that offers it, and Ravion resolves the matching `arm64` Amazon Linux 2023 AMI from the instance type automatically, so nothing else needs configuring. A Custom AMI ID is used exactly as given, so set one only when it already matches the instance type's architecture. The requirement is that your container image (Container mode) or host-installed dependencies (Manual mode) build for `arm64`. Choose an Intel or AMD type when something in the stack is `x86_64`-only.
+
+    Then right-size from measurement rather than guessing: start with the smallest size in the chosen family that holds the working set, watch the service CPU and memory metrics, and move up a size or enable CPU autoscaling from there.
+
+    Changing Instance type later applies to instances launched after the change. Running instances keep their current type until you recycle them, and a Graviton/x86 switch changes the AMI for new instances only, so a group can briefly run both architectures mid-recycle. Container images must work on both architectures during that window, or recycle every instance promptly after the change.
 
     ## Deploy types
 
