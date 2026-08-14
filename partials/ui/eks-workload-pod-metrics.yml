@@ -1,0 +1,60 @@
+# Golden-signal pod metrics shared by rvn-eks-web, rvn-eks-worker, and
+# rvn-eks-cron, read from the cluster's Amazon Managed Prometheus workspace
+# (EKS Add-ons module, Metrics section). Every metric name here is on the
+# add-ons module's curated allow-list; anything added must be too, or the
+# chart will render empty.
+#
+# Pod matching: the deploy pins fullnameOverride to `module.input.name`, so a
+# Deployment's pods are `<name>-<rs-hash>-<suffix>` and a CronJob's are
+# `<name>-<job-id>-<suffix>`. The two-segment tail - neither segment may
+# contain a hyphen - keeps a sibling service whose name merely starts with
+# this one (`api` vs `api-worker`) out of the selection.
+- id: cpu
+  name: CPU usage
+  type: line
+  source:
+    type: prometheus
+    aws_account_id: << module.input.aws_account_id >>
+    region: << module.input.amp_region >>
+    workspace_id: << module.input.amp_workspace_id >>
+    query: 'sum(rate(container_cpu_usage_seconds_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
+    unit: cores
+- id: memory
+  name: Memory working set
+  type: line
+  source:
+    type: prometheus
+    aws_account_id: << module.input.aws_account_id >>
+    region: << module.input.amp_region >>
+    workspace_id: << module.input.amp_workspace_id >>
+    query: 'sum(container_memory_working_set_bytes{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"})'
+    unit: B
+- id: restarts
+  name: Container restarts
+  type: line
+  source:
+    type: prometheus
+    aws_account_id: << module.input.aws_account_id >>
+    region: << module.input.amp_region >>
+    workspace_id: << module.input.amp_workspace_id >>
+    query: 'sum(increase(kube_pod_container_status_restarts_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
+- id: network_rx
+  name: Network in
+  type: line
+  source:
+    type: prometheus
+    aws_account_id: << module.input.aws_account_id >>
+    region: << module.input.amp_region >>
+    workspace_id: << module.input.amp_workspace_id >>
+    query: 'sum(rate(container_network_receive_bytes_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
+    unit: B/s
+- id: network_tx
+  name: Network out
+  type: line
+  source:
+    type: prometheus
+    aws_account_id: << module.input.aws_account_id >>
+    region: << module.input.amp_region >>
+    workspace_id: << module.input.amp_workspace_id >>
+    query: 'sum(rate(container_network_transmit_bytes_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
+    unit: B/s
