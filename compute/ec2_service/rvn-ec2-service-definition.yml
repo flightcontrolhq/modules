@@ -949,7 +949,7 @@ module:
 
     **Always take the highest generation number available for the family you chose.** Each generation is faster and cheaper per unit of work than the one below it, so `m8g` beats `m7g`, which beats `m6i`. This is the most common configuration mistake: an instance type copied from an example, an older project, or an AI assistant's memory is usually one or two generations behind, which pays more for less performance. Read the current generation off the Instance type list rather than assuming it. The one exception is burstable: `t4g`, `t3`, and `t3a` are still the newest burstable families, because AWS has not released a newer one.
 
-    The Instance type list shows only what the selected account and region support, which is the authoritative answer for that region. Newest generations reach the largest regions first, so a region may top out a generation behind. To check from the command line before configuring the module:
+    The Instance type list shows only what the selected account and region support, which is the authoritative answer for that region. Newest generations reach the largest regions first, so a region may top out a generation behind. The list is region-level, so a type offered in the region can still be missing from an individual Availability Zone; if capacity fails in one subnet, spread the group across more AZs. To check from the command line before configuring the module:
 
     ```sh
     ravion values aws/ec2/instances --aws-account-id <account-id> --region us-east-1

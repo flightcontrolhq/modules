@@ -59,7 +59,7 @@ In `m8g.large`, the digit is the generation and the letters after it identify th
 ravion values aws/ec2/instances --aws-account-id <account-id> --region us-east-1
 ```
 
-That lists exactly what the account and region support, from the same source as the Instance type list in the Ravion config form. Newest generations reach the largest regions first, so a region can top out a generation behind. Burstable is the exception to the generation rule: `t4g`, `t3`, and `t3a` are still the newest burstable families, because AWS has not released a newer one.
+That lists exactly what the account and region support, from the same source as the Instance type list in the Ravion config form. Newest generations reach the largest regions first, so a region can top out a generation behind, and that list is region-level: a type offered in the region may still be missing from one Availability Zone, so if capacity fails in one subnet, place the group across more AZs. Burstable is the exception to the generation rule: `t4g`, `t3`, and `t3a` are still the newest burstable families, because AWS has not released a newer one.
 
 Prefer Graviton whenever the workload can run on it: best price and performance in every family that offers it, and with `ami_id` left null the module reads `supported_architectures` from the selected instance type and resolves the matching `arm64` Amazon Linux 2023 AMI, so no other input changes. A custom `ami_id` is used as given, so it must already match the instance type's architecture. The container image (`container` runtime) or host-installed dependencies (`manual` runtime) must build for `arm64`. Use an Intel or AMD type when something in the stack is `x86_64`-only.
 
