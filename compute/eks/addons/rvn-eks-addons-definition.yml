@@ -3,8 +3,8 @@ definition:
   name: EKS Add-ons
   description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload metrics into Amazon Managed Prometheus, workload logs into an in-cluster log store backed by S3, CloudWatch Container Insights, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.6.0
-  description: Adds workload metrics and logs for EKS clusters. Metrics collects per-container CPU, memory, network, restart, and scaling metrics into an Amazon Managed Prometheus workspace in your own account, on a curated metric set chosen to keep the bill predictable. Logs collects container output into a log store that runs inside your cluster and keeps every log line in an S3 bucket in your own account, with a retention window you choose; nothing is exposed to the internet. Container Insights is now off by default, since these cover the same ground at lower cost. Grafana can be installed alongside them, wired to both.
+  version: 0.6.1
+  description: The Beacon agent's chart and image now come from Ravion's public registry (public.ecr.aws/a8z1i1r2/beacon) - anonymously pullable from any cluster, no repository credentials or grants involved.
 module:
   inputs:
     - id: cluster
