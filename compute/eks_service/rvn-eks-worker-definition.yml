@@ -3,8 +3,8 @@ definition:
   name: EKS Worker
   description: Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
 release:
-  version: 0.2.0
-  description: Add container image builds. Build source now selects Dockerfile, Railpack, or an existing registry image. The first two build from a Git repository and push to an ECR repository, so the module gains a Terraform stack that creates that repository and nothing else. Adds build environment variables with optional Dockerfile build-argument injection, plus builder instance and ECR lifecycle settings.
+  version: 0.3.0
+  description: Add the Metrics and Logs tabs, wired to the cluster's observability stack. A new optional EKS Add-ons reference feeds golden-signal pod charts (CPU, memory, restarts, network, replicas) from that module's Amazon Managed Prometheus workspace, and the Logs tab reads the in-cluster Loki through the Beacon agent. Requires an EKS Add-ons module at 0.6.0 or later with Metrics and Logs enabled.
 module:
   inputs:
     - id: section_cluster
@@ -17,6 +17,16 @@ module:
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
+    - id: section_addons
+      label: EKS add-ons
+      type: section
+      description: Add-ons module attached to the cluster above. Selecting it feeds the Metrics tab from the cluster's Amazon Managed Prometheus workspace.
+    - id: addons
+      label: EKS add-ons
+      type: $ref:rvn-eks-addons
+      mapped_inputs:
+        - $include: ../../partials/inputs/eks-workload-amp-mapped-inputs.yml
+      required: false
     - id: section_service
       label: Worker service
       type: section
@@ -130,6 +140,29 @@ module:
                   maxReplicas: '<< module.input.max_replicas != nil ? module.input.max_replicas : 3 >>'
                   targetCPUUtilizationPercentage: '<< module.input.autoscaling_cpu_target != nil ? module.input.autoscaling_cpu_target : 70 >>'
                   targetMemoryUtilizationPercentage: << module.input.autoscaling_memory_target >>
+  ui:
+    metrics:
+      - $include: ../../partials/ui/eks-workload-pod-metrics.yml
+      - id: replicas_available
+        name: Replicas available
+        type: line
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          region: << module.input.amp_region >>
+          workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_desired
+        name: Replicas desired
+        type: line
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          region: << module.input.amp_region >>
+          workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+    logs:
+      - $include: ../../partials/ui/eks-workload-logs.yml
   readme: |
     Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
 

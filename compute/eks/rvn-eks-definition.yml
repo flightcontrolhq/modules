@@ -3,8 +3,8 @@ definition:
   name: EKS Cluster
   description: Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
-  version: 0.1.0
-  description: Initial EKS module definition for the compute/eks composite stack.
+  version: 0.2.0
+  description: Drop the Container Insights charts from the Metrics tab. The EKS Add-ons module defaults Container Insights off, so those charts rendered empty on new clusters; cluster-health charts now live on the add-ons module, read from its Amazon Managed Prometheus workspace. The control-plane charts (API server requests, errors, throttling, pending pods) remain - EKS publishes those under AWS/EKS with no agent involved.
 module:
   inputs:
     - id: network
@@ -269,67 +269,11 @@ module:
       <<
       (stack.output.cluster_name ? [{"name":"EKS console","href":"https://" + stack.output.region + ".console.aws.amazon.com/eks/home?region=" + stack.output.region + "#/clusters/" + stack.output.cluster_name}] : [])
       >>
+    # Cluster-health charts (node CPU/memory, pod counts) live on the EKS
+    # Add-ons module, which owns the Amazon Managed Prometheus workspace they
+    # read from. The charts here are control-plane metrics EKS publishes to
+    # CloudWatch under AWS/EKS on its own - no agent in the cluster involved.
     metrics:
-      - id: node_cpu_utilization
-        name: Node CPU used
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-          name: node_cpu_utilization
-          namespace: ContainerInsights
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: node_memory_utilization
-        name: Node memory used
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-          name: node_memory_utilization
-          namespace: ContainerInsights
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: running_pods
-        name: Running pods
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-          name: cluster_number_of_running_pods
-          namespace: ContainerInsights
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: node_count
-        name: Nodes
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-          name: cluster_node_count
-          namespace: ContainerInsights
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
-      - id: failed_node_count
-        name: Failed nodes
-        source:
-          aws_account_id: << module.input.aws_account_id >>
-          dimensions:
-            ClusterName: << stack.output.cluster_name >>
-          name: cluster_failed_node_count
-          namespace: ContainerInsights
-          region: << stack.output.region >>
-          statistic: Average
-          type: cloudwatch
-        type: line
       - id: apiserver_requests
         name: API server requests
         source:

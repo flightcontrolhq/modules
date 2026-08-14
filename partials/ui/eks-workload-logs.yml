@@ -1,0 +1,18 @@
+# Log source shared by every EKS workload module: the in-cluster Loki reached
+# through the Beacon agent (EKS Add-ons module, Logs section).
+#
+# Both fields resolve from the workload's own inputs - the cluster ARN is
+# mapped off the cluster reference and the selector uses the release identity
+# - so the source is declared (and listed as pending until the agent serves
+# it) from the moment the instance exists, with no stack apply involved.
+#
+# `workload` is the collector's hash-stripped controller name, which the
+# deploy pins to `module.input.name` via fullnameOverride. The `app` label is
+# NOT usable here: the charts set app.kubernetes.io/name to the chart name,
+# which is identical for every service deployed from the same chart.
+- id: app
+  name: Application logs
+  source:
+    type: loki
+    cluster_arn: << module.input.cluster_arn >>
+    selector: '{namespace="<< module.input.namespace >>", workload="<< module.input.name >>"}'

@@ -3,8 +3,8 @@ definition:
   name: EKS Web Service
   description: Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
 release:
-  version: 0.2.0
-  description: Add container image builds. Build source now selects Dockerfile, Railpack, or an existing registry image; the first two build from a Git repository and push to an ECR repository the stack creates, and the chart deploys from it. Adds build environment variables with optional Dockerfile build-argument injection, plus builder instance and ECR lifecycle settings.
+  version: 0.3.0
+  description: Wire the Metrics and Logs tabs to the cluster's observability stack. The Metrics tab gains golden-signal pod charts (CPU, memory, restarts, network, replicas) read from the add-ons module's Amazon Managed Prometheus workspace, alongside the existing load balancer charts; the Logs tab reads the in-cluster Loki through the Beacon agent. Requires an EKS Add-ons module at 0.6.0 or later with Metrics and Logs enabled.
 module:
   inputs:
     - id: section_cluster
@@ -54,6 +54,7 @@ module:
           collapsible: true
           required: false
           default: <<ref.stack.output.private_alb_https_listener_arn>>
+        - $include: ../../partials/inputs/eks-workload-amp-mapped-inputs.yml
       required: true
     - id: section_service
       label: Web service
@@ -372,6 +373,25 @@ module:
       [{"name":"Load balancer","href":"http://" + stack.output.load_balancer_dns_name}] : []
       >>
     metrics:
+      - $include: ../../partials/ui/eks-workload-pod-metrics.yml
+      - id: replicas_available
+        name: Replicas available
+        type: line
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          region: << module.input.amp_region >>
+          workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_desired
+        name: Replicas desired
+        type: line
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          region: << module.input.amp_region >>
+          workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: request_count
         name: Request count
         type: line
@@ -444,6 +464,8 @@ module:
           namespace: AWS/ApplicationELB
           region: << stack.output.region >>
           statistic: Average
+    logs:
+      - $include: ../../partials/ui/eks-workload-logs.yml
   readme: |
     Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
 
