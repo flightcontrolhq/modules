@@ -56,19 +56,14 @@ In `m8g.large`, the digit is the generation and the letters after it identify th
 **Always use the highest generation number available for the chosen family.** Each generation is faster and cheaper per unit of work than the one below it, so `m8g` beats `m7g`, which beats `m6i`. Do not copy an instance type from an example (including the ones below), an older project, or an AI assistant's memory — those are typically one or two generations behind current, which pays more for less performance. Query the region instead:
 
 ```sh
-aws ec2 describe-instance-type-offerings \
-  --region us-east-1 \
-  --location-type region \
-  --filters Name=instance-type,Values='m*.large' \
-  --query 'InstanceTypeOfferings[].InstanceType' \
-  --output text | tr '\t' '\n' | sort -V
+ravion values aws/ec2/instances --aws-account-id <account-id> --region us-east-1
 ```
 
-Newest generations reach the largest regions first, so a region can top out a generation behind. Burstable is the exception to the generation rule: `t4g`, `t3`, and `t3a` are still the newest burstable families, because AWS has not released a newer one.
+That lists exactly what the account and region support, from the same source as the Instance type list in the Ravion config form. Newest generations reach the largest regions first, so a region can top out a generation behind. Burstable is the exception to the generation rule: `t4g`, `t3`, and `t3a` are still the newest burstable families, because AWS has not released a newer one.
 
 Prefer Graviton whenever the workload can run on it: best price and performance in every family that offers it, and with `ami_id` left null the module reads `supported_architectures` from the selected instance type and resolves the matching `arm64` Amazon Linux 2023 AMI, so no other input changes. A custom `ami_id` is used as given, so it must already match the instance type's architecture. The container image (`container` runtime) or host-installed dependencies (`manual` runtime) must build for `arm64`. Use an Intel or AMD type when something in the stack is `x86_64`-only.
 
-Then right-size from measurement: start with the smallest size in the family that holds the working set, watch the instances' CPU utilization, and move up a size or set `cpu_autoscaling_enabled` from there. Memory is not measurable from AWS by default — the module's CloudWatch agent config ships app logs only, and the instance role has no `cloudwatch:PutMetricData` — so size memory from what the app itself reports, or extend the agent with a metrics config and grant that permission through the instance role.
+Then right-size from measurement: start with the smallest size in the family that holds the working set, watch the instances' CPU and memory utilization, and move up a size or set `cpu_autoscaling_enabled` from there.
 
 Changing `instance_type` produces a new launch template version that applies to instances launched afterwards. Running instances keep their current type until recycled, and a Graviton/x86 switch changes the AMI for new instances only, so the group can briefly run both architectures mid-recycle. Either keep multi-architecture images during that window or recycle every instance promptly.
 
