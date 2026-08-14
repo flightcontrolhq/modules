@@ -700,7 +700,7 @@ variable "beacon_endpoint" {
 variable "beacon_chart_source" {
   type        = string
   description = "Where the agent's Helm chart comes from. An 'oci://' reference is split into repository and chart name; anything else is treated as a filesystem path to a chart directory, which is how the chart is tested before it is published to ECR Public. Must stay publicly pullable: customer clusters cannot pull from Ravion's private ECR."
-  default     = "oci://public.ecr.aws/ravion/beacon"
+  default     = "oci://public.ecr.aws/a8z1i1r2/beacon"
   nullable    = false
 
   validation {
