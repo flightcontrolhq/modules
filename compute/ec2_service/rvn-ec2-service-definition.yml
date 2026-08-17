@@ -703,6 +703,23 @@ module:
       min: 1
       show_when:
         backup_dump_enabled: true
+    - id: backup_dump_max_interval_hours
+      label: Maximum dump interval (hours)
+      type: number
+      description: Maximum expected interval between successful dumps; set this higher than the dump schedule interval so the freshness alarm is meaningful.
+      default: 48
+      min: 1
+      show_when:
+        backup_dump_enabled: true
+    - id: backup_dump_force_deletion_enabled
+      label: Allow backup bucket deletion
+      type: boolean
+      description: Allow Terraform to delete a module-created S3 backup bucket that still contains backups.
+      default: false
+      show_when:
+        backup_dump_enabled: true
+        backup_dump_destination: s3
+        backup_dump_s3_bucket_arn: null
     - id: backup_dump_restore_on_first_boot_enabled
       label: Restore latest dump on first boot
       type: boolean
@@ -945,6 +962,8 @@ module:
         backup_dump_s3_bucket_arn: << module.input.backup_dump_s3_bucket_arn || nil >>
         backup_dump_s3_prefix: << module.input.backup_dump_s3_prefix >>
         backup_dump_retention_days: << module.input.backup_dump_retention_days >>
+        backup_dump_max_interval_hours: << module.input.backup_dump_max_interval_hours >>
+        backup_dump_force_deletion_enabled: << module.input.backup_dump_force_deletion_enabled >>
         backup_dump_restore_on_first_boot_enabled: << module.input.backup_dump_restore_on_first_boot_enabled >>
         backup_max_age_hours: << module.input.backup_max_age_hours || nil >>
         backup_on_termination_enabled: << module.input.backup_on_termination_enabled >>
@@ -1314,9 +1333,9 @@ module:
 
     Phase 2 adds engine-native logical dumps alongside the Phase 1 EBS snapshot workflow. Enable Logical dumps and provide both command halves of the contract: the dump command writes artifacts into the module-created staging directory exposed as `RAVION_BACKUP_DIR`, and the restore command reads that directory. Both commands run as root. Use the SSM document `<name>-backup` for `backup-now` or `restore-latest`; the systemd timer uses the same script.
 
-    S3 is the default destination. The module-created bucket is encrypted, versioned, private, and expires objects after Logical dump retention days. A supplied bucket must grant the instance role access to the configured service prefix. EFS uses the existing EFS mount and the same timestamped layout, but costs roughly ten times S3 storage, has no object versioning or object lock, and is available only in the VPC. EFS is a backup destination, not a live SQLite or Postgres data directory; an `rsync` of a live database file is not a valid backup.
+    S3 is the default destination. The module-created bucket is encrypted, versioned, private, expires current and noncurrent versions after Logical dump retention days, and cleans up incomplete multipart uploads. A supplied bucket must grant the instance role access to the configured service prefix; the module prunes this service's old artifacts, while the bucket owner remains responsible for bucket lifecycle, versioning, and object-lock policy. Terraform does not delete a non-empty module-created bucket unless Allow backup bucket deletion is enabled. EFS uses the existing EFS mount and the same timestamped layout, but costs roughly ten times S3 storage, has no object versioning or object lock, and is available only in the VPC. EFS is a backup destination, not a live SQLite or Postgres data directory; an `rsync` of a live database file is not a valid backup.
 
-    Every run writes a UTC timestamped directory containing a manifest with completion time, instance ID, and file list. Newest-backup discovery reads those manifests, not key names or object metadata. Restore-on-first-boot runs once per data volume and writes a marker only after the restore command succeeds. If no backup exists, or `backup_max_age_hours` makes the newest backup stale, the module logs a fatal error, blocks application startup, leaves the instance available for inspection, and does not mark the restore successful. This is safer than silently starting with stale or empty state.
+    Every run writes a UTC timestamped directory containing a manifest with completion time, instance ID, and file list. Newest-backup discovery reads those manifests, not key names or object metadata. The schedule accepts systemd OnCalendar shorthand and wildcard forms, not five-field cron syntax. Set Maximum dump interval (hours) higher than the schedule interval; it drives the missing-success alarm window. The default AL2023 AMI supplies AWS CLI v2, which the S3 workflow checks for rather than installing the unrelated `awscli` package. Restore-on-first-boot runs once per data volume and writes a marker only after the restore command succeeds. A successful listing with no manifests is treated as a fresh service: it logs that no restore is needed and writes the marker so normal initialization can continue. Listing/download failures, failed restore commands, and stale backups identified by `backup_max_age_hours` remain fatal, block application startup, and do not mark the restore successful. This is safer than silently starting with stale or empty state.
 
     A planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. The hook continues after timeout or failure, so it cannot wedge the ASG. Hard crashes, Availability Zone loss, and instance-store failures cannot run a termination hook. If several instances restore the same dump, each then diverges independently; the module intentionally does not gate this feature on instance count.
 

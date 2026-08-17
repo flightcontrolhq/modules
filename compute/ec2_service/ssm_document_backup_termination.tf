@@ -134,7 +134,7 @@ resource "aws_iam_role_policy" "backup_eventbridge" {
       }, {
       Effect   = "Allow"
       Action   = "ssm:StartAutomationExecution"
-      Resource = aws_ssm_document.backup_termination[0].arn
+      Resource = local.backup_dump_termination_automation_arn
     }]
   })
 }
@@ -159,7 +159,7 @@ resource "aws_cloudwatch_event_target" "backup_termination" {
   count = local.backup_dump_termination_enabled ? 1 : 0
 
   rule     = aws_cloudwatch_event_rule.backup_termination[0].name
-  arn      = aws_ssm_document.backup_termination[0].arn
+  arn      = local.backup_dump_termination_automation_arn
   role_arn = aws_iam_role.backup_eventbridge[0].arn
 
   input_transformer {

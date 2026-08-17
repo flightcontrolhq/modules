@@ -49,9 +49,12 @@ mount -a -t efs
 %{ endif ~}
 
 %{ if backup_dump_enabled ~}
-# Install the AWS CLI only for S3 logical dump destinations.
+# AL2023 normally includes AWS CLI v2; fail clearly if an S3 destination lacks it.
 %{ if backup_dump_destination == "s3" ~}
-dnf install -y awscli
+if ! command -v aws >/dev/null 2>&1; then
+  echo "FATAL: AWS CLI is required for S3 logical dumps but was not found on the AL2023 AMI."
+  exit 1
+fi
 %{ endif ~}
 mkdir -p "/var/log/ravion/${name}" /var/lib/ravion
 cat > "/usr/local/bin/${name}-backup" <<'RAVION_BACKUP_SCRIPT'
@@ -107,6 +110,8 @@ ${supervisor_install_script}
 ${env_file_script}
 
 dnf install -y amazon-cloudwatch-agent
+DEPLOY_ID="bootstrap"
+${deployment_log_script}
 
 %{ if additional_user_data != "" ~}
 # Additional user data

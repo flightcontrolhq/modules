@@ -6,7 +6,7 @@ resource "aws_s3_bucket" "dump" {
   count = local.backup_dump_bucket_created ? 1 : 0
 
   bucket        = "${var.name}-backups-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
+  force_destroy = var.backup_dump_force_deletion_enabled
 
   tags = merge(local.tags, {
     Name = "${var.name}-backups"
@@ -55,8 +55,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "dump" {
     id     = "logical-dump-retention"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = var.backup_dump_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.backup_dump_retention_days
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }

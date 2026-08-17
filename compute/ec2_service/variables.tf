@@ -386,12 +386,15 @@ variable "backup_dump_restore_command" {
 
 variable "backup_dump_schedule" {
   type        = string
-  description = "systemd OnCalendar expression for logical dumps."
+  description = "systemd OnCalendar expression for logical dumps, such as hourly, daily, or '*-*-* 04:00:00 UTC'."
   default     = "*-*-* 04:00:00 UTC"
 
   validation {
-    condition     = can(regex("^(\\*-\\*-\\*|[0-9]{4}-[0-9]{2}-[0-9]{2}) ([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?( UTC)?$", var.backup_dump_schedule))
-    error_message = "The backup_dump_schedule must be a systemd OnCalendar date and time expression, such as '*-*-* 04:00:00 UTC'."
+    condition = contains(["hourly", "daily", "weekly", "monthly", "quarterly", "yearly", "annually"], lower(trimspace(var.backup_dump_schedule))) || (
+      can(regex("^[A-Za-z0-9_*.?,%~+:/-]+( +[A-Za-z0-9_*.?,%~+:/-]+){0,3}$", trimspace(var.backup_dump_schedule))) &&
+      !can(regex("^[^ ]+( +[^ ]+){4}$", trimspace(var.backup_dump_schedule)))
+    )
+    error_message = "The backup_dump_schedule must be a systemd OnCalendar expression, not five-field cron syntax."
   }
 }
 
@@ -437,6 +440,23 @@ variable "backup_dump_retention_days" {
     condition     = var.backup_dump_retention_days > 0 && floor(var.backup_dump_retention_days) == var.backup_dump_retention_days
     error_message = "The backup_dump_retention_days must be a positive whole number."
   }
+}
+
+variable "backup_dump_max_interval_hours" {
+  type        = number
+  description = "Maximum expected interval between successful logical dumps, in hours; set this higher than the backup_dump_schedule interval."
+  default     = 48
+
+  validation {
+    condition     = var.backup_dump_max_interval_hours > 0 && floor(var.backup_dump_max_interval_hours) == var.backup_dump_max_interval_hours
+    error_message = "The backup_dump_max_interval_hours must be a positive whole number."
+  }
+}
+
+variable "backup_dump_force_deletion_enabled" {
+  type        = bool
+  description = "Allow Terraform to delete a module-created logical dump bucket even when it still contains backups."
+  default     = false
 }
 
 variable "backup_dump_restore_on_first_boot_enabled" {

@@ -55,40 +55,87 @@ upload_backup() {
     aws s3 cp "$${RAVION_BACKUP_DIR}/" "s3://$${BUCKET}/$${artifact_path}/" --recursive
   else
     mkdir -p "$EFS_ROOT"
+    mkdir -p "$${EFS_ROOT}/$${timestamp}"
     cp -a "$${RAVION_BACKUP_DIR}/." "$${EFS_ROOT}/$${timestamp}/"
     find "$${EFS_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime "+$${RETENTION_DAYS}" -exec rm -rf {} +
+  fi
+
+  if [ "$DESTINATION" = "s3" ]; then
+    prune_s3_backups
   fi
 
   log "RAVION_BACKUP_SUCCESS completed_at=$${completed_at} artifact=$${artifact_path}"
 }
 
-find_s3_manifest() {
-  local best_epoch=0 best_key="" key manifest epoch
+prune_s3_backups() {
+  local cutoff listing key manifest epoch manifest_dir
+  cutoff=$(( $(date +%s) - RETENTION_DAYS * 86400 ))
+  if ! listing=$(aws s3api list-objects-v2 --bucket "$${BUCKET}" --prefix "$${ARTIFACT_PREFIX}/" --output json); then
+    return 1
+  fi
   while IFS= read -r key; do
     [ -n "$key" ] || continue
     manifest=$(mktemp)
-    aws s3 cp "s3://$${BUCKET}/$${key}" "$manifest" >/dev/null
-    epoch=$(jq -r '.completed_at_epoch // 0' "$manifest")
+    if ! aws s3 cp "s3://$${BUCKET}/$${key}" "$manifest" >/dev/null; then
+      rm -f "$manifest"
+      return 1
+    fi
+    if ! epoch=$(jq -r '.completed_at_epoch // 0' "$manifest"); then
+      rm -f "$manifest"
+      return 1
+    fi
+    if [ "$epoch" -gt 0 ] && [ "$epoch" -lt "$cutoff" ]; then
+      manifest_dir="$${key%/manifest.json}"
+      aws s3 rm "s3://$${BUCKET}/$${manifest_dir}/" --recursive
+    fi
+    rm -f "$manifest"
+  done < <(jq -r '.Contents[]?.Key | select(endswith("/manifest.json"))' <<< "$listing")
+}
+
+find_s3_manifest() {
+  local best_epoch=0 best_key="" key manifest epoch listing keys
+  if ! listing=$(aws s3api list-objects-v2 --bucket "$${BUCKET}" --prefix "$${ARTIFACT_PREFIX}/" --output json); then
+    return 2
+  fi
+  if ! keys=$(jq -r '.Contents[]?.Key | select(endswith("/manifest.json"))' <<< "$listing"); then
+    return 2
+  fi
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    manifest=$(mktemp)
+    if ! aws s3 cp "s3://$${BUCKET}/$${key}" "$manifest" >/dev/null; then
+      rm -f "$manifest"
+      return 2
+    fi
+    if ! epoch=$(jq -r '.completed_at_epoch // 0' "$manifest"); then
+      rm -f "$manifest"
+      return 2
+    fi
     if [ "$epoch" -gt "$best_epoch" ]; then
       best_epoch="$epoch"
       best_key="$key"
     fi
     rm -f "$manifest"
-  done < <(aws s3api list-objects-v2 --bucket "$${BUCKET}" --prefix "$${ARTIFACT_PREFIX}/" --output json |
-    jq -r '.Contents[]?.Key | select(endswith("/manifest.json"))')
+  done <<< "$keys"
   [ -n "$best_key" ] || return 1
   printf '%s\n' "$best_key"
 }
 
 find_efs_manifest() {
-  local best_epoch=0 best_manifest="" manifest epoch
+  local best_epoch=0 best_manifest="" manifest epoch manifests
+  mkdir -p "$EFS_ROOT"
+  if ! manifests=$(find "$EFS_ROOT" -type f -name manifest.json 2>/dev/null); then
+    return 2
+  fi
   while IFS= read -r manifest; do
-    epoch=$(jq -r '.completed_at_epoch // 0' "$manifest")
+    if ! epoch=$(jq -r '.completed_at_epoch // 0' "$manifest"); then
+      return 2
+    fi
     if [ "$epoch" -gt "$best_epoch" ]; then
       best_epoch="$epoch"
       best_manifest="$manifest"
     fi
-  done < <(find "$EFS_ROOT" -type f -name manifest.json 2>/dev/null)
+  done <<< "$manifests"
   [ -n "$best_manifest" ] || return 1
   printf '%s\n' "$best_manifest"
 }
@@ -99,19 +146,29 @@ restore_backup() {
   restore_dir=$(mktemp -d "/var/lib/ravion/$${SERVICE_NAME}-restore.XXXXXX")
 
   if [ "$DESTINATION" = "s3" ]; then
-    manifest_ref=$(find_s3_manifest) || {
+    if manifest_ref=$(find_s3_manifest); then
+      :
+    elif [ "$?" -eq 1 ]; then
+      log "No logical backup manifest was found; treating this as a fresh service and continuing without restore"
+      return 0
+    else
       log "FATAL: no logical backup manifest was found; application startup is blocked"
       return 1
-    }
+    fi
     manifest=$(mktemp)
     aws s3 cp "s3://$${BUCKET}/$${manifest_ref}" "$manifest" >/dev/null
     manifest_dir="$${manifest_ref%/manifest.json}"
     aws s3 cp "s3://$${BUCKET}/$${manifest_dir}/" "$restore_dir/" --recursive
   else
-    manifest_ref=$(find_efs_manifest) || {
+    if manifest_ref=$(find_efs_manifest); then
+      :
+    elif [ "$?" -eq 1 ]; then
+      log "No logical backup manifest was found; treating this as a fresh service and continuing without restore"
+      return 0
+    else
       log "FATAL: no logical backup manifest was found; application startup is blocked"
       return 1
-    }
+    fi
     manifest="$manifest_ref"
     manifest_dir="$${manifest_ref%/manifest.json}"
     cp -a "$manifest_dir/." "$restore_dir/"

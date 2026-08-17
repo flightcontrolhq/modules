@@ -239,9 +239,11 @@ run "logical_dumps_create_s3_resources_and_wiring" {
   command = plan
 
   variables {
-    backup_dump_enabled          = true
-    backup_dump_command          = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
-    data_volume_creation_enabled = true
+    backup_dump_enabled            = true
+    backup_dump_command            = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    backup_dump_schedule           = "hourly"
+    backup_dump_max_interval_hours = 6
+    data_volume_creation_enabled   = true
   }
 
   assert {
@@ -274,6 +276,31 @@ run "logical_dumps_create_s3_resources_and_wiring" {
     error_message = "Logical dumps must create the one-click document and freshness alarm."
   }
 
+  assert {
+    condition     = aws_s3_bucket.dump[0].force_destroy == false
+    error_message = "Logical dump buckets must not be force-deleted by default."
+  }
+
+  assert {
+    condition     = contains([for rule in aws_s3_bucket_lifecycle_configuration.dump[0].rule : rule.noncurrent_version_expiration[0].noncurrent_days], 30)
+    error_message = "Logical dump buckets must expire noncurrent versions."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.backup_dump_failure[0].period == 21600 && aws_cloudwatch_metric_alarm.backup_dump_failure[0].evaluation_periods == 1
+    error_message = "The dump freshness alarm window must follow the configured maximum interval."
+  }
+
+  assert {
+    condition     = strcontains(aws_cloudwatch_event_target.backup_termination[0].arn, "automation-definition/")
+    error_message = "Termination EventBridge targets must use the SSM Automation ARN form."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "fresh service and continuing without restore") && strcontains(base64decode(aws_launch_template.app.user_data), "/backup.log")
+    error_message = "Bootstrap must allow a fresh restore-enabled service and configure backup log collection."
+  }
+
 }
 
 run "logical_dumps_use_supplied_s3_bucket" {
@@ -294,6 +321,11 @@ run "logical_dumps_use_supplied_s3_bucket" {
   assert {
     condition     = output.backup_dump_bucket_arn == "arn:aws:s3:::existing-backup-bucket"
     error_message = "The effective dump bucket ARN must use the supplied bucket."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "prune_s3_backups")
+    error_message = "Supplied S3 buckets must receive module-side retention pruning."
   }
 }
 
