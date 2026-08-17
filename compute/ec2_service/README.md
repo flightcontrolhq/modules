@@ -188,7 +188,7 @@ S3 is the default destination and uses a module-created encrypted, versioned, pr
 
 When restore-on-first-boot is enabled, a replacement instance discovers the newest manifest, logs its exact completion timestamp and age, downloads the artifacts, runs the restore command, and writes a marker on the data volume only after success. A reboot does not restore again. A successful listing that contains no manifests is treated as a fresh service: the module logs that no restore is needed and writes the marker so the instance can initialize normally. Listing or download failures, failed restore commands, and stale backups identified by `backup_max_age_hours` remain fatal; they do not write the marker or start the application. The instance remains available for inspection rather than silently starting with stale or empty data and diverging from the backup.
 
-Planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. Its heartbeat timeout and `CONTINUE` safety result prevent a failed or slow dump from wedging the group. Hard crashes, Availability Zone loss, and instance-store failures cannot run this hook. If multiple instances restore the same dump, they then diverge independently; the feature is intentionally not gated on instance count.
+Planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. `backup_on_termination_timeout_seconds` controls the lifecycle-hook heartbeat; the Automation step reserves 60 seconds of slack so `CompleteLifecycleAction` can still run before the hook expires. The standalone `backup_dump` document keeps its 3600-second limit for manual and scheduled invocations. The hook's `CONTINUE` safety result prevents a failed or slow dump from wedging the group. Hard crashes, Availability Zone loss, and instance-store failures cannot run this hook. If multiple instances restore the same dump, they then diverge independently; the feature is intentionally not gated on instance count.
 
 Logical-dump RPO is approximately the dump schedule interval, while a planned-termination dump can provide near-zero loss for planned replacement. Restore-on-first-boot automates the workflow but still depends on the newest available dump and a successful engine restore command. Phase 1 EBS snapshot restore remains deliberate and manual for whole-volume recovery.
 
@@ -275,6 +275,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | backup_dump_restore_on_first_boot_enabled | Restore latest dump before first application start | `bool` | `false` | no |
 | backup_max_age_hours | Maximum accepted restore age | `number` | `null` | no |
 | backup_on_termination_enabled | Run a dump before planned ASG termination | `bool` | `true` | no |
+| backup_on_termination_timeout_seconds | Planned-termination dump timeout, including lifecycle-hook heartbeat slack | `number` | `1800` | no |
 | backup_dump_failure_alarm_enabled | Alarm on missing recent dump success | `bool` | `true` | no |
 
 ## Outputs

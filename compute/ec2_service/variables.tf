@@ -482,6 +482,17 @@ variable "backup_on_termination_enabled" {
   default     = true
 }
 
+variable "backup_on_termination_timeout_seconds" {
+  type        = number
+  description = "Maximum time allowed for a planned-termination logical dump, including lifecycle-hook heartbeat slack."
+  default     = 1800
+
+  validation {
+    condition     = var.backup_on_termination_timeout_seconds >= 300 && var.backup_on_termination_timeout_seconds <= 7200 && floor(var.backup_on_termination_timeout_seconds) == var.backup_on_termination_timeout_seconds
+    error_message = "The backup_on_termination_timeout_seconds must be a whole number between 300 and 7200."
+  }
+}
+
 variable "backup_dump_failure_alarm_enabled" {
   type        = bool
   description = "Create a CloudWatch alarm when recent logical dump success records are missing."

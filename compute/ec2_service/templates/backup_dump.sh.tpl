@@ -52,11 +52,18 @@ upload_backup() {
   artifact_path="$${ARTIFACT_PREFIX}/$${timestamp}"
 
   if [ "$DESTINATION" = "s3" ]; then
-    aws s3 cp "$${RAVION_BACKUP_DIR}/" "s3://$${BUCKET}/$${artifact_path}/" --recursive
+    aws s3 cp "$${RAVION_BACKUP_DIR}/" "s3://$${BUCKET}/$${artifact_path}/" --recursive --exclude manifest.json
+    aws s3 cp "$${RAVION_BACKUP_DIR}/manifest.json" "s3://$${BUCKET}/$${artifact_path}/manifest.json"
   else
     mkdir -p "$EFS_ROOT"
     mkdir -p "$${EFS_ROOT}/$${timestamp}"
-    cp -a "$${RAVION_BACKUP_DIR}/." "$${EFS_ROOT}/$${timestamp}/"
+    while IFS= read -r -d '' file; do
+      relative="$${file#"$${RAVION_BACKUP_DIR}/"}"
+      relative_dir=$(dirname "$relative")
+      mkdir -p "$${EFS_ROOT}/$${timestamp}/$${relative_dir}"
+      cp -a "$file" "$${EFS_ROOT}/$${timestamp}/$${relative}"
+    done < <(find "$RAVION_BACKUP_DIR" -type f ! -name manifest.json -print0)
+    cp -a "$${RAVION_BACKUP_DIR}/manifest.json" "$${EFS_ROOT}/$${timestamp}/manifest.json"
   fi
 
   if [ "$DESTINATION" = "s3" ]; then

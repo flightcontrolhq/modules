@@ -4,7 +4,7 @@ definition:
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing, local EBS data, and switchable container or manual in-place deploys.
 release:
   version: 1.6.0
-  description: Add engine-native logical dumps, restore-on-boot, and planned-termination backups for on-disk databases.
+  description: Add engine-native logical dumps, safe restore-on-boot, and planned-termination backups for on-disk databases.
 module:
   inputs:
     - id: network
@@ -742,6 +742,15 @@ module:
       default: true
       show_when:
         backup_dump_enabled: true
+    - id: backup_on_termination_timeout_seconds
+      label: Planned termination timeout (secs)
+      type: number
+      description: Maximum time allowed for the planned-termination dump; the automation step keeps 60 seconds of slack before the lifecycle hook expires.
+      default: 1800
+      min: 300
+      max: 7200
+      show_when:
+        backup_dump_enabled: true
     - id: backup_dump_failure_alarm_enabled
       label: Logical dump freshness alarm
       type: boolean
@@ -966,6 +975,7 @@ module:
         backup_dump_restore_on_first_boot_enabled: << module.input.backup_dump_restore_on_first_boot_enabled >>
         backup_max_age_hours: << module.input.backup_max_age_hours || nil >>
         backup_on_termination_enabled: << module.input.backup_on_termination_enabled >>
+        backup_on_termination_timeout_seconds: << module.input.backup_on_termination_timeout_seconds >>
         backup_dump_failure_alarm_enabled: << module.input.backup_dump_failure_alarm_enabled >>
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
         desired_capacity: "<< module.input.cpu_autoscaling_enabled ? nil : (module.input.desired_capacity || nil) >>"
@@ -1336,7 +1346,7 @@ module:
 
     Every run writes a UTC timestamped directory containing a manifest with completion time, instance ID, and file list. Newest-backup discovery reads those manifests, not key names or object metadata. The schedule accepts systemd OnCalendar shorthand and wildcard forms, not five-field cron syntax. Set Maximum dump interval (hours) higher than the schedule interval; it drives the missing-success alarm window. The default AL2023 AMI supplies AWS CLI v2, which the S3 workflow checks for rather than installing the unrelated `awscli` package. Restore-on-first-boot runs once per data volume and writes a marker only after the restore command succeeds. A successful listing with no manifests is treated as a fresh service: it logs that no restore is needed and writes the marker so normal initialization can continue. Listing/download failures, failed restore commands, and stale backups identified by `backup_max_age_hours` remain fatal, block application startup, and do not mark the restore successful. This is safer than silently starting with stale or empty state.
 
-    A planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. The hook continues after timeout or failure, so it cannot wedge the ASG. Hard crashes, Availability Zone loss, and instance-store failures cannot run a termination hook. If several instances restore the same dump, each then diverges independently; the module intentionally does not gate this feature on instance count.
+    A planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. Planned termination timeout (secs) controls the lifecycle-hook heartbeat, while the Automation step keeps 60 seconds of slack so CompleteLifecycleAction can run before the hook expires. The standalone backup document keeps its 3600-second limit for manual and scheduled invocations. The hook continues after timeout or failure, so it cannot wedge the ASG. Hard crashes, Availability Zone loss, and instance-store failures cannot run a termination hook. If several instances restore the same dump, each then diverges independently; the module intentionally does not gate this feature on instance count.
 
     Logical dump RPO is approximately the dump schedule interval, with a planned-termination dump able to reduce planned replacement loss to near zero. Restore-on-first-boot automates the RTO workflow but still depends on the newest available dump and a successful engine restore command. Phase 1 EBS snapshot restore remains deliberate and manual, and is still the recovery option for whole-volume recovery.
 

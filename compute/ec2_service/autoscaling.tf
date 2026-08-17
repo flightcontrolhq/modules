@@ -57,7 +57,7 @@ module "autoscaling" {
         name                 = "ravion-backup-terminate"
         lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
         default_result       = "CONTINUE"
-        heartbeat_timeout    = 1800
+        heartbeat_timeout    = var.backup_on_termination_timeout_seconds
       },
     ] : []
   )
