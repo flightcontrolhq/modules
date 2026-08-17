@@ -47,5 +47,5 @@ resource "aws_iam_role_policy" "dlm" {
 resource "aws_iam_role_policy_attachment" "dlm_ssm" {
   count      = local.backup_scripts_enabled ? 1 : 0
   role       = aws_iam_role.dlm[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AWSDataLifecycleManagerSSMFullAccess"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AWSDataLifecycleManagerSSMFullAccess"
 }

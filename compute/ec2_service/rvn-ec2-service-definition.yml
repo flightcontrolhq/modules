@@ -1196,7 +1196,7 @@ module:
     To restore:
 
     1. Find a snapshot using the `RavionBackup=<service name>` tag, or the `backup_snapshot_filter` output.
-    2. Set Data volume snapshot ID to the selected `snap-...` ID while Data volume remains enabled.
+    2. Set Data volume snapshot ID to the selected `snap-...` ID while Data volume remains enabled. Keep Data volume size at least as large as the snapshot; the configured volume type and size are preserved, and AWS rejects an undersized restore.
     3. Apply the change and recycle the affected instance so it launches from the snapshot.
     4. Verify that the restored filesystem is mounted at the Data volume mount path and that the application sees the expected data.
     5. Clear Data volume snapshot ID and apply again, so future replacements do not keep booting from that pinned snapshot.

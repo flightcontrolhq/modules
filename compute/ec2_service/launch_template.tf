@@ -46,8 +46,8 @@ resource "aws_launch_template" "app" {
       device_name = "/dev/xvdf"
 
       ebs {
-        volume_size           = var.data_volume_snapshot_id == null ? var.data_volume_size : null
-        volume_type           = var.data_volume_snapshot_id == null ? var.data_volume_type : null
+        volume_size           = var.data_volume_size
+        volume_type           = var.data_volume_type
         snapshot_id           = var.data_volume_snapshot_id
         encrypted             = true
         delete_on_termination = true
@@ -111,6 +111,11 @@ resource "aws_launch_template" "app" {
     precondition {
       condition     = local.backup_consistency_mode != "custom" || (var.backup_pre_script_command != null && length(trimspace(var.backup_pre_script_command)) > 0 && var.backup_post_script_command != null && length(trimspace(var.backup_post_script_command)) > 0)
       error_message = "The backup_pre_script_command and backup_post_script_command must both be set when backup_consistency_mode is custom."
+    }
+
+    precondition {
+      condition     = local.backup_consistency_mode != "filesystem_freeze" || var.data_volume_creation_enabled
+      error_message = "The data_volume_creation_enabled must be true when backup_consistency_mode is filesystem_freeze."
     }
 
     precondition {

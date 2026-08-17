@@ -166,7 +166,7 @@ Snapshots are incremental EBS snapshots, but the schedule still costs storage an
 To restore:
 
 1. Find a snapshot using the `RavionBackup=<service name>` tag, or the `backup_snapshot_filter` output.
-2. Set `data_volume_snapshot_id` to the selected `snap-...` ID while `data_volume_creation_enabled` remains enabled.
+2. Set `data_volume_snapshot_id` to the selected `snap-...` ID while `data_volume_creation_enabled` remains enabled. Keep `data_volume_size` at least as large as the snapshot's size; the configured `data_volume_type` and size are passed to the restored volume, so AWS rejects an undersized restore instead of silently changing it.
 3. Apply the change and recycle the affected instance so it launches from the snapshot.
 4. Verify that the restored filesystem is mounted at `data_volume_mount_path` and that the application sees the expected data.
 5. Clear `data_volume_snapshot_id` and apply again, so future replacements do not keep booting from that pinned snapshot.

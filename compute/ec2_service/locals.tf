@@ -15,11 +15,12 @@ locals {
 
   container_runtime = var.runtime == "container"
 
-  backup_consistency_mode     = coalesce(var.backup_consistency_mode, var.data_volume_creation_enabled ? "filesystem_freeze" : "crash_consistent")
-  backup_scripts_enabled      = var.backup_enabled && local.backup_consistency_mode != "crash_consistent"
-  backup_root_volume_included = var.backup_root_volume_included || !var.data_volume_creation_enabled
-  backup_pre_script_command   = coalesce(var.backup_pre_script_command, "")
-  backup_post_script_command  = coalesce(var.backup_post_script_command, "")
+  backup_consistency_mode            = coalesce(var.backup_consistency_mode, var.data_volume_creation_enabled ? "filesystem_freeze" : "crash_consistent")
+  backup_scripts_enabled             = var.backup_enabled && local.backup_consistency_mode != "crash_consistent"
+  backup_root_volume_included        = var.backup_root_volume_included || !var.data_volume_creation_enabled
+  backup_pre_script_command          = var.backup_pre_script_command == null ? "" : var.backup_pre_script_command
+  backup_post_script_command         = var.backup_post_script_command == null ? "" : var.backup_post_script_command
+  backup_cross_region_retention_days = max(1, floor(var.backup_interval_hours * var.backup_retention_count / 24))
   backup_target_tag = {
     RavionBackup = var.name
   }

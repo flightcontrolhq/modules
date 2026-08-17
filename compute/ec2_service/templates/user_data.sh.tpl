@@ -10,10 +10,13 @@ dnf install -y git jq unzip
 # Resolve the configured Xen device to its Nitro NVMe alias when needed.
 DATA_DEVICE="${data_volume_device_name}"
 if [ ! -b "$DATA_DEVICE" ]; then
+  DATA_DEVICE=$(readlink -f "${data_volume_device_name}" 2>/dev/null || true)
+fi
+if [ ! -b "$DATA_DEVICE" ]; then
   EXPECTED_DEVICE="f"
   DATA_DEVICE=$(for dev in /dev/nvme*n1; do
     [ -b "$dev" ] || continue
-    if /sbin/ebsnvme-id "$dev" 2>/dev/null | grep -Eq "Device Name: /dev/(xvd)?$${EXPECTED_DEVICE}$"; then
+    if /sbin/ebsnvme-id "$dev" 2>/dev/null | grep -Eiq "((device name|block device mapping):[[:space:]]*)?(/dev/)?(xvd)?$${EXPECTED_DEVICE}([[:space:]]|$)"; then
       echo "$dev"
       break
     fi
@@ -22,12 +25,13 @@ fi
 if [ -n "$DATA_DEVICE" ] && [ -b "$DATA_DEVICE" ]; then
   DATA_FSTYPE=$(lsblk -no FSTYPE "$DATA_DEVICE" | tr -d '[:space:]')
   if [ -z "$DATA_FSTYPE" ]; then
-  mkfs -t xfs "$DATA_DEVICE"
+    mkfs -t xfs "$DATA_DEVICE"
+    DATA_FSTYPE="xfs"
   fi
   mkdir -p "${data_volume_mount_path}"
   DATA_UUID=$(blkid -s UUID -o value "$DATA_DEVICE")
   sed -i "\|[[:space:]]${data_volume_mount_path}[[:space:]]|d" /etc/fstab
-  echo "UUID=$${DATA_UUID} ${data_volume_mount_path} $${DATA_FSTYPE:-xfs} defaults,nofail 0 2" >> /etc/fstab
+  echo "UUID=$${DATA_UUID} ${data_volume_mount_path} $${DATA_FSTYPE} defaults,nofail 0 2" >> /etc/fstab
   mount "${data_volume_mount_path}" || mount -a
 fi
 %{ endif ~}

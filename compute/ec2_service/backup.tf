@@ -40,7 +40,7 @@ resource "aws_dlm_lifecycle_policy" "service" {
           encrypted = true
           copy_tags = true
           retain_rule {
-            interval      = var.backup_retention_count
+            interval      = local.backup_cross_region_retention_days
             interval_unit = "DAYS"
           }
         }
