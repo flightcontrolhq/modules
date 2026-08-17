@@ -53,7 +53,6 @@ data "aws_iam_policy_document" "dlm" {
     content {
       sid = "CopyEncryptedSnapshots"
       actions = [
-        "kms:CreateGrant",
         "kms:Decrypt",
         "kms:DescribeKey",
         "kms:Encrypt",
@@ -63,6 +62,36 @@ data "aws_iam_policy_document" "dlm" {
         "kms:ReEncryptTo",
       ]
       resources = ["*"]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values = [
+          "ec2.${local.region}.amazonaws.com",
+          "ec2.${var.backup_cross_region_copy_destination}.amazonaws.com",
+        ]
+      }
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.backup_cross_region_copy_destination != null ? [1] : []
+    content {
+      sid       = "CreateEncryptedSnapshotCopyGrant"
+      actions   = ["kms:CreateGrant"]
+      resources = ["*"]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values = [
+          "ec2.${local.region}.amazonaws.com",
+          "ec2.${var.backup_cross_region_copy_destination}.amazonaws.com",
+        ]
+      }
+      condition {
+        test     = "Bool"
+        variable = "kms:GrantIsForAWSResource"
+        values   = ["true"]
+      }
     }
   }
 }
