@@ -530,8 +530,8 @@ variable "backup_replication_restore_on_first_boot_enabled" {
 
 variable "backup_replication_snapshot_interval" {
   type        = string
-  description = "Litestream snapshot interval, such as 1s or 1m."
-  default     = "1s"
+  description = "Litestream full snapshot interval, such as 1m or 1h."
+  default     = "1m"
 
   validation {
     condition     = can(regex("^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$", var.backup_replication_snapshot_interval))
@@ -541,23 +541,12 @@ variable "backup_replication_snapshot_interval" {
 
 variable "backup_replication_retention" {
   type        = string
-  description = "Litestream replica retention duration, such as 24h or 168h."
+  description = "Litestream snapshot retention duration, such as 24h or 168h. It must exceed the snapshot interval."
   default     = "24h"
 
   validation {
     condition     = can(regex("^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$", var.backup_replication_retention))
     error_message = "The backup_replication_retention must be a positive Litestream duration."
-  }
-}
-
-variable "backup_replication_version" {
-  type        = string
-  description = "Pinned Litestream release version installed on instances."
-  default     = "0.5.12"
-
-  validation {
-    condition     = var.backup_replication_version == "0.5.12"
-    error_message = "The backup_replication_version must be the checksum-verified supported release 0.5.12."
   }
 }
 

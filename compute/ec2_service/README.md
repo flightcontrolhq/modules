@@ -194,11 +194,11 @@ Logical-dump RPO is approximately the dump schedule interval, while a planned-te
 
 ## Continuous replication
 
-Phase 3 adds native Litestream support for SQLite. Enable `backup_replication_enabled`, set `backup_replication_database_path` to an absolute path under the EBS data volume, and provide an S3 bucket ARN or let the module create one. The module installs the pinned `backup_replication_version` release after verifying its architecture-specific checksum, writes a Litestream configuration with the configured snapshot interval and retention, and runs `litestream replicate` as a supervised program. Its log is shipped to the same CloudWatch log group as application and logical-backup logs.
+Phase 3 adds native Litestream support for SQLite. Enable `backup_replication_enabled`, set `backup_replication_database_path` to an absolute path under the EBS data volume, and provide an S3 bucket ARN or let the module create one. The module installs its internally pinned Litestream 0.5.12 release after verifying its architecture-specific checksum, writes a Litestream configuration with the configured full-snapshot interval and retention, and runs `litestream replicate` as a supervised program. Litestream upgrades are module releases rather than a caller-controlled input. Its log is shipped to the same CloudWatch log group as application and logical-backup logs.
 
-When `backup_replication_restore_on_first_boot_enabled` is enabled, the first boot uses Litestream's `-if-replica-exists` restore behavior. A successful empty replica discovery is treated as a fresh service and marks restore complete. Discovery or download failures, restore failures, and replicas older than `backup_replication_max_age_hours` block application startup without writing the marker. The replica is a supplement to snapshots and logical dumps, not a replacement: a corrupted SQLite database produces a corrupted replica.
+When `backup_replication_restore_on_first_boot_enabled` is enabled, the first boot lists the replica's LTX files with Litestream's `ltx -level all -json` command before restoring. A successful empty listing is treated as a fresh service and marks restore complete; a non-zero discovery exit blocks startup, so credential and network failures cannot masquerade as an empty replica. Restore failures and replicas older than `backup_replication_max_age_hours` also block application startup without writing the marker. The replica is a supplement to snapshots and logical dumps, not a replacement: a corrupted SQLite database produces a corrupted replica.
 
-Litestream is SQLite-only. Keep the live database on the local EBS data volume, not EFS. Do not run multiple instances against the same SQLite database and replica prefix: the replicas will conflict or corrupt. The module intentionally does not gate replication on instance count, so the operator must enforce single-writer deployment.
+Litestream is SQLite-only. Keep the live database on the local EBS data volume, not EFS. The configured replication bucket is shared with logical dumps when both features are enabled: dumps use the logical-backup prefix and replicas use their own replication prefix. Do not run multiple instances against the same SQLite database and replica prefix: the replicas will conflict or corrupt. The module intentionally does not gate replication on instance count, so the operator must enforce single-writer deployment.
 
 PostgreSQL continuous archiving is not a module input. It requires engine-specific `archive_command` configuration in `postgresql.conf` and credentials that this module does not own. Use `additional_user_data` for a WAL-G or pgBackRest recipe and phase 1 custom consistency hooks for deliberate snapshots instead of enabling an input that would only be partially configured.
 
@@ -301,9 +301,8 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | backup_replication_database_path | SQLite database path under the data volume | `string` | `null` | no |
 | backup_replication_s3_bucket_arn | Existing S3 bucket ARN, or null for a module-created bucket | `string` | `null` | no |
 | backup_replication_restore_on_first_boot_enabled | Restore a replica before the first application start | `bool` | `false` | no |
-| backup_replication_snapshot_interval | Litestream snapshot interval | `string` | `"1s"` | no |
-| backup_replication_retention | Litestream replica retention duration | `string` | `"24h"` | no |
-| backup_replication_version | Checksum-verified Litestream release version | `string` | `"0.5.12"` | no |
+| backup_replication_snapshot_interval | Litestream full snapshot interval | `string` | `"1m"` | no |
+| backup_replication_retention | Litestream snapshot retention duration; must exceed the snapshot interval | `string` | `"24h"` | no |
 | backup_replication_max_age_hours | Maximum accepted replica age on restore | `number` | `null` | no |
 
 ## Outputs

@@ -794,22 +794,15 @@ module:
     - id: backup_replication_snapshot_interval
       label: Replica snapshot interval
       type: string
-      description: Litestream snapshot interval, such as 1s or 1m.
-      default: 1s
+      description: Litestream full snapshot interval, such as 1m or 1h. Full snapshots are expensive, so choose a value shorter than the retention duration.
+      default: 1m
       show_when:
         backup_replication_enabled: true
     - id: backup_replication_retention
       label: Replica retention
       type: string
-      description: Litestream replica retention duration, such as 24h or 168h.
+      description: Litestream snapshot retention duration, such as 24h or 168h. It must exceed the snapshot interval.
       default: 24h
-      show_when:
-        backup_replication_enabled: true
-    - id: backup_replication_version
-      label: Litestream version
-      type: string
-      description: Pinned Litestream release version verified by checksum on the instance.
-      default: 0.5.12
       show_when:
         backup_replication_enabled: true
     - id: backup_replication_max_age_hours
@@ -1046,7 +1039,6 @@ module:
         backup_replication_restore_on_first_boot_enabled: << module.input.backup_replication_restore_on_first_boot_enabled >>
         backup_replication_snapshot_interval: << module.input.backup_replication_snapshot_interval >>
         backup_replication_retention: << module.input.backup_replication_retention >>
-        backup_replication_version: << module.input.backup_replication_version >>
         backup_replication_max_age_hours: << module.input.backup_replication_max_age_hours || nil >>
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
         desired_capacity: "<< module.input.cpu_autoscaling_enabled ? nil : (module.input.desired_capacity || nil) >>"
@@ -1425,9 +1417,9 @@ module:
 
     Phase 3 adds native Litestream support for SQLite. Enable Continuous replication, set SQLite database path to an absolute path under the EBS Data volume, and provide a Replication S3 bucket ARN or let the module create one. The module installs the pinned Litestream release after verifying its architecture-specific checksum, configures the selected replica snapshot interval and retention, and runs `litestream replicate` under supervisord. Its log is sent to the same CloudWatch log group as application and logical-backup logs.
 
-    Restore replica on first boot uses Litestream's `-if-replica-exists` behavior. A successful empty replica discovery is treated as a fresh service and marks restore complete. Discovery or download failures, restore failures, and replicas older than Maximum replica age remain fatal and block application startup without writing the marker. Continuous replication supplements snapshots and logical dumps rather than replacing them: a corrupted SQLite database produces a corrupted replica.
+    Restore replica on first boot first lists all LTX files with Litestream's `ltx -level all -json` command. A successful empty listing is treated as a fresh service and marks restore complete; a non-zero discovery exit blocks startup so credential and network failures cannot masquerade as an empty replica. Restore failures and replicas older than Maximum replica age remain fatal and block application startup without writing the marker. Continuous replication supplements snapshots and logical dumps rather than replacing them: a corrupted SQLite database produces a corrupted replica.
 
-    Litestream is SQLite-only, and the live database must stay on the local EBS Data volume rather than EFS. Do not run multiple instances against the same SQLite database and replica prefix; the replicas can conflict or corrupt. The module intentionally does not gate this feature on instance count, so the operator must enforce a single writer.
+    Litestream is SQLite-only, and the live database must stay on the local EBS Data volume rather than EFS. The Replication S3 bucket is shared with logical dumps when both features are enabled: each feature uses its own prefix. Do not run multiple instances against the same SQLite database and replica prefix; the replicas can conflict or corrupt. The module intentionally does not gate this feature on instance count, so the operator must enforce a single writer.
 
     PostgreSQL continuous archiving is documented as a recipe instead of an input. WAL-G and pgBackRest require an engine-specific `archive_command` in `postgresql.conf` plus credentials that the module does not own. Configure those through Additional user data and use the Phase 1 custom consistency hooks for deliberate snapshots.
 

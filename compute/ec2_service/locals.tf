@@ -41,6 +41,7 @@ locals {
   backup_dump_alarm_evaluation_periods   = ceil(var.backup_dump_max_interval_hours * 3600 / local.backup_dump_alarm_period)
   backup_dump_termination_automation_arn = local.backup_dump_termination_enabled ? "arn:${data.aws_partition.current.partition}:ssm:${local.region}:${data.aws_caller_identity.current.account_id}:automation-definition/${aws_ssm_document.backup_termination[0].name}:$DEFAULT" : null
   backup_replication_s3_prefix           = "replication/${var.name}"
+  backup_replication_version             = "0.5.12"
   backup_replication_restore_marker_path = "${var.data_volume_mount_path}/.ravion-backup-replication-restore-complete"
   backup_replication_log_path            = "${local.log_directory}/litestream.log"
 
@@ -187,7 +188,7 @@ locals {
     backup_replication_s3_prefix         = local.backup_replication_s3_prefix
     backup_replication_snapshot_interval = var.backup_replication_snapshot_interval
     backup_replication_retention         = var.backup_replication_retention
-    backup_replication_version           = var.backup_replication_version
+    backup_replication_version           = local.backup_replication_version
     backup_replication_max_age_hours     = var.backup_replication_max_age_hours == null ? "" : tostring(var.backup_replication_max_age_hours)
     backup_replication_log_path          = local.backup_replication_log_path
     region                               = local.region

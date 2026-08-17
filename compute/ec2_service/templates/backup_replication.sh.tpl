@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-LITESTREAM_VERSION="${backup_replication_version}"
+LITESTREAM_VERSION="0.5.12"
 LITESTREAM_ARCHIVE=""
 LITESTREAM_SHA256=""
 case "$(uname -m)" in
@@ -30,13 +30,16 @@ chmod 755 /usr/local/bin/litestream
 cat > /etc/litestream.yml <<'LITESTREAM_CONFIG'
 dbs:
   - path: ${backup_replication_database_path}
-    replicas:
-      - type: s3
-        bucket: ${backup_replication_bucket_name}
-        path: ${backup_replication_s3_prefix}
-        region: ${region}
-        snapshot-interval: ${backup_replication_snapshot_interval}
-        retention: ${backup_replication_retention}
+    replica:
+      type: s3
+      bucket: ${backup_replication_bucket_name}
+      path: ${backup_replication_s3_prefix}
+      region: ${region}
+snapshot:
+  interval: ${backup_replication_snapshot_interval}
+  retention: ${backup_replication_retention}
+retention:
+  enabled: true
 LITESTREAM_CONFIG
 chmod 600 /etc/litestream.yml
 
@@ -44,19 +47,21 @@ chmod 600 /etc/litestream.yml
 if [ ! -f "${backup_replication_restore_marker}" ]; then
   REPLICA_URL="s3://${backup_replication_bucket_name}/${backup_replication_s3_prefix}"
   RESTORE_DIR=$(mktemp -d)
-  RESTORE_OUTPUT=$(mktemp)
-  trap 'rm -rf "$RESTORE_DIR" "$RESTORE_OUTPUT"' EXIT
-  if ! /usr/local/bin/litestream restore -if-db-not-exists -if-replica-exists -json -o "$RESTORE_DIR/database" "$REPLICA_URL" >"$RESTORE_OUTPUT"; then
-    echo "FATAL: Litestream replica discovery or restore failed; application startup is blocked." >&2
+  LTX_OUTPUT=$(mktemp)
+  trap 'rm -rf "$RESTORE_DIR" "$LTX_OUTPUT"' EXIT
+  if ! /usr/local/bin/litestream ltx -level all -json "$REPLICA_URL" >"$LTX_OUTPUT"; then
+    echo "FATAL: Litestream replica discovery failed; application startup is blocked." >&2
     exit 1
   fi
-  if [ -e "$RESTORE_DIR/database" ]; then
-    if ! RESTORE_TIMESTAMP=$(jq -r '[.files[]?.timestamp] | map(select(. != null)) | max // empty' "$RESTORE_OUTPUT"); then
-      echo "FATAL: Litestream restore output could not be parsed; application startup is blocked." >&2
+  if [ "$(jq 'length' "$LTX_OUTPUT")" -eq 0 ]; then
+    echo "No Litestream replica was found; treating this as a fresh service and continuing without restore."
+  else
+    if ! RESTORE_TIMESTAMP=$(jq -r '[.[].timestamp] | map(select(. != null)) | max // empty' "$LTX_OUTPUT"); then
+      echo "FATAL: Litestream replica listing could not be parsed; application startup is blocked." >&2
       exit 1
     fi
     if [ -z "$RESTORE_TIMESTAMP" ]; then
-      echo "FATAL: Litestream restored a replica without a timestamp; application startup is blocked." >&2
+      echo "FATAL: Litestream replica listing contained no timestamps; application startup is blocked." >&2
       exit 1
     fi
     RESTORE_EPOCH=$(date -d "$RESTORE_TIMESTAMP" +%s)
@@ -67,11 +72,13 @@ if [ ! -f "${backup_replication_restore_marker}" ]; then
       exit 1
     fi
 %{ endif ~}
+    if ! /usr/local/bin/litestream restore -integrity-check full -o "$RESTORE_DIR/database" "$REPLICA_URL"; then
+      echo "FATAL: Litestream replica restore failed; application startup is blocked." >&2
+      exit 1
+    fi
     mkdir -p "$(dirname "${backup_replication_database_path}")"
     mv "$RESTORE_DIR/database" "${backup_replication_database_path}"
     echo "Litestream restored replica completed at $${RESTORE_TIMESTAMP} (age $${RESTORE_AGE} seconds)."
-  else
-    echo "No Litestream replica was found; treating this as a fresh service and continuing without restore."
   fi
   touch "${backup_replication_restore_marker}"
 fi
