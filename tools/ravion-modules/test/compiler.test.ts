@@ -325,6 +325,7 @@ describe("compiler", () => {
         "section_routing",
         "section_health",
         "section_storage",
+        "section_backups",
         "section_scaling",
         "section_app_config",
         "section_networking",
