@@ -422,6 +422,34 @@ run "replication_reuses_supplied_s3_bucket" {
   }
 }
 
+run "replication_bucket_wins_when_dumps_use_efs" {
+  command = plan
+
+  variables {
+    backup_dump_enabled              = true
+    backup_dump_command              = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    backup_dump_destination          = "efs"
+    backup_dump_s3_bucket_arn        = "arn:aws:s3:::existing-backup-bucket"
+    backup_replication_enabled       = true
+    backup_replication_database_path = "/data/app.db"
+    backup_replication_s3_bucket_arn = "arn:aws:s3:::existing-replication-bucket"
+    data_volume_creation_enabled     = true
+    efs_enabled                      = true
+    efs_file_system_id               = "fs-12345678"
+    efs_client_security_group_id     = "sg-12345678"
+  }
+
+  assert {
+    condition     = output.backup_replication_bucket_arn == "arn:aws:s3:::existing-replication-bucket"
+    error_message = "Replication must use its supplied bucket when dumps use EFS."
+  }
+
+  assert {
+    condition     = output.backup_replication_prefix == "replication/backup-test"
+    error_message = "Replication must retain its dedicated S3 prefix when dumps use EFS."
+  }
+}
+
 run "replication_requires_database_on_data_volume" {
   command = plan
 

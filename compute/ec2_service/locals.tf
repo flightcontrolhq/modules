@@ -25,7 +25,7 @@ locals {
     RavionBackup = var.name
   }
 
-  backup_s3_bucket_arn                   = var.backup_dump_enabled && var.backup_dump_s3_bucket_arn != null ? var.backup_dump_s3_bucket_arn : var.backup_replication_s3_bucket_arn
+  backup_s3_bucket_arn                   = var.backup_dump_enabled && var.backup_dump_destination == "s3" && var.backup_dump_s3_bucket_arn != null ? var.backup_dump_s3_bucket_arn : var.backup_replication_s3_bucket_arn
   backup_s3_enabled                      = (var.backup_dump_enabled && var.backup_dump_destination == "s3") || var.backup_replication_enabled
   backup_dump_termination_enabled        = var.backup_dump_enabled && var.backup_on_termination_enabled
   backup_dump_bucket_created             = local.backup_s3_enabled && local.backup_s3_bucket_arn == null
