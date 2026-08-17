@@ -25,6 +25,17 @@ locals {
     RavionBackup = var.name
   }
 
+  backup_dump_enabled                  = var.backup_dump_enabled
+  backup_dump_termination_enabled      = var.backup_dump_enabled && var.backup_on_termination_enabled
+  backup_dump_bucket_created           = var.backup_dump_enabled && var.backup_dump_destination == "s3" && var.backup_dump_s3_bucket_arn == null
+  backup_dump_bucket_name              = var.backup_dump_s3_bucket_arn != null ? trimprefix(var.backup_dump_s3_bucket_arn, "arn:${data.aws_partition.current.partition}:s3:::") : (local.backup_dump_bucket_created ? aws_s3_bucket.dump[0].bucket : null)
+  backup_dump_bucket_arn               = var.backup_dump_s3_bucket_arn != null ? var.backup_dump_s3_bucket_arn : (local.backup_dump_bucket_created ? aws_s3_bucket.dump[0].arn : null)
+  backup_dump_artifact_prefix          = "${trim(var.backup_dump_s3_prefix, "/")}/${var.name}"
+  backup_dump_efs_root                 = var.efs_enabled ? "${var.efs_mount_path}/.ravion-backups/${var.name}" : ""
+  backup_dump_log_path                 = "${local.log_directory}/backup.log"
+  backup_dump_restore_marker_path      = "${var.data_volume_mount_path}/.ravion-backup-restore-complete"
+  backup_dump_restore_blocked_log_path = "/var/log/ravion/${var.name}/backup-restore.log"
+
   load_balancer_creation_enabled = var.load_balancer_attachment != null ? var.load_balancer_attachment.creation_enabled : false
 
   cpu_architecture = var.ami_id == null ? (
@@ -49,8 +60,9 @@ locals {
   supervisor_install_script = templatefile("${path.module}/templates/install_supervisor.sh.tpl", {})
 
   deployment_log_script = templatefile("${path.module}/templates/configure_deployment_logs.sh.tpl", {
-    log_directory  = local.log_directory
-    log_group_name = local.log_group_name
+    backup_log_path = local.backup_dump_log_path
+    log_directory   = local.log_directory
+    log_group_name  = local.log_group_name
   })
 
   supervisor_program_script = templatefile("${path.module}/templates/configure_supervisor_program.sh.tpl", {
@@ -132,5 +144,24 @@ locals {
     efs_access_point_id          = var.efs_access_point_id != null ? var.efs_access_point_id : ""
     efs_mount_path               = var.efs_mount_path
     additional_user_data         = var.additional_user_data
+    backup_dump_enabled          = var.backup_dump_enabled
+    backup_dump_destination      = var.backup_dump_destination
+    backup_dump_schedule         = var.backup_dump_schedule
+    backup_dump_restore_enabled  = var.backup_dump_restore_on_first_boot_enabled
+    backup_dump_restore_marker   = local.backup_dump_restore_marker_path
+    backup_dump_script           = local.backup_dump_script
   }))
+
+  backup_dump_script = templatefile("${path.module}/templates/backup_dump.sh.tpl", {
+    name                               = var.name
+    backup_dump_command_base64         = var.backup_dump_command == null ? "" : base64encode(var.backup_dump_command)
+    backup_dump_restore_command_base64 = var.backup_dump_restore_command == null ? "" : base64encode(var.backup_dump_restore_command)
+    backup_dump_destination            = var.backup_dump_destination
+    backup_dump_bucket_name            = local.backup_dump_bucket_name == null ? "" : local.backup_dump_bucket_name
+    backup_dump_s3_prefix              = local.backup_dump_artifact_prefix
+    backup_dump_efs_root               = local.backup_dump_efs_root
+    backup_dump_retention_days         = var.backup_dump_retention_days
+    backup_dump_log_path               = local.backup_dump_log_path
+    backup_max_age_hours               = var.backup_max_age_hours == null ? "" : tostring(var.backup_max_age_hours)
+  })
 }

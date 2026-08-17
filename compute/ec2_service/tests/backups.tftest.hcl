@@ -56,6 +56,36 @@ mock_provider "aws" {
       id = "lt-12345678"
     }
   }
+
+  override_resource {
+    target = aws_ssm_document.backup_dump
+    values = {
+      arn = "arn:aws:ssm:us-east-1:123456789012:document/backup-test-backup"
+    }
+  }
+
+  override_resource {
+    target = aws_ssm_document.backup_termination
+    values = {
+      arn = "arn:aws:ssm:us-east-1:123456789012:automation-definition/backup-test-backup-termination"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.backup_eventbridge
+    values = {
+      arn = "arn:aws:iam::123456789012:role/backup-test-events"
+      id  = "backup-test-events"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.backup_termination_automation
+    values = {
+      arn = "arn:aws:iam::123456789012:role/backup-test-automation"
+      id  = "backup-test-automation"
+    }
+  }
 }
 
 variables {
@@ -176,6 +206,129 @@ run "filesystem_freeze_requires_data_volume" {
   variables {
     backup_enabled          = true
     backup_consistency_mode = "filesystem_freeze"
+  }
+
+  expect_failures = [aws_launch_template.app]
+}
+
+run "logical_dumps_are_absent_when_disabled" {
+  command = plan
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 0
+    error_message = "Logical dumps disabled must not create a dump bucket."
+  }
+
+  assert {
+    condition     = length(aws_ssm_document.backup_dump) == 0
+    error_message = "Logical dumps disabled must not create a dump SSM document."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_event_rule.backup_termination) == 0
+    error_message = "Logical dumps disabled must not create termination automation."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.backup_dump_failure) == 0
+    error_message = "Logical dumps disabled must not create a freshness alarm."
+  }
+}
+
+run "logical_dumps_create_s3_resources_and_wiring" {
+  command = plan
+
+  variables {
+    backup_dump_enabled          = true
+    backup_dump_command          = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    data_volume_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 1
+    error_message = "Logical dumps should create a module-managed S3 bucket by default."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_versioning.dump[0].versioning_configuration[0].status == "Enabled"
+    error_message = "Logical dump buckets must enable versioning."
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.dump[0].rule).apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    error_message = "Logical dump buckets must enable server-side encryption."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.dump[0].block_public_acls
+    error_message = "Logical dump buckets must block public access."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_lifecycle_configuration.dump[0].rule) == 1
+    error_message = "Logical dump buckets must configure retention expiry."
+  }
+
+  assert {
+    condition     = length(aws_ssm_document.backup_dump) == 1 && length(aws_cloudwatch_metric_alarm.backup_dump_failure) == 1
+    error_message = "Logical dumps must create the one-click document and freshness alarm."
+  }
+
+}
+
+run "logical_dumps_use_supplied_s3_bucket" {
+  command = plan
+
+  variables {
+    backup_dump_enabled          = true
+    backup_dump_command          = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    backup_dump_s3_bucket_arn    = "arn:aws:s3:::existing-backup-bucket"
+    data_volume_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 0
+    error_message = "A supplied S3 bucket ARN must prevent module bucket creation."
+  }
+
+  assert {
+    condition     = output.backup_dump_bucket_arn == "arn:aws:s3:::existing-backup-bucket"
+    error_message = "The effective dump bucket ARN must use the supplied bucket."
+  }
+}
+
+run "logical_dumps_support_efs_destination" {
+  command = plan
+
+  variables {
+    backup_dump_enabled          = true
+    backup_dump_command          = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    backup_dump_destination      = "efs"
+    data_volume_creation_enabled = true
+    efs_enabled                  = true
+    efs_file_system_id           = "fs-12345678"
+    efs_client_security_group_id = "sg-12345678"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 0
+    error_message = "EFS logical dumps must not create an S3 bucket."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "EFS_ROOT")
+    error_message = "EFS logical dumps must configure the shared EFS staging root."
+  }
+}
+
+run "restore_on_first_boot_requires_restore_command" {
+  command = plan
+
+  variables {
+    backup_dump_enabled                       = true
+    backup_dump_command                       = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    backup_dump_restore_on_first_boot_enabled = true
+    data_volume_creation_enabled              = true
   }
 
   expect_failures = [aws_launch_template.app]

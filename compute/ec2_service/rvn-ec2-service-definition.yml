@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing, local EBS data, and switchable container or manual in-place deploys.
 release:
-  version: 1.5.0
-  description: Add scheduled EBS backups and a deliberate snapshot restore path for on-disk databases.
+  version: 1.6.0
+  description: Add engine-native logical dumps, restore-on-boot, and planned-termination backups for on-disk databases.
 module:
   inputs:
     - id: network
@@ -537,7 +537,7 @@ module:
     - id: section_backups
       label: Backups
       type: section
-      description: Scheduled EBS snapshots for on-disk application data.
+      description: EBS snapshots and engine-native logical dumps for on-disk application data.
     - id: backup_enabled
       label: Enable EBS backups
       type: boolean
@@ -636,6 +636,103 @@ module:
       show_when:
         backup_enabled: true
       values: $values:aws/regions
+    - id: section_logical_backups
+      label: Logical dumps
+      type: section
+      description: Engine-native logical backups shipped to S3 or EFS, with optional restore and termination-time automation.
+    - id: backup_dump_enabled
+      label: Enable logical dumps
+      type: boolean
+      description: Run engine-native dumps on a systemd schedule and ship them off the instance.
+      default: false
+    - id: backup_dump_command
+      label: Dump command
+      type: text
+      description: Root command that writes logical backup artifacts into the RAVION_BACKUP_DIR directory.
+      required: true
+      show_when:
+        backup_dump_enabled: true
+    - id: backup_dump_restore_command
+      label: Restore command
+      type: text
+      description: Root command that reads logical backup artifacts from RAVION_BACKUP_DIR.
+      required: true
+      show_when:
+        backup_dump_restore_on_first_boot_enabled: true
+    - id: backup_dump_schedule
+      label: Dump schedule
+      type: string
+      description: systemd OnCalendar expression for logical dumps, not cron syntax.
+      default: "*-*-* 04:00:00 UTC"
+      show_when:
+        backup_dump_enabled: true
+    - id: backup_dump_destination
+      label: Dump destination
+      type: string
+      description: Store logical dumps in a module-created or supplied S3 bucket, or on the existing EFS mount.
+      default: s3
+      show_when:
+        backup_dump_enabled: true
+      values:
+        - label: S3
+          value: s3
+        - label: EFS
+          value: efs
+    - id: backup_dump_s3_bucket_arn
+      label: S3 bucket ARN
+      type: string
+      description: Optional existing S3 bucket ARN. Leave blank to create a dedicated encrypted bucket.
+      required: false
+      show_when:
+        backup_dump_enabled: true
+        backup_dump_destination: s3
+      placeholder: arn:aws:s3:::bucket-name
+    - id: backup_dump_s3_prefix
+      label: S3 prefix
+      type: string
+      description: Prefix under which this service's timestamped manifests and dump artifacts are stored.
+      default: backups/
+      show_when:
+        backup_dump_enabled: true
+        backup_dump_destination: s3
+    - id: backup_dump_retention_days
+      label: Logical dump retention (days)
+      type: number
+      description: Number of days to retain logical dump artifacts.
+      default: 30
+      min: 1
+      show_when:
+        backup_dump_enabled: true
+    - id: backup_dump_restore_on_first_boot_enabled
+      label: Restore latest dump on first boot
+      type: boolean
+      description: Discover and restore the newest manifest-based logical dump before starting the application on a replacement instance.
+      default: false
+      show_when:
+        backup_dump_enabled: true
+    - id: backup_max_age_hours
+      label: Maximum restore age (hours)
+      type: number
+      description: Refuse to restore and block application startup when the newest dump is older than this limit.
+      required: false
+      show_when:
+        backup_dump_enabled: true
+        backup_dump_restore_on_first_boot_enabled: true
+      min: 1
+    - id: backup_on_termination_enabled
+      label: Backup on planned termination
+      type: boolean
+      description: Run a final logical dump through an Auto Scaling lifecycle hook before planned instance termination.
+      default: true
+      show_when:
+        backup_dump_enabled: true
+    - id: backup_dump_failure_alarm_enabled
+      label: Logical dump freshness alarm
+      type: boolean
+      description: Alarm when the shared CloudWatch log group has no recent successful logical dump record.
+      default: true
+      show_when:
+        backup_dump_enabled: true
     - id: efs_enabled
       label: EFS file system
       type: boolean
@@ -840,6 +937,18 @@ module:
         backup_pre_script_command: << module.input.backup_pre_script_command || nil >>
         backup_post_script_command: << module.input.backup_post_script_command || nil >>
         backup_cross_region_copy_destination: << module.input.backup_cross_region_copy_destination || nil >>
+        backup_dump_enabled: << module.input.backup_dump_enabled >>
+        backup_dump_command: << module.input.backup_dump_command || nil >>
+        backup_dump_restore_command: << module.input.backup_dump_restore_command || nil >>
+        backup_dump_schedule: << module.input.backup_dump_schedule >>
+        backup_dump_destination: << module.input.backup_dump_destination >>
+        backup_dump_s3_bucket_arn: << module.input.backup_dump_s3_bucket_arn || nil >>
+        backup_dump_s3_prefix: << module.input.backup_dump_s3_prefix >>
+        backup_dump_retention_days: << module.input.backup_dump_retention_days >>
+        backup_dump_restore_on_first_boot_enabled: << module.input.backup_dump_restore_on_first_boot_enabled >>
+        backup_max_age_hours: << module.input.backup_max_age_hours || nil >>
+        backup_on_termination_enabled: << module.input.backup_on_termination_enabled >>
+        backup_dump_failure_alarm_enabled: << module.input.backup_dump_failure_alarm_enabled >>
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
         desired_capacity: "<< module.input.cpu_autoscaling_enabled ? nil : (module.input.desired_capacity || nil) >>"
         ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
@@ -1201,7 +1310,17 @@ module:
     4. Verify that the restored filesystem is mounted at the Data volume mount path and that the application sees the expected data.
     5. Clear Data volume snapshot ID and apply again, so future replacements do not keep booting from that pinned snapshot.
 
-    This phase intentionally does not provide logical dumps, S3 backups, termination hooks, automatic snapshot discovery, or continuous replication. Those mechanisms are for later phases and are needed for lower RPO, object-level recovery, or automatic replacement restoration.
+    ## Logical dumps and replacement restore
+
+    Phase 2 adds engine-native logical dumps alongside the Phase 1 EBS snapshot workflow. Enable Logical dumps and provide both command halves of the contract: the dump command writes artifacts into the module-created staging directory exposed as `RAVION_BACKUP_DIR`, and the restore command reads that directory. Both commands run as root. Use the SSM document `<name>-backup` for `backup-now` or `restore-latest`; the systemd timer uses the same script.
+
+    S3 is the default destination. The module-created bucket is encrypted, versioned, private, and expires objects after Logical dump retention days. A supplied bucket must grant the instance role access to the configured service prefix. EFS uses the existing EFS mount and the same timestamped layout, but costs roughly ten times S3 storage, has no object versioning or object lock, and is available only in the VPC. EFS is a backup destination, not a live SQLite or Postgres data directory; an `rsync` of a live database file is not a valid backup.
+
+    Every run writes a UTC timestamped directory containing a manifest with completion time, instance ID, and file list. Newest-backup discovery reads those manifests, not key names or object metadata. Restore-on-first-boot runs once per data volume and writes a marker only after the restore command succeeds. If no backup exists, or `backup_max_age_hours` makes the newest backup stale, the module logs a fatal error, blocks application startup, leaves the instance available for inspection, and does not mark the restore successful. This is safer than silently starting with stale or empty state.
+
+    A planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. The hook continues after timeout or failure, so it cannot wedge the ASG. Hard crashes, Availability Zone loss, and instance-store failures cannot run a termination hook. If several instances restore the same dump, each then diverges independently; the module intentionally does not gate this feature on instance count.
+
+    Logical dump RPO is approximately the dump schedule interval, with a planned-termination dump able to reduce planned replacement loss to near zero. Restore-on-first-boot automates the RTO workflow but still depends on the newest available dump and a successful engine restore command. Phase 1 EBS snapshot restore remains deliberate and manual, and is still the recovery option for whole-volume recovery.
 
     ## Instance replacement
 

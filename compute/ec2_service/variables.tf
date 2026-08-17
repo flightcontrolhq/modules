@@ -366,6 +366,108 @@ variable "backup_cross_region_copy_destination" {
   }
 }
 
+variable "backup_dump_enabled" {
+  type        = bool
+  description = "Create a systemd logical-dump schedule and off-instance backup destination."
+  default     = false
+}
+
+variable "backup_dump_command" {
+  type        = string
+  description = "Root command that writes a logical backup into RAVION_BACKUP_DIR."
+  default     = null
+}
+
+variable "backup_dump_restore_command" {
+  type        = string
+  description = "Root command that restores a logical backup from RAVION_BACKUP_DIR."
+  default     = null
+}
+
+variable "backup_dump_schedule" {
+  type        = string
+  description = "systemd OnCalendar expression for logical dumps."
+  default     = "*-*-* 04:00:00 UTC"
+
+  validation {
+    condition     = can(regex("^(\\*-\\*-\\*|[0-9]{4}-[0-9]{2}-[0-9]{2}) ([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?( UTC)?$", var.backup_dump_schedule))
+    error_message = "The backup_dump_schedule must be a systemd OnCalendar date and time expression, such as '*-*-* 04:00:00 UTC'."
+  }
+}
+
+variable "backup_dump_destination" {
+  type        = string
+  description = "Destination for logical dump artifacts."
+  default     = "s3"
+
+  validation {
+    condition     = contains(["s3", "efs"], var.backup_dump_destination)
+    error_message = "The backup_dump_destination must be 's3' or 'efs'."
+  }
+}
+
+variable "backup_dump_s3_bucket_arn" {
+  type        = string
+  description = "Optional S3 bucket ARN for logical dumps. When null, the module creates a dedicated bucket."
+  default     = null
+
+  validation {
+    condition     = var.backup_dump_s3_bucket_arn == null || can(regex("^arn:[^:]+:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.backup_dump_s3_bucket_arn))
+    error_message = "The backup_dump_s3_bucket_arn must be an S3 bucket ARN."
+  }
+}
+
+variable "backup_dump_s3_prefix" {
+  type        = string
+  description = "Prefix under which logical dump artifacts are stored."
+  default     = "backups/"
+
+  validation {
+    condition     = can(regex("^[^/].*", var.backup_dump_s3_prefix))
+    error_message = "The backup_dump_s3_prefix must not begin with '/'."
+  }
+}
+
+variable "backup_dump_retention_days" {
+  type        = number
+  description = "Number of days to retain logical dump artifacts."
+  default     = 30
+
+  validation {
+    condition     = var.backup_dump_retention_days > 0 && floor(var.backup_dump_retention_days) == var.backup_dump_retention_days
+    error_message = "The backup_dump_retention_days must be a positive whole number."
+  }
+}
+
+variable "backup_dump_restore_on_first_boot_enabled" {
+  type        = bool
+  description = "Restore the newest logical dump before the application starts on a replacement instance."
+  default     = false
+}
+
+variable "backup_max_age_hours" {
+  type        = number
+  description = "Maximum allowed age of a logical dump restored on first boot."
+  default     = null
+
+  validation {
+    condition     = var.backup_max_age_hours == null || (var.backup_max_age_hours > 0 && floor(var.backup_max_age_hours) == var.backup_max_age_hours)
+    error_message = "The backup_max_age_hours must be null or a positive whole number."
+  }
+}
+
+variable "backup_on_termination_enabled" {
+  type        = bool
+  description = "Run a logical dump through an Auto Scaling termination lifecycle hook before planned instance termination."
+  default     = true
+}
+
+variable "backup_dump_failure_alarm_enabled" {
+  type        = bool
+  description = "Create a CloudWatch alarm when recent logical dump success records are missing."
+  default     = true
+}
+
 ################################################################################
 # Auto Scaling Group
 ################################################################################

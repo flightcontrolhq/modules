@@ -119,6 +119,21 @@ resource "aws_launch_template" "app" {
     }
 
     precondition {
+      condition     = !var.backup_dump_enabled || (var.backup_dump_command != null && length(trimspace(var.backup_dump_command)) > 0)
+      error_message = "The backup_dump_command must be set when backup_dump_enabled is true."
+    }
+
+    precondition {
+      condition     = !var.backup_dump_restore_on_first_boot_enabled || (var.backup_dump_enabled && var.data_volume_creation_enabled && var.backup_dump_restore_command != null && length(trimspace(var.backup_dump_restore_command)) > 0)
+      error_message = "The backup_dump_restore_command, backup_dump_enabled, and data_volume_creation_enabled must be set when backup_dump_restore_on_first_boot_enabled is true."
+    }
+
+    precondition {
+      condition     = var.backup_dump_destination != "efs" || !var.backup_dump_enabled || var.efs_enabled
+      error_message = "The efs_enabled must be true when logical dump destination is efs."
+    }
+
+    precondition {
       condition     = var.min_size <= var.max_size
       error_message = "The min_size must not be greater than max_size."
     }

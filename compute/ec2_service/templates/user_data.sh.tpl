@@ -48,6 +48,52 @@ echo "${efs_file_system_id} ${efs_mount_path} efs _netdev,tls 0 0" >> /etc/fstab
 mount -a -t efs
 %{ endif ~}
 
+%{ if backup_dump_enabled ~}
+# Install the AWS CLI only for S3 logical dump destinations.
+%{ if backup_dump_destination == "s3" ~}
+dnf install -y awscli
+%{ endif ~}
+mkdir -p "/var/log/ravion/${name}" /var/lib/ravion
+cat > "/usr/local/bin/${name}-backup" <<'RAVION_BACKUP_SCRIPT'
+${backup_dump_script}
+RAVION_BACKUP_SCRIPT
+chmod 700 "/usr/local/bin/${name}-backup"
+
+%{ if backup_dump_restore_enabled ~}
+if [ ! -f "${backup_dump_restore_marker}" ]; then
+  "/usr/local/bin/${name}-backup" restore-latest
+  touch "${backup_dump_restore_marker}"
+fi
+%{ endif ~}
+
+cat > "/etc/systemd/system/${name}-backup.service" <<'RAVION_BACKUP_SERVICE'
+[Unit]
+Description=Logical backup for ${name}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/${name}-backup backup-now
+RAVION_BACKUP_SERVICE
+
+cat > "/etc/systemd/system/${name}-backup.timer" <<'RAVION_BACKUP_TIMER'
+[Unit]
+Description=Logical backup schedule for ${name}
+
+[Timer]
+OnCalendar=${backup_dump_schedule}
+Persistent=true
+Unit=${name}-backup.service
+
+[Install]
+WantedBy=timers.target
+RAVION_BACKUP_TIMER
+
+systemctl daemon-reload
+systemctl enable --now "${name}-backup.timer"
+%{ endif ~}
+
 mkdir -p "$(dirname ${env_file_path})"
 
 # Install both runtime prerequisites so deploy mode can change without

@@ -171,7 +171,24 @@ To restore:
 4. Verify that the restored filesystem is mounted at `data_volume_mount_path` and that the application sees the expected data.
 5. Clear `data_volume_snapshot_id` and apply again, so future replacements do not keep booting from that pinned snapshot.
 
-This phase intentionally does not provide logical dumps, S3 backups, termination hooks, automatic snapshot discovery, or continuous replication. Those mechanisms are for later phases and are needed when you require lower RPO, object-level recovery, or automatic replacement restoration.
+## Logical dumps and replacement restore
+
+Phase 2 adds engine-native logical dumps for per-object recovery and replacement onto a different instance, Availability Zone, or region. Enable `backup_dump_enabled`, then provide the two halves of the command contract:
+
+- `backup_dump_command` runs as root and writes a complete logical dump into the module-created staging directory.
+- `backup_dump_restore_command` runs as root and reads that directory to restore the dump.
+
+The staging directory is exported to both commands as `RAVION_BACKUP_DIR`. The command must write its artifacts there; the module owns staging, manifests, upload/download, newest-backup discovery, and retention. For example, a SQLite command can use `.backup "$RAVION_BACKUP_DIR/app.db"`, while a PostgreSQL command can write `pg_dump` output there.
+
+The `${name}-backup` SSM Command document provides `backup-now` and `restore-latest` actions. The same script runs from the daily systemd timer and the planned-termination automation. Each run is stored under `<prefix><service name>/<UTC timestamp>/` and contains a manifest with completion time, instance ID, and the files present. Discovery reads manifests rather than trusting key names or object metadata.
+
+S3 is the default destination and uses a module-created encrypted, versioned, private bucket unless `backup_dump_s3_bucket_arn` supplies an existing one. EFS uses the existing EFS mount and the same layout, but costs roughly ten times S3 storage, has no versioning or object lock of its own, and is available only in the VPC. EFS is a backup destination, not a live SQLite or Postgres data directory; `rsync` of a live database file is not a valid backup.
+
+When restore-on-first-boot is enabled, a replacement instance discovers the newest manifest, logs its exact completion timestamp and age, downloads the artifacts, runs the restore command, and writes a marker on the data volume only after success. A reboot does not restore again. If no dump exists, or `backup_max_age_hours` says the newest dump is stale, the module logs a fatal error, does not write the success marker, and does not start the application. The instance remains available for inspection rather than silently starting with stale or empty data and diverging from the backup.
+
+Planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. Its heartbeat timeout and `CONTINUE` safety result prevent a failed or slow dump from wedging the group. Hard crashes, Availability Zone loss, and instance-store failures cannot run this hook. If multiple instances restore the same dump, they then diverge independently; the feature is intentionally not gated on instance count.
+
+Logical-dump RPO is approximately the dump schedule interval, while a planned-termination dump can provide near-zero loss for planned replacement. Restore-on-first-boot automates the workflow but still depends on the newest available dump and a successful engine restore command. Phase 1 EBS snapshot restore remains deliberate and manual for whole-volume recovery.
 
 ## Requirements
 
@@ -243,6 +260,18 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | backup_pre_script_command | Custom pre-snapshot command | `string` | `null` | no |
 | backup_post_script_command | Custom post-snapshot command | `string` | `null` | no |
 | backup_cross_region_copy_destination | Destination AWS region for an additional copy | `string` | `null` | no |
+| backup_dump_enabled | Schedule engine-native logical dumps | `bool` | `false` | no |
+| backup_dump_command | Root dump command writing to `RAVION_BACKUP_DIR` | `string` | `null` | no |
+| backup_dump_restore_command | Root restore command reading `RAVION_BACKUP_DIR` | `string` | `null` | no |
+| backup_dump_schedule | systemd OnCalendar expression | `string` | `"*-*-* 04:00:00 UTC"` | no |
+| backup_dump_destination | `s3` or `efs` logical dump destination | `string` | `"s3"` | no |
+| backup_dump_s3_bucket_arn | Existing S3 bucket ARN, or null for a module-created bucket | `string` | `null` | no |
+| backup_dump_s3_prefix | Prefix for logical dump artifacts | `string` | `"backups/"` | no |
+| backup_dump_retention_days | Logical dump retention in days | `number` | `30` | no |
+| backup_dump_restore_on_first_boot_enabled | Restore latest dump before first application start | `bool` | `false` | no |
+| backup_max_age_hours | Maximum accepted restore age | `number` | `null` | no |
+| backup_on_termination_enabled | Run a dump before planned ASG termination | `bool` | `true` | no |
+| backup_dump_failure_alarm_enabled | Alarm on missing recent dump success | `bool` | `true` | no |
 
 ## Outputs
 
@@ -266,3 +295,8 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | backup_target_tag | Tag targeted by the DLM policy |
 | backup_snapshot_filter | Tag filter for finding snapshots |
 | backup_ssm_document_name | Consistency SSM document when scripts are enabled |
+| backup_dump_bucket_name | Effective S3 logical dump bucket name |
+| backup_dump_bucket_arn | Effective S3 logical dump bucket ARN |
+| backup_dump_prefix | Service logical dump prefix |
+| backup_dump_ssm_document_name | SSM command document for backup-now and restore-latest |
+| backup_dump_termination_document_name | SSM Automation document for termination-time dumps |

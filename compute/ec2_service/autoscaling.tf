@@ -37,20 +37,30 @@ module "autoscaling" {
   # while they are still Pending/Terminating. Nothing completes the action, so
   # the minimum 30s heartbeat with CONTINUE keeps the added launch/terminate
   # delay as small as possible.
-  lifecycle_hooks = [
-    {
-      name                 = "ravion-launch-visibility"
-      lifecycle_transition = "autoscaling:EC2_INSTANCE_LAUNCHING"
-      default_result       = "CONTINUE"
-      heartbeat_timeout    = 30
-    },
-    {
-      name                 = "ravion-terminate-visibility"
-      lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
-      default_result       = "CONTINUE"
-      heartbeat_timeout    = 30
-    },
-  ]
+  lifecycle_hooks = concat(
+    [
+      {
+        name                 = "ravion-launch-visibility"
+        lifecycle_transition = "autoscaling:EC2_INSTANCE_LAUNCHING"
+        default_result       = "CONTINUE"
+        heartbeat_timeout    = 30
+      },
+      {
+        name                 = "ravion-terminate-visibility"
+        lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
+        default_result       = "CONTINUE"
+        heartbeat_timeout    = 30
+      },
+    ],
+    local.backup_dump_termination_enabled ? [
+      {
+        name                 = "ravion-backup-terminate"
+        lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
+        default_result       = "CONTINUE"
+        heartbeat_timeout    = 1800
+      },
+    ] : []
+  )
 
   scaling_policies = var.cpu_autoscaling_enabled ? [
     {

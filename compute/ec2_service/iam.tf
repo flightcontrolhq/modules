@@ -165,6 +165,35 @@ data "aws_iam_policy_document" "instance" {
       }
     }
   }
+
+  dynamic "statement" {
+    for_each = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? [1] : []
+    content {
+      sid = "LogicalDumpBucketList"
+      actions = [
+        "s3:ListBucket",
+      ]
+      resources = [local.backup_dump_bucket_arn]
+      condition {
+        test     = "StringLike"
+        variable = "s3:prefix"
+        values   = ["${local.backup_dump_artifact_prefix}/*"]
+      }
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? [1] : []
+    content {
+      sid = "LogicalDumpObjects"
+      actions = [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject",
+      ]
+      resources = ["${local.backup_dump_bucket_arn}/${local.backup_dump_artifact_prefix}/*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "instance" {

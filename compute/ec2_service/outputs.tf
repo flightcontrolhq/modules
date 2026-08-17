@@ -117,3 +117,28 @@ output "backup_ssm_document_name" {
   description = "The SSM consistency document used by DLM, when scripts are enabled."
   value       = local.backup_scripts_enabled ? aws_ssm_document.backup[0].name : null
 }
+
+output "backup_dump_bucket_name" {
+  description = "The S3 bucket name used for logical dumps, when the destination is S3."
+  value       = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? local.backup_dump_bucket_name : null
+}
+
+output "backup_dump_bucket_arn" {
+  description = "The S3 bucket ARN used for logical dumps, when the destination is S3."
+  value       = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? local.backup_dump_bucket_arn : null
+}
+
+output "backup_dump_prefix" {
+  description = "The destination prefix containing this service's logical dump manifests and artifacts."
+  value       = var.backup_dump_enabled ? local.backup_dump_artifact_prefix : null
+}
+
+output "backup_dump_ssm_document_name" {
+  description = "The SSM command document used to run or restore logical dumps."
+  value       = var.backup_dump_enabled ? aws_ssm_document.backup_dump[0].name : null
+}
+
+output "backup_dump_termination_document_name" {
+  description = "The SSM Automation document used by the termination-time dump hook."
+  value       = local.backup_dump_termination_enabled ? aws_ssm_document.backup_termination[0].name : null
+}
