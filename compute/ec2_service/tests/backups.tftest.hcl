@@ -24,7 +24,7 @@ mock_provider "aws" {
   override_data {
     target = data.aws_iam_policy_document.dlm
     values = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"CopyEncryptedSnapshots\",\"Effect\":\"Allow\",\"Action\":[\"kms:Decrypt\",\"kms:DescribeKey\",\"kms:Encrypt\",\"kms:GenerateDataKey\",\"kms:GenerateDataKeyWithoutPlaintext\",\"kms:ReEncryptFrom\",\"kms:ReEncryptTo\"],\"Resource\":\"*\",\"Condition\":{\"StringEquals\":{\"kms:ViaService\":[\"ec2.us-east-1.amazonaws.com\",\"ec2.us-west-2.amazonaws.com\"]}}},{\"Sid\":\"CreateEncryptedSnapshotCopyGrant\",\"Effect\":\"Allow\",\"Action\":\"kms:CreateGrant\",\"Resource\":\"*\",\"Condition\":{\"StringEquals\":{\"kms:ViaService\":[\"ec2.us-east-1.amazonaws.com\",\"ec2.us-west-2.amazonaws.com\"]},\"Bool\":{\"kms:GrantIsForAWSResource\":\"true\"}}}]}"
     }
   }
 
@@ -148,6 +148,40 @@ run "backups_with_data_volume_use_scripts_and_exclude_boot" {
   assert {
     condition     = aws_dlm_lifecycle_policy.service[0].policy_details[0].parameters[0].exclude_boot_volume == true
     error_message = "Data-volume backups must exclude the boot volume by default."
+  }
+}
+
+run "cross_region_encrypted_copy_restricts_kms_conditions" {
+  command = plan
+
+  variables {
+    backup_enabled                       = true
+    backup_cross_region_copy_destination = "us-west-2"
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.dlm[0].policy).Statement :
+      statement.Sid == "CopyEncryptedSnapshots" &&
+      statement.Condition.StringEquals["kms:ViaService"] == [
+        "ec2.us-east-1.amazonaws.com",
+        "ec2.us-west-2.amazonaws.com",
+      ]
+    ])
+    error_message = "Encrypted snapshot copy permissions must be limited to EC2 in the source and destination regions."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.dlm[0].policy).Statement :
+      statement.Sid == "CreateEncryptedSnapshotCopyGrant" &&
+      statement.Condition.StringEquals["kms:ViaService"] == [
+        "ec2.us-east-1.amazonaws.com",
+        "ec2.us-west-2.amazonaws.com",
+      ] &&
+      statement.Condition.Bool["kms:GrantIsForAWSResource"] == "true"
+    ])
+    error_message = "Encrypted snapshot copy grants must require AWS resources and both EC2 regions."
   }
 }
 
