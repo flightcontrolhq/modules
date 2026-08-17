@@ -57,20 +57,26 @@ upload_backup() {
     mkdir -p "$EFS_ROOT"
     mkdir -p "$${EFS_ROOT}/$${timestamp}"
     cp -a "$${RAVION_BACKUP_DIR}/." "$${EFS_ROOT}/$${timestamp}/"
-    find "$${EFS_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime "+$${RETENTION_DAYS}" -exec rm -rf {} +
   fi
 
   if [ "$DESTINATION" = "s3" ]; then
-    prune_s3_backups
+    if ! prune_s3_backups; then
+      log "WARNING: logical dump uploaded successfully, but S3 retention cleanup failed"
+    fi
+  elif ! prune_efs_backups; then
+    log "WARNING: logical dump stored successfully, but EFS retention cleanup failed"
   fi
 
   log "RAVION_BACKUP_SUCCESS completed_at=$${completed_at} artifact=$${artifact_path}"
 }
 
 prune_s3_backups() {
-  local cutoff listing key manifest epoch manifest_dir
+  local cutoff listing keys key manifest epoch manifest_dir
   cutoff=$(( $(date +%s) - RETENTION_DAYS * 86400 ))
   if ! listing=$(aws s3api list-objects-v2 --bucket "$${BUCKET}" --prefix "$${ARTIFACT_PREFIX}/" --output json); then
+    return 1
+  fi
+  if ! keys=$(jq -r '.Contents[]?.Key | select(endswith("/manifest.json"))' <<< "$listing"); then
     return 1
   fi
   while IFS= read -r key; do
@@ -86,10 +92,17 @@ prune_s3_backups() {
     fi
     if [ "$epoch" -gt 0 ] && [ "$epoch" -lt "$cutoff" ]; then
       manifest_dir="$${key%/manifest.json}"
-      aws s3 rm "s3://$${BUCKET}/$${manifest_dir}/" --recursive
+      if ! aws s3 rm "s3://$${BUCKET}/$${manifest_dir}/" --recursive; then
+        rm -f "$manifest"
+        return 1
+      fi
     fi
     rm -f "$manifest"
-  done < <(jq -r '.Contents[]?.Key | select(endswith("/manifest.json"))' <<< "$listing")
+  done <<< "$keys"
+}
+
+prune_efs_backups() {
+  find "$${EFS_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime "+$${RETENTION_DAYS}" -exec rm -rf {} +
 }
 
 find_s3_manifest() {
