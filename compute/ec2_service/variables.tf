@@ -266,10 +266,104 @@ variable "data_volume_mount_path" {
   }
 }
 
+variable "data_volume_snapshot_id" {
+  type        = string
+  description = "Optional EBS snapshot ID used to restore the data volume on a replacement instance."
+  default     = null
+
+  validation {
+    condition     = var.data_volume_snapshot_id == null || can(regex("^snap-", var.data_volume_snapshot_id))
+    error_message = "The data_volume_snapshot_id must be a valid snapshot ID starting with 'snap-'."
+  }
+}
+
 variable "additional_user_data" {
   type        = string
   description = "Additional shell script appended to the instance bootstrap user data."
   default     = ""
+}
+
+################################################################################
+# Backups
+################################################################################
+
+variable "backup_enabled" {
+  type        = bool
+  description = "Create a scheduled Amazon Data Lifecycle Manager EBS snapshot policy for this service's instances."
+  default     = false
+}
+
+variable "backup_interval_hours" {
+  type        = number
+  description = "Hours between scheduled EBS snapshots."
+  default     = 24
+
+  validation {
+    condition     = contains([1, 2, 3, 4, 6, 8, 12, 24], var.backup_interval_hours)
+    error_message = "The backup_interval_hours must be one of 1, 2, 3, 4, 6, 8, 12, or 24."
+  }
+}
+
+variable "backup_start_time" {
+  type        = string
+  description = "UTC time in HH:MM format at which the snapshot schedule starts."
+  default     = "05:00"
+
+  validation {
+    condition     = can(regex("^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$", var.backup_start_time))
+    error_message = "The backup_start_time must be a UTC time in HH:MM format."
+  }
+}
+
+variable "backup_retention_count" {
+  type        = number
+  description = "Number of snapshots retained by the schedule."
+  default     = 7
+
+  validation {
+    condition     = var.backup_retention_count > 0 && floor(var.backup_retention_count) == var.backup_retention_count
+    error_message = "The backup_retention_count must be a positive whole number."
+  }
+}
+
+variable "backup_root_volume_included" {
+  type        = bool
+  description = "Include the root volume in the snapshot set. This is automatically effective when no data volume exists."
+  default     = false
+}
+
+variable "backup_consistency_mode" {
+  type        = string
+  description = "Snapshot consistency mode: crash_consistent, filesystem_freeze, or custom. The effective default is filesystem_freeze with a data volume and crash_consistent without one."
+  default     = null
+
+  validation {
+    condition     = var.backup_consistency_mode == null || contains(["crash_consistent", "filesystem_freeze", "custom"], var.backup_consistency_mode)
+    error_message = "The backup_consistency_mode must be crash_consistent, filesystem_freeze, or custom."
+  }
+}
+
+variable "backup_pre_script_command" {
+  type        = string
+  description = "Command run before snapshots when backup_consistency_mode is custom."
+  default     = null
+}
+
+variable "backup_post_script_command" {
+  type        = string
+  description = "Command run after snapshots when backup_consistency_mode is custom."
+  default     = null
+}
+
+variable "backup_cross_region_copy_destination" {
+  type        = string
+  description = "Optional AWS region to which each snapshot is copied."
+  default     = null
+
+  validation {
+    condition     = var.backup_cross_region_copy_destination == null || can(regex("^[a-z]{2}-[a-z]+-[0-9]+$", var.backup_cross_region_copy_destination))
+    error_message = "The backup_cross_region_copy_destination must be a valid AWS region."
+  }
 }
 
 ################################################################################

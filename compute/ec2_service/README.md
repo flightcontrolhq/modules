@@ -150,11 +150,28 @@ aws ssm send-command \
 ## Storage and durability
 
 - The root volume and optional data volume are per-instance EBS. They are durable for the life of the instance: deploys, restarts, and stack updates never replace an instance, so local files such as an embedded database stay in place at local-disk latency, exactly as on an EC2 instance you launch yourself.
-- They are deleted with the instance, which happens for exactly three reasons: you terminate or recycle it (for example to roll out a new AMI), the group scales in, or it fails its Auto Scaling health check. Keep backups (EBS snapshots, dumps to S3) for critical data instead of avoiding local storage.
+- They are deleted with the instance, which happens for exactly three reasons: you terminate or recycle it (for example to roll out a new AMI), the group scales in, or it fails its Auto Scaling health check. On-disk databases such as SQLite and Postgres are supported when Backups are configured; without backups, a replacement loses the volume.
 - `health_check_type` defaults to `EC2`, which is the AWS instance/system status check — unreachable instance, broken boot or network state, failed underlying host. It ignores application state: a crashed app is restarted in place by supervisord, and a failing HTTP health check never replaces an instance. So health-driven replacement is rare and tied to hardware or hypervisor failure. Setting `health_check_type = "ELB"` makes load balancer health replace instances instead, which also breaks in-place deploys (they briefly deregister the instance).
-- Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
+- Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container. EFS is for shared files, not a live SQLite or Postgres data directory.
+- Shared or multi-attach EBS block storage is deliberately not supported. A block device is not a shared filesystem; concurrent read/write mounts of XFS or ext4 can corrupt it. Reliable multi-writer access needs a cluster filesystem and fencing, while single-writer databases gain nothing from multi-attach.
 - When `docker_socket_mount_enabled` is enabled, the data volume and EFS host paths are mapped identically inside the app container. This lets sibling containers started through the host Docker socket resolve those same host-path binds correctly.
 - Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh, so applying a new AMI never replaces running instances by itself. Recycling instances to pick up the new AMI is a replacement, and it deletes their volumes.
+
+## Backups and restore
+
+Enable `backup_enabled` to create a service-specific Amazon Data Lifecycle Manager schedule. The default daily snapshot uses `filesystem_freeze` when a data volume exists, which runs `sync` and freezes only the data mount (never `/` or `/boot`) while the multi-volume snapshot set is taken. Use `crash_consistent` when filesystem freezing is unsuitable, or `custom` with both pre- and post-script commands for engine-specific quiescing. A safety timeout thaws a frozen filesystem if the post-script is delayed or lost.
+
+Snapshots are incremental EBS snapshots, but the schedule still costs storage and (for cross-region copies) transfer and destination-region storage. The honest RPO is `backup_interval_hours`: a failure immediately before a scheduled snapshot can lose up to that interval. Phase 1 has no automatic restore. The RTO requires a human operator to deliberately select a snapshot and recycle an instance; a replacement instance otherwise boots with an empty data volume.
+
+To restore:
+
+1. Find a snapshot using the `RavionBackup=<service name>` tag, or the `backup_snapshot_filter` output.
+2. Set `data_volume_snapshot_id` to the selected `snap-...` ID while `data_volume_creation_enabled` remains enabled.
+3. Apply the change and recycle the affected instance so it launches from the snapshot.
+4. Verify that the restored filesystem is mounted at `data_volume_mount_path` and that the application sees the expected data.
+5. Clear `data_volume_snapshot_id` and apply again, so future replacements do not keep booting from that pinned snapshot.
+
+This phase intentionally does not provide logical dumps, S3 backups, termination hooks, automatic snapshot discovery, or continuous replication. Those mechanisms are for later phases and are needed when you require lower RPO, object-level recovery, or automatic replacement restoration.
 
 ## Requirements
 
@@ -195,6 +212,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | data_volume_size | Data volume size (GB) | `number` | `20` | no |
 | data_volume_type | Data volume type | `string` | `"gp3"` | no |
 | data_volume_mount_path | Host mount path for the data volume | `string` | `"/data"` | no |
+| data_volume_snapshot_id | Snapshot used to restore a replacement data volume | `string` | `null` | no |
 | additional_user_data | Extra shell script appended to bootstrap | `string` | `""` | no |
 | min_size | Minimum instances | `number` | `1` | no |
 | max_size | Maximum instances | `number` | `3` | no |
@@ -216,6 +234,15 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
 | log_rotation_max_size_mb | Size at which supervisord rotates the on-instance app log | `number` | `20` | no |
 | log_rotation_backup_count | Rotated app log files kept on the instance | `number` | `5` | no |
+| backup_enabled | Schedule DLM EBS snapshots | `bool` | `false` | no |
+| backup_interval_hours | Hours between snapshots (1, 2, 3, 4, 6, 8, 12, or 24) | `number` | `24` | no |
+| backup_start_time | Snapshot schedule start time in UTC (HH:MM) | `string` | `"05:00"` | no |
+| backup_retention_count | Snapshots retained | `number` | `7` | no |
+| backup_root_volume_included | Include the root volume | `bool` | `false` | no |
+| backup_consistency_mode | `crash_consistent`, `filesystem_freeze`, or `custom` | `string` | automatic | no |
+| backup_pre_script_command | Custom pre-snapshot command | `string` | `null` | no |
+| backup_post_script_command | Custom post-snapshot command | `string` | `null` | no |
+| backup_cross_region_copy_destination | Destination AWS region for an additional copy | `string` | `null` | no |
 
 ## Outputs
 
@@ -235,3 +262,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | log_stream_prefix | Prefix of deployment- and instance-scoped app log streams |
 | aws_account_id | AWS account ID |
 | region | AWS region |
+| backup_policy_id | DLM policy ID when backups are enabled |
+| backup_target_tag | Tag targeted by the DLM policy |
+| backup_snapshot_filter | Tag filter for finding snapshots |
+| backup_ssm_document_name | Consistency SSM document when scripts are enabled |

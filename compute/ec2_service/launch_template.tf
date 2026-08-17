@@ -46,8 +46,9 @@ resource "aws_launch_template" "app" {
       device_name = "/dev/xvdf"
 
       ebs {
-        volume_size           = var.data_volume_size
-        volume_type           = var.data_volume_type
+        volume_size           = var.data_volume_snapshot_id == null ? var.data_volume_size : null
+        volume_type           = var.data_volume_snapshot_id == null ? var.data_volume_type : null
+        snapshot_id           = var.data_volume_snapshot_id
         encrypted             = true
         delete_on_termination = true
       }
@@ -68,7 +69,8 @@ resource "aws_launch_template" "app" {
     resource_type = "instance"
 
     tags = merge(local.tags, {
-      Name = var.name
+      Name         = var.name
+      RavionBackup = var.name
     })
   }
 
@@ -76,7 +78,8 @@ resource "aws_launch_template" "app" {
     resource_type = "volume"
 
     tags = merge(local.tags, {
-      Name = var.name
+      Name         = var.name
+      RavionBackup = var.name
     })
   }
 
@@ -98,6 +101,16 @@ resource "aws_launch_template" "app" {
     precondition {
       condition     = !var.efs_enabled || var.efs_file_system_id != null
       error_message = "The efs_file_system_id is required when efs_enabled is true."
+    }
+
+    precondition {
+      condition     = var.data_volume_snapshot_id == null || var.data_volume_creation_enabled
+      error_message = "The data_volume_creation_enabled must be true when data_volume_snapshot_id is set."
+    }
+
+    precondition {
+      condition     = local.backup_consistency_mode != "custom" || (var.backup_pre_script_command != null && length(trimspace(var.backup_pre_script_command)) > 0 && var.backup_post_script_command != null && length(trimspace(var.backup_post_script_command)) > 0)
+      error_message = "The backup_pre_script_command and backup_post_script_command must both be set when backup_consistency_mode is custom."
     }
 
     precondition {

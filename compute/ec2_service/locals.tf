@@ -15,6 +15,15 @@ locals {
 
   container_runtime = var.runtime == "container"
 
+  backup_consistency_mode     = coalesce(var.backup_consistency_mode, var.data_volume_creation_enabled ? "filesystem_freeze" : "crash_consistent")
+  backup_scripts_enabled      = var.backup_enabled && local.backup_consistency_mode != "crash_consistent"
+  backup_root_volume_included = var.backup_root_volume_included || !var.data_volume_creation_enabled
+  backup_pre_script_command   = coalesce(var.backup_pre_script_command, "")
+  backup_post_script_command  = coalesce(var.backup_post_script_command, "")
+  backup_target_tag = {
+    RavionBackup = var.name
+  }
+
   load_balancer_creation_enabled = var.load_balancer_attachment != null ? var.load_balancer_attachment.creation_enabled : false
 
   cpu_architecture = var.ami_id == null ? (
@@ -116,6 +125,7 @@ locals {
     supervisor_install_script    = local.supervisor_install_script
     data_volume_creation_enabled = var.data_volume_creation_enabled
     data_volume_mount_path       = var.data_volume_mount_path
+    data_volume_device_name      = "/dev/xvdf"
     efs_enabled                  = var.efs_enabled
     efs_file_system_id           = var.efs_file_system_id != null ? var.efs_file_system_id : ""
     efs_access_point_id          = var.efs_access_point_id != null ? var.efs_access_point_id : ""

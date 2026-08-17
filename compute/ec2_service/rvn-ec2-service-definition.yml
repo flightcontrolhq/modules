@@ -1,10 +1,10 @@
 definition:
   type: rvn-ec2-service
   name: EC2 Service
-  description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
+  description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing, local EBS data, and switchable container or manual in-place deploys.
 release:
-  version: 1.4.1
-  description: Document how to choose an instance type, so services run on the newest instance generation their region offers instead of an outdated one.
+  version: 1.5.0
+  description: Add scheduled EBS backups and a deliberate snapshot restore path for on-disk databases.
 module:
   inputs:
     - id: network
@@ -522,6 +522,120 @@ module:
       patterns:
         - message: Use an absolute path.
           pattern: ^/
+    - id: data_volume_snapshot_id
+      label: Data volume snapshot ID
+      type: string
+      description: Optional EBS snapshot ID to restore into the data volume when a replacement instance boots. Clear this after the restore is complete.
+      collapsible: true
+      required: false
+      show_when:
+        data_volume_creation_enabled: true
+      placeholder: snap-...
+      patterns:
+        - message: Enter an EBS snapshot ID.
+          pattern: ^snap-[a-z0-9]+$
+    - id: section_backups
+      label: Backups
+      type: section
+      description: Scheduled EBS snapshots for on-disk application data.
+    - id: backup_enabled
+      label: Enable EBS backups
+      type: boolean
+      description: Schedule Amazon Data Lifecycle Manager snapshots for this service's instances. Opt in for on-disk databases such as SQLite or Postgres.
+      default: false
+    - id: backup_interval_hours
+      label: Backup interval (hours)
+      type: number
+      description: Maximum age of a scheduled snapshot, and therefore the honest backup RPO.
+      show_when:
+        backup_enabled: true
+      min: 1
+      max: 24
+      default: 24
+      values:
+        - label: Every hour
+          value: 1
+        - label: Every 2 hours
+          value: 2
+        - label: Every 3 hours
+          value: 3
+        - label: Every 4 hours
+          value: 4
+        - label: Every 6 hours
+          value: 6
+        - label: Every 8 hours
+          value: 8
+        - label: Every 12 hours
+          value: 12
+        - label: Daily
+          value: 24
+    - id: backup_start_time
+      label: Backup start time (UTC)
+      type: string
+      description: UTC time in HH:MM format when the daily schedule begins.
+      show_when:
+        backup_enabled: true
+      default: "05:00"
+      patterns:
+        - message: Use HH:MM in UTC.
+          pattern: ^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$
+    - id: backup_retention_count
+      label: Snapshots to retain
+      type: number
+      description: Number of snapshots retained for this schedule.
+      show_when:
+        backup_enabled: true
+      min: 1
+      default: 7
+    - id: backup_root_volume_included
+      label: Include root volume
+      type: boolean
+      description: Include the operating system volume in each snapshot set. It is included automatically when no data volume exists.
+      show_when:
+        backup_enabled: true
+      default: false
+    - id: backup_consistency_mode
+      label: Backup consistency mode
+      type: string
+      description: Freeze the data filesystem before snapshots, take crash-consistent snapshots, or provide database-specific pre/post commands.
+      show_when:
+        backup_enabled: true
+      default: filesystem_freeze
+      values:
+        - label: Filesystem freeze
+          description: Sync and freeze the data volume without touching / or /boot.
+          value: filesystem_freeze
+        - label: Crash consistent
+          description: Snapshot without scripts; database engines must recover as after a power loss.
+          value: crash_consistent
+        - label: Custom
+          description: Run your own database quiesce commands before and after the snapshot.
+          value: custom
+    - id: backup_pre_script_command
+      label: Backup pre-script command
+      type: text
+      description: Command that quiesces the database before each snapshot. Required for Custom consistency mode.
+      required: true
+      show_when:
+        backup_enabled: true
+        backup_consistency_mode: custom
+    - id: backup_post_script_command
+      label: Backup post-script command
+      type: text
+      description: Command that resumes the database after each snapshot. Required for Custom consistency mode.
+      required: true
+      show_when:
+        backup_enabled: true
+        backup_consistency_mode: custom
+    - id: backup_cross_region_copy_destination
+      label: Cross-region copy destination
+      type: string
+      description: Optional AWS region for a second snapshot copy. Cross-region copies incur additional storage and transfer costs.
+      collapsible: true
+      required: false
+      show_when:
+        backup_enabled: true
+      values: $values:aws/regions
     - id: efs_enabled
       label: EFS file system
       type: boolean
@@ -715,7 +829,17 @@ module:
         cpu_target_value: << module.input.cpu_target_value >>
         data_volume_creation_enabled: << module.input.data_volume_creation_enabled >>
         data_volume_mount_path: << module.input.data_volume_mount_path >>
+        data_volume_snapshot_id: << module.input.data_volume_snapshot_id || nil >>
         data_volume_size: << module.input.data_volume_size >>
+        backup_enabled: << module.input.backup_enabled >>
+        backup_interval_hours: << module.input.backup_interval_hours >>
+        backup_start_time: << module.input.backup_start_time >>
+        backup_retention_count: << module.input.backup_retention_count >>
+        backup_root_volume_included: << module.input.backup_root_volume_included >>
+        backup_consistency_mode: "<< module.input.data_volume_creation_enabled ? (module.input.backup_consistency_mode || \"filesystem_freeze\") : \"crash_consistent\" >>"
+        backup_pre_script_command: << module.input.backup_pre_script_command || nil >>
+        backup_post_script_command: << module.input.backup_post_script_command || nil >>
+        backup_cross_region_copy_destination: << module.input.backup_cross_region_copy_destination || nil >>
         deploy_timeout_seconds: << module.input.deploy_timeout_seconds >>
         desired_capacity: "<< module.input.cpu_autoscaling_enabled ? nil : (module.input.desired_capacity || nil) >>"
         ecr_force_deletion_enabled: << module.input.ecr_force_deletion_enabled >>
@@ -1057,9 +1181,27 @@ module:
 
     Root and Data volumes are encrypted gp3 EBS volumes attached to the instance. They are durable for the life of the instance: nothing in the normal deploy or update path replaces an instance, so files written to disk stay there, at local-disk latency. This is the same durability model as an EC2 instance you create yourself in the AWS console.
 
-    Both volumes are deleted with the instance, which only happens for the three reasons in Instance replacement below. Keep backups of critical data on the disk — an EBS snapshot schedule, database dumps to S3, or a periodic sync — rather than avoiding local storage.
+    Both volumes are deleted with the instance, which only happens for the three reasons in Instance replacement below. On-disk databases such as SQLite and Postgres are supported when Backups are configured; without backups, a replacement loses the volume.
 
-    Enable EFS and select a Ravion EFS module when several instances must share the same files, or when a replacement instance must find the data already in place. The service mounts the file system through its access point when present and attaches the EFS client security group to each instance. Container mode bind-mounts the Data and EFS host paths into the app container at the same paths. EFS is a network file system, so latency-sensitive local state such as an embedded database is usually better on the instance's own volume with backups.
+    Enable EFS and select a Ravion EFS module when several instances must share the same files, or when a replacement instance must find the data already in place. EFS is for shared files, not a live SQLite or Postgres data directory.
+
+    Shared or multi-attach EBS block storage is deliberately not supported. A block device is not a shared filesystem; concurrent read/write mounts of XFS or ext4 can corrupt it. Reliable multi-writer access needs a cluster filesystem and fencing, while single-writer databases gain nothing from multi-attach.
+
+    ## Backups and restore
+
+    Enable Backups to create a service-specific Amazon Data Lifecycle Manager schedule. The default daily snapshot uses `filesystem_freeze` when a Data volume exists, which runs `sync` and freezes only the data mount (never `/` or `/boot`) while the multi-volume snapshot set is taken. Use `crash_consistent` when filesystem freezing is unsuitable, or `custom` with both pre- and post-script commands for engine-specific quiescing. A safety timeout thaws a frozen filesystem if the post-script is delayed or lost.
+
+    Snapshots are incremental EBS snapshots, but the schedule still costs storage and cross-region copies cost transfer and destination-region storage. The honest RPO is the Backup interval: a failure immediately before a scheduled snapshot can lose up to that interval. Phase 1 has no automatic restore. The RTO requires a human operator to select a snapshot and recycle an instance; a replacement otherwise boots with an empty Data volume.
+
+    To restore:
+
+    1. Find a snapshot using the `RavionBackup=<service name>` tag, or the `backup_snapshot_filter` output.
+    2. Set Data volume snapshot ID to the selected `snap-...` ID while Data volume remains enabled.
+    3. Apply the change and recycle the affected instance so it launches from the snapshot.
+    4. Verify that the restored filesystem is mounted at the Data volume mount path and that the application sees the expected data.
+    5. Clear Data volume snapshot ID and apply again, so future replacements do not keep booting from that pinned snapshot.
+
+    This phase intentionally does not provide logical dumps, S3 backups, termination hooks, automatic snapshot discovery, or continuous replication. Those mechanisms are for later phases and are needed for lower RPO, object-level recovery, or automatic replacement restoration.
 
     ## Instance replacement
 

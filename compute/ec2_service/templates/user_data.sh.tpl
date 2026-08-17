@@ -7,21 +7,28 @@ set -euo pipefail
 dnf install -y git jq unzip
 
 %{ if data_volume_creation_enabled ~}
-# Format and mount the data volume on first boot. The volume is the only
-# attached disk without a filesystem; on later boots fstab mounts it.
-DATA_DEVICE=""
-for dev in $(lsblk -dnpo NAME -e 7,11); do
-  if [ -z "$(lsblk -no FSTYPE "$dev" | tr -d '[:space:]')" ]; then
-    DATA_DEVICE="$dev"
-    break
-  fi
-done
-if [ -n "$DATA_DEVICE" ]; then
+# Resolve the configured Xen device to its Nitro NVMe alias when needed.
+DATA_DEVICE="${data_volume_device_name}"
+if [ ! -b "$DATA_DEVICE" ]; then
+  EXPECTED_DEVICE="f"
+  DATA_DEVICE=$(for dev in /dev/nvme*n1; do
+    [ -b "$dev" ] || continue
+    if /sbin/ebsnvme-id "$dev" 2>/dev/null | grep -Eq "Device Name: /dev/(xvd)?$${EXPECTED_DEVICE}$"; then
+      echo "$dev"
+      break
+    fi
+  done)
+fi
+if [ -n "$DATA_DEVICE" ] && [ -b "$DATA_DEVICE" ]; then
+  DATA_FSTYPE=$(lsblk -no FSTYPE "$DATA_DEVICE" | tr -d '[:space:]')
+  if [ -z "$DATA_FSTYPE" ]; then
   mkfs -t xfs "$DATA_DEVICE"
-  mkdir -p ${data_volume_mount_path}
+  fi
+  mkdir -p "${data_volume_mount_path}"
   DATA_UUID=$(blkid -s UUID -o value "$DATA_DEVICE")
-  echo "UUID=$DATA_UUID ${data_volume_mount_path} xfs defaults,nofail 0 2" >> /etc/fstab
-  mount -a
+  sed -i "\|[[:space:]]${data_volume_mount_path}[[:space:]]|d" /etc/fstab
+  echo "UUID=$${DATA_UUID} ${data_volume_mount_path} $${DATA_FSTYPE:-xfs} defaults,nofail 0 2" >> /etc/fstab
+  mount "${data_volume_mount_path}" || mount -a
 fi
 %{ endif ~}
 

@@ -95,3 +95,25 @@ output "region" {
   description = "The AWS region where resources are created."
   value       = local.region
 }
+
+output "backup_policy_id" {
+  description = "The ID of the Amazon Data Lifecycle Manager backup policy, when backups are enabled."
+  value       = var.backup_enabled ? aws_dlm_lifecycle_policy.service[0].id : null
+}
+
+output "backup_target_tag" {
+  description = "The instance tag targeted by the backup policy."
+  value       = local.backup_target_tag
+}
+
+output "backup_snapshot_filter" {
+  description = "Tag filter for finding this service's snapshots in the EC2 console or API."
+  value = {
+    "tag:RavionBackup" = var.name
+  }
+}
+
+output "backup_ssm_document_name" {
+  description = "The SSM consistency document used by DLM, when scripts are enabled."
+  value       = local.backup_scripts_enabled ? aws_ssm_document.backup[0].name : null
+}
