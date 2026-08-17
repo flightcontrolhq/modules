@@ -35,6 +35,36 @@ data "aws_iam_policy_document" "dlm" {
     actions   = ["ec2:CreateTags"]
     resources = ["arn:${data.aws_partition.current.partition}:ec2:*::snapshot/*"]
   }
+
+  dynamic "statement" {
+    for_each = var.backup_cross_region_copy_destination != null ? [1] : []
+    content {
+      sid = "CopySnapshots"
+      actions = [
+        "ec2:CopySnapshot",
+        "ec2:ModifySnapshotAttribute",
+      ]
+      resources = ["*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.backup_cross_region_copy_destination != null ? [1] : []
+    content {
+      sid = "CopyEncryptedSnapshots"
+      actions = [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKeyWithoutPlaintext",
+        "kms:ReEncryptFrom",
+        "kms:ReEncryptTo",
+      ]
+      resources = ["*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "dlm" {
