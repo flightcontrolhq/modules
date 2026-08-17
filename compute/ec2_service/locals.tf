@@ -27,7 +27,6 @@ locals {
 
   backup_s3_bucket_arn                   = var.backup_dump_enabled && var.backup_dump_s3_bucket_arn != null ? var.backup_dump_s3_bucket_arn : var.backup_replication_s3_bucket_arn
   backup_s3_enabled                      = (var.backup_dump_enabled && var.backup_dump_destination == "s3") || var.backup_replication_enabled
-  backup_dump_enabled                    = var.backup_dump_enabled
   backup_dump_termination_enabled        = var.backup_dump_enabled && var.backup_on_termination_enabled
   backup_dump_bucket_created             = local.backup_s3_enabled && local.backup_s3_bucket_arn == null
   backup_dump_bucket_name                = local.backup_s3_bucket_arn != null ? trimprefix(local.backup_s3_bucket_arn, "arn:${data.aws_partition.current.partition}:s3:::") : (local.backup_dump_bucket_created ? aws_s3_bucket.dump[0].bucket : null)
@@ -36,7 +35,6 @@ locals {
   backup_dump_efs_root                   = var.efs_enabled ? "${var.efs_mount_path}/.ravion-backups/${var.name}" : ""
   backup_dump_log_path                   = "${local.log_directory}/backup.log"
   backup_dump_restore_marker_path        = "${var.data_volume_mount_path}/.ravion-backup-restore-complete"
-  backup_dump_restore_blocked_log_path   = "/var/log/ravion/${var.name}/backup-restore.log"
   backup_dump_alarm_period               = min(86400, var.backup_dump_max_interval_hours * 3600)
   backup_dump_alarm_evaluation_periods   = ceil(var.backup_dump_max_interval_hours * 3600 / local.backup_dump_alarm_period)
   backup_dump_termination_automation_arn = local.backup_dump_termination_enabled ? "arn:${data.aws_partition.current.partition}:ssm:${local.region}:${data.aws_caller_identity.current.account_id}:automation-definition/${aws_ssm_document.backup_termination[0].name}:$DEFAULT" : null
@@ -161,7 +159,7 @@ locals {
     backup_dump_restore_marker   = local.backup_dump_restore_marker_path
     backup_dump_script           = local.backup_dump_script
     deployment_log_script        = local.deployment_log_script
-    backup_replication_enabled   = var.backup_replication_enabled
+    backup_replication_enabled   = var.backup_replication_enabled && var.backup_replication_engine == "litestream"
     backup_replication_script    = local.backup_replication_script
   }))
 
