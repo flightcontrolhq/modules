@@ -37,6 +37,15 @@ resource "aws_iam_role_policy" "backup_termination_automation" {
         Resource = "arn:${data.aws_partition.current.partition}:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*"
       },
       {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetCommandInvocation",
+          "ssm:ListCommandInvocations",
+          "ssm:ListCommands",
+        ]
+        Resource = "*"
+      },
+      {
         Effect   = "Allow"
         Action   = "autoscaling:CompleteLifecycleAction"
         Resource = module.autoscaling.autoscaling_group_arn
@@ -73,7 +82,7 @@ resource "aws_ssm_document" "backup_termination" {
       {
         name           = "runDump"
         action         = "aws:runCommand"
-        timeoutSeconds = 1500
+        timeoutSeconds = local.backup_on_termination_step_timeout_seconds
         onFailure      = "step:completeLifecycleAction"
         inputs = {
           DocumentName = aws_ssm_document.backup_dump[0].name

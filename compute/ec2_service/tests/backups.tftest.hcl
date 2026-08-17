@@ -239,11 +239,12 @@ run "logical_dumps_create_s3_resources_and_wiring" {
   command = plan
 
   variables {
-    backup_dump_enabled            = true
-    backup_dump_command            = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
-    backup_dump_schedule           = "hourly"
-    backup_dump_max_interval_hours = 6
-    data_volume_creation_enabled   = true
+    backup_dump_enabled                   = true
+    backup_dump_command                   = "sqlite3 /data/app.db '.backup \"$RAVION_BACKUP_DIR/app.db\"'"
+    backup_dump_schedule                  = "hourly"
+    backup_dump_max_interval_hours        = 6
+    backup_on_termination_timeout_seconds = 3600
+    data_volume_creation_enabled          = true
   }
 
   assert {
@@ -299,6 +300,20 @@ run "logical_dumps_create_s3_resources_and_wiring" {
   assert {
     condition     = strcontains(base64decode(aws_launch_template.app.user_data), "fresh service and continuing without restore") && strcontains(base64decode(aws_launch_template.app.user_data), "/backup.log")
     error_message = "Bootstrap must allow a fresh restore-enabled service and configure backup log collection."
+  }
+
+  assert {
+    condition     = yamldecode(aws_ssm_document.backup_termination[0].content).mainSteps[0].timeoutSeconds == 3540
+    error_message = "Termination automation must leave lifecycle-hook heartbeat slack for completion."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_iam_role_policy.backup_termination_automation[0].policy).Statement :
+      try(statement.Action == "ssm:GetCommandInvocation", false) ||
+      try(statement.Action[0] == "ssm:GetCommandInvocation", false)
+    ])
+    error_message = "Termination automation must be allowed to poll the dump command invocation."
   }
 
 }
