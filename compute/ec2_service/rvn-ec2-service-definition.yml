@@ -719,7 +719,6 @@ module:
       show_when:
         backup_dump_enabled: true
         backup_dump_destination: s3
-        backup_dump_s3_bucket_arn: null
     - id: backup_dump_restore_on_first_boot_enabled
       label: Restore latest dump on first boot
       type: boolean
