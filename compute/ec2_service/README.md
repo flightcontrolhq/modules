@@ -192,6 +192,26 @@ Planned ASG termination can run a final dump through an EventBridge-triggered SS
 
 Logical-dump RPO is approximately the dump schedule interval, while a planned-termination dump can provide near-zero loss for planned replacement. Restore-on-first-boot automates the workflow but still depends on the newest available dump and a successful engine restore command. Phase 1 EBS snapshot restore remains deliberate and manual for whole-volume recovery.
 
+## Continuous replication
+
+Phase 3 adds native Litestream support for SQLite. Enable `backup_replication_enabled`, set `backup_replication_database_path` to an absolute path under the EBS data volume, and provide an S3 bucket ARN or let the module create one. The module installs the pinned `backup_replication_version` release after verifying its architecture-specific checksum, writes a Litestream configuration with the configured snapshot interval and retention, and runs `litestream replicate` as a supervised program. Its log is shipped to the same CloudWatch log group as application and logical-backup logs.
+
+When `backup_replication_restore_on_first_boot_enabled` is enabled, the first boot uses Litestream's `-if-replica-exists` restore behavior. A successful empty replica discovery is treated as a fresh service and marks restore complete. Discovery or download failures, restore failures, and replicas older than `backup_replication_max_age_hours` block application startup without writing the marker. The replica is a supplement to snapshots and logical dumps, not a replacement: a corrupted SQLite database produces a corrupted replica.
+
+Litestream is SQLite-only. Keep the live database on the local EBS data volume, not EFS. Do not run multiple instances against the same SQLite database and replica prefix: the replicas will conflict or corrupt. The module intentionally does not gate replication on instance count, so the operator must enforce single-writer deployment.
+
+PostgreSQL continuous archiving is not a module input. It requires engine-specific `archive_command` configuration in `postgresql.conf` and credentials that this module does not own. Use `additional_user_data` for a WAL-G or pgBackRest recipe and phase 1 custom consistency hooks for deliberate snapshots instead of enabling an input that would only be partially configured.
+
+The three backup phases have different recovery characteristics:
+
+| Phase | Mechanism | Honest RPO | Restore path |
+| --- | --- | --- | --- |
+| 1 | EBS snapshots | Snapshot interval | Human selects a snapshot and recycles an instance |
+| 2 | Engine-native dumps | Dump interval, with near-zero loss for planned termination | Optional restore-on-first-boot |
+| 3 | Litestream SQLite replication | Typically seconds, based on the snapshot interval | Optional restore-on-first-boot |
+
+Use snapshots for whole-volume recovery, logical dumps for portable per-object recovery, and replication for low-RPO SQLite replacement recovery. Keep at least one snapshot or dump path because continuous replication preserves whatever state the source database has, including corruption.
+
 ## Requirements
 
 | Name | Version |
@@ -276,6 +296,15 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | backup_max_age_hours | Maximum accepted restore age | `number` | `null` | no |
 | backup_on_termination_enabled | Run a dump before planned ASG termination | `bool` | `true` | no |
 | backup_dump_failure_alarm_enabled | Alarm on missing recent dump success | `bool` | `true` | no |
+| backup_replication_enabled | Continuously replicate a SQLite database with Litestream | `bool` | `false` | no |
+| backup_replication_engine | Continuous replication engine | `string` | `"litestream"` | no |
+| backup_replication_database_path | SQLite database path under the data volume | `string` | `null` | no |
+| backup_replication_s3_bucket_arn | Existing S3 bucket ARN, or null for a module-created bucket | `string` | `null` | no |
+| backup_replication_restore_on_first_boot_enabled | Restore a replica before the first application start | `bool` | `false` | no |
+| backup_replication_snapshot_interval | Litestream snapshot interval | `string` | `"1s"` | no |
+| backup_replication_retention | Litestream replica retention duration | `string` | `"24h"` | no |
+| backup_replication_version | Checksum-verified Litestream release version | `string` | `"0.5.12"` | no |
+| backup_replication_max_age_hours | Maximum accepted replica age on restore | `number` | `null` | no |
 
 ## Outputs
 
@@ -304,3 +333,6 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | backup_dump_prefix | Service logical dump prefix |
 | backup_dump_ssm_document_name | SSM command document for backup-now and restore-latest |
 | backup_dump_termination_document_name | SSM Automation document for termination-time dumps |
+| backup_replication_bucket_name | Effective S3 bucket name for Litestream replicas |
+| backup_replication_bucket_arn | Effective S3 bucket ARN for Litestream replicas |
+| backup_replication_prefix | Service Litestream replica prefix |

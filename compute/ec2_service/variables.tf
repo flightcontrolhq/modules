@@ -488,6 +488,90 @@ variable "backup_dump_failure_alarm_enabled" {
   default     = true
 }
 
+variable "backup_replication_enabled" {
+  type        = bool
+  description = "Continuously replicate a SQLite database to S3 with Litestream."
+  default     = false
+}
+
+variable "backup_replication_engine" {
+  type        = string
+  description = "Continuous replication engine to use."
+  default     = "litestream"
+
+  validation {
+    condition     = contains(["litestream"], var.backup_replication_engine)
+    error_message = "The backup_replication_engine must be 'litestream'."
+  }
+}
+
+variable "backup_replication_database_path" {
+  type        = string
+  description = "Absolute path to the SQLite database replicated by Litestream. It must be under the data volume mount path."
+  default     = null
+}
+
+variable "backup_replication_s3_bucket_arn" {
+  type        = string
+  description = "Optional existing S3 bucket ARN for Litestream replicas. When null, the module creates a dedicated bucket."
+  default     = null
+
+  validation {
+    condition     = var.backup_replication_s3_bucket_arn == null || can(regex("^arn:[^:]+:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.backup_replication_s3_bucket_arn))
+    error_message = "The backup_replication_s3_bucket_arn must be an S3 bucket ARN."
+  }
+}
+
+variable "backup_replication_restore_on_first_boot_enabled" {
+  type        = bool
+  description = "Restore the Litestream replica before the application starts on a replacement instance."
+  default     = false
+}
+
+variable "backup_replication_snapshot_interval" {
+  type        = string
+  description = "Litestream snapshot interval, such as 1s or 1m."
+  default     = "1s"
+
+  validation {
+    condition     = can(regex("^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$", var.backup_replication_snapshot_interval))
+    error_message = "The backup_replication_snapshot_interval must be a positive Litestream duration."
+  }
+}
+
+variable "backup_replication_retention" {
+  type        = string
+  description = "Litestream replica retention duration, such as 24h or 168h."
+  default     = "24h"
+
+  validation {
+    condition     = can(regex("^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$", var.backup_replication_retention))
+    error_message = "The backup_replication_retention must be a positive Litestream duration."
+  }
+}
+
+variable "backup_replication_version" {
+  type        = string
+  description = "Pinned Litestream release version installed on instances."
+  default     = "0.5.12"
+
+  validation {
+    condition     = var.backup_replication_version == "0.5.12"
+    error_message = "The backup_replication_version must be the checksum-verified supported release 0.5.12."
+  }
+}
+
+variable "backup_replication_max_age_hours" {
+  type        = number
+  description = "Maximum allowed age of a Litestream replica restored on first boot."
+  default     = null
+
+  validation {
+    condition     = var.backup_replication_max_age_hours == null || (var.backup_replication_max_age_hours > 0 && floor(var.backup_replication_max_age_hours) == var.backup_replication_max_age_hours)
+    error_message = "The backup_replication_max_age_hours must be null or a positive whole number."
+  }
+}
+
 ################################################################################
 # Auto Scaling Group
 ################################################################################

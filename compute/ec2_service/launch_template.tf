@@ -124,6 +124,29 @@ resource "aws_launch_template" "app" {
     }
 
     precondition {
+      condition     = !var.backup_replication_enabled || var.data_volume_creation_enabled
+      error_message = "The data_volume_creation_enabled must be true when backup_replication_enabled is true."
+    }
+
+    precondition {
+      condition = !var.backup_replication_enabled || (
+        var.backup_replication_database_path != null &&
+        startswith(var.backup_replication_database_path, "${trimsuffix(var.data_volume_mount_path, "/")}/")
+      )
+      error_message = "The backup_replication_database_path must be under the data_volume_mount_path when backup_replication_enabled is true."
+    }
+
+    precondition {
+      condition     = !var.backup_replication_enabled || local.backup_s3_enabled
+      error_message = "Litestream replication requires an S3 backup destination."
+    }
+
+    precondition {
+      condition     = !(var.backup_dump_enabled && var.backup_dump_destination == "s3" && var.backup_replication_enabled) || var.backup_dump_s3_bucket_arn == null || var.backup_replication_s3_bucket_arn == null || var.backup_dump_s3_bucket_arn == var.backup_replication_s3_bucket_arn
+      error_message = "Logical dumps and Litestream replication must use the same supplied S3 bucket when both are enabled."
+    }
+
+    precondition {
       condition     = !var.backup_dump_restore_on_first_boot_enabled || (var.backup_dump_enabled && var.data_volume_creation_enabled && var.backup_dump_restore_command != null && length(trimspace(var.backup_dump_restore_command)) > 0)
       error_message = "The backup_dump_restore_command, backup_dump_enabled, and data_volume_creation_enabled must be set when backup_dump_restore_on_first_boot_enabled is true."
     }

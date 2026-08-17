@@ -365,3 +365,71 @@ run "restore_on_first_boot_requires_restore_command" {
 
   expect_failures = [aws_launch_template.app]
 }
+
+run "replication_is_absent_when_disabled" {
+  command = plan
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 0
+    error_message = "Replication disabled must not create a replication bucket."
+  }
+
+  assert {
+    condition     = !strcontains(base64decode(aws_launch_template.app.user_data), "litestream replicate")
+    error_message = "Replication disabled must not install a Litestream supervisor program."
+  }
+}
+
+run "replication_creates_s3_bucket_when_dumps_are_disabled" {
+  command = plan
+
+  variables {
+    backup_replication_enabled           = true
+    backup_replication_database_path     = "/data/app.db"
+    data_volume_creation_enabled         = true
+    backup_replication_snapshot_interval = "1s"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 1
+    error_message = "Replication must create an S3 bucket when dumps are disabled."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.app.user_data), "litestream replicate") && strcontains(base64decode(aws_launch_template.app.user_data), "/data/app.db")
+    error_message = "Replication bootstrap must configure and supervise Litestream."
+  }
+}
+
+run "replication_reuses_supplied_s3_bucket" {
+  command = plan
+
+  variables {
+    backup_replication_enabled       = true
+    backup_replication_database_path = "/data/app.db"
+    backup_replication_s3_bucket_arn = "arn:aws:s3:::existing-replication-bucket"
+    data_volume_creation_enabled     = true
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.dump) == 0
+    error_message = "A supplied replication bucket ARN must prevent module bucket creation."
+  }
+
+  assert {
+    condition     = output.backup_replication_bucket_arn == "arn:aws:s3:::existing-replication-bucket"
+    error_message = "Replication must use the supplied S3 bucket."
+  }
+}
+
+run "replication_requires_database_on_data_volume" {
+  command = plan
+
+  variables {
+    backup_replication_enabled       = true
+    backup_replication_database_path = "/var/lib/app.db"
+    data_volume_creation_enabled     = true
+  }
+
+  expect_failures = [aws_launch_template.app]
+}

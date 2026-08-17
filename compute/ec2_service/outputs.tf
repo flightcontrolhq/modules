@@ -142,3 +142,18 @@ output "backup_dump_termination_document_name" {
   description = "The SSM Automation document used by the termination-time dump hook."
   value       = local.backup_dump_termination_enabled ? aws_ssm_document.backup_termination[0].name : null
 }
+
+output "backup_replication_bucket_name" {
+  description = "The S3 bucket name used for Litestream replication, when enabled."
+  value       = var.backup_replication_enabled ? local.backup_dump_bucket_name : null
+}
+
+output "backup_replication_bucket_arn" {
+  description = "The S3 bucket ARN used for Litestream replication, when enabled."
+  value       = var.backup_replication_enabled ? local.backup_dump_bucket_arn : null
+}
+
+output "backup_replication_prefix" {
+  description = "The S3 prefix containing the Litestream replica for this service."
+  value       = var.backup_replication_enabled ? local.backup_replication_s3_prefix : null
+}

@@ -106,6 +106,10 @@ dnf install -y docker
 systemctl enable --now docker
 ${supervisor_install_script}
 
+%{ if backup_replication_enabled ~}
+${backup_replication_script}
+%{ endif ~}
+
 # Initialize the app env file. Deploys refresh it before running either mode.
 ${env_file_script}
 

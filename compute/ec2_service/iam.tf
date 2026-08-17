@@ -167,7 +167,7 @@ data "aws_iam_policy_document" "instance" {
   }
 
   dynamic "statement" {
-    for_each = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? [1] : []
+    for_each = local.backup_s3_enabled ? [1] : []
     content {
       sid = "LogicalDumpBucketList"
       actions = [
@@ -177,13 +177,16 @@ data "aws_iam_policy_document" "instance" {
       condition {
         test     = "StringLike"
         variable = "s3:prefix"
-        values   = ["${local.backup_dump_artifact_prefix}/*"]
+        values = compact([
+          var.backup_dump_enabled && var.backup_dump_destination == "s3" ? "${local.backup_dump_artifact_prefix}/*" : null,
+          var.backup_replication_enabled ? "${local.backup_replication_s3_prefix}/*" : null,
+        ])
       }
     }
   }
 
   dynamic "statement" {
-    for_each = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? [1] : []
+    for_each = local.backup_s3_enabled ? [1] : []
     content {
       sid = "LogicalDumpObjects"
       actions = [
@@ -191,7 +194,10 @@ data "aws_iam_policy_document" "instance" {
         "s3:GetObject",
         "s3:PutObject",
       ]
-      resources = ["${local.backup_dump_bucket_arn}/${local.backup_dump_artifact_prefix}/*"]
+      resources = compact([
+        var.backup_dump_enabled && var.backup_dump_destination == "s3" ? "${local.backup_dump_bucket_arn}/${local.backup_dump_artifact_prefix}/*" : null,
+        var.backup_replication_enabled ? "${local.backup_dump_bucket_arn}/${local.backup_replication_s3_prefix}/*" : null,
+      ])
     }
   }
 }

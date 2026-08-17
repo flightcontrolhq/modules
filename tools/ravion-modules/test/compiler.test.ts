@@ -327,6 +327,7 @@ describe("compiler", () => {
         "section_storage",
         "section_backups",
         "section_logical_backups",
+        "section_replication",
         "section_scaling",
         "section_app_config",
         "section_networking",
