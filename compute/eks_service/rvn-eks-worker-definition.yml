@@ -3,8 +3,8 @@ definition:
   name: EKS Worker
   description: Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
 release:
-  version: 0.3.0
-  description: Add the Metrics and Logs tabs, wired to the cluster's observability stack. A new optional EKS Add-ons reference feeds golden-signal pod charts (CPU, memory, restarts, network, replicas) from that module's Amazon Managed Prometheus workspace, and the Logs tab reads the in-cluster Loki through the Beacon agent. Requires an EKS Add-ons module at 0.6.0 or later with Metrics and Logs enabled.
+  version: 0.4.0
+  description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this worker.
 module:
   inputs:
     - id: section_cluster
@@ -20,12 +20,12 @@ module:
     - id: section_addons
       label: EKS add-ons
       type: section
-      description: Add-ons module attached to the cluster above. Selecting it feeds the Metrics tab from the cluster's Amazon Managed Prometheus workspace.
+      description: Add-ons module attached to the cluster above. Selecting it points the Metrics and Logs tabs at whichever observability providers that module has selected.
     - id: addons
       label: EKS add-ons
       type: $ref:rvn-eks-addons
       mapped_inputs:
-        - $include: ../../partials/inputs/eks-workload-amp-mapped-inputs.yml
+        - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
       required: false
     - id: section_service
       label: Worker service
@@ -143,23 +143,55 @@ module:
   ui:
     metrics:
       - $include: ../../partials/ui/eks-workload-pod-metrics.yml
+      # Replica counts, once per metrics rendering provider under a shared
+      # chart id, in the add-ons module's fallback order. See
+      # partials/ui/eks-workload-pod-metrics.yml for how the chain works and
+      # why an unset provider list reads as "AMP".
+      #
+      # Neither chart has a CloudWatch link. Container Insights publishes no
+      # Deployment-level replica metric; its nearest equivalent counts pods per
+      # Kubernetes Service, and a worker renders no Service. With CloudWatch as
+      # the only metrics provider these two charts are empty and the pod charts
+      # still work.
       - id: replicas_available
         name: Replicas available
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_available
+        name: Replicas available
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
+          query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_desired
         name: Replicas desired
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_desired
+        name: Replicas desired
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
@@ -253,6 +285,30 @@ module:
     Every deploy runs `helm upgrade --install --atomic`, so a release either lands completely or leaves the cluster on the previous revision. Pods roll with the chart's RollingUpdate strategy, which surges 25% and keeps zero pods unavailable.
 
     Deployments collapse: if several are queued, only the newest runs.
+
+    ## Metrics and logs
+
+    The Metrics and Logs tabs follow the providers selected on the EKS add-ons module referenced above. You configure observability once, on that module, and every workload attached to it follows; there is nothing to set here. Without an add-ons reference both tabs stay empty.
+
+    Where several providers can serve the same signal they form a **fallback chain**, not a merge. The tab reads the first store that can answer right now and moves to the next when it cannot, saying which store it ended up using. Reading two stores at once would draw every line twice.
+
+    | Signal | Chain order |
+    | ------ | ----------- |
+    | Logs | In-cluster store (Loki) -> Amazon CloudWatch Logs |
+    | Metrics | Amazon Managed Prometheus -> Prometheus in your cluster -> CloudWatch Container Insights |
+
+    The practical effect is that the in-cluster store's one weakness stops being fatal. Loki is reached through the Beacon agent, so with the agent offline those logs are unavailable - but if CloudWatch Logs is also selected, the tab shows CloudWatch and says so, then switches back when the agent returns.
+
+    Charts are the same five golden signals whichever store answers: CPU, memory working set, container restarts, network in, and network out. Two things differ on the CloudWatch link of the chain, and are worth knowing before you read a number off it:
+
+    - **Container Insights reports per pod, Prometheus reports across pods.** A CloudWatch chart is an average over the worker's pods; the Prometheus charts sum them. Same shape, different magnitude.
+    - **It needs enhanced observability**, which the add-ons module turns on with CloudWatch by default. Without it, CPU and memory come back empty.
+
+    Replicas available and desired have no CloudWatch equivalent. Container Insights' nearest metric counts pods behind a Kubernetes Service, and a worker renders no Service, so with CloudWatch as the only metrics provider those two charts are empty while the pod charts still work.
+
+    A provider that ships to a vendor rather than rendering in Ravion - Datadog, Grafana Cloud, New Relic, OpenSearch, Splunk, or a custom OTLP endpoint - adds an **Open in ...** action to the tab, pointing at this worker rather than at the vendor's front page.
+
+    Turning a signal off on the add-ons module empties the matching tab here.
 
     ## Configuration
 
