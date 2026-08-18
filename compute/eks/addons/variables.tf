@@ -709,7 +709,7 @@ variable "beacon_chart_source" {
 
 variable "beacon_chart_version" {
   type        = string
-  description = "Version of the Beacon Helm chart to install. Pinned per module release so an apply is reproducible and a chart change (which is where the agent's RBAC lives) arrives as a module upgrade rather than as whatever the registry called latest that day. Set null to let Helm resolve the latest. This is the CHART version, not the agent version: the two move independently, because the control plane rolls the agent image forward per cluster while Terraform owns the chart release."
+  description = "Version of the Beacon Helm CHART to install - the agent's RBAC and wiring - pinned per module release so a chart change arrives as a module upgrade rather than as whatever the registry called latest that day. Set null to let Helm resolve the latest. This is NOT the agent version and never moves it: the control plane rolls the agent image forward per cluster, and the chart re-emits the running image on every upgrade, so an apply of this module - any apply - leaves the agent at whatever version it is running."
   default     = "0.3.0"
 
   validation {
@@ -762,7 +762,7 @@ variable "beacon_self_update_enabled" {
 
 variable "beacon_image_tag" {
   type        = string
-  description = "Agent image tag to install. When null, the chart's appVersion is used. This is a FLOOR, not a pin: with self-update on, the control plane moves the running version forward from here and Terraform deliberately ignores subsequent changes to it, so an apply after a staged rollout is a no-op rather than a revert. Changing this value after the release exists therefore requires replacing the release."
+  description = "Agent image tag to PIN. Leave null (the default): a fresh install then starts at the chart's appVersion and every later apply keeps whatever version the release is running, because the control plane owns the agent version and the chart re-emits the running image on upgrade. Set it only to force a specific agent version onto a cluster; it is then applied once and ignored afterwards, so a later control-plane rollout is not reverted by the next apply."
   default     = null
 }
 
