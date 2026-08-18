@@ -409,13 +409,13 @@ output "grafana_amp_role_arn" {
 ################################################################################
 
 output "logs_providers" {
-  description = "Log destinations selected for this cluster, as given. Empty when logs are off."
-  value       = local.logs_providers
+  description = "Log destinations selected for this cluster, as given. Always a list - empty when logs are off, never null, because a service module reads null as 'these add-ons predate providers'."
+  value       = tolist(local.logs_providers)
 }
 
 output "logs_rendering_providers" {
   description = "The selected log providers Ravion's Logs tab can read, in fallback order: loki, then cloudwatch. Empty when logs are off, or when only ship-only providers are selected — the tab then shows the 'Open in ...' actions alone."
-  value       = local.logs_rendering_providers
+  value       = tolist(local.logs_rendering_providers)
 }
 
 output "logs_cloudwatch_log_group" {
@@ -424,23 +424,23 @@ output "logs_cloudwatch_log_group" {
 }
 
 output "logs_external_links" {
-  description = "One entry per ship-only log provider: { provider, name, href_prefix }. href_prefix is a base URL the service module appends its own query to."
-  value       = local.logs_external_links
+  description = "One entry per ship-only log provider: { provider, name, href_prefix }. href_prefix ends exactly where a query value begins, so the service module appends its own encoded query and nothing else. Always a list, empty when there are none."
+  value       = tolist(local.logs_external_links)
 }
 
 output "metrics_providers" {
-  description = "Metric destinations selected for this cluster, as given. Empty when metrics are off."
-  value       = local.metrics_providers
+  description = "Metric destinations selected for this cluster, as given. Always a list - empty when metrics are off, never null."
+  value       = tolist(local.metrics_providers)
 }
 
 output "metrics_rendering_providers" {
   description = "The selected metric providers Ravion's Metrics tab can read, in fallback order: amp, then prometheus, then cloudwatch. Empty when metrics are off."
-  value       = local.metrics_rendering_providers
+  value       = tolist(local.metrics_rendering_providers)
 }
 
 output "metrics_external_links" {
-  description = "One entry per ship-only metrics provider: { provider, name, href_prefix }."
-  value       = local.metrics_external_links
+  description = "One entry per ship-only metrics provider: { provider, name, href_prefix }, on the same terms as logs_external_links. Always a list, empty when there are none."
+  value       = tolist(local.metrics_external_links)
 }
 
 output "prometheus_endpoint" {

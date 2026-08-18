@@ -3,15 +3,17 @@ definition:
   name: EKS Add-ons
   description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload logs and metrics shipped to any combination of destinations (an in-cluster log store on S3 and Amazon Managed Prometheus by default; CloudWatch, Grafana Cloud, Datadog, New Relic or a custom OTLP endpoint on request), Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.8.1
+  version: 0.8.2
   description: >-
-    Three more destinations. Logs can now go to Amazon OpenSearch Service (signed with the
-    cluster's own IAM role - map the published role into the domain, which is the half of
-    the grant that lives there) and to Splunk over HEC. Metrics can go to a Prometheus
-    running in your cluster: installed with its remote-write receiver on and a persistent
-    volume behind it, or pointed at one you already run. In-cluster Prometheus renders in
-    Ravion as the fallback behind Amazon Managed Prometheus, read through the Beacon agent
-    the same way the in-cluster log store is - it is never exposed outside the cluster.
+    The pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled Terraform
+    variables are gone; the provider lists are the only switch, and an instance upgraded
+    through 0.8.0 or 0.8.1 already carries the selection they mapped onto. An instance still
+    on 0.7.x should upgrade to 0.8.1 first, which is what reads them.
+    Rendering an external store through the Beacon agent is complete: Grafana Cloud's query
+    endpoints and an in-cluster Prometheus are on the agent's proxy allowlist, each paired
+    with the credential Secret the External Secrets Operator materializes into Beacon's
+    namespace, and the module publishes that Secret's name for the control plane to carry as
+    an opaque reference - Ravion asks the agent to present it and never sees the value.
 module:
   inputs:
     - id: cluster
@@ -998,10 +1000,6 @@ module:
         # lists and never the toggles.
         logs_providers: '<< module.input.logs_enabled == false ? [] : (module.input.logs_providers != nil ? module.input.logs_providers : ["loki"]) >>'
         metrics_providers: '<< module.input.metrics_enabled == false ? [] : (module.input.metrics_providers != nil ? module.input.metrics_providers : ["amp"]) >>'
-        # DEPRECATED, dropped in 0.8.2. Carried so an instance that had Container
-        # Insights on before 0.8.0 keeps it, as [amp, cloudwatch], instead of
-        # losing it silently on the upgrade.
-        cloudwatch_observability_enabled: << module.input.cloudwatch_observability_enabled >>
         logs_namespace_exclude: '<< module.input.logs_namespace_exclude != nil ? module.input.logs_namespace_exclude : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"] >>'
         logs_loki:
           retention_days: '<< module.input.log_retention_days != nil ? module.input.log_retention_days : 30 >>'

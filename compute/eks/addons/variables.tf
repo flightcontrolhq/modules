@@ -1122,12 +1122,13 @@ variable "grafana_helm_values" {
 
 variable "logs_providers" {
   type        = list(string)
-  description = "Where container logs go. Any combination of: loki (in-cluster store on S3, renders in Ravion), cloudwatch (CloudWatch Logs, renders in Ravion), grafana_cloud, datadog, new_relic, opensearch, splunk, otlp. An empty list turns logs off entirely — no collector, no store. Null falls back to the deprecated logs_enabled boolean."
+  description = "Where container logs go. Any combination of: loki (in-cluster store on S3, renders in Ravion), cloudwatch (CloudWatch Logs, renders in Ravion), grafana_cloud, datadog, new_relic, opensearch, splunk, otlp. An empty list turns logs off entirely — no collector, no store."
   default     = ["loki"]
+  nullable    = false
 
   validation {
     condition = alltrue([
-      for provider in coalesce(var.logs_providers, []) :
+      for provider in var.logs_providers :
       contains(["loki", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "opensearch", "splunk", "otlp"], provider)
     ])
     error_message = "Each logs_providers entry must be one of: loki, cloudwatch, grafana_cloud, datadog, new_relic, opensearch, splunk, otlp."
@@ -1136,12 +1137,13 @@ variable "logs_providers" {
 
 variable "metrics_providers" {
   type        = list(string)
-  description = "Where workload metrics go. Any combination of: amp (Amazon Managed Prometheus, renders in Ravion), prometheus (in-cluster, renders through Beacon), cloudwatch (Container Insights, renders in Ravion), grafana_cloud, datadog, new_relic, otlp. An empty list turns metrics off entirely. Null falls back to the deprecated metrics_enabled boolean."
+  description = "Where workload metrics go. Any combination of: amp (Amazon Managed Prometheus, renders in Ravion), prometheus (in-cluster, renders through Beacon), cloudwatch (Container Insights, renders in Ravion), grafana_cloud, datadog, new_relic, otlp. An empty list turns metrics off entirely."
   default     = ["amp"]
+  nullable    = false
 
   validation {
     condition = alltrue([
-      for provider in coalesce(var.metrics_providers, []) :
+      for provider in var.metrics_providers :
       contains(["amp", "prometheus", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "otlp"], provider)
     ])
     error_message = "Each metrics_providers entry must be one of: amp, prometheus, cloudwatch, grafana_cloud, datadog, new_relic, otlp."
@@ -1420,34 +1422,4 @@ variable "prometheus_helm_values" {
   description = "Extra YAML documents merged into the prometheus chart values, after the values this module derives (later entries win). The route to alerting rules, extra scrape jobs, or a private image registry."
   default     = []
   nullable    = false
-}
-
-################################################################################
-# Deprecated — removed in 0.8.2
-#
-# The booleans the module carried before providers existed. They are fallbacks
-# only: whenever logs_providers / metrics_providers is non-null (which the
-# module definition always makes it) these are ignored.
-#
-#   logs_enabled = true                     => ["loki"]
-#   metrics_enabled = true                  => ["amp"]
-#   cloudwatch_observability_enabled = true => "cloudwatch" appended to metrics
-################################################################################
-
-variable "logs_enabled" {
-  type        = bool
-  description = "DEPRECATED, removed in 0.8.2. Use logs_providers. Read only when logs_providers is null: true means ['loki'], false means no logs at all."
-  default     = null
-}
-
-variable "metrics_enabled" {
-  type        = bool
-  description = "DEPRECATED, removed in 0.8.2. Use metrics_providers. Read only when metrics_providers is null: true means ['amp'], false means no metrics at all."
-  default     = null
-}
-
-variable "cloudwatch_observability_enabled" {
-  type        = bool
-  description = "DEPRECATED, removed in 0.8.2. Use metrics_providers / logs_providers. True appends 'cloudwatch' to the metrics providers, which is what an instance that had Container Insights on before 0.8.0 upgrades into. The add-on is re-applied with Auto-Monitor off."
-  default     = null
 }

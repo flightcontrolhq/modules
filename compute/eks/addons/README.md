@@ -148,7 +148,7 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 
 **Which collector runs.** Alloy carries the loki-family destinations (`loki`, `grafana_cloud`) because Ravion's log views are written against its label contract; the OpenTelemetry contrib DaemonSet carries the rest. A default cluster runs Alloy alone; a CloudWatch-only cluster runs the OpenTelemetry collector alone; a cluster with both runs both, each reading the same files once. `logs_namespace_exclude` (default `kube-system`, `kube-node-lease`, `amazon-cloudwatch`, `ravion-beacon`) keeps a namespace out of both.
 
-**Migration from 0.7.x.** `logs_enabled`, `metrics_enabled` and `cloudwatch_observability_enabled` survive one release as fallbacks and are read only when the matching provider list is null:
+**Migration from 0.7.x.** `logs_enabled`, `metrics_enabled` and `cloudwatch_observability_enabled` were read as fallbacks in 0.8.0 and 0.8.1, and are **removed in 0.8.2** — an instance still on 0.7.x should pass through 0.8.1, which maps them onto the lists:
 
 | Before | After the upgrade |
 |---|---|
@@ -157,7 +157,7 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 | `metrics_enabled = true` | `metrics_providers = ["amp"]` |
 | `cloudwatch_observability_enabled = true` | `cloudwatch` appended to `metrics_providers`, so `[amp, cloudwatch]`: AMP renders, Container Insights is the fallback |
 
-The one behavioural change on upgrade is that the CloudWatch add-on is re-applied with **Auto-Monitor off**, so agents previously injected into workloads leave them on their next rollout. Anyone who actually wanted Application Signals turns its toggle on. The three variables are deleted in 0.8.2.
+The one behavioural change on upgrade is that the CloudWatch add-on is re-applied with **Auto-Monitor off**, so agents previously injected into workloads leave them on their next rollout. Anyone who actually wanted Application Signals turns its toggle on.
 
 ### Workload metrics (Amazon Managed Prometheus)
 
@@ -475,7 +475,6 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | otel_logs_collector_service_account / _resources / _helm_values | The log collector's identity, sizing, and value overrides. | mixed | `"ravion-otel-logs-collector"` / requests `100m`/`128Mi`, limit `512Mi` / `[]` | no |
 | otel_contrib_image_repository / otel_contrib_image_tag / otel_contrib_command_name | The upstream contrib collector image, used by the log collector and by the metrics collector when a vendor exporter the AWS Distro lacks is selected. | `string` | `"docker.io/otel/opentelemetry-collector-contrib"` / `"0.137.0"` / `"otelcol-contrib"` | no |
 | cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. Fallbacks for the `metrics_cloudwatch` fields of the same name. | `string` | `null` | no |
-| logs_enabled / metrics_enabled / cloudwatch_observability_enabled | **Deprecated, removed in 0.8.2.** Read only when the matching provider list is null. See the migration table above. | `bool` | `null` | no |
 | amp_workspace_id | Existing AMP workspace to write into. Null creates one aliased `ravion-<cluster>`. | `string` | `null` | no |
 | amp_region | Region the AMP workspace lives in. Null uses the cluster's region. | `string` | `null` | no |
 | amp_alias | Alias for the created workspace. Null uses `ravion-<cluster_name>`. | `string` | `null` | no |
