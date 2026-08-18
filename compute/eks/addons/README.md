@@ -8,9 +8,10 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | **AWS Load Balancer Controller** | automatic with any load balancer, or `lb_controller_enabled` opt-in | `false` | `aws-load-balancer-controller` Helm chart wired to the Pod Identity role created by the `compute/eks` composite; registers workload pods into shared load balancer target groups (`TargetGroupBinding`); Ingress → ALB, LoadBalancer Service → NLB |
 | **External Secrets Operator** | `eso_enabled` | `true` | `external-secrets` Helm chart + Pod Identity role scoped to Secrets Manager / Parameter Store reads, plus the cluster-scoped `ravion-aws` and `ravion-aws-parameter-store` `ClusterSecretStore`s |
 | **EBS CSI driver** | `ebs_csi_driver_enabled` | `false` | `aws-ebs-csi-driver` EKS add-on + Pod Identity role |
-| **Container Insights** | `cloudwatch_observability_enabled` | `false` | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role (CloudWatch agent + Fluent Bit). A legacy toggle: Ravion's own pipelines cover both metrics and logs, so this now duplicates them at CloudWatch prices |
-| **Workload metrics** | `metrics_enabled` | `false` | An Amazon Managed Prometheus workspace, a Pod Identity role scoped to `aps:RemoteWrite` on it, `kube-state-metrics`, and an OpenTelemetry collector (ADOT image) that scrapes a curated allow-list and remote-writes it over SigV4 |
-| **Workload logs** | `logs_enabled` | `false` | An S3 bucket with a retention lifecycle rule, a Pod Identity role scoped to it, Loki in single-binary mode storing to that bucket, and Grafana Alloy as a collection DaemonSet. Loki is reachable only from inside the cluster |
+| **Workload logs** | `logs_providers` | `["loki"]` | Per destination. `loki`: an S3 bucket with a retention lifecycle rule, a Pod Identity role scoped to it, Loki in single-binary mode, and Grafana Alloy as a collection DaemonSet. `cloudwatch` and every vendor: an OpenTelemetry contrib DaemonSet with one exporter each. `[]` installs nothing |
+| **Workload metrics** | `metrics_providers` | `["amp"]` | Per destination. `amp`: an Amazon Managed Prometheus workspace, a Pod Identity role scoped to `aps:RemoteWrite` on it, `kube-state-metrics`, and an OpenTelemetry collector scraping a curated allow-list. Vendors: one more exporter on the same collector. `cloudwatch`: the `amazon-cloudwatch-observability` add-on. `[]` installs nothing |
+| **CloudWatch (Container Insights)** | `cloudwatch` in either provider list | not selected | `amazon-cloudwatch-observability` EKS add-on + Pod Identity role, with **Auto-Monitor off**: the Fluent Bit half only when it is a logs destination, the metrics agent only when it is a metrics destination |
+| **Vendor credentials** | any vendor provider | not selected | One `ExternalSecret` per vendor (local `charts/observability-secrets`), materializing a Secrets Manager secret into a Kubernetes Secret the collectors read as environment variables |
 | **Grafana read role** | `grafana_role_enabled` | `false` | An IAM role trusted by `grafana.amazonaws.com` with query access to the AMP workspace — for Amazon Managed Grafana, which can read metrics but cannot reach in-cluster Loki |
 | **In-cluster Grafana** | `grafana_enabled` | `false` | A Grafana release preprovisioned with both datasources: AMP over SigV4 (with its own Pod Identity role) and the in-cluster Loki |
 | **Ravion Beacon** | `beacon_enabled` | `false` | Mints the cluster's WorkOS M2M credential through the `ravion` provider (`ravion_beacon_credential`), writes it into a Kubernetes `Secret` (local `charts/beacon-credential`) and mirrors it into an AWS Secrets Manager secret, and installs the `beacon` Helm chart — an in-cluster agent that dials Ravion outbound over a single WebSocket |
@@ -110,9 +111,50 @@ spec:
 
 **At rest.** The values themselves live only in AWS Secrets Manager / Parameter Store, encrypted with KMS there. The Kubernetes Secrets the operator materializes are stored in etcd under **KMS envelope encryption**, which the [`compute/eks`](..) cluster module enables by default (`secrets_encryption_enabled`, `true`, creating a dedicated CMK per cluster unless `secrets_kms_key_arn` is supplied). Materialized Secrets are still readable by anything with Secret read RBAC in that namespace; mounting values as files via the [AWS Secrets Store CSI driver](https://github.com/aws/secrets-store-csi-driver-provider-aws), which skips the Kubernetes Secret object entirely, is a future hardening option not implemented here.
 
+### Logs and metrics providers
+
+Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the defaults**, so a cluster that touches nothing renders both dashboard tabs; nothing CloudWatch is installed by default or as a side effect of anything else. Add as many destinations as you like per signal — the collectors fan out, so a log file is tailed once and the cluster scraped once however many copies leave it.
+
+| `logs_providers` | Collector | Destination | In Ravion |
+|---|---|---|---|
+| `loki` *(default)* | Alloy DaemonSet | In-cluster Loki, chunks in an S3 bucket in your account | **Renders**, through Beacon |
+| `cloudwatch` | OpenTelemetry DaemonSet (`awscloudwatchlogs`) | Log group `/ravion/eks/<cluster>`, one stream per pod as `<namespace>/<pod>/<container>` | **Renders**, and is the fallback when the in-cluster agent is offline |
+| `grafana_cloud` | Alloy (`loki.write` with basic auth) | Your Grafana Cloud Loki endpoint | Ships + "Open in Grafana Cloud" |
+| `datadog` | OpenTelemetry (`datadog`) | Datadog intake for the chosen site | Ships + "Open in Datadog" |
+| `new_relic` | OpenTelemetry (`otlphttp`) | New Relic OTLP, US or EU | Ships + "Open in New Relic" |
+| `otlp` | OpenTelemetry (`otlphttp`) | Any OTLP/HTTP receiver | Ships |
+
+| `metrics_providers` | Exporter | Destination | In Ravion |
+|---|---|---|---|
+| `amp` *(default)* | `prometheusremotewrite` + SigV4 | Amazon Managed Prometheus workspace in your account | **Renders** |
+| `cloudwatch` | the CloudWatch agent (add-on) | `ContainerInsights` metric namespace | **Renders**, as the fallback behind AMP |
+| `grafana_cloud` | `prometheusremotewrite` + basic auth | Grafana Cloud Prometheus remote write | Ships + link |
+| `datadog` | `datadog` | Datadog intake | Ships + link |
+| `new_relic` | `otlphttp` | New Relic OTLP | Ships + link |
+| `otlp` | `otlphttp` | Any OTLP/HTTP receiver | Ships |
+
+**Several rendering providers are a fallback chain, never a merge.** `logs_rendering_providers` and `metrics_rendering_providers` publish the selected members of a fixed order — logs `loki → cloudwatch`, metrics `amp → prometheus → cloudwatch` — and the dashboard reads the first store that can answer right now, saying which one it is showing. That turns the in-cluster store's one weakness (no agent, no logs) into a soft failure rather than an empty tab. Merging two stores for the same workload would show every line twice, so it is deliberately not done.
+
+**Cost is a choice the form makes visible.** The in-cluster store costs S3 storage and requests plus the collector pods, with no per-gigabyte ingest. AMP bills per sample (roughly $25–50/month for a 20-service cluster). CloudWatch Logs bills per gigabyte ingested and then stored; Container Insights bills per metric. Every vendor bills for what it receives, so two ship-only destinations is two bills for the same lines — by selection, never by accident.
+
+**Vendor credentials never pass through Ravion.** Every key is a Secrets Manager ARN. The External Secrets Operator this module installs reads it with its own Pod Identity role and materializes a Kubernetes Secret in the collector namespace; the collectors read it as an environment variable, and the value appears in no Helm value, no Terraform output, and no release history. Selecting a vendor with `eso_enabled = false` fails the plan rather than installing a collector that cannot authenticate.
+
+**Which collector runs.** Alloy carries the loki-family destinations (`loki`, `grafana_cloud`) because Ravion's log views are written against its label contract; the OpenTelemetry contrib DaemonSet carries the rest. A default cluster runs Alloy alone; a CloudWatch-only cluster runs the OpenTelemetry collector alone; a cluster with both runs both, each reading the same files once. `logs_namespace_exclude` (default `kube-system`, `kube-node-lease`, `amazon-cloudwatch`, `ravion-beacon`) keeps a namespace out of both.
+
+**Migration from 0.7.x.** `logs_enabled`, `metrics_enabled` and `cloudwatch_observability_enabled` survive one release as fallbacks and are read only when the matching provider list is null:
+
+| Before | After the upgrade |
+|---|---|
+| `logs_enabled = true` | `logs_providers = ["loki"]` — same pipeline, same bucket, same endpoint |
+| `logs_enabled = false` | `logs_providers = []` — stays off; it does not adopt the new default |
+| `metrics_enabled = true` | `metrics_providers = ["amp"]` |
+| `cloudwatch_observability_enabled = true` | `cloudwatch` appended to `metrics_providers`, so `[amp, cloudwatch]`: AMP renders, Container Insights is the fallback |
+
+The one behavioural change on upgrade is that the CloudWatch add-on is re-applied with **Auto-Monitor off**, so agents previously injected into workloads leave them on their next rollout. Anyone who actually wanted Application Signals turns its toggle on. The three variables are deleted in 0.8.2.
+
 ### Workload metrics (Amazon Managed Prometheus)
 
-`metrics_enabled` turns on a Prometheus pipeline that lives entirely in the customer's account: an [Amazon Managed Prometheus](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html) workspace, `kube-state-metrics`, and a single-replica OpenTelemetry collector running the [AWS Distro for OpenTelemetry](https://aws-otel.github.io/) image. The collector scrapes three targets, drops everything outside a curated allow-list, and remote-writes the rest to the workspace signed with SigV4.
+`amp` in `metrics_providers` (the default) turns on a Prometheus pipeline that lives entirely in the customer's account: an [Amazon Managed Prometheus](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-Amazon-Managed-Service-Prometheus.html) workspace, `kube-state-metrics`, and a single-replica OpenTelemetry collector running the [AWS Distro for OpenTelemetry](https://aws-otel.github.io/) image. The collector scrapes three targets, drops everything outside a curated allow-list, and remote-writes the rest to the workspace signed with SigV4.
 
 | Target | Reached via | What it contributes |
 |---|---|---|
@@ -147,7 +189,7 @@ Prometheus anchors relabel regexes at both ends, so each entry must match a **wh
 
 ### Workload logs (Loki on S3)
 
-`logs_enabled` turns on a log pipeline that lives entirely in the customer's account: [Grafana Alloy](https://grafana.com/docs/alloy/latest/) as a DaemonSet reading every container's stdout off its own node, [Loki](https://grafana.com/docs/loki/latest/) in the cluster indexing and serving it, and an S3 bucket holding every chunk.
+`loki` in `logs_providers` (the default) turns on a log pipeline that lives entirely in the customer's account: [Grafana Alloy](https://grafana.com/docs/alloy/latest/) as a DaemonSet reading every container's stdout off its own node, [Loki](https://grafana.com/docs/loki/latest/) in the cluster indexing and serving it, and an S3 bucket holding every chunk.
 
 **Loki is never exposed.** No ingress, no load balancer, not even the chart's nginx gateway — a ClusterIP Service on port 3100 and nothing else. Ravion reads it by asking the Beacon agent to proxy a query over the WebSocket Beacon already holds, so there is no inbound path to open, nothing to put a certificate on, and no log data leaving the account except as the answer to a query. That is also why `loki_endpoint` is an in-cluster URL: it is what Beacon's proxy allowlist names, not something to publish.
 
@@ -180,11 +222,19 @@ Loki runs in **single-binary mode**: every target in one StatefulSet replica, wi
 
 `loki_persistence_enabled` is **off** by default. Loki's chunks are in S3 either way; what the local volume holds is the write-ahead log, the compactor's working directory, and the index cache. With persistence off the module mounts an `emptyDir` at `/var/loki` sized by `loki_persistence_size` — necessary, not cosmetic, because the chart only mounts that path when persistence is on and the container runs with a read-only root filesystem. Turning persistence on needs a working `StorageClass`, which on a Ravion cluster means `ebs_csi_driver_enabled`; an unschedulable PVC is a worse first run than an ephemeral volume, hence the default.
 
-#### Container Insights is no longer the log pipeline
+#### CloudWatch is a provider, not a mode
 
-`cloudwatch_observability_enabled` now defaults to **`false`**. The add-on used to be how EKS clusters got logs; with Loki for logs and AMP for metrics it duplicates both halves at CloudWatch prices. It stays as a toggle for customers who want Container Insights in its own right, unchanged in behaviour when enabled.
+Container Insights used to be a section of its own, defaulting to off and described as a legacy toggle. It is now `cloudwatch` in `logs_providers` and `metrics_providers`, and the add-on is installed because one of those lists names it — never as a default and never as a side effect.
 
-The cluster module's Logs tab keeps the EKS control-plane group (`/aws/eks/<cluster>/cluster`), which is native to EKS and unaffected. The `/aws/containerinsights/<cluster>/application` and `/dataplane` groups only exist when this add-on is enabled.
+Its two halves follow the two lists. `cloudwatch` in `metrics_providers` runs the CloudWatch agent (Container Insights, `cloudwatch_enhanced_observability` on by default); `cloudwatch` in `logs_providers` turns on the add-on's Fluent Bit half, which writes to `/aws/containerinsights/<cluster>/application`. Ravion's own CloudWatch log pipeline is separate and writes to `/ravion/eks/<cluster>` through the OpenTelemetry collector, with one stream per pod named `<namespace>/<pod>/<container>` — that is the group `logs_cloudwatch_log_group` publishes and the service modules query.
+
+**Auto-Monitor is pinned off.** The add-on's admission webhook, left at its default, injects the AWS Distro for OpenTelemetry agent into *every* workload in the cluster and restarts the pods to do it — which is where a wall of `AWS Application Signals…` log noise comes from on a cluster that only asked for metrics. The module always sends `manager.applicationSignals.autoMonitor.monitorAllServices = false` unless `cloudwatch_application_signals_enabled` is set.
+
+Application Signals with **no namespace list** is a deliberate whole-cluster opt-in and flips that switch to `true`. Application Signals **with** a namespace list keeps the cluster-wide switch off and publishes the namespaces as `cloudwatch_application_signals_namespaces`: annotate exactly those namespaces for auto-instrumentation (`instrumentation.opentelemetry.io/inject-<language>: "true"`, per the AWS Application Signals documentation for the language in use). The module does not annotate them itself, because that would mean taking Helm ownership of namespaces it did not create.
+
+`metrics_cloudwatch.addon_configuration_values` is merged over the module's document per top-level key, for anything the add-on supports that this module does not surface.
+
+The cluster module's Logs tab keeps the EKS control-plane group (`/aws/eks/<cluster>/cluster`), which is native to EKS and unaffected.
 
 ### Grafana
 
@@ -399,9 +449,22 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | eso_helm_values | Extra YAML docs merged into the external-secrets chart values. | `list(string)` | `[]` | no |
 | ebs_csi_driver_enabled | Install the aws-ebs-csi-driver add-on + Pod Identity role. | `bool` | `false` | no |
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
-| cloudwatch_observability_enabled | Install amazon-cloudwatch-observability (Container Insights) + Pod Identity role. A legacy toggle: `logs_enabled` and `metrics_enabled` cover the same ground. | `bool` | `false` | no |
-| cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. | `string` | `null` | no |
-| metrics_enabled | Collect workload metrics into Amazon Managed Prometheus. | `bool` | `false` | no |
+| logs_providers | Where container logs go: any of `loki`, `cloudwatch`, `grafana_cloud`, `datadog`, `new_relic`, `otlp`. `[]` turns logs off. Null falls back to the deprecated `logs_enabled`. | `list(string)` | `["loki"]` | no |
+| metrics_providers | Where metrics go: any of `amp`, `cloudwatch`, `grafana_cloud`, `datadog`, `new_relic`, `otlp`. `[]` turns metrics off. Null falls back to the deprecated `metrics_enabled`. | `list(string)` | `["amp"]` | no |
+| observability_namespace | Namespace for the collectors, the log store, and the materialized vendor credentials. Null shares Beacon's namespace, which is what keeps Loki's Service URL stable. | `string` | `null` | no |
+| logs_namespace_exclude | Namespaces no log collector reads from, for every destination. | `list(string)` | `["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"]` | no |
+| logs_loki | `{ retention_days, s3_bucket, persistence_enabled, persistence_size }`. Falls back to the flat `log_retention_days` / `loki_s3_bucket` / `loki_persistence_*`. | `object` | `{}` | no |
+| logs_cloudwatch | `{ retention_days, log_group_name }`. Default group `/ravion/eks/<cluster>`, retention 30 days. | `object` | `{}` | no |
+| logs_grafana_cloud / metrics_grafana_cloud | `{ url, user, token_secret_arn, stack_url }` — the Loki push URL / Prometheus remote-write URL, the tenant id, the Secrets Manager ARN of the token, and the stack URL used for the deep link. | `object` | `{}` | no |
+| logs_datadog / metrics_datadog | `{ site, api_key_secret_arn }`. Shared between the signals: whichever is set wins for both. | `object` | `{}` | no |
+| logs_new_relic / metrics_new_relic | `{ region, license_key_secret_arn }`, region `us` or `eu`. | `object` | `{}` | no |
+| logs_otlp / metrics_otlp | `{ endpoint, headers_secret_arn }`. The secret holds the value of an `Authorization` header. | `object` | `{}` | no |
+| metrics_amp | `{ workspace_id, region, alias }`. Falls back to the flat `amp_workspace_id` / `amp_region` / `amp_alias`. | `object` | `{}` | no |
+| metrics_cloudwatch | `{ enhanced_observability, application_signals_enabled, application_signals_namespaces, addon_version, addon_configuration_values }`. Auto-Monitor stays off unless Application Signals is enabled with no namespace list. | `object` | `{}` | no |
+| otel_logs_collector_service_account / _resources / _helm_values | The log collector's identity, sizing, and value overrides. | mixed | `"ravion-otel-logs-collector"` / requests `100m`/`128Mi`, limit `512Mi` / `[]` | no |
+| otel_contrib_image_repository / otel_contrib_image_tag / otel_contrib_command_name | The upstream contrib collector image, used by the log collector and by the metrics collector when a vendor exporter the AWS Distro lacks is selected. | `string` | `"docker.io/otel/opentelemetry-collector-contrib"` / `"0.137.0"` / `"otelcol-contrib"` | no |
+| cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values | CloudWatch Observability pin / JSON overrides. Fallbacks for the `metrics_cloudwatch` fields of the same name. | `string` | `null` | no |
+| logs_enabled / metrics_enabled / cloudwatch_observability_enabled | **Deprecated, removed in 0.8.2.** Read only when the matching provider list is null. See the migration table above. | `bool` | `null` | no |
 | amp_workspace_id | Existing AMP workspace to write into. Null creates one aliased `ravion-<cluster>`. | `string` | `null` | no |
 | amp_region | Region the AMP workspace lives in. Null uses the cluster's region. | `string` | `null` | no |
 | amp_alias | Alias for the created workspace. Null uses `ravion-<cluster_name>`. | `string` | `null` | no |
@@ -409,8 +472,7 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | scrape_interval_seconds | Scrape interval for every job (15-300). The first cost lever. | `number` | `60` | no |
 | metrics_additional_allowlist | Extra whole-name metric regexes appended to the curated allow-list on every job. | `list(string)` | `[]` | no |
 | otel_collector_chart_version | Community opentelemetry-collector chart version. | `string` | `"0.169.0"` | no |
-| otel_collector_image_repository / otel_collector_image_tag | Collector image (ADOT, which ships the `sigv4auth` extension). | `string` | `"public.ecr.aws/aws-observability/aws-otel-collector"` / `"v0.49.0"` | no |
-| otel_collector_command_name | Binary the chart runs as `/<name>`. ADOT's entrypoint is `awscollector`. | `string` | `"awscollector"` | no |
+| otel_collector_image_repository / otel_collector_image_tag / otel_collector_command_name | Metrics collector image and entrypoint. Null lets the module choose: the AWS Distro (which ships `sigv4auth`) for an AMP-only selection, contrib when a vendor exporter it lacks is selected. | `string` | `null` | no |
 | otel_collector_service_account | Collector service account; the Pod Identity association binds to this name. | `string` | `"ravion-otel-collector"` | no |
 | otel_collector_resources | Collector requests and limits. A memory limit is set by default because `memory_limiter` sizes itself against it. | `object` | requests `100m`/`256Mi`, limit `512Mi` | no |
 | otel_collector_helm_values | Extra YAML docs merged into the collector chart values. | `list(string)` | `[]` | no |
@@ -485,7 +547,17 @@ All outputs are null when the corresponding add-on is disabled.
 | eso_role_arn | External Secrets Operator Pod Identity role. |
 | eso_secrets_manager_store_name / eso_parameter_store_store_name | `ClusterSecretStore` names workload charts reference. |
 | ebs_csi_addon_version / ebs_csi_role_arn | EBS CSI add-on version and Pod Identity role. |
-| cloudwatch_observability_addon_version / cloudwatch_observability_role_arn | Container Insights add-on version and Pod Identity role. |
+| cloudwatch_observability_addon_version / cloudwatch_observability_role_arn | CloudWatch Observability add-on version and Pod Identity role. |
+| cloudwatch_application_signals_namespaces | Namespaces Application Signals was asked for. Auto-Monitor stays cluster-wide-off when this is non-empty; annotate exactly these. |
+| logs_providers / metrics_providers | The destinations selected, as given. |
+| logs_rendering_providers / metrics_rendering_providers | The selected destinations Ravion can read, **in fallback order** (`loki → cloudwatch`, `amp → prometheus → cloudwatch`). Empty when the signal is off or only ship-only destinations are selected. |
+| logs_cloudwatch_log_group | `/ravion/eks/<cluster>`, one stream per pod as `<namespace>/<pod>/<container>` (null unless `cloudwatch` is a logs destination). |
+| logs_external_links / metrics_external_links | One `{ provider, name, href_prefix }` per ship-only destination; the caller appends its own query to `href_prefix`. |
+| prometheus_endpoint | In-cluster Prometheus base URL (null unless `prometheus` is a metrics destination). |
+| grafana_cloud_logs_query_url / grafana_cloud_metrics_query_url | Grafana Cloud query base URLs, derived from the push URLs and named in Beacon's proxy allowlist. |
+| observability_credentials_secret_name / observability_proxy_credentials | The Secret in Beacon's namespace the agent presents when proxying a query to an external store, and the full `{ endpointPrefix, secretName, kind }` mapping. |
+| observability_namespace | Namespace the collectors, the log store, and the vendor credentials live in. |
+| otel_logs_collector_role_arn | The log collector's Pod Identity role, scoped to the Ravion log group alone. |
 | amp_workspace_id / amp_workspace_arn / amp_region | The AMP workspace this cluster's metrics land in — created, or the one passed in. |
 | amp_remote_write_endpoint / amp_query_endpoint | Where the collector writes, and the Prometheus-compatible base URL to query (a Grafana datasource URL as-is). |
 | amp_remote_write_role_arn | Collector Pod Identity role, scoped to `aps:RemoteWrite` on that one workspace. |
@@ -530,4 +602,7 @@ All outputs are null when the corresponding add-on is disabled.
 - The beacon chart deliberately creates no credential `Secret` of its own, and grants Beacon **no RBAC on Secrets at all**. The kubelet reads that object and projects it into the container as a read-only volume, which is what keeps the base ClusterRole free of Secret access.
 - The Beacon credential is a Terraform resource (`ravion_beacon_credential`), not a provisioner. A `local-exec` curl used to enroll the cluster and treat the Secrets Manager copy as the idempotency anchor, because the plaintext is returned once and a re-run on a fresh runner had to answer "already enrolled?" with no local state. The provider dissolves that problem rather than working around it: create is idempotent-by-replacement — a create for an already-registered cluster ARN mints a new secret and revokes the old one — so **state is the anchor and Secrets Manager is only a mirror**. It also means no `curl` on the runner, no API-token module input, and nothing enrolled during a plan nobody applies.
 - `beacon_enabled = false` now **does** revoke the credential, because the destroy runs through the provider. The agent row is retained, disabled, so the cluster's history is not orphaned.
+- Both collectors fan out rather than duplicating themselves: several destinations are several exporters (or several `loki.write` blocks) on one pipeline, so the node's log files are read once and the cluster scraped once regardless of how many vendors receive a copy. Vendor agents are deliberately not installed — each would be another DaemonSet with its own RBAC, upgrade cadence, and opinions about labels, and every vendor here accepts what Alloy or the OpenTelemetry Collector already produces.
+- The `awscloudwatchlogs` exporter is configured with both a static `log_group_name` and per-record `aws.log.group.names` / `aws.log.stream.names` resource attributes. The attributes are what give one stream per pod; the static value is the floor, so a collector version that ignores them still writes to the right group. Worth re-checking on a collector upgrade.
+- `agent.enabled` in the CloudWatch add-on's configuration is the one key here not lifted verbatim from AWS's documented examples; it is how the chart switches the metrics DaemonSet off for a logs-only selection. If the EKS API ever rejects it during schema validation, drop it (the metrics agent then runs beside a logs-only selection) or override the document through `metrics_cloudwatch.addon_configuration_values`.
 - There is no ordering concern for the Deployment-kind add-ons here (External Secrets Operator, Karpenter, load balancer controller): this stack deploys against a cluster whose system node group already exists, which is what the `compute/eks` composite's cluster → system node group → Deployment-kind add-on chain guarantees.
