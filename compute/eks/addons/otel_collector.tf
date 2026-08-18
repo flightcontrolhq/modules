@@ -50,17 +50,112 @@ locals {
     length(local.otel_collector_resource_limits) > 0 ? { limits = local.otel_collector_resource_limits } : {},
   )
 
-  otel_collector_values = var.metrics_enabled ? templatefile("${path.module}/templates/otel_values.yaml.tpl", {
-    name                  = local.otel_collector_name
-    replica_count         = 1
-    image_repository      = var.otel_collector_image_repository
-    image_tag             = var.otel_collector_image_tag
-    command_name          = var.otel_collector_command_name
-    service_account       = var.otel_collector_service_account
-    resources             = local.otel_collector_resources
-    scrape_interval       = "${var.scrape_interval_seconds}s"
-    amp_region            = local.amp_region
-    remote_write_endpoint = local.amp_remote_write_endpoint
+  # One exporter per selected provider. Keys are the collector's component ids;
+  # `debug = null` deletes the chart's default exporter.
+  otel_metrics_exporters = merge(
+    { debug = null },
+    local.amp_enabled ? {
+      "prometheusremotewrite/amp" = {
+        endpoint = local.amp_remote_write_endpoint
+        auth = {
+          authenticator = "sigv4auth"
+        }
+        # AMP rejects samples older than an hour; retrying past that only burns
+        # the queue, so failures are dropped rather than blocking newer batches.
+        retry_on_failure = {
+          enabled          = true
+          initial_interval = "5s"
+          max_interval     = "30s"
+          max_elapsed_time = "300s"
+        }
+        resource_to_telemetry_conversion = {
+          enabled = false
+        }
+      }
+    } : {},
+    local.metrics_grafana_cloud_enabled ? {
+      "prometheusremotewrite/grafana_cloud" = {
+        endpoint = local.grafana_cloud_config.metrics_url
+        auth = {
+          authenticator = "basicauth/grafana_cloud"
+        }
+        resource_to_telemetry_conversion = {
+          enabled = false
+        }
+      }
+    } : {},
+    local.metrics_datadog_enabled ? {
+      datadog = {
+        api = {
+          site = local.datadog_config.site
+          key  = "$${env:DATADOG_API_KEY}"
+        }
+      }
+    } : {},
+    local.metrics_new_relic_enabled ? {
+      "otlphttp/new_relic" = {
+        endpoint = local.new_relic_otlp_endpoint
+        headers = {
+          "api-key" = "$${env:NEW_RELIC_LICENSE_KEY}"
+        }
+      }
+    } : {},
+    local.metrics_otlp_enabled ? {
+      "otlphttp/custom" = merge(
+        { endpoint = local.otlp_metrics_config.endpoint },
+        local.otlp_metrics_config.headers_secret_arn == null ? {} : {
+          headers = { authorization = "$${env:OTLP_METRICS_AUTHORIZATION}" }
+        },
+      )
+    } : {},
+  )
+
+  otel_metrics_extensions = merge(
+    local.amp_enabled ? {
+      sigv4auth = {
+        region  = local.amp_region
+        service = "aps"
+      }
+    } : {},
+    local.metrics_grafana_cloud_enabled ? {
+      "basicauth/grafana_cloud" = {
+        client_auth = {
+          username = local.grafana_cloud_config.metrics_user
+          password = "$${env:GRAFANA_CLOUD_TOKEN}"
+        }
+      }
+    } : {},
+  )
+
+  otel_metrics_pipeline_exporters = [for name, _ in local.otel_metrics_exporters : name if name != "debug"]
+
+  otel_collector_extra_envs = [
+    for secret in local.otel_metrics_secret_env : {
+      name = secret.environment
+      valueFrom = {
+        secretKeyRef = {
+          name = secret.name
+          key  = secret.secret_key
+        }
+      }
+    }
+  ]
+
+  otel_collector_values = local.otel_metrics_enabled ? templatefile("${path.module}/templates/otel_values.yaml.tpl", {
+    name             = local.otel_collector_name
+    replica_count    = 1
+    image_repository = local.otel_metrics_image_repository
+    image_tag        = local.otel_metrics_image_tag
+    command_name     = local.otel_metrics_command_name
+    service_account  = var.otel_collector_service_account
+    resources        = local.otel_collector_resources
+    scrape_interval  = "${var.scrape_interval_seconds}s"
+    extra_envs       = local.otel_collector_extra_envs
+
+    exporters          = local.otel_metrics_exporters
+    extensions         = local.otel_metrics_extensions
+    service_extensions = concat(["health_check"], sort(keys(local.otel_metrics_extensions)))
+    pipeline_exporters = sort(local.otel_metrics_pipeline_exporters)
 
     kube_state_metrics_enabled = local.kube_state_metrics_install
     kube_state_metrics_target  = local.kube_state_metrics_target
@@ -72,7 +167,7 @@ locals {
 }
 
 resource "helm_release" "otel_collector" {
-  count = var.metrics_enabled ? 1 : 0
+  count = local.otel_metrics_enabled ? 1 : 0
 
   name       = local.otel_collector_name
   namespace  = local.metrics_namespace
@@ -93,5 +188,30 @@ resource "helm_release" "otel_collector" {
     # Not a hard dependency — a missing target is a failed scrape, not a failed
     # collector — but it keeps the first minutes free of scrape errors.
     helm_release.kube_state_metrics,
+    # A vendor credential that is not materialized yet is a pod that never
+    # starts, because the env var references a Secret key.
+    helm_release.observability_secrets,
   ]
+
+  lifecycle {
+    precondition {
+      condition     = !local.metrics_grafana_cloud_enabled || (local.grafana_cloud_config.metrics_url != null && local.grafana_cloud_config.metrics_user != null && local.grafana_cloud_config.token_secret_arn != null)
+      error_message = "grafana_cloud is in metrics_providers but its remote-write URL, instance id, or token secret ARN is missing. All three are required: Grafana Cloud authenticates every remote write with basic auth."
+    }
+
+    precondition {
+      condition     = !local.metrics_datadog_enabled || local.datadog_config.api_key_secret_arn != null
+      error_message = "datadog is in metrics_providers but no API key secret ARN was given. The key is read in-cluster from Secrets Manager by External Secrets; without an ARN the collector has nothing to authenticate with."
+    }
+
+    precondition {
+      condition     = !local.metrics_new_relic_enabled || local.new_relic_config.license_key_secret_arn != null
+      error_message = "new_relic is in metrics_providers but no license key secret ARN was given. The key is read in-cluster from Secrets Manager by External Secrets."
+    }
+
+    precondition {
+      condition     = !local.metrics_otlp_enabled || local.otlp_metrics_config.endpoint != null
+      error_message = "otlp is in metrics_providers but no OTLP endpoint was given. There is nowhere to send the metrics."
+    }
+  }
 }

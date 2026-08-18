@@ -25,6 +25,11 @@ serviceAccount:
   create: true
   name: ${jsonencode(service_account)}
 
+# Vendor tokens, by reference: the values come from Kubernetes Secrets the
+# External Secrets Operator materializes from Secrets Manager, and the exporter
+# configuration reads them as $${env:...}.
+extraEnvs: ${jsonencode(extra_envs)}
+
 # Scraping the kubelet through the API server proxy needs nodes/proxy; the node
 # service discovery needs nodes. Nothing here reads pods, services or secrets.
 clusterRole:
@@ -156,35 +161,22 @@ config:
       spike_limit_percentage: 25
     batch: {}
 
-  exporters:
-    debug: null
-    prometheusremotewrite:
-      endpoint: ${jsonencode(remote_write_endpoint)}
-      auth:
-        authenticator: sigv4auth
-      # AMP rejects samples older than an hour; retrying past that only burns
-      # the queue, so failures are dropped rather than blocking newer batches.
-      retry_on_failure:
-        enabled: true
-        initial_interval: 5s
-        max_interval: 30s
-        max_elapsed_time: 300s
-      resource_to_telemetry_conversion:
-        enabled: false
+  # ONE EXPORTER PER SELECTED PROVIDER, FANNED OUT ON ONE PIPELINE. The scrape
+  # happens once whatever the destination count; `debug: null` deletes the
+  # chart's default exporter, which would otherwise print every sample.
+  # Rendered from Terraform (otel_collector.tf) rather than written out here,
+  # because which of them exist is a function of metrics_providers.
+  exporters: ${jsonencode(exporters)}
 
-  extensions:
-    # Credentials come from the Pod Identity Agent through the SDK's default
-    # chain — the extension configures none of its own.
-    sigv4auth:
-      region: ${jsonencode(amp_region)}
-      service: aps
+  # sigv4auth for AMP (credentials come from the Pod Identity Agent through the
+  # SDK's default chain — the extension configures none of its own), basicauth
+  # for Grafana Cloud.
+  extensions: ${jsonencode(extensions)}
 
   service:
     # health_check is the chart's readiness and liveness probe; removing it
     # fails the pod, not just the extension.
-    extensions:
-      - health_check
-      - sigv4auth
+    extensions: ${jsonencode(service_extensions)}
     pipelines:
       logs: null
       traces: null
@@ -194,5 +186,4 @@ config:
         processors:
           - memory_limiter
           - batch
-        exporters:
-          - prometheusremotewrite
+        exporters: ${jsonencode(pipeline_exporters)}
