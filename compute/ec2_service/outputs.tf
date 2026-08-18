@@ -95,3 +95,65 @@ output "region" {
   description = "The AWS region where resources are created."
   value       = local.region
 }
+
+output "backup_policy_id" {
+  description = "The ID of the Amazon Data Lifecycle Manager backup policy, when backups are enabled."
+  value       = var.backup_enabled ? aws_dlm_lifecycle_policy.service[0].id : null
+}
+
+output "backup_target_tag" {
+  description = "The instance tag targeted by the backup policy."
+  value       = local.backup_target_tag
+}
+
+output "backup_snapshot_filter" {
+  description = "Tag filter for finding this service's snapshots in the EC2 console or API."
+  value = {
+    "tag:RavionBackup" = var.name
+  }
+}
+
+output "backup_ssm_document_name" {
+  description = "The SSM consistency document used by DLM, when scripts are enabled."
+  value       = local.backup_scripts_enabled ? aws_ssm_document.backup[0].name : null
+}
+
+output "backup_dump_bucket_name" {
+  description = "The S3 bucket name used for logical dumps, when the destination is S3."
+  value       = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? local.backup_dump_bucket_name : null
+}
+
+output "backup_dump_bucket_arn" {
+  description = "The S3 bucket ARN used for logical dumps, when the destination is S3."
+  value       = var.backup_dump_enabled && var.backup_dump_destination == "s3" ? local.backup_dump_bucket_arn : null
+}
+
+output "backup_dump_prefix" {
+  description = "The destination prefix containing this service's logical dump manifests and artifacts."
+  value       = var.backup_dump_enabled ? local.backup_dump_artifact_prefix : null
+}
+
+output "backup_dump_ssm_document_name" {
+  description = "The SSM command document used to run or restore logical dumps."
+  value       = var.backup_dump_enabled ? aws_ssm_document.backup_dump[0].name : null
+}
+
+output "backup_dump_termination_document_name" {
+  description = "The SSM Automation document used by the termination-time dump hook."
+  value       = local.backup_dump_termination_enabled ? aws_ssm_document.backup_termination[0].name : null
+}
+
+output "backup_replication_bucket_name" {
+  description = "The S3 bucket name used for Litestream replication, when enabled."
+  value       = var.backup_replication_enabled ? local.backup_dump_bucket_name : null
+}
+
+output "backup_replication_bucket_arn" {
+  description = "The S3 bucket ARN used for Litestream replication, when enabled."
+  value       = var.backup_replication_enabled ? local.backup_dump_bucket_arn : null
+}
+
+output "backup_replication_prefix" {
+  description = "The S3 prefix containing the Litestream replica for this service."
+  value       = var.backup_replication_enabled ? local.backup_replication_s3_prefix : null
+}

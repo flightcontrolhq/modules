@@ -266,10 +266,310 @@ variable "data_volume_mount_path" {
   }
 }
 
+variable "data_volume_snapshot_id" {
+  type        = string
+  description = "Optional EBS snapshot ID used to restore the data volume on a replacement instance."
+  default     = null
+
+  validation {
+    condition     = var.data_volume_snapshot_id == null || can(regex("^snap-", var.data_volume_snapshot_id))
+    error_message = "The data_volume_snapshot_id must be a valid snapshot ID starting with 'snap-'."
+  }
+}
+
 variable "additional_user_data" {
   type        = string
   description = "Additional shell script appended to the instance bootstrap user data."
   default     = ""
+}
+
+################################################################################
+# Backups
+################################################################################
+
+variable "backup_enabled" {
+  type        = bool
+  description = "Create a scheduled Amazon Data Lifecycle Manager EBS snapshot policy for this service's instances."
+  default     = false
+}
+
+variable "backup_interval_hours" {
+  type        = number
+  description = "Hours between scheduled EBS snapshots."
+  default     = 24
+
+  validation {
+    condition     = contains([1, 2, 3, 4, 6, 8, 12, 24], var.backup_interval_hours)
+    error_message = "The backup_interval_hours must be one of 1, 2, 3, 4, 6, 8, 12, or 24."
+  }
+}
+
+variable "backup_start_time" {
+  type        = string
+  description = "UTC time in HH:MM format at which the snapshot schedule starts."
+  default     = "05:00"
+
+  validation {
+    condition     = can(regex("^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$", var.backup_start_time))
+    error_message = "The backup_start_time must be a UTC time in HH:MM format."
+  }
+}
+
+variable "backup_retention_count" {
+  type        = number
+  description = "Number of snapshots retained by the schedule."
+  default     = 7
+
+  validation {
+    condition     = var.backup_retention_count > 0 && floor(var.backup_retention_count) == var.backup_retention_count
+    error_message = "The backup_retention_count must be a positive whole number."
+  }
+}
+
+variable "backup_root_volume_included" {
+  type        = bool
+  description = "Include the root volume in the snapshot set. This is automatically effective when no data volume exists."
+  default     = false
+}
+
+variable "backup_consistency_mode" {
+  type        = string
+  description = "Snapshot consistency mode: crash_consistent, filesystem_freeze, or custom. The effective default is filesystem_freeze with a data volume and crash_consistent without one."
+  default     = null
+
+  validation {
+    condition     = var.backup_consistency_mode == null || contains(["crash_consistent", "filesystem_freeze", "custom"], var.backup_consistency_mode)
+    error_message = "The backup_consistency_mode must be crash_consistent, filesystem_freeze, or custom."
+  }
+}
+
+variable "backup_pre_script_command" {
+  type        = string
+  description = "Command run before snapshots when backup_consistency_mode is custom."
+  default     = null
+}
+
+variable "backup_post_script_command" {
+  type        = string
+  description = "Command run after snapshots when backup_consistency_mode is custom."
+  default     = null
+}
+
+variable "backup_cross_region_copy_destination" {
+  type        = string
+  description = "Optional AWS region to which each snapshot is copied."
+  default     = null
+
+  validation {
+    condition     = var.backup_cross_region_copy_destination == null || can(regex("^[a-z]{2}-[a-z]+-[0-9]+$", var.backup_cross_region_copy_destination))
+    error_message = "The backup_cross_region_copy_destination must be a valid AWS region."
+  }
+}
+
+variable "backup_dump_enabled" {
+  type        = bool
+  description = "Create a systemd logical-dump schedule and off-instance backup destination."
+  default     = false
+}
+
+variable "backup_dump_command" {
+  type        = string
+  description = "Root command that writes a logical backup into RAVION_BACKUP_DIR."
+  default     = null
+}
+
+variable "backup_dump_restore_command" {
+  type        = string
+  description = "Root command that restores a logical backup from RAVION_BACKUP_DIR."
+  default     = null
+}
+
+variable "backup_dump_schedule" {
+  type        = string
+  description = "systemd OnCalendar expression for logical dumps, such as hourly, daily, or '*-*-* 04:00:00 UTC'."
+  default     = "*-*-* 04:00:00 UTC"
+
+  validation {
+    condition = contains(["hourly", "daily", "weekly", "monthly", "quarterly", "yearly", "annually"], lower(trimspace(var.backup_dump_schedule))) || (
+      can(regex("^[A-Za-z0-9_*.?,%~+:/-]+( +[A-Za-z0-9_*.?,%~+:/-]+){0,3}$", trimspace(var.backup_dump_schedule))) &&
+      !can(regex("^[^ ]+( +[^ ]+){4}$", trimspace(var.backup_dump_schedule)))
+    )
+    error_message = "The backup_dump_schedule must be a systemd OnCalendar expression, not five-field cron syntax."
+  }
+}
+
+variable "backup_dump_destination" {
+  type        = string
+  description = "Destination for logical dump artifacts."
+  default     = "s3"
+
+  validation {
+    condition     = contains(["s3", "efs"], var.backup_dump_destination)
+    error_message = "The backup_dump_destination must be 's3' or 'efs'."
+  }
+}
+
+variable "backup_dump_s3_bucket_arn" {
+  type        = string
+  description = "Optional S3 bucket ARN for logical dumps. When null, the module creates a dedicated bucket."
+  default     = null
+
+  validation {
+    condition     = var.backup_dump_s3_bucket_arn == null || can(regex("^arn:[^:]+:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.backup_dump_s3_bucket_arn))
+    error_message = "The backup_dump_s3_bucket_arn must be an S3 bucket ARN."
+  }
+}
+
+variable "backup_dump_s3_prefix" {
+  type        = string
+  description = "Prefix under which logical dump artifacts are stored."
+  default     = "backups/"
+
+  validation {
+    condition     = can(regex("^[^/].*", var.backup_dump_s3_prefix))
+    error_message = "The backup_dump_s3_prefix must not begin with '/'."
+  }
+}
+
+variable "backup_dump_retention_days" {
+  type        = number
+  description = "Number of days to retain logical dump artifacts."
+  default     = 30
+
+  validation {
+    condition     = var.backup_dump_retention_days > 0 && floor(var.backup_dump_retention_days) == var.backup_dump_retention_days
+    error_message = "The backup_dump_retention_days must be a positive whole number."
+  }
+}
+
+variable "backup_dump_max_interval_hours" {
+  type        = number
+  description = "Maximum expected interval between successful logical dumps, in hours; set this higher than the backup_dump_schedule interval."
+  default     = 48
+
+  validation {
+    condition     = var.backup_dump_max_interval_hours > 0 && floor(var.backup_dump_max_interval_hours) == var.backup_dump_max_interval_hours
+    error_message = "The backup_dump_max_interval_hours must be a positive whole number."
+  }
+}
+
+variable "backup_dump_force_deletion_enabled" {
+  type        = bool
+  description = "Allow Terraform to delete a module-created logical dump bucket even when it still contains backups."
+  default     = false
+}
+
+variable "backup_dump_restore_on_first_boot_enabled" {
+  type        = bool
+  description = "Restore the newest logical dump before the application starts on a replacement instance."
+  default     = false
+}
+
+variable "backup_max_age_hours" {
+  type        = number
+  description = "Maximum allowed age of a logical dump restored on first boot."
+  default     = null
+
+  validation {
+    condition     = var.backup_max_age_hours == null || (var.backup_max_age_hours > 0 && floor(var.backup_max_age_hours) == var.backup_max_age_hours)
+    error_message = "The backup_max_age_hours must be null or a positive whole number."
+  }
+}
+
+variable "backup_on_termination_enabled" {
+  type        = bool
+  description = "Run a logical dump through an Auto Scaling termination lifecycle hook before planned instance termination."
+  default     = true
+}
+
+variable "backup_on_termination_timeout_seconds" {
+  type        = number
+  description = "Maximum time allowed for a planned-termination logical dump, including lifecycle-hook heartbeat slack."
+  default     = 1800
+
+  validation {
+    condition     = var.backup_on_termination_timeout_seconds >= 300 && var.backup_on_termination_timeout_seconds <= 7200 && floor(var.backup_on_termination_timeout_seconds) == var.backup_on_termination_timeout_seconds
+    error_message = "The backup_on_termination_timeout_seconds must be a whole number between 300 and 7200."
+  }
+}
+
+variable "backup_dump_failure_alarm_enabled" {
+  type        = bool
+  description = "Create a CloudWatch alarm when recent logical dump success records are missing."
+  default     = true
+}
+
+variable "backup_replication_enabled" {
+  type        = bool
+  description = "Continuously replicate a SQLite database to S3 with Litestream."
+  default     = false
+}
+
+variable "backup_replication_engine" {
+  type        = string
+  description = "Continuous replication engine to use."
+  default     = "litestream"
+
+  validation {
+    condition     = contains(["litestream"], var.backup_replication_engine)
+    error_message = "The backup_replication_engine must be 'litestream'."
+  }
+}
+
+variable "backup_replication_database_path" {
+  type        = string
+  description = "Absolute path to the SQLite database replicated by Litestream. It must be under the data volume mount path."
+  default     = null
+}
+
+variable "backup_replication_s3_bucket_arn" {
+  type        = string
+  description = "Optional existing S3 bucket ARN for Litestream replicas. When null, the module creates a dedicated bucket."
+  default     = null
+
+  validation {
+    condition     = var.backup_replication_s3_bucket_arn == null || can(regex("^arn:[^:]+:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.backup_replication_s3_bucket_arn))
+    error_message = "The backup_replication_s3_bucket_arn must be an S3 bucket ARN."
+  }
+}
+
+variable "backup_replication_restore_on_first_boot_enabled" {
+  type        = bool
+  description = "Restore the Litestream replica before the application starts on a replacement instance."
+  default     = false
+}
+
+variable "backup_replication_snapshot_interval" {
+  type        = string
+  description = "Litestream full snapshot interval, such as 1m or 1h."
+  default     = "1m"
+
+  validation {
+    condition     = can(regex("^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$", var.backup_replication_snapshot_interval))
+    error_message = "The backup_replication_snapshot_interval must be a positive Litestream duration."
+  }
+}
+
+variable "backup_replication_retention" {
+  type        = string
+  description = "Litestream snapshot retention duration, such as 24h or 168h. It must exceed the snapshot interval."
+  default     = "24h"
+
+  validation {
+    condition     = can(regex("^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$", var.backup_replication_retention))
+    error_message = "The backup_replication_retention must be a positive Litestream duration."
+  }
+}
+
+variable "backup_replication_max_age_hours" {
+  type        = number
+  description = "Maximum allowed age of a Litestream replica restored on first boot."
+  default     = null
+
+  validation {
+    condition     = var.backup_replication_max_age_hours == null || (var.backup_replication_max_age_hours > 0 && floor(var.backup_replication_max_age_hours) == var.backup_replication_max_age_hours)
+    error_message = "The backup_replication_max_age_hours must be null or a positive whole number."
+  }
 }
 
 ################################################################################
