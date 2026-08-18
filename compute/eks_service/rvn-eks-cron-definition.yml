@@ -3,8 +3,8 @@ definition:
   name: EKS Cron Job
   description: Scheduled job on EKS for running a container on a cron schedule, deployed from a container image with no chart of your own.
 release:
-  version: 0.3.0
-  description: Add the Metrics and Logs tabs, wired to the cluster's observability stack. A new optional EKS Add-ons reference feeds pod charts (CPU, memory, restarts, network) and run outcome counts from that module's Amazon Managed Prometheus workspace, and the Logs tab reads the in-cluster Loki through the Beacon agent. Requires an EKS Add-ons module at 0.6.0 or later with Metrics and Logs enabled.
+  version: 0.4.0
+  description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this job. Run outcome charts still need a Prometheus provider.
 module:
   inputs:
     - id: section_cluster
@@ -360,6 +360,30 @@ module:
     Use **Runtime secrets** for sensitive values, as an array of `{name, value_from}` objects - the same shape as ECS. `value_from` must be a full Secrets Manager or SSM Parameter Store ARN, including the JSON-key extraction suffix when you want a single key out of a JSON secret.
 
     Ravion never reads these values. The ARNs travel to the chart as references, the chart renders an `ExternalSecret`, and the External Secrets Operator materializes the Kubernetes Secret in the cluster. No secret value reaches Ravion, the Helm values document, or the Helm release history.
+
+    ## Metrics and logs
+
+    The Metrics and Logs tabs follow the providers selected on the EKS add-ons module referenced above. You configure observability once, on that module, and every workload attached to it follows; there is nothing to set here. Without an add-ons reference both tabs stay empty.
+
+    Where several providers can serve the same signal they form a **fallback chain**, not a merge. The tab reads the first store that can answer right now and moves to the next when it cannot, saying which store it ended up using. Reading two stores at once would draw every line twice.
+
+    | Signal | Chain order |
+    | ------ | ----------- |
+    | Logs | In-cluster store (Loki) -> Amazon CloudWatch Logs |
+    | Metrics | Amazon Managed Prometheus -> Prometheus in your cluster -> CloudWatch Container Insights |
+
+    The practical effect is that the in-cluster store's one weakness stops being fatal. Loki is reached through the Beacon agent, so with the agent offline those logs are unavailable - but if CloudWatch Logs is also selected, the tab shows CloudWatch and says so, then switches back when the agent returns.
+
+    Logs and pod charts cover every run of the job, because both match on the pods the CronJob creates rather than on any one Job object. Charts are the same five golden signals whichever store answers: CPU, memory working set, container restarts, network in, and network out. Two things differ on the CloudWatch link of the chain:
+
+    - **Container Insights reports per pod, Prometheus reports across pods.** A CloudWatch chart is an average over the run's pods; the Prometheus charts sum them. Same shape, different magnitude.
+    - **It needs enhanced observability**, which the add-ons module turns on with CloudWatch by default. Without it, CPU and memory come back empty.
+
+    **Runs succeeded** and **Runs failed** are Prometheus-only. Container Insights reports on running pods and never on Job completion, so it has no metric that says a run finished, let alone whether it worked. With CloudWatch as the only metrics provider those two charts are empty while the pod charts still work - so if run outcomes matter to you, keep a Prometheus provider selected.
+
+    A provider that ships to a vendor rather than rendering in Ravion - Datadog, Grafana Cloud, New Relic, OpenSearch, Splunk, or a custom OTLP endpoint - adds an **Open in ...** action to the tab, pointing at this job rather than at the vendor's front page.
+
+    Turning a signal off on the add-ons module empties the matching tab here.
 
     ## Configuration
 
