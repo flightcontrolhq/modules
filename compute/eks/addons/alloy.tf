@@ -41,13 +41,52 @@ locals {
     length(local.alloy_resource_limits) > 0 ? { limits = local.alloy_resource_limits } : {},
   )
 
-  alloy_config = var.logs_enabled ? templatefile("${path.module}/templates/alloy_config.alloy.tpl", {
-    loki_push_url = local.loki_push_url
+  # One loki.write per selected loki-family provider. The in-cluster store comes
+  # first so its receiver name stays "ravion", which the tests and every
+  # debugging note about this pipeline refer to.
+  alloy_destinations = concat(
+    local.loki_enabled ? [{
+      name         = "ravion"
+      comment      = "The in-cluster store (loki.tf). Ravion's Logs tab reads this one through Beacon."
+      url          = local.loki_push_url
+      username     = null
+      password_env = null
+    }] : [],
+    local.logs_grafana_cloud_enabled ? [{
+      name         = "grafana_cloud"
+      comment      = "Grafana Cloud Logs. Same Loki push protocol, with basic auth."
+      url          = local.grafana_cloud_config.logs_url
+      username     = local.grafana_cloud_config.logs_user
+      password_env = "GRAFANA_CLOUD_TOKEN"
+    }] : [],
+  )
+
+  # Alloy matches on a whole label, so the exclusion list is one anchored
+  # alternation rather than a rule per namespace.
+  alloy_namespace_exclude_regex = join("|", var.logs_namespace_exclude)
+
+  alloy_config = local.alloy_enabled ? templatefile("${path.module}/templates/alloy_config.alloy.tpl", {
+    destinations            = local.alloy_destinations
+    namespace_exclude_regex = local.alloy_namespace_exclude_regex
   }) : null
+
+  # Vendor credentials arrive as environment variables from the Secrets the
+  # External Secrets Operator materializes (observability_secrets.tf).
+  alloy_extra_env = [
+    for secret in local.alloy_secret_env : {
+      name = secret.environment
+      valueFrom = {
+        secretKeyRef = {
+          name = secret.name
+          key  = secret.secret_key
+        }
+      }
+    }
+  ]
 }
 
 resource "helm_release" "alloy" {
-  count = var.logs_enabled ? 1 : 0
+  count = local.alloy_enabled ? 1 : 0
 
   name       = local.alloy_release_name
   namespace  = local.logs_namespace
@@ -94,6 +133,10 @@ resource "helm_release" "alloy" {
 
           resources = local.alloy_resources
 
+          # Vendor tokens, by reference. CHART VALUE: grafana/alloy exposes
+          # alloy.extraEnv as a list of core v1 EnvVar objects.
+          extraEnv = local.alloy_extra_env
+
           # Nothing about this cluster is Grafana Labs' business.
           enableReporting = false
         }
@@ -118,6 +161,17 @@ resource "helm_release" "alloy" {
   )
 
   # Pushing into a Loki that does not exist yet is a retry loop and a page of
-  # errors in the first minutes of a cluster's life.
-  depends_on = [helm_release.loki]
+  # errors in the first minutes of a cluster's life; a missing credential Secret
+  # is a pod that never starts.
+  depends_on = [
+    helm_release.loki,
+    helm_release.observability_secrets,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = !local.logs_grafana_cloud_enabled || (local.grafana_cloud_config.logs_url != null && local.grafana_cloud_config.logs_user != null && local.grafana_cloud_config.token_secret_arn != null)
+      error_message = "grafana_cloud is in logs_providers but its push URL, user id, or token secret ARN is missing. All three are required: Grafana Cloud's Loki endpoint authenticates every write with basic auth, so a partial configuration is a collector that starts and then fails every push."
+    }
+  }
 }
