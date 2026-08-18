@@ -33,6 +33,13 @@ if [ -n "$DATA_DEVICE" ] && [ -b "$DATA_DEVICE" ]; then
   sed -i "\|[[:space:]]${data_volume_mount_path}[[:space:]]|d" /etc/fstab
   echo "UUID=$${DATA_UUID} ${data_volume_mount_path} $${DATA_FSTYPE} defaults,nofail 0 2" >> /etc/fstab
   mount "${data_volume_mount_path}" || mount -a
+else
+  echo "FATAL: Data volume device ${data_volume_device_name} could not be resolved for mount path ${data_volume_mount_path}."
+  exit 1
+fi
+if ! findmnt -rn --mountpoint "${data_volume_mount_path}" >/dev/null 2>&1; then
+  echo "FATAL: Data volume device ${data_volume_device_name} is not mounted at ${data_volume_mount_path}."
+  exit 1
 fi
 %{ endif ~}
 
