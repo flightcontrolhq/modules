@@ -122,12 +122,15 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 | `grafana_cloud` | Alloy (`loki.write` with basic auth) | Your Grafana Cloud Loki endpoint | Ships + "Open in Grafana Cloud" |
 | `datadog` | OpenTelemetry (`datadog`) | Datadog intake for the chosen site | Ships + "Open in Datadog" |
 | `new_relic` | OpenTelemetry (`otlphttp`) | New Relic OTLP, US or EU | Ships + "Open in New Relic" |
+| `opensearch` | OpenTelemetry (`opensearch`, SigV4) | An Amazon OpenSearch Service domain | Ships + "Open Dashboards" |
+| `splunk` | OpenTelemetry (`splunk_hec`) | Splunk HTTP Event Collector | Ships |
 | `otlp` | OpenTelemetry (`otlphttp`) | Any OTLP/HTTP receiver | Ships |
 
 | `metrics_providers` | Exporter | Destination | In Ravion |
 |---|---|---|---|
 | `amp` *(default)* | `prometheusremotewrite` + SigV4 | Amazon Managed Prometheus workspace in your account | **Renders** |
-| `cloudwatch` | the CloudWatch agent (add-on) | `ContainerInsights` metric namespace | **Renders**, as the fallback behind AMP |
+| `prometheus` | `prometheusremotewrite` | Prometheus in your cluster, PV-backed | **Renders**, through Beacon, behind AMP |
+| `cloudwatch` | the CloudWatch agent (add-on) | `ContainerInsights` metric namespace | **Renders**, last in the chain |
 | `grafana_cloud` | `prometheusremotewrite` + basic auth | Grafana Cloud Prometheus remote write | Ships + link |
 | `datadog` | `datadog` | Datadog intake | Ships + link |
 | `new_relic` | `otlphttp` | New Relic OTLP | Ships + link |
@@ -138,6 +141,10 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 **Cost is a choice the form makes visible.** The in-cluster store costs S3 storage and requests plus the collector pods, with no per-gigabyte ingest. AMP bills per sample (roughly $25–50/month for a 20-service cluster). CloudWatch Logs bills per gigabyte ingested and then stored; Container Insights bills per metric. Every vendor bills for what it receives, so two ship-only destinations is two bills for the same lines — by selection, never by accident.
 
 **Vendor credentials never pass through Ravion.** Every key is a Secrets Manager ARN. The External Secrets Operator this module installs reads it with its own Pod Identity role and materializes a Kubernetes Secret in the collector namespace; the collectors read it as an environment variable, and the value appears in no Helm value, no Terraform output, and no release history. Selecting a vendor with `eso_enabled = false` fails the plan rather than installing a collector that cannot authenticate.
+
+**Amazon OpenSearch Service authenticates with an IAM role, not a key.** The collector signs its requests with its Pod Identity role, published as `logs_opensearch_role_arn`; the domain's own access policy or fine-grained role mapping has to name that role, and this module cannot write it because it does not manage the domain. The IAM half it does write is scoped to `es:ESHttp*` on the account's domains in this region.
+
+**In-cluster Prometheus is a store, not a scraper.** Every scrape in this module belongs to the one collector, which owns the curated allow-list and the label contract; the Prometheus this provider installs runs with `web.enable-remote-write-receiver`, no scrape jobs, no alertmanager, no pushgateway and no second copy of the exporters already running. It needs a `StorageClass` for its PersistentVolume (`ebs_csi_driver_enabled` on a Ravion cluster). `metrics_prometheus.endpoint` points at a Prometheus you already run and skips the install entirely. Like Loki, it has no ingress: Ravion reads it through Beacon, whose allowlist this module writes.
 
 **Which collector runs.** Alloy carries the loki-family destinations (`loki`, `grafana_cloud`) because Ravion's log views are written against its label contract; the OpenTelemetry contrib DaemonSet carries the rest. A default cluster runs Alloy alone; a CloudWatch-only cluster runs the OpenTelemetry collector alone; a cluster with both runs both, each reading the same files once. `logs_namespace_exclude` (default `kube-system`, `kube-node-lease`, `amazon-cloudwatch`, `ravion-beacon`) keeps a namespace out of both.
 
@@ -458,6 +465,10 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | logs_grafana_cloud / metrics_grafana_cloud | `{ url, user, token_secret_arn, stack_url }` — the Loki push URL / Prometheus remote-write URL, the tenant id, the Secrets Manager ARN of the token, and the stack URL used for the deep link. | `object` | `{}` | no |
 | logs_datadog / metrics_datadog | `{ site, api_key_secret_arn }`. Shared between the signals: whichever is set wins for both. | `object` | `{}` | no |
 | logs_new_relic / metrics_new_relic | `{ region, license_key_secret_arn }`, region `us` or `eu`. | `object` | `{}` | no |
+| logs_opensearch | `{ endpoint, index_prefix }`. The domain endpoint and index; requests are signed with `logs_opensearch_role_arn`. | `object` | `{}` | no |
+| logs_splunk | `{ hec_url, hec_token_secret_arn, index }`. | `object` | `{}` | no |
+| metrics_prometheus | `{ retention_days, storage_size, endpoint }`. `endpoint` points at a Prometheus you already run and skips the install. | `object` | `{}` | no |
+| prometheus_chart_version / prometheus_helm_values | prometheus-community/prometheus chart version and value overrides. | `string` / `list(string)` | `"27.44.0"` / `[]` | no |
 | logs_otlp / metrics_otlp | `{ endpoint, headers_secret_arn }`. The secret holds the value of an `Authorization` header. | `object` | `{}` | no |
 | metrics_amp | `{ workspace_id, region, alias }`. Falls back to the flat `amp_workspace_id` / `amp_region` / `amp_alias`. | `object` | `{}` | no |
 | metrics_cloudwatch | `{ enhanced_observability, application_signals_enabled, application_signals_namespaces, addon_version, addon_configuration_values }`. Auto-Monitor stays off unless Application Signals is enabled with no namespace list. | `object` | `{}` | no |
@@ -557,7 +568,8 @@ All outputs are null when the corresponding add-on is disabled.
 | grafana_cloud_logs_query_url / grafana_cloud_metrics_query_url | Grafana Cloud query base URLs, derived from the push URLs and named in Beacon's proxy allowlist. |
 | observability_credentials_secret_name / observability_proxy_credentials | The Secret in Beacon's namespace the agent presents when proxying a query to an external store, and the full `{ endpointPrefix, secretName, kind }` mapping. |
 | observability_namespace | Namespace the collectors, the log store, and the vendor credentials live in. |
-| otel_logs_collector_role_arn | The log collector's Pod Identity role, scoped to the Ravion log group alone. |
+| otel_logs_collector_role_arn / logs_opensearch_role_arn | The log collector's Pod Identity role: scoped to the Ravion log group, and the role to map into an OpenSearch domain. |
+| prometheus_chart_version | Installed prometheus chart version (null unless the module installed one). |
 | amp_workspace_id / amp_workspace_arn / amp_region | The AMP workspace this cluster's metrics land in — created, or the one passed in. |
 | amp_remote_write_endpoint / amp_query_endpoint | Where the collector writes, and the Prometheus-compatible base URL to query (a Grafana datasource URL as-is). |
 | amp_remote_write_role_arn | Collector Pod Identity role, scoped to `aps:RemoteWrite` on that one workspace. |

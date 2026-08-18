@@ -46,6 +46,19 @@ locals {
         }
       },
     ] : [],
+    local.prometheus_enabled ? [
+      {
+        name      = "Ravion Metrics (in-cluster Prometheus)"
+        uid       = "ravion-prometheus"
+        type      = "prometheus"
+        access    = "proxy"
+        url       = local.prometheus_endpoint
+        isDefault = !local.amp_enabled && !local.loki_enabled
+        jsonData = {
+          httpMethod = "POST"
+        }
+      },
+    ] : [],
     local.loki_enabled ? [
       {
         name      = "Ravion Logs (Loki)"

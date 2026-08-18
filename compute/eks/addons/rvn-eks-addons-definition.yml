@@ -3,24 +3,15 @@ definition:
   name: EKS Add-ons
   description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload logs and metrics shipped to any combination of destinations (an in-cluster log store on S3 and Amazon Managed Prometheus by default; CloudWatch, Grafana Cloud, Datadog, New Relic or a custom OTLP endpoint on request), Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.8.0
+  version: 0.8.1
   description: >-
-    Logs and Metrics become provider multi-selects. Both are now ON by default - container
-    logs into the in-cluster store on S3, metrics into Amazon Managed Prometheus - so a new
-    cluster renders both dashboard tabs with no configuration. Any number of destinations can
-    be added per signal: CloudWatch, Grafana Cloud, Datadog, New Relic, or a custom OTLP
-    endpoint, each with its own fields and its own "Open in ..." link. The collectors fan out,
-    so a file is tailed once and the cluster scraped once however many destinations receive a
-    copy, and vendor credentials are Secrets Manager ARNs materialized in-cluster by the
-    External Secrets Operator - no key passes through Ravion or Helm.
-    Container Insights stops being a section of its own and becomes the `cloudwatch` provider
-    in both lists, installed with Auto-Monitor OFF: its default injected the AWS agent into
-    every workload in the cluster and restarted the pods to do it. Application Signals
-    auto-instrumentation is now an explicit, default-off toggle with a namespace list.
-    The old logs_enabled / metrics_enabled / cloudwatch_observability_enabled booleans survive
-    one release as fallbacks, so an existing instance upgrades with the selection it already
-    had - including [amp, cloudwatch] for a cluster that ran Container Insights.
-    Beacon chart 0.3.0. The agent gains user-initiated recovery actions under the deploy grant (restart a workload, roll a release back), detects hand edits to Ravion-deployed workloads from the cluster's own Helm release records, and reports pod diagnoses with crash logs. The chart no longer asks to read Ingresses, PersistentVolumeClaims or TargetGroupBindings - three read grants removed, none added. The chart version is now pinned per module release; the agent image still moves forward under the control plane's self-update.
+    Three more destinations. Logs can now go to Amazon OpenSearch Service (signed with the
+    cluster's own IAM role - map the published role into the domain, which is the half of
+    the grant that lives there) and to Splunk over HEC. Metrics can go to a Prometheus
+    running in your cluster: installed with its remote-write receiver on and a persistent
+    volume behind it, or pointed at one you already run. In-cluster Prometheus renders in
+    Ravion as the fallback behind Amazon Managed Prometheus, read through the Beacon agent
+    the same way the in-cluster log store is - it is never exposed outside the cluster.
 module:
   inputs:
     - id: cluster
@@ -220,6 +211,12 @@ module:
           label: New Relic
           value: new_relic
         - group_label: Ships to your vendor
+          label: Amazon OpenSearch Service
+          value: opensearch
+        - group_label: Ships to your vendor
+          label: Splunk (HEC)
+          value: splunk
+        - group_label: Ships to your vendor
           label: Custom OTLP endpoint
           value: otlp
     - default: 30
@@ -328,6 +325,46 @@ module:
         logs_enabled: true
         logs_providers: new_relic
       type: string
+    - description: Endpoint of the Amazon OpenSearch Service domain, https://... . The collector signs its requests with the cluster's own IAM role - after the first deployment, map the role from the logs_opensearch_role_arn output into the domain's access policy or its fine-grained role mapping, which is the half of the grant that lives on the domain.
+      id: opensearch_endpoint
+      label: OpenSearch domain endpoint
+      placeholder: https://search-logs-abc123.us-east-2.es.amazonaws.com
+      show_when:
+        logs_enabled: true
+        logs_providers: opensearch
+      type: string
+    - default: ravion-logs
+      description: Index the logs are written to. OpenSearch bills for the instances and storage behind the domain, not per gigabyte ingested.
+      id: opensearch_index_prefix
+      label: OpenSearch index
+      show_when:
+        logs_enabled: true
+        logs_providers: opensearch
+      type: string
+    - description: Splunk HTTP Event Collector URL, including the /services/collector path.
+      id: splunk_hec_url
+      label: Splunk HEC URL
+      placeholder: https://http-inputs-acme.splunkcloud.com:443/services/collector
+      show_when:
+        logs_enabled: true
+        logs_providers: splunk
+      type: string
+    - description: Secrets Manager ARN holding the HEC token. Read in-cluster by External Secrets; never stored by Ravion.
+      id: splunk_hec_token_secret_arn
+      label: Splunk HEC token secret
+      placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:splunk-hec-token
+      show_when:
+        logs_enabled: true
+        logs_providers: splunk
+      type: string
+    - collapsible: true
+      description: Splunk index the events are written to. Leave blank to use the token's default index.
+      id: splunk_index
+      label: Splunk index
+      show_when:
+        logs_enabled: true
+        logs_providers: splunk
+      type: string
     - description: OTLP/HTTP endpoint logs are sent to - Honeycomb, Dynatrace, Elastic, or anything else that speaks OTLP.
       id: otlp_logs_endpoint
       label: OTLP logs endpoint
@@ -414,6 +451,9 @@ module:
           label: Amazon Managed Prometheus
           value: amp
         - group_label: Renders in Ravion's Metrics tab (fallback)
+          label: Prometheus in your cluster
+          value: prometheus
+        - group_label: Renders in Ravion's Metrics tab (fallback)
           label: Amazon CloudWatch (Container Insights)
           value: cloudwatch
         - group_label: Ships to your vendor
@@ -446,6 +486,31 @@ module:
         metrics_providers: amp
       type: string
       values: $values:aws/regions
+    - default: 15
+      description: How long the in-cluster Prometheus keeps metrics. Storage is the volume below, in your own account, with no per-sample charge.
+      id: prometheus_retention_days
+      label: Prometheus retention (days)
+      show_when:
+        metrics_enabled: true
+        metrics_providers: prometheus
+      type: number
+    - default: 50Gi
+      description: Size of the persistent volume Prometheus stores metrics on. Needs a working storage class, which on a Ravion cluster means the EBS CSI driver add-on above.
+      id: prometheus_storage_size
+      label: Prometheus volume size
+      show_when:
+        metrics_enabled: true
+        metrics_providers: prometheus
+      type: string
+    - collapsible: true
+      description: Write into a Prometheus you already run instead of installing one. Give its in-cluster URL; the module then installs nothing and only remote-writes to it.
+      id: prometheus_endpoint
+      label: Existing Prometheus URL
+      placeholder: http://prometheus.monitoring.svc.cluster.local:9090
+      show_when:
+        metrics_enabled: true
+        metrics_providers: prometheus
+      type: string
     - default: true
       description: Container Insights with enhanced pod and container metrics. CloudWatch bills per metric and per log ingested; enhanced collection is the more expensive of the two modes.
       id: cloudwatch_enhanced_observability
@@ -954,6 +1019,13 @@ module:
         logs_new_relic:
           region: << module.input.new_relic_region >>
           license_key_secret_arn: << module.input.new_relic_license_key_secret_arn >>
+        logs_opensearch:
+          endpoint: << module.input.opensearch_endpoint >>
+          index_prefix: << module.input.opensearch_index_prefix >>
+        logs_splunk:
+          hec_url: << module.input.splunk_hec_url >>
+          hec_token_secret_arn: << module.input.splunk_hec_token_secret_arn >>
+          index: << module.input.splunk_index >>
         logs_otlp:
           endpoint: << module.input.otlp_logs_endpoint >>
           headers_secret_arn: << module.input.otlp_headers_secret_arn >>
@@ -963,6 +1035,10 @@ module:
         metrics_amp:
           workspace_id: << module.input.amp_workspace_id >>
           region: << module.input.amp_region >>
+        metrics_prometheus:
+          retention_days: << module.input.prometheus_retention_days >>
+          storage_size: << module.input.prometheus_storage_size >>
+          endpoint: << module.input.prometheus_endpoint >>
         metrics_cloudwatch:
           enhanced_observability: '<< module.input.cloudwatch_enhanced_observability != nil ? module.input.cloudwatch_enhanced_observability : true >>'
           application_signals_enabled: '<< module.input.cloudwatch_application_signals_enabled != nil ? module.input.cloudwatch_application_signals_enabled : false >>'

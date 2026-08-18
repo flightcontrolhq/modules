@@ -112,6 +112,30 @@ locals {
         }
       }
     } : {},
+    local.logs_opensearch_enabled ? {
+      # The exporter signs with the collector's Pod Identity credentials through
+      # the sigv4auth extension; the domain has to map logs_opensearch_role_arn
+      # in its access policy or its fine-grained role mapping.
+      opensearch = {
+        http = {
+          endpoint = local.opensearch_config.endpoint
+          auth = {
+            authenticator = "sigv4auth/opensearch"
+          }
+        }
+        logs_index = local.opensearch_config.index_prefix
+      }
+    } : {},
+    local.logs_splunk_enabled ? {
+      splunk_hec = merge(
+        {
+          endpoint = local.splunk_config.hec_url
+          token    = "$${env:SPLUNK_HEC_TOKEN}"
+          source   = "kubernetes"
+        },
+        local.splunk_config.index == null ? {} : { index = local.splunk_config.index },
+      )
+    } : {},
     local.logs_otlp_enabled ? {
       "otlphttp/custom" = merge(
         { endpoint = local.otlp_logs_config.endpoint },
@@ -122,10 +146,15 @@ locals {
     } : {},
   )
 
-  # No extension is needed by any 0.8.0 log exporter: CloudWatch signs with the
-  # Pod Identity credentials the AWS SDK resolves, and the vendors authenticate
-  # with a header.
-  otel_logs_extensions = {}
+  # CloudWatch signs with the Pod Identity credentials the AWS SDK resolves and
+  # needs no extension; OpenSearch's exporter asks for a named signer.
+  otel_logs_extensions = local.logs_opensearch_enabled ? {
+    "sigv4auth/opensearch" = {
+      region = local.observability_region
+      # "es" for a managed domain; a Serverless collection would be "aoss".
+      service = "es"
+    }
+  } : {}
 
   otel_logs_pipeline_exporters = [for name, _ in local.otel_logs_exporters : name if name != "debug"]
 
@@ -140,6 +169,10 @@ locals {
       }
     }
   ]
+
+  # The only log destinations that authenticate with AWS credentials rather
+  # than a token.
+  otel_logs_needs_aws = local.logs_cloudwatch_enabled || local.logs_opensearch_enabled
 
   otel_logs_values = local.otel_logs_enabled ? templatefile("${path.module}/templates/otel_logs_values.yaml.tpl", {
     name             = local.otel_logs_collector_name
@@ -169,34 +202,62 @@ locals {
 ################################################################################
 
 data "aws_iam_policy_document" "otel_logs_cloudwatch" {
-  count = local.logs_cloudwatch_enabled ? 1 : 0
+  count = local.otel_logs_needs_aws ? 1 : 0
 
-  statement {
-    sid    = "WriteRavionLogGroup"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-      "logs:PutRetentionPolicy",
-      "logs:DescribeLogStreams",
-    ]
-    resources = [
-      "arn:${data.aws_partition.current.partition}:logs:${local.observability_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.cloudwatch_logs_config.log_group_name}",
-      "arn:${data.aws_partition.current.partition}:logs:${local.observability_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.cloudwatch_logs_config.log_group_name}:*",
-    ]
+  dynamic "statement" {
+    for_each = local.logs_opensearch_enabled && local.opensearch_config.endpoint != null ? [1] : []
+
+    content {
+      sid    = "WriteOpenSearchIndexes"
+      effect = "Allow"
+      actions = [
+        "es:ESHttpPost",
+        "es:ESHttpPut",
+        "es:ESHttpHead",
+        "es:ESHttpGet",
+      ]
+      # Every domain in the account: the endpoint is a URL, not an ARN, and
+      # resolving one to the other would need a data source (and a domain that
+      # already exists at plan time). The domain's own access policy is the
+      # second half of this grant and is where it gets narrowed.
+      resources = ["arn:${data.aws_partition.current.partition}:es:${local.observability_region}:${data.aws_caller_identity.current.account_id}:domain/*"]
+    }
   }
 
-  statement {
-    sid       = "DescribeLogGroups"
-    effect    = "Allow"
-    actions   = ["logs:DescribeLogGroups"]
-    resources = ["*"]
+  dynamic "statement" {
+    for_each = local.logs_cloudwatch_enabled ? [1] : []
+
+    content {
+      sid    = "WriteRavionLogGroup"
+      effect = "Allow"
+      actions = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:PutRetentionPolicy",
+        "logs:DescribeLogStreams",
+      ]
+      resources = [
+        "arn:${data.aws_partition.current.partition}:logs:${local.observability_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.cloudwatch_logs_config.log_group_name}",
+        "arn:${data.aws_partition.current.partition}:logs:${local.observability_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.cloudwatch_logs_config.log_group_name}:*",
+      ]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = local.logs_cloudwatch_enabled ? [1] : []
+
+    content {
+      sid       = "DescribeLogGroups"
+      effect    = "Allow"
+      actions   = ["logs:DescribeLogGroups"]
+      resources = ["*"]
+    }
   }
 }
 
 module "otel_logs_collector_role" {
-  count = local.logs_cloudwatch_enabled ? 1 : 0
+  count = local.otel_logs_needs_aws ? 1 : 0
 
   source = "../../../security/iam"
 
@@ -206,14 +267,14 @@ module "otel_logs_collector_role" {
   custom_assume_role_policy = local.pod_identity_trust_policy
 
   inline_policies = {
-    "cloudwatch-logs-write" = data.aws_iam_policy_document.otel_logs_cloudwatch[0].json
+    "log-destination-write" = data.aws_iam_policy_document.otel_logs_cloudwatch[0].json
   }
 
   tags = local.tags
 }
 
 resource "aws_eks_pod_identity_association" "otel_logs_collector" {
-  count = local.logs_cloudwatch_enabled ? 1 : 0
+  count = local.otel_logs_needs_aws ? 1 : 0
 
   cluster_name    = var.cluster_name
   namespace       = local.logs_namespace
@@ -260,6 +321,16 @@ resource "helm_release" "otel_logs_collector" {
     precondition {
       condition     = !local.logs_otlp_enabled || local.otlp_logs_config.endpoint != null
       error_message = "otlp is in logs_providers but no OTLP endpoint was given. There is nowhere to send the logs."
+    }
+
+    precondition {
+      condition     = !local.logs_opensearch_enabled || local.opensearch_config.endpoint != null
+      error_message = "opensearch is in logs_providers but no domain endpoint was given. Also map logs_opensearch_role_arn into the domain's access policy or fine-grained role mapping: the collector signs with that role, and OpenSearch is the only half of the grant this module cannot write."
+    }
+
+    precondition {
+      condition     = !local.logs_splunk_enabled || (local.splunk_config.hec_url != null && local.splunk_config.hec_token_secret_arn != null)
+      error_message = "splunk is in logs_providers but its HEC URL or token secret ARN is missing. Both are required: the token is read in-cluster from Secrets Manager by External Secrets."
     }
   }
 }

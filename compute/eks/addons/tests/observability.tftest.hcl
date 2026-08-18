@@ -576,3 +576,148 @@ run "datadog_without_a_key_is_refused" {
 
   expect_failures = [helm_release.otel_logs_collector]
 }
+
+################################################################################
+# 0.8.1 providers: OpenSearch, Splunk, and Prometheus in the cluster.
+################################################################################
+
+run "opensearch_signs_with_the_collectors_own_role" {
+  command = plan
+
+  variables {
+    logs_providers    = ["opensearch"]
+    metrics_providers = []
+    logs_opensearch = {
+      endpoint     = "https://search-logs-abc123.us-east-2.es.amazonaws.com"
+      index_prefix = "ravion-eks"
+    }
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.otel_logs_collector[0].values[0]).config.exporters.opensearch.http.endpoint == "https://search-logs-abc123.us-east-2.es.amazonaws.com"
+    error_message = "The OpenSearch exporter must point at the domain endpoint"
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.otel_logs_collector[0].values[0]).config.exporters.opensearch.logs_index == "ravion-eks"
+    error_message = "The index prefix must reach the exporter"
+  }
+
+  # No key anywhere: the domain trusts an IAM role, not a password.
+  assert {
+    condition     = yamldecode(helm_release.otel_logs_collector[0].values[0]).config.extensions["sigv4auth/opensearch"].service == "es"
+    error_message = "OpenSearch requests must be signed with SigV4 for the managed-domain service"
+  }
+
+  assert {
+    condition     = output.logs_opensearch_role_arn != null
+    error_message = "The role the customer maps into the domain must be published - it is the half of the grant this module cannot write"
+  }
+
+  assert {
+    condition     = output.logs_external_links[0].provider == "opensearch"
+    error_message = "OpenSearch ships, so the Logs tab offers a Dashboards link"
+  }
+}
+
+run "splunk_ships_over_hec_with_a_referenced_token" {
+  command = plan
+
+  variables {
+    logs_providers    = ["splunk"]
+    metrics_providers = []
+    logs_splunk = {
+      hec_url              = "https://http-inputs-acme.splunkcloud.com:443/services/collector"
+      hec_token_secret_arn = "arn:aws:secretsmanager:us-east-2:123456789012:secret:splunk-hec"
+      index                = "kubernetes"
+    }
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.otel_logs_collector[0].values[0]).config.exporters.splunk_hec.index == "kubernetes"
+    error_message = "The target index must reach the exporter"
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.otel_logs_collector[0].values[0]).config.exporters.splunk_hec.token == "$${env:SPLUNK_HEC_TOKEN}"
+    error_message = "The HEC token must be read from the environment, never rendered into a Helm value"
+  }
+
+  assert {
+    condition     = length([for secret in local.vendor_secrets : secret if secret.provider == "splunk"]) == 1
+    error_message = "The HEC token must be materialized by External Secrets"
+  }
+}
+
+run "in_cluster_prometheus_is_a_rendering_provider" {
+  command = plan
+
+  variables {
+    logs_providers    = []
+    metrics_providers = ["amp", "prometheus"]
+    beacon_enabled    = true
+    metrics_prometheus = {
+      retention_days = 30
+      storage_size   = "100Gi"
+    }
+  }
+
+  assert {
+    condition     = join(",", output.metrics_rendering_providers) == "amp,prometheus"
+    error_message = "AMP is read first and the in-cluster store is the fallback behind it"
+  }
+
+  assert {
+    condition     = length(helm_release.prometheus) == 1
+    error_message = "The prometheus provider installs Prometheus unless an endpoint was given"
+  }
+
+  # Without the receiver flag every remote write from the collector is a 404.
+  assert {
+    condition     = contains(yamldecode(helm_release.prometheus[0].values[0]).server.extraFlags, "web.enable-remote-write-receiver")
+    error_message = "Prometheus must accept remote writes, which is off by default"
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.prometheus[0].values[0]).server.retention == "30d" && yamldecode(helm_release.prometheus[0].values[0]).server.persistentVolume.size == "100Gi"
+    error_message = "Retention and volume size must reach the chart"
+  }
+
+  assert {
+    condition     = output.prometheus_endpoint == "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090"
+    error_message = "The in-cluster endpoint is what Beacon proxies to and what the service modules map"
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.otel_collector[0].values[0]).config.exporters["prometheusremotewrite/in_cluster"].endpoint == "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090/api/v1/write"
+    error_message = "The collector must remote-write the same series into the in-cluster store"
+  }
+
+  # It has no route out of the cluster, so Beacon is the only way to read it.
+  assert {
+    condition     = contains(yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.allowedEndpoints, "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090")
+    error_message = "The in-cluster Prometheus must be on Beacon's proxy allowlist"
+  }
+}
+
+run "an_existing_prometheus_skips_the_install" {
+  command = plan
+
+  variables {
+    logs_providers    = []
+    metrics_providers = ["prometheus"]
+    metrics_prometheus = {
+      endpoint = "http://prometheus.monitoring.svc.cluster.local:9090"
+    }
+  }
+
+  assert {
+    condition     = length(helm_release.prometheus) == 0
+    error_message = "An endpoint means the customer already runs one; the module must not install a second"
+  }
+
+  assert {
+    condition     = output.prometheus_endpoint == "http://prometheus.monitoring.svc.cluster.local:9090"
+    error_message = "The endpoint given must be the one published and written to"
+  }
+}

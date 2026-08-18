@@ -1122,29 +1122,29 @@ variable "grafana_helm_values" {
 
 variable "logs_providers" {
   type        = list(string)
-  description = "Where container logs go. Any combination of: loki (in-cluster store on S3, renders in Ravion), cloudwatch (CloudWatch Logs, renders in Ravion), grafana_cloud, datadog, new_relic, otlp. An empty list turns logs off entirely — no collector, no store. Null falls back to the deprecated logs_enabled boolean."
+  description = "Where container logs go. Any combination of: loki (in-cluster store on S3, renders in Ravion), cloudwatch (CloudWatch Logs, renders in Ravion), grafana_cloud, datadog, new_relic, opensearch, splunk, otlp. An empty list turns logs off entirely — no collector, no store. Null falls back to the deprecated logs_enabled boolean."
   default     = ["loki"]
 
   validation {
     condition = alltrue([
       for provider in coalesce(var.logs_providers, []) :
-      contains(["loki", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "otlp"], provider)
+      contains(["loki", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "opensearch", "splunk", "otlp"], provider)
     ])
-    error_message = "Each logs_providers entry must be one of: loki, cloudwatch, grafana_cloud, datadog, new_relic, otlp."
+    error_message = "Each logs_providers entry must be one of: loki, cloudwatch, grafana_cloud, datadog, new_relic, opensearch, splunk, otlp."
   }
 }
 
 variable "metrics_providers" {
   type        = list(string)
-  description = "Where workload metrics go. Any combination of: amp (Amazon Managed Prometheus, renders in Ravion), cloudwatch (Container Insights, renders in Ravion), grafana_cloud, datadog, new_relic, otlp. An empty list turns metrics off entirely. Null falls back to the deprecated metrics_enabled boolean."
+  description = "Where workload metrics go. Any combination of: amp (Amazon Managed Prometheus, renders in Ravion), prometheus (in-cluster, renders through Beacon), cloudwatch (Container Insights, renders in Ravion), grafana_cloud, datadog, new_relic, otlp. An empty list turns metrics off entirely. Null falls back to the deprecated metrics_enabled boolean."
   default     = ["amp"]
 
   validation {
     condition = alltrue([
       for provider in coalesce(var.metrics_providers, []) :
-      contains(["amp", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "otlp"], provider)
+      contains(["amp", "prometheus", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "otlp"], provider)
     ])
-    error_message = "Each metrics_providers entry must be one of: amp, cloudwatch, grafana_cloud, datadog, new_relic, otlp."
+    error_message = "Each metrics_providers entry must be one of: amp, prometheus, cloudwatch, grafana_cloud, datadog, new_relic, otlp."
   }
 }
 
@@ -1232,6 +1232,27 @@ variable "logs_new_relic" {
 
 
 
+variable "logs_opensearch" {
+  type = object({
+    endpoint     = optional(string)
+    index_prefix = optional(string)
+  })
+  description = "Amazon OpenSearch Service: the domain endpoint (https://...) and the index prefix. Requests are signed with SigV4 from the collector's Pod Identity role, so the domain's access policy or its fine-grained role mapping has to name logs_opensearch_role_arn - the module cannot do that from outside the domain."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_splunk" {
+  type = object({
+    hec_url              = optional(string)
+    hec_token_secret_arn = optional(string)
+    index                = optional(string)
+  })
+  description = "Splunk HTTP Event Collector: the HEC URL, a Secrets Manager ARN holding the token, and the target index."
+  default     = {}
+  nullable    = false
+}
+
 variable "logs_otlp" {
   type = object({
     endpoint           = optional(string)
@@ -1266,6 +1287,17 @@ variable "metrics_cloudwatch" {
   nullable    = false
 }
 
+
+variable "metrics_prometheus" {
+  type = object({
+    retention_days = optional(number)
+    storage_size   = optional(string)
+    endpoint       = optional(string)
+  })
+  description = "Prometheus running in the cluster, with the remote-write receiver on and a PersistentVolume behind it. Set endpoint to point at a Prometheus you already run, and the module installs nothing and only remote-writes to it. Installing needs a working StorageClass, which on a Ravion cluster means ebs_csi_driver_enabled."
+  default     = {}
+  nullable    = false
+}
 
 variable "metrics_grafana_cloud" {
   type = object({
@@ -1366,6 +1398,29 @@ variable "otel_contrib_command_name" {
 }
 
 
+
+################################################################################
+# In-cluster Prometheus
+################################################################################
+
+variable "prometheus_chart_version" {
+  type        = string
+  description = "Version of the prometheus-community/prometheus Helm chart installed for the in-cluster prometheus provider."
+  default     = "27.44.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.prometheus_chart_version))
+    error_message = "The prometheus_chart_version must be a semantic version like '27.44.0' (no leading 'v')."
+  }
+}
+
+variable "prometheus_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the prometheus chart values, after the values this module derives (later entries win). The route to alerting rules, extra scrape jobs, or a private image registry."
+  default     = []
+  nullable    = false
+}
 
 ################################################################################
 # Deprecated — removed in 0.8.2
