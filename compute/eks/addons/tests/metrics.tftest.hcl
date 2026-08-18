@@ -72,11 +72,20 @@ mock_provider "aws" {
 
 mock_provider "helm" {}
 
+# Beacon's credential is minted by Ravion's own provider, which refuses to
+# configure without a runner JWT.
+mock_provider "ravion" {}
+
+# Both signals start empty so every run opts into exactly the providers it is
+# about. The defaults ([loki] and [amp]) have their own coverage in
+# observability.tftest.hcl.
 variables {
   cluster_name      = "test-cluster"
   region            = "us-east-2"
   karpenter_enabled = false
   eso_enabled       = false
+  logs_providers    = []
+  metrics_providers = []
 }
 
 ################################################################################
@@ -128,7 +137,7 @@ run "metrics_enabled_creates_workspace_and_collector" {
   command = plan
 
   variables {
-    metrics_enabled = true
+    metrics_providers = ["amp"]
   }
 
   assert {
@@ -168,8 +177,8 @@ run "byo_workspace_suppresses_creation" {
   command = plan
 
   variables {
-    metrics_enabled  = true
-    amp_workspace_id = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    metrics_providers = ["amp"]
+    amp_workspace_id  = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
   }
 
   assert {
@@ -212,9 +221,9 @@ run "amp_region_override_moves_the_endpoint" {
   command = plan
 
   variables {
-    metrics_enabled  = true
-    amp_workspace_id = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    amp_region       = "us-west-2"
+    metrics_providers = ["amp"]
+    amp_workspace_id  = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    amp_region        = "us-west-2"
   }
 
   assert {
@@ -228,7 +237,7 @@ run "amp_region_override_moves_the_endpoint" {
   }
 
   assert {
-    condition     = strcontains(helm_release.otel_collector[0].values[0], "region: \"us-west-2\"")
+    condition     = yamldecode(helm_release.otel_collector[0].values[0]).config.extensions.sigv4auth.region == "us-west-2"
     error_message = "The sigv4auth extension must sign for the workspace's region, not the cluster's"
   }
 }
@@ -242,7 +251,7 @@ run "allowlist_composition" {
   command = plan
 
   variables {
-    metrics_enabled              = true
+    metrics_providers            = ["amp"]
     metrics_additional_allowlist = ["my_app_requests_total", "my_app_.*_seconds"]
     scrape_interval_seconds      = 120
   }
@@ -286,7 +295,7 @@ run "kube_state_metrics_can_be_left_out" {
   command = plan
 
   variables {
-    metrics_enabled            = true
+    metrics_providers          = ["amp"]
     kube_state_metrics_enabled = false
   }
 
@@ -309,7 +318,7 @@ run "grafana_role_scoping" {
   command = plan
 
   variables {
-    metrics_enabled      = true
+    metrics_providers    = ["amp"]
     amp_workspace_id     = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     grafana_role_enabled = true
   }

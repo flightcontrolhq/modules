@@ -7,6 +7,10 @@
 // stream per workload into one per replica per restart. Anything
 // high-cardinality belongs in structured metadata, which is stored but not
 // indexed. Changing these names is a breaking change for the dashboard.
+//
+// ONE PIPELINE, SEVERAL DESTINATIONS. Every loki-family provider the user
+// selected gets its own loki.write below, and the same processed stream is
+// forwarded to all of them: the files are tailed once however wide the fan-out.
 
 // Pods on THIS node only. Alloy runs as a DaemonSet, so an unfiltered
 // discovery would have every instance watching every pod in the cluster and
@@ -24,6 +28,16 @@ discovery.kubernetes "pods" {
 discovery.relabel "pod_logs" {
   targets = discovery.kubernetes.pods.targets
 
+%{ if namespace_exclude_regex != "" ~}
+  // Namespaces the operator asked to keep out of the log store, dropped at
+  // discovery so their files are never opened at all.
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    regex         = "${namespace_exclude_regex}"
+    action        = "drop"
+  }
+
+%{ endif ~}
   rule {
     source_labels = ["__meta_kubernetes_namespace"]
     target_label  = "namespace"
@@ -83,7 +97,7 @@ loki.source.file "pod_logs" {
 }
 
 loki.process "pod_logs" {
-  forward_to = [loki.write.ravion.receiver]
+  forward_to = [${join(", ", [for destination in destinations : "loki.write.${destination.name}.receiver"])}]
 
   // containerd writes CRI-format lines: "<ts> <stream> <flags> <message>".
   // This stage recovers the container's own timestamp, so a log's time is when
@@ -111,9 +125,22 @@ loki.process "pod_logs" {
     values = ["filename"]
   }
 }
+%{ for destination in destinations ~}
 
-loki.write "ravion" {
+// ${destination.comment}
+loki.write "${destination.name}" {
   endpoint {
-    url = "${loki_push_url}"
+    url = "${destination.url}"
+%{ if destination.username != null ~}
+
+    // The password is read from the environment at start-up. It reaches the
+    // pod from a Kubernetes Secret the External Secrets Operator materializes
+    // out of Secrets Manager, so the token is in neither this file nor Helm.
+    basic_auth {
+      username = "${destination.username}"
+      password = sys.env("${destination.password_env}")
+    }
+%{ endif ~}
   }
 }
+%{ endfor ~}

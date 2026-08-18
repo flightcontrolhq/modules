@@ -31,13 +31,18 @@ output "ebs_csi_role_arn" {
 ################################################################################
 
 output "cloudwatch_observability_addon_version" {
-  description = "Resolved version of the amazon-cloudwatch-observability EKS add-on (null if disabled)."
-  value       = var.cloudwatch_observability_enabled ? aws_eks_addon.cloudwatch_observability[0].addon_version : null
+  description = "Resolved version of the amazon-cloudwatch-observability EKS add-on (null unless cloudwatch is in logs_providers or metrics_providers)."
+  value       = local.cloudwatch_addon_enabled ? aws_eks_addon.cloudwatch_observability[0].addon_version : null
 }
 
 output "cloudwatch_observability_role_arn" {
-  description = "ARN of the CloudWatch Observability add-on Pod Identity role (null if disabled)."
-  value       = var.cloudwatch_observability_enabled ? module.cloudwatch_observability_role[0].role_arn : null
+  description = "ARN of the CloudWatch Observability add-on Pod Identity role (null unless the add-on is installed)."
+  value       = local.cloudwatch_addon_enabled ? module.cloudwatch_observability_role[0].role_arn : null
+}
+
+output "cloudwatch_application_signals_namespaces" {
+  description = "Namespaces Application Signals auto-instrumentation was asked for. The add-on's cluster-wide Auto-Monitor stays OFF when this is non-empty: annotate these namespaces with instrumentation.opentelemetry.io/inject-* to instrument exactly them. Empty list when Application Signals is off or when it was enabled cluster-wide."
+  value       = local.cloudwatch_metrics_config.application_signals_namespaces
 }
 
 ################################################################################
@@ -294,22 +299,22 @@ output "amp_query_endpoint" {
 
 output "amp_region" {
   description = "Region the AMP workspace lives in (null if metrics are disabled). May differ from the cluster's region when amp_region is set."
-  value       = var.metrics_enabled ? local.amp_region : null
+  value       = local.amp_enabled ? local.amp_region : null
 }
 
 output "metrics_namespace" {
   description = "Kubernetes namespace the metrics components are installed into (null if metrics are disabled)."
-  value       = var.metrics_enabled ? local.metrics_namespace : null
+  value       = local.metrics_on ? local.metrics_namespace : null
 }
 
 output "amp_remote_write_role_arn" {
   description = "ARN of the collector's Pod Identity role, scoped to aps:RemoteWrite on this workspace alone (null if metrics are disabled)."
-  value       = var.metrics_enabled ? module.amp_remote_write_role[0].role_arn : null
+  value       = local.amp_enabled ? module.amp_remote_write_role[0].role_arn : null
 }
 
 output "otel_collector_chart_version" {
   description = "Installed version of the opentelemetry-collector Helm chart (null if metrics are disabled)."
-  value       = var.metrics_enabled ? helm_release.otel_collector[0].version : null
+  value       = local.otel_metrics_enabled ? helm_release.otel_collector[0].version : null
 }
 
 output "kube_state_metrics_chart_version" {
@@ -337,7 +342,7 @@ output "loki_endpoint" {
 
 output "loki_namespace" {
   description = "Kubernetes namespace Loki and Alloy are installed into (null if logs are disabled)."
-  value       = var.logs_enabled ? local.logs_namespace : null
+  value       = local.loki_enabled ? local.logs_namespace : null
 }
 
 output "loki_s3_bucket" {
@@ -352,22 +357,22 @@ output "loki_s3_bucket_arn" {
 
 output "loki_role_arn" {
   description = "ARN of Loki's Pod Identity role, scoped to read, write, and delete on the log bucket alone (null if logs are disabled). Delete is what lets the compactor enforce retention."
-  value       = var.logs_enabled ? module.loki_role[0].role_arn : null
+  value       = local.loki_enabled ? module.loki_role[0].role_arn : null
 }
 
 output "log_retention_days" {
   description = "How long logs stay queryable (null if logs are disabled). Enforced by Loki's compactor; the bucket lifecycle rule sweeps a week later as a backstop."
-  value       = var.logs_enabled ? var.log_retention_days : null
+  value       = local.loki_enabled ? local.loki_config.retention_days : null
 }
 
 output "loki_chart_version" {
   description = "Installed version of the grafana/loki Helm chart (null if logs are disabled)."
-  value       = var.logs_enabled ? helm_release.loki[0].version : null
+  value       = local.loki_enabled ? helm_release.loki[0].version : null
 }
 
 output "alloy_chart_version" {
   description = "Installed version of the grafana/alloy Helm chart (null if logs are disabled)."
-  value       = var.logs_enabled ? helm_release.alloy[0].version : null
+  value       = local.alloy_enabled ? helm_release.alloy[0].version : null
 }
 
 ################################################################################
@@ -386,5 +391,99 @@ output "grafana_service" {
 
 output "grafana_amp_role_arn" {
   description = "ARN of the in-cluster Grafana's Pod Identity role for querying the AMP workspace (null when Grafana or metrics are disabled). Distinct from grafana_role_arn, which is for Amazon Managed Grafana reaching in from outside."
-  value       = var.grafana_enabled && var.metrics_enabled ? module.grafana_workspace_read_role[0].role_arn : null
+  value       = var.grafana_enabled && local.amp_enabled ? module.grafana_workspace_read_role[0].role_arn : null
+}
+
+################################################################################
+# Observability providers
+#
+# The contract the service modules (rvn-eks-web / worker / cron) and the control
+# plane read. Two rules hold across all of it:
+#
+#   * The *_rendering_providers lists are IN FALLBACK ORDER. A service module
+#     lists one ui.logs / ui.metrics entry per element, in this order, each
+#     guarded on membership; the dashboard reads the first that can answer.
+#
+#   * The *_external_links lists are the ship-only providers. href_prefix is a
+#     base URL the caller completes with its own namespace/workload query.
+################################################################################
+
+output "logs_providers" {
+  description = "Log destinations selected for this cluster, as given. Always a list - empty when logs are off, never null, because a service module reads null as 'these add-ons predate providers'."
+  value       = tolist(local.logs_providers)
+}
+
+output "logs_rendering_providers" {
+  description = "The selected log providers Ravion's Logs tab can read, in fallback order: loki, then cloudwatch. Empty when logs are off, or when only ship-only providers are selected — the tab then shows the 'Open in ...' actions alone."
+  value       = tolist(local.logs_rendering_providers)
+}
+
+output "logs_cloudwatch_log_group" {
+  description = "CloudWatch Logs group Ravion's own log pipeline writes to (null unless cloudwatch is in logs_providers). One stream per pod, named <namespace>/<pod>/<container>. Distinct from the add-on's /aws/containerinsights/<cluster>/application group."
+  value       = local.cloudwatch_log_group_name
+}
+
+output "logs_external_links" {
+  description = "One entry per ship-only log provider: { provider, name, href_prefix }. href_prefix ends exactly where a query value begins, so the service module appends its own encoded query and nothing else. Always a list, empty when there are none."
+  value       = tolist(local.logs_external_links)
+}
+
+output "metrics_providers" {
+  description = "Metric destinations selected for this cluster, as given. Always a list - empty when metrics are off, never null."
+  value       = tolist(local.metrics_providers)
+}
+
+output "metrics_rendering_providers" {
+  description = "The selected metric providers Ravion's Metrics tab can read, in fallback order: amp, then prometheus, then cloudwatch. Empty when metrics are off."
+  value       = tolist(local.metrics_rendering_providers)
+}
+
+output "metrics_external_links" {
+  description = "One entry per ship-only metrics provider: { provider, name, href_prefix }, on the same terms as logs_external_links. Always a list, empty when there are none."
+  value       = tolist(local.metrics_external_links)
+}
+
+output "prometheus_endpoint" {
+  description = "In-cluster Prometheus base URL (null unless prometheus is in metrics_providers). Reachable only from inside the cluster: Ravion queries it through Beacon, the same way it queries Loki."
+  value       = local.prometheus_endpoint
+}
+
+output "grafana_cloud_logs_query_url" {
+  description = "Grafana Cloud Loki query base URL, derived from the push URL (null unless grafana_cloud is in logs_providers). Named in Beacon's proxy allowlist so the dashboard can read it through the agent."
+  value       = local.grafana_cloud_logs_query_url
+}
+
+output "grafana_cloud_metrics_query_url" {
+  description = "Grafana Cloud Prometheus query base URL, derived from the remote-write URL (null unless grafana_cloud is in metrics_providers)."
+  value       = local.grafana_cloud_metrics_query_url
+}
+
+output "observability_credentials_secret_name" {
+  description = "Name of the Kubernetes Secret in Beacon's namespace holding the credential the agent presents when proxying a query to an external store (null when there is none). Keys are username/password. This is the name the control plane carries as auth_secret — it never sees the value."
+  value       = local.observability_credentials_secret_name
+}
+
+output "observability_proxy_credentials" {
+  description = "Every proxy credential this module materialized: { endpointPrefix, secretName, kind }. observability_credentials_secret_name is the first of them; this is the full mapping for a cluster that renders from more than one external store."
+  value       = local.beacon_proxy_credentials
+}
+
+output "observability_namespace" {
+  description = "Kubernetes namespace the collectors, the log store, and the materialized vendor credentials are installed into."
+  value       = local.observability_namespace
+}
+
+output "otel_logs_collector_role_arn" {
+  description = "ARN of the log collector's Pod Identity role (null unless a log provider authenticates with AWS credentials). Scoped to the Ravion log group and, for OpenSearch, to signing domain requests."
+  value       = local.otel_logs_needs_aws ? module.otel_logs_collector_role[0].role_arn : null
+}
+
+output "logs_opensearch_role_arn" {
+  description = "ARN of the role the collector signs OpenSearch requests with (null unless opensearch is in logs_providers). Map it in the domain's access policy or its fine-grained role mapping - that half of the grant lives on the domain, which this module does not manage."
+  value       = local.logs_opensearch_enabled ? module.otel_logs_collector_role[0].role_arn : null
+}
+
+output "prometheus_chart_version" {
+  description = "Installed version of the prometheus Helm chart (null unless the module installed an in-cluster Prometheus)."
+  value       = local.prometheus_install ? helm_release.prometheus[0].version : null
 }

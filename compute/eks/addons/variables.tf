@@ -88,13 +88,11 @@ variable "ebs_csi_addon_configuration_values" {
 
 ################################################################################
 # CloudWatch Observability (Container Insights)
+#
+# CloudWatch is a provider in logs_providers / metrics_providers now, not a
+# section of its own. The variables below are what the provider reads; see
+# observability.tf for the selection logic.
 ################################################################################
-
-variable "cloudwatch_observability_enabled" {
-  type        = bool
-  description = "Install the amazon-cloudwatch-observability add-on (Container Insights) and create its Pod Identity role. Collects node, pod, and container metrics and ships container logs to CloudWatch. Off by default: Ravion's own pipelines cover both halves - logs_enabled ships logs to Loki on S3, metrics_enabled ships metrics to Amazon Managed Prometheus - so this duplicates them at CloudWatch prices. Turn it on if you want Container Insights in its own right."
-  default     = false
-}
 
 variable "cloudwatch_observability_addon_version" {
   type        = string
@@ -797,13 +795,6 @@ variable "beacon_aws_account_id" {
 # Workload metrics (Amazon Managed Prometheus)
 ################################################################################
 
-variable "metrics_enabled" {
-  type        = bool
-  description = "Collect workload metrics into Amazon Managed Prometheus. Installs kube-state-metrics and an OpenTelemetry collector that scrapes a curated allow-list (cAdvisor, kube-state-metrics, kubelet resource metrics) and remote-writes it to an AMP workspace over SigV4. Also trims the Container Insights add-on to logs only, since its metrics half would then be a second, coarser copy of the same data."
-  default     = false
-  nullable    = false
-}
-
 variable "amp_workspace_id" {
   type        = string
   description = "Existing Amazon Managed Prometheus workspace to write into (ws-...). When null, the module creates one for this cluster. Bring your own to share a workspace between clusters, or to write into a workspace in another region."
@@ -871,23 +862,20 @@ variable "otel_collector_chart_version" {
 
 variable "otel_collector_image_repository" {
   type        = string
-  description = "Collector image. Defaults to the AWS Distro for OpenTelemetry, which is the distribution that ships the sigv4auth extension the AMP remote write depends on. Point this at a private mirror if the cluster cannot reach ECR Public."
-  default     = "public.ecr.aws/aws-observability/aws-otel-collector"
-  nullable    = false
+  description = "Metrics collector image. When null the module chooses: the AWS Distro for OpenTelemetry (public.ecr.aws/aws-observability/aws-otel-collector) for an AMP-only or CloudWatch-only selection, and the upstream contrib distribution when a vendor provider is selected, because the AWS Distro does not ship the datadog exporter or the basicauth extension. Point this at a private mirror if the cluster cannot reach the registry."
+  default     = null
 }
 
 variable "otel_collector_image_tag" {
   type        = string
-  description = "Tag of the collector image."
-  default     = "v0.49.0"
-  nullable    = false
+  description = "Tag of the metrics collector image. When null it follows the image the module chose: v0.49.0 for the AWS Distro, otel_contrib_image_tag for contrib."
+  default     = null
 }
 
 variable "otel_collector_command_name" {
   type        = string
-  description = "Binary the collector container runs, as the chart's command.name (it renders '/<name>'). The ADOT image's entrypoint is /awscollector; the upstream contrib image would need 'otelcol-contrib'."
-  default     = "awscollector"
-  nullable    = false
+  description = "Binary the metrics collector container runs, as the chart's command.name (it renders '/<name>'). When null it follows the chosen image: 'awscollector' for the AWS Distro, 'otelcol-contrib' for contrib."
+  default     = null
 }
 
 variable "otel_collector_service_account" {
@@ -967,13 +955,6 @@ variable "grafana_source_account_id" {
 ################################################################################
 # Workload logs (Loki on S3)
 ################################################################################
-
-variable "logs_enabled" {
-  type        = bool
-  description = "Collect container logs with Grafana Alloy into an in-cluster Loki that stores to S3 in this account. Loki is never exposed outside the cluster - Ravion reads it through the Beacon agent's tunnel - so no load balancer, no public endpoint, and no log data leaves the customer's account except in answer to a query."
-  default     = false
-  nullable    = false
-}
 
 variable "loki_s3_bucket" {
   type        = string
@@ -1121,6 +1102,324 @@ variable "grafana_service_account" {
 variable "grafana_helm_values" {
   type        = list(string)
   description = "Extra YAML documents merged into the grafana/grafana chart values, after the values this module derives (later entries win). The route to an ingress, persistence, an admin password from an existing secret, dashboards, or resources."
+  default     = []
+  nullable    = false
+}
+
+################################################################################
+# Observability providers
+#
+# One multi-select per signal. Loki (in-cluster) and Amazon Managed Prometheus
+# are the defaults: a fresh instance gets Ravion's full Logs and Metrics
+# experience with no configuration, and nothing CloudWatch is ever installed as
+# a side effect. Every other destination — including CloudWatch — is a member of
+# these lists and nothing more.
+#
+# Rendering providers form a FALLBACK CHAIN in the dashboard, never a merge:
+# logs loki -> cloudwatch, metrics amp -> prometheus -> cloudwatch. Ship-only
+# providers stack freely; the collectors fan out to all of them at once.
+################################################################################
+
+variable "logs_providers" {
+  type        = list(string)
+  description = "Where container logs go. Any combination of: loki (in-cluster store on S3, renders in Ravion), cloudwatch (CloudWatch Logs, renders in Ravion), grafana_cloud, datadog, new_relic, opensearch, splunk, otlp. An empty list turns logs off entirely — no collector, no store."
+  default     = ["loki"]
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for provider in var.logs_providers :
+      contains(["loki", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "opensearch", "splunk", "otlp"], provider)
+    ])
+    error_message = "Each logs_providers entry must be one of: loki, cloudwatch, grafana_cloud, datadog, new_relic, opensearch, splunk, otlp."
+  }
+}
+
+variable "metrics_providers" {
+  type        = list(string)
+  description = "Where workload metrics go. Any combination of: amp (Amazon Managed Prometheus, renders in Ravion), prometheus (in-cluster, renders through Beacon), cloudwatch (Container Insights, renders in Ravion), grafana_cloud, datadog, new_relic, otlp. An empty list turns metrics off entirely."
+  default     = ["amp"]
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for provider in var.metrics_providers :
+      contains(["amp", "prometheus", "cloudwatch", "grafana_cloud", "datadog", "new_relic", "otlp"], provider)
+    ])
+    error_message = "Each metrics_providers entry must be one of: amp, prometheus, cloudwatch, grafana_cloud, datadog, new_relic, otlp."
+  }
+}
+
+variable "observability_namespace" {
+  type        = string
+  description = "Kubernetes namespace the collectors, kube-state-metrics, the log store and the materialized vendor credentials are installed into. When null, Beacon's namespace is used, so Ravion's in-cluster components share one namespace — and, importantly, Loki keeps the Service URL the control plane already defaults to. Created if it does not exist."
+  default     = null
+}
+
+variable "logs_namespace_exclude" {
+  type        = list(string)
+  description = "Namespaces no log collector reads from. Applies to every logs provider: Alloy drops them at discovery, the OpenTelemetry collector never opens their files. Ravion's own namespace is excluded by default so the collectors do not tail themselves into a loop."
+  default     = ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"]
+  nullable    = false
+}
+
+################################################################################
+# Per-provider settings
+#
+# One object per provider. Only the objects whose provider is selected are read,
+# so passing them all is free. Every field is optional: where a field has an
+# older flat variable (log_retention_days, loki_s3_bucket, amp_workspace_id,
+# amp_region, cloudwatch_observability_addon_version), the object wins and the
+# flat variable is the fallback.
+#
+# Vendor credentials are ALWAYS Secrets Manager ARNs, never values: the External
+# Secrets Operator materializes them into Kubernetes Secrets in the collector's
+# namespace, so nothing sensitive passes through Ravion, Helm values, or release
+# history. Selecting a vendor provider therefore requires eso_enabled.
+################################################################################
+
+variable "logs_loki" {
+  type = object({
+    retention_days      = optional(number)
+    s3_bucket           = optional(string)
+    persistence_enabled = optional(bool)
+    persistence_size    = optional(string)
+  })
+  description = "In-cluster Loki settings: how long logs stay queryable, an existing bucket to store chunks in, and the local working volume. Falls back to log_retention_days / loki_s3_bucket / loki_persistence_* when a field is null."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_cloudwatch" {
+  type = object({
+    retention_days = optional(number)
+    log_group_name = optional(string)
+  })
+  description = "CloudWatch Logs settings. The default log group is /ravion/eks/<cluster>, one stream per pod named <namespace>/<pod>/<container>."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_grafana_cloud" {
+  type = object({
+    url              = optional(string)
+    user             = optional(string)
+    token_secret_arn = optional(string)
+    stack_url        = optional(string)
+  })
+  description = "Grafana Cloud Logs: the Loki push URL, the numeric user/tenant id, a Secrets Manager ARN holding the access token, and (optionally) the stack URL used to build the 'Open in Grafana' link. Alloy writes here with basic auth, alongside any other loki-family destination."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_datadog" {
+  type = object({
+    site               = optional(string)
+    api_key_secret_arn = optional(string)
+  })
+  description = "Datadog logs: the site (datadoghq.com, datadoghq.eu, ...) and a Secrets Manager ARN holding the API key. Shared with metrics_datadog when both signals pick Datadog."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_new_relic" {
+  type = object({
+    region                 = optional(string)
+    license_key_secret_arn = optional(string)
+  })
+  description = "New Relic logs: region (us or eu, deciding the OTLP endpoint) and a Secrets Manager ARN holding the license key."
+  default     = {}
+  nullable    = false
+}
+
+
+
+variable "logs_opensearch" {
+  type = object({
+    endpoint     = optional(string)
+    index_prefix = optional(string)
+  })
+  description = "Amazon OpenSearch Service: the domain endpoint (https://...) and the index prefix. Requests are signed with SigV4 from the collector's Pod Identity role, so the domain's access policy or its fine-grained role mapping has to name logs_opensearch_role_arn - the module cannot do that from outside the domain."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_splunk" {
+  type = object({
+    hec_url              = optional(string)
+    hec_token_secret_arn = optional(string)
+    index                = optional(string)
+  })
+  description = "Splunk HTTP Event Collector: the HEC URL, a Secrets Manager ARN holding the token, and the target index."
+  default     = {}
+  nullable    = false
+}
+
+variable "logs_otlp" {
+  type = object({
+    endpoint           = optional(string)
+    headers_secret_arn = optional(string)
+  })
+  description = "Any OTLP/HTTP log receiver: the endpoint, and optionally a Secrets Manager ARN holding the value of an Authorization header the collector sends with every request."
+  default     = {}
+  nullable    = false
+}
+
+variable "metrics_amp" {
+  type = object({
+    workspace_id = optional(string)
+    region       = optional(string)
+    alias        = optional(string)
+  })
+  description = "Amazon Managed Prometheus: an existing workspace to write into, the region it lives in, and the alias for a created one. Falls back to amp_workspace_id / amp_region / amp_alias."
+  default     = {}
+  nullable    = false
+}
+
+variable "metrics_cloudwatch" {
+  type = object({
+    enhanced_observability         = optional(bool)
+    application_signals_enabled    = optional(bool)
+    application_signals_namespaces = optional(list(string))
+    addon_version                  = optional(string)
+    addon_configuration_values     = optional(string)
+  })
+  description = "CloudWatch Container Insights. Application Signals auto-instrumentation is OFF unless application_signals_enabled is true: with it on, the add-on's Auto-Monitor webhook injects the AWS OpenTelemetry agent into workloads and restarts their pods, which is exactly the behaviour that used to be silently on. Falls back to cloudwatch_observability_addon_version / cloudwatch_observability_addon_configuration_values."
+  default     = {}
+  nullable    = false
+}
+
+
+variable "metrics_prometheus" {
+  type = object({
+    retention_days = optional(number)
+    storage_size   = optional(string)
+    endpoint       = optional(string)
+  })
+  description = "Prometheus running in the cluster, with the remote-write receiver on and a PersistentVolume behind it. Set endpoint to point at a Prometheus you already run, and the module installs nothing and only remote-writes to it. Installing needs a working StorageClass, which on a Ravion cluster means ebs_csi_driver_enabled."
+  default     = {}
+  nullable    = false
+}
+
+variable "metrics_grafana_cloud" {
+  type = object({
+    url              = optional(string)
+    user             = optional(string)
+    token_secret_arn = optional(string)
+    stack_url        = optional(string)
+  })
+  description = "Grafana Cloud Metrics: the Prometheus remote-write URL, the numeric instance/user id, a Secrets Manager ARN holding the token, and (optionally) the stack URL for the 'Open in Grafana' link."
+  default     = {}
+  nullable    = false
+}
+
+variable "metrics_datadog" {
+  type = object({
+    site               = optional(string)
+    api_key_secret_arn = optional(string)
+  })
+  description = "Datadog metrics: the site and a Secrets Manager ARN holding the API key. Shared with logs_datadog when both signals pick Datadog."
+  default     = {}
+  nullable    = false
+}
+
+variable "metrics_new_relic" {
+  type = object({
+    region                 = optional(string)
+    license_key_secret_arn = optional(string)
+  })
+  description = "New Relic metrics: region (us or eu) and a Secrets Manager ARN holding the license key."
+  default     = {}
+  nullable    = false
+}
+
+variable "metrics_otlp" {
+  type = object({
+    endpoint           = optional(string)
+    headers_secret_arn = optional(string)
+  })
+  description = "Any OTLP/HTTP metrics receiver: the endpoint, and optionally a Secrets Manager ARN holding the value of an Authorization header."
+  default     = {}
+  nullable    = false
+}
+
+################################################################################
+# Log collector (OpenTelemetry)
+#
+# The second log collector, next to Alloy. Alloy carries the loki-family
+# destinations because the dashboard's label contract is written against it;
+# this one carries every other log destination, with one exporter per selected
+# provider on a single pipeline.
+################################################################################
+
+variable "otel_logs_collector_service_account" {
+  type        = string
+  description = "Service account the log collector runs as. The Pod Identity association that lets it write to CloudWatch Logs or sign OpenSearch requests binds to this name."
+  default     = "ravion-otel-logs-collector"
+  nullable    = false
+}
+
+variable "otel_logs_collector_resources" {
+  type = object({
+    cpu_request    = optional(string, "100m")
+    memory_request = optional(string, "128Mi")
+    cpu_limit      = optional(string)
+    memory_limit   = optional(string, "512Mi")
+  })
+  description = "Resource requests and limits for each log collector pod. It runs on every node, so this is multiplied by the node count. A memory limit is set by default because the collector's memory_limiter processor sizes itself as a percentage of the container limit."
+  default     = {}
+  nullable    = false
+}
+
+variable "otel_logs_collector_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the opentelemetry-collector chart values for the log collector (later entries win)."
+  default     = []
+  nullable    = false
+}
+
+variable "otel_contrib_image_repository" {
+  type        = string
+  description = "Image for collectors that need vendor exporters (datadog, splunk_hec, opensearch, awscloudwatchlogs). The AWS Distro does not ship them, so the log collector — and the metrics collector, when a vendor provider is selected — runs the upstream contrib distribution instead."
+  default     = "docker.io/otel/opentelemetry-collector-contrib"
+  nullable    = false
+}
+
+variable "otel_contrib_image_tag" {
+  type        = string
+  description = "Tag of the contrib collector image."
+  default     = "0.137.0"
+  nullable    = false
+}
+
+variable "otel_contrib_command_name" {
+  type        = string
+  description = "Binary the contrib collector container runs, as the chart's command.name (it renders '/<name>')."
+  default     = "otelcol-contrib"
+  nullable    = false
+}
+
+
+
+################################################################################
+# In-cluster Prometheus
+################################################################################
+
+variable "prometheus_chart_version" {
+  type        = string
+  description = "Version of the prometheus-community/prometheus Helm chart installed for the in-cluster prometheus provider."
+  default     = "27.44.0"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.prometheus_chart_version))
+    error_message = "The prometheus_chart_version must be a semantic version like '27.44.0' (no leading 'v')."
+  }
+}
+
+variable "prometheus_helm_values" {
+  type        = list(string)
+  description = "Extra YAML documents merged into the prometheus chart values, after the values this module derives (later entries win). The route to alerting rules, extra scrape jobs, or a private image registry."
   default     = []
   nullable    = false
 }

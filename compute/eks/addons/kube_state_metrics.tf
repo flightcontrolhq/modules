@@ -26,7 +26,7 @@ locals {
   # In-cluster DNS, so the collector never leaves the cluster to scrape it.
   kube_state_metrics_target = "${local.kube_state_metrics_name}.${local.metrics_namespace}.svc.cluster.local:8080"
 
-  kube_state_metrics_install = var.metrics_enabled && var.kube_state_metrics_enabled
+  kube_state_metrics_install = local.kube_state_metrics_wanted && var.kube_state_metrics_enabled
 }
 
 resource "helm_release" "kube_state_metrics" {
