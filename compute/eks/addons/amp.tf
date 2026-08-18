@@ -23,39 +23,39 @@
 ################################################################################
 
 locals {
-  amp_create = var.metrics_enabled && var.amp_workspace_id == null
+  amp_create = local.amp_enabled && local.amp_config.workspace_id == null
 
   # data.aws_region.current is never null, so this always resolves.
-  amp_region = coalesce(var.amp_region, var.region, data.aws_region.current.region)
-  amp_alias  = coalesce(var.amp_alias, "ravion-${var.cluster_name}")
+  amp_region = coalesce(local.amp_config.region, var.region, data.aws_region.current.region)
+  amp_alias  = coalesce(local.amp_config.alias, "ravion-${var.cluster_name}")
 
-  amp_workspace_id = var.metrics_enabled ? (
-    local.amp_create ? aws_prometheus_workspace.this[0].id : var.amp_workspace_id
+  amp_workspace_id = local.amp_enabled ? (
+    local.amp_create ? aws_prometheus_workspace.this[0].id : local.amp_config.workspace_id
   ) : null
 
   # Constructed rather than read back for the bring-your-own case: a data source
   # would make every plan depend on the workspace still existing, and the ARN of
   # an AMP workspace is fully determined by account, region, and id.
-  amp_workspace_arn = var.metrics_enabled ? (
+  amp_workspace_arn = local.amp_enabled ? (
     local.amp_create
     ? aws_prometheus_workspace.this[0].arn
-    : "arn:${data.aws_partition.current.partition}:aps:${local.amp_region}:${data.aws_caller_identity.current.account_id}:workspace/${var.amp_workspace_id}"
+    : "arn:${data.aws_partition.current.partition}:aps:${local.amp_region}:${data.aws_caller_identity.current.account_id}:workspace/${local.amp_config.workspace_id}"
   ) : null
 
   # The Prometheus-compatible base URL. Grafana and the Ravion dashboard take it
   # as-is; the collector appends the remote-write path.
-  amp_query_endpoint = var.metrics_enabled ? (
+  amp_query_endpoint = local.amp_enabled ? (
     "https://aps-workspaces.${local.amp_region}.${data.aws_partition.current.dns_suffix}/workspaces/${local.amp_workspace_id}"
   ) : null
 
-  amp_remote_write_endpoint = var.metrics_enabled ? "${local.amp_query_endpoint}/api/v1/remote_write" : null
+  amp_remote_write_endpoint = local.amp_enabled ? "${local.amp_query_endpoint}/api/v1/remote_write" : null
 }
 
 resource "aws_prometheus_workspace" "this" {
   count = local.amp_create ? 1 : 0
 
   # Null means the provider's own region, which is the cluster's region.
-  region = var.amp_region
+  region = local.amp_config.region
 
   alias = local.amp_alias
 
@@ -67,7 +67,7 @@ resource "aws_prometheus_workspace" "this" {
 ################################################################################
 
 data "aws_iam_policy_document" "amp_remote_write" {
-  count = var.metrics_enabled ? 1 : 0
+  count = local.amp_enabled ? 1 : 0
 
   statement {
     sid       = "RemoteWriteToWorkspace"
@@ -78,7 +78,7 @@ data "aws_iam_policy_document" "amp_remote_write" {
 }
 
 module "amp_remote_write_role" {
-  count = var.metrics_enabled ? 1 : 0
+  count = local.amp_enabled ? 1 : 0
 
   source = "../../../security/iam"
 
@@ -99,7 +99,7 @@ module "amp_remote_write_role" {
 # Identity Agent populates — the sigv4auth extension configures no credentials
 # of its own.
 resource "aws_eks_pod_identity_association" "otel_collector" {
-  count = var.metrics_enabled ? 1 : 0
+  count = local.amp_enabled ? 1 : 0
 
   cluster_name    = var.cluster_name
   namespace       = local.metrics_namespace

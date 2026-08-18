@@ -28,14 +28,14 @@ locals {
   # renders a datasource it cannot reach as a permanently failing panel, which
   # is worse than an absent one.
   grafana_datasources = concat(
-    var.metrics_enabled ? [
+    local.amp_enabled ? [
       {
         name      = "Ravion Metrics (AMP)"
         uid       = "ravion-amp"
         type      = "prometheus"
         access    = "proxy"
         url       = local.amp_query_endpoint
-        isDefault = !var.logs_enabled
+        isDefault = !local.loki_enabled
         jsonData = {
           httpMethod = "POST"
           # Signed with whatever the AWS SDK default chain resolves, which the
@@ -46,7 +46,7 @@ locals {
         }
       },
     ] : [],
-    var.logs_enabled ? [
+    local.loki_enabled ? [
       {
         name      = "Ravion Logs (Loki)"
         uid       = "ravion-loki"
@@ -64,7 +64,7 @@ locals {
 ################################################################################
 
 data "aws_iam_policy_document" "grafana_workspace_read" {
-  count = var.grafana_enabled && var.metrics_enabled ? 1 : 0
+  count = var.grafana_enabled && local.amp_enabled ? 1 : 0
 
   statement {
     sid    = "QueryPrometheusWorkspace"
@@ -80,7 +80,7 @@ data "aws_iam_policy_document" "grafana_workspace_read" {
 }
 
 module "grafana_workspace_read_role" {
-  count = var.grafana_enabled && var.metrics_enabled ? 1 : 0
+  count = var.grafana_enabled && local.amp_enabled ? 1 : 0
 
   source = "../../../security/iam"
 
@@ -97,7 +97,7 @@ module "grafana_workspace_read_role" {
 }
 
 resource "aws_eks_pod_identity_association" "grafana" {
-  count = var.grafana_enabled && var.metrics_enabled ? 1 : 0
+  count = var.grafana_enabled && local.amp_enabled ? 1 : 0
 
   cluster_name    = var.cluster_name
   namespace       = local.grafana_namespace
@@ -165,8 +165,8 @@ resource "helm_release" "grafana" {
 
   lifecycle {
     precondition {
-      condition     = var.metrics_enabled || var.logs_enabled
-      error_message = "grafana_enabled is true but neither metrics_enabled nor logs_enabled is. Grafana would install with no datasources at all — turn on the pipeline you want to look at, or leave Grafana off."
+      condition     = local.metrics_on || local.logs_on
+      error_message = "grafana_enabled is true but both logs_providers and metrics_providers are empty. Grafana would install with no datasources at all — select the provider you want to look at, or leave Grafana off."
     }
   }
 }

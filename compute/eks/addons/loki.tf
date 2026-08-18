@@ -48,24 +48,24 @@ locals {
 
   loki_generated_bucket_name = "ravion-loki-${local.loki_cluster_slug}-${data.aws_caller_identity.current.account_id}"
 
-  loki_create_bucket = var.logs_enabled && var.loki_s3_bucket == null
+  loki_create_bucket = local.loki_enabled && local.loki_config.s3_bucket == null
 
-  loki_bucket_name = var.logs_enabled ? coalesce(var.loki_s3_bucket, local.loki_generated_bucket_name) : null
+  loki_bucket_name = local.loki_enabled ? coalesce(local.loki_config.s3_bucket, local.loki_generated_bucket_name) : null
 
   # Constructed rather than read from the module output, so the bring-your-own
   # case needs no data source and no round trip.
-  loki_bucket_arn = var.logs_enabled ? "arn:${data.aws_partition.current.partition}:s3:::${local.loki_bucket_name}" : null
+  loki_bucket_arn = local.loki_enabled ? "arn:${data.aws_partition.current.partition}:s3:::${local.loki_bucket_name}" : null
 
   # Loki takes durations, not days. Kept a whole number of days so it lines up
   # with the 24h index period.
-  loki_retention_period = "${var.log_retention_days * 24}h"
+  loki_retention_period = "${local.loki_config.retention_days * 24}h"
 
   # The bucket sweeps up a week after the compactor should have. See (3) above.
-  loki_bucket_expiration_days = var.log_retention_days + 7
+  loki_bucket_expiration_days = local.loki_config.retention_days + 7
 
   loki_service_host = "${local.loki_release_name}.${local.logs_namespace}.svc.cluster.local"
-  loki_endpoint     = var.logs_enabled ? "http://${local.loki_service_host}:3100" : null
-  loki_push_url     = var.logs_enabled ? "${local.loki_endpoint}/loki/api/v1/push" : null
+  loki_endpoint     = local.loki_enabled ? "http://${local.loki_service_host}:3100" : null
+  loki_push_url     = local.loki_enabled ? "${local.loki_endpoint}/loki/api/v1/push" : null
 
   loki_resource_limits = merge(
     var.loki_resources.cpu_limit == null ? {} : { cpu = var.loki_resources.cpu_limit },
@@ -81,33 +81,6 @@ locals {
     length(local.loki_resource_requests) > 0 ? { requests = local.loki_resource_requests } : {},
     length(local.loki_resource_limits) > 0 ? { limits = local.loki_resource_limits } : {},
   )
-
-  # PENDING BEACON CHART CONTRACT — this key does not exist in the chart yet.
-  #
-  # Loki has no route out of the cluster: no ingress, no load balancer, and a
-  # ClusterIP Service. The only thing that can reach it from Ravion is Beacon,
-  # by proxying an HTTP request over the WebSocket it already holds — and the
-  # set of URLs it may proxy to has to be an allowlist the customer can read in
-  # their own Terraform, not something the control plane names at query time.
-  #
-  # The chart has no such value today (see packages/beacon/chart/beacon/
-  # values.yaml: exec, portForward, helmInventory and deploy are the only
-  # capabilities, and portForward is a TCP tunnel to a pod, not this). Helm
-  # ignores values a chart does not consume, so passing it now is inert rather
-  # than broken, and it means the module side of the contract is already in
-  # place when the chart grows `httpProxy`. THE KEY NAME BELOW IS A PROPOSAL:
-  # confirm it against the chart before relying on it, and expect to change it
-  # here if the chart lands on something else.
-  beacon_log_proxy_values = var.beacon_enabled && var.logs_enabled ? [
-    yamlencode({
-      httpProxy = {
-        enabled = true
-        # Exact origins, not prefixes: an allowlist that admits a host admits
-        # every path on it, and Loki's API is the only thing meant to be here.
-        allowedEndpoints = [local.loki_endpoint]
-      }
-    }),
-  ] : []
 }
 
 ################################################################################
@@ -153,7 +126,7 @@ module "loki_bucket" {
 ################################################################################
 
 data "aws_iam_policy_document" "loki_s3" {
-  count = var.logs_enabled ? 1 : 0
+  count = local.loki_enabled ? 1 : 0
 
   statement {
     sid    = "ListLogBucket"
@@ -181,7 +154,7 @@ data "aws_iam_policy_document" "loki_s3" {
 }
 
 module "loki_role" {
-  count = var.logs_enabled ? 1 : 0
+  count = local.loki_enabled ? 1 : 0
 
   source = "../../../security/iam"
 
@@ -198,7 +171,7 @@ module "loki_role" {
 }
 
 resource "aws_eks_pod_identity_association" "loki" {
-  count = var.logs_enabled ? 1 : 0
+  count = local.loki_enabled ? 1 : 0
 
   cluster_name    = var.cluster_name
   namespace       = local.logs_namespace
@@ -213,7 +186,7 @@ resource "aws_eks_pod_identity_association" "loki" {
 ################################################################################
 
 resource "helm_release" "loki" {
-  count = var.logs_enabled ? 1 : 0
+  count = local.loki_enabled ? 1 : 0
 
   name       = local.loki_release_name
   namespace  = local.logs_namespace
@@ -332,19 +305,19 @@ resource "helm_release" "loki" {
           resources = local.loki_resources
 
           persistence = {
-            enabled = var.loki_persistence_enabled
-            size    = var.loki_persistence_size
+            enabled = local.loki_config.persistence_enabled
+            size    = local.loki_config.persistence_size
           }
 
           # Empty when the PVC above already covers /var/loki.
-          extraVolumes = var.loki_persistence_enabled ? [] : [
+          extraVolumes = local.loki_config.persistence_enabled ? [] : [
             {
               name     = "loki-data"
-              emptyDir = { sizeLimit = var.loki_persistence_size }
+              emptyDir = { sizeLimit = local.loki_config.persistence_size }
             },
           ]
 
-          extraVolumeMounts = var.loki_persistence_enabled ? [] : [
+          extraVolumeMounts = local.loki_config.persistence_enabled ? [] : [
             {
               name      = "loki-data"
               mountPath = "/var/loki"
