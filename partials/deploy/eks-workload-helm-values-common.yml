@@ -14,7 +14,7 @@ image:
   tag: '<< deploy.input.image_ref contains "sha256:" ? "" : deploy.input.image_ref >>'
   digest: '<< deploy.input.image_ref contains "sha256:" ? deploy.input.image_ref : "" >>'
 imagePullSecrets: >-
-  << module.input.image_pull_secret_names != nil ? map(module.input.image_pull_secret_names, {"name": #}) : [] >>
+  << module.input.image_pull_secret_names != nil ? map(module.input.image_pull_secret_names, ({"name": #})) : [] >>
 command: '<< module.input.start_command != nil ? module.input.start_command : [] >>'
 args: '<< module.input.start_command_args != nil ? module.input.start_command_args : [] >>'
 env: '<< module.input.environment_variables != nil ? module.input.environment_variables : [] >>'
