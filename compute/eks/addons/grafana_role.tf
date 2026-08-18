@@ -34,7 +34,7 @@ data "aws_iam_policy_document" "grafana_read" {
   # Only rendered when there is a workspace to point at, so the role is still
   # useful for logs on a cluster with metrics off.
   dynamic "statement" {
-    for_each = var.metrics_enabled ? [1] : []
+    for_each = local.amp_enabled ? [1] : []
 
     content {
       sid    = "QueryPrometheusWorkspace"
