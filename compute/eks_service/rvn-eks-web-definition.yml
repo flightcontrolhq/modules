@@ -374,24 +374,77 @@ module:
       >>
     metrics:
       - $include: ../../partials/ui/eks-workload-pod-metrics.yml
+      # Replica counts, once per metrics rendering provider under a shared
+      # chart id, in the add-ons module's fallback order. See
+      # partials/ui/eks-workload-pod-metrics.yml for how the chain works and
+      # why an unset provider list reads as "AMP".
       - id: replicas_available
         name: Replicas available
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_available
+        name: Replicas available
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
+          query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      # Container Insights publishes no Deployment-level replica metric, but it
+      # does publish a running-pod count per Kubernetes Service - and the
+      # rvn-eks-web chart names its Service after fullnameOverride, so the
+      # Service dimension is this module's name. Close enough to "replicas
+      # available" to belong in the same chain: both count pods that are
+      # actually serving. Neither rvn-eks-worker nor rvn-eks-cron renders a
+      # Service, so neither gets this fallback.
+      - id: replicas_available
+        name: Replicas available
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "cloudwatch" in module.input.metrics_rendering_providers >>
+        source:
+          type: cloudwatch
+          aws_account_id: << module.input.aws_account_id >>
+          dimensions:
+            ClusterName: << module.input.cluster_name >>
+            Namespace: << module.input.namespace >>
+            Service: << module.input.name >>
+          name: service_number_of_running_pods
+          namespace: ContainerInsights
+          region: << module.input.aws_region >>
+          statistic: Average
+      # Desired replicas has no CloudWatch equivalent at all: the count lives
+      # in the Deployment spec, which Container Insights never reads. The chain
+      # ends at the in-cluster Prometheus.
       - id: replicas_desired
         name: Replicas desired
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_desired
+        name: Replicas desired
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
+          query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      # The load balancer charts below read the ALB the Terraform stack owns,
+      # not the cluster's observability stack, so no provider guard applies.
       - id: request_count
         name: Request count
         type: line

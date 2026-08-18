@@ -143,23 +143,55 @@ module:
   ui:
     metrics:
       - $include: ../../partials/ui/eks-workload-pod-metrics.yml
+      # Replica counts, once per metrics rendering provider under a shared
+      # chart id, in the add-ons module's fallback order. See
+      # partials/ui/eks-workload-pod-metrics.yml for how the chain works and
+      # why an unset provider list reads as "AMP".
+      #
+      # Neither chart has a CloudWatch link. Container Insights publishes no
+      # Deployment-level replica metric; its nearest equivalent counts pods per
+      # Kubernetes Service, and a worker renders no Service. With CloudWatch as
+      # the only metrics provider these two charts are empty and the pod charts
+      # still work.
       - id: replicas_available
         name: Replicas available
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_available
+        name: Replicas available
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
+          query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_desired
         name: Replicas desired
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
+      - id: replicas_desired
+        name: Replicas desired
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
