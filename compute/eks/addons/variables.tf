@@ -710,7 +710,7 @@ variable "beacon_chart_source" {
 variable "beacon_chart_version" {
   type        = string
   description = "Version of the Beacon Helm CHART to install - the agent's RBAC and wiring - pinned per module release so a chart change arrives as a module upgrade rather than as whatever the registry called latest that day. Set null to let Helm resolve the latest. This is NOT the agent version and never moves it: the control plane rolls the agent image forward per cluster, and the chart re-emits the running image on every upgrade, so an apply of this module - any apply - leaves the agent at whatever version it is running."
-  default     = "0.3.0"
+  default     = "0.4.0"
 
   validation {
     condition     = var.beacon_chart_version == null || can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.beacon_chart_version))
