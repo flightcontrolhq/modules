@@ -3,8 +3,8 @@ definition:
   name: EKS Add-ons
   description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload metrics into Amazon Managed Prometheus, workload logs into an in-cluster log store backed by S3, CloudWatch Container Insights, Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.7.0
-  description: Add cluster-health charts to the Metrics tab - node CPU and memory, node readiness, and pod counts - read from this module's own Amazon Managed Prometheus workspace. The charts stay pending until a stack apply with Metrics enabled.
+  version: 0.7.1
+  description: Beacon chart 0.3.0. The agent gains user-initiated recovery actions under the deploy grant (restart a workload, roll a release back), detects hand edits to Ravion-deployed workloads from the cluster's own Helm release records, and reports pod diagnoses with crash logs. The chart no longer asks to read Ingresses, PersistentVolumeClaims or TargetGroupBindings - three read grants removed, none added. The chart version is now pinned per module release; the agent image still moves forward under the control plane's self-update.
 module:
   inputs:
     - id: cluster
@@ -739,7 +739,7 @@ module:
     | Terraform variable | Default | What it changes |
     | ------------------ | ------- | --------------- |
     | `beacon_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
-    | `beacon_chart_version` | Latest | Beacon **chart** version, not the agent version — Ravion rolls the agent image forward independently |
+    | `beacon_chart_version` | `0.3.0` | Beacon **chart** version, pinned per module release; not the agent version — Ravion rolls the agent image forward independently. Set to `null` to track the registry's latest |
     | `beacon_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
     | `beacon_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
 

@@ -711,8 +711,8 @@ variable "beacon_chart_source" {
 
 variable "beacon_chart_version" {
   type        = string
-  description = "Version of the Beacon Helm chart to install. When null, Helm resolves the latest. This is the CHART version, not the agent version: the two move independently, because the control plane rolls the agent image forward per cluster while Terraform owns the chart release."
-  default     = null
+  description = "Version of the Beacon Helm chart to install. Pinned per module release so an apply is reproducible and a chart change (which is where the agent's RBAC lives) arrives as a module upgrade rather than as whatever the registry called latest that day. Set null to let Helm resolve the latest. This is the CHART version, not the agent version: the two move independently, because the control plane rolls the agent image forward per cluster while Terraform owns the chart release."
+  default     = "0.3.0"
 
   validation {
     condition     = var.beacon_chart_version == null || can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.beacon_chart_version))
