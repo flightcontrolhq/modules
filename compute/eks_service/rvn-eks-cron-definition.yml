@@ -196,26 +196,59 @@ module:
   ui:
     metrics:
       - $include: ../../partials/ui/eks-workload-pod-metrics.yml
+      # Run outcomes, once per metrics rendering provider under a shared chart
+      # id, in the add-ons module's fallback order. See
+      # partials/ui/eks-workload-pod-metrics.yml for how the chain works and
+      # why an unset provider list reads as "AMP".
+      #
       # CronJob-created Jobs are named `<name>-<schedule-id>`, where the id is
       # the schedule time in minutes since the epoch - all digits, hence the
       # numeric tail in the job_name match.
+      #
+      # Neither chart has a CloudWatch link. Container Insights reports on
+      # running pods and never on Job completion, so there is no metric that
+      # says a run finished, let alone whether it succeeded. With CloudWatch as
+      # the only metrics provider these two charts are empty and the pod charts
+      # still work.
       - id: job_runs_succeeded
         name: Runs succeeded
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(increase(kube_job_status_succeeded{namespace="<< module.input.namespace >>",job_name=~"<< module.input.name >>-[0-9]+"}[$__interval]))'
+      - id: job_runs_succeeded
+        name: Runs succeeded
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
+          query: 'sum(increase(kube_job_status_succeeded{namespace="<< module.input.namespace >>",job_name=~"<< module.input.name >>-[0-9]+"}[$__interval]))'
       - id: job_runs_failed
         name: Runs failed
         type: line
+        enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_region >>
           workspace_id: << module.input.amp_workspace_id >>
+          query: 'sum(increase(kube_job_status_failed{namespace="<< module.input.namespace >>",job_name=~"<< module.input.name >>-[0-9]+"}[$__interval]))'
+      - id: job_runs_failed
+        name: Runs failed
+        type: line
+        enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
+        source:
+          type: prometheus
+          aws_account_id: << module.input.aws_account_id >>
+          cluster_arn: << module.input.cluster_arn >>
+          endpoint: << module.input.prometheus_endpoint >>
           query: 'sum(increase(kube_job_status_failed{namespace="<< module.input.namespace >>",job_name=~"<< module.input.name >>-[0-9]+"}[$__interval]))'
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
