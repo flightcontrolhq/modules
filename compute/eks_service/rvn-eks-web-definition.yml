@@ -54,7 +54,7 @@ module:
           collapsible: true
           required: false
           default: <<ref.stack.output.private_alb_https_listener_arn>>
-        - $include: ../../partials/inputs/eks-workload-amp-mapped-inputs.yml
+        - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
       required: true
     - id: section_service
       label: Web service

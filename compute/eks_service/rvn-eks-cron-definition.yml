@@ -20,12 +20,12 @@ module:
     - id: section_addons
       label: EKS add-ons
       type: section
-      description: Add-ons module attached to the cluster above. Selecting it feeds the Metrics tab from the cluster's Amazon Managed Prometheus workspace.
+      description: Add-ons module attached to the cluster above. Selecting it points the Metrics and Logs tabs at whichever observability providers that module has selected.
     - id: addons
       label: EKS add-ons
       type: $ref:rvn-eks-addons
       mapped_inputs:
-        - $include: ../../partials/inputs/eks-workload-amp-mapped-inputs.yml
+        - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
       required: false
     - id: section_service
       label: Cron job
