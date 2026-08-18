@@ -66,11 +66,20 @@ mock_provider "aws" {
 
 mock_provider "helm" {}
 
+# Beacon's credential is minted by Ravion's own provider, which refuses to
+# configure without a runner JWT.
+mock_provider "ravion" {}
+
+# Both signals start empty so every run opts into exactly the providers it is
+# about. The defaults ([loki] and [amp]) have their own coverage in
+# observability.tftest.hcl.
 variables {
   cluster_name      = "test-cluster"
   region            = "us-east-2"
   karpenter_enabled = false
   eso_enabled       = false
+  logs_providers    = []
+  metrics_providers = []
 }
 
 ################################################################################
@@ -114,7 +123,7 @@ run "logs_enabled_creates_bucket_loki_and_alloy" {
   command = plan
 
   variables {
-    logs_enabled = true
+    logs_providers = ["loki"]
   }
 
   assert {
@@ -174,7 +183,7 @@ run "byo_bucket_suppresses_creation" {
   command = plan
 
   variables {
-    logs_enabled   = true
+    logs_providers = ["loki"]
     loki_s3_bucket = "my-existing-log-bucket"
   }
 
@@ -207,7 +216,7 @@ run "retention_is_enforced_in_both_places" {
   command = plan
 
   variables {
-    logs_enabled       = true
+    logs_providers     = ["loki"]
     log_retention_days = 14
   }
 
@@ -242,7 +251,7 @@ run "loki_runs_as_a_single_binary_with_no_extras" {
   command = plan
 
   variables {
-    logs_enabled = true
+    logs_providers = ["loki"]
   }
 
   assert {
@@ -304,7 +313,7 @@ run "alloy_attaches_the_agreed_label_set" {
   command = plan
 
   variables {
-    logs_enabled = true
+    logs_providers = ["loki"]
   }
 
   assert {
@@ -351,17 +360,17 @@ run "beacon_receives_the_loki_endpoint" {
   command = plan
 
   variables {
-    logs_enabled   = true
+    logs_providers = ["loki"]
     beacon_enabled = true
   }
 
   assert {
-    condition     = length(local.beacon_log_proxy_values) == 1
+    condition     = length(local.beacon_observability_proxy_values) == 1
     error_message = "Beacon must be handed a proxy allowlist document when logs are on"
   }
 
   assert {
-    condition     = yamldecode(local.beacon_log_proxy_values[0]).httpProxy.allowedEndpoints == ["http://ravion-loki.ravion-beacon.svc.cluster.local:3100"]
+    condition     = join(",", yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.allowedEndpoints) == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
     error_message = "Beacon's proxy allowlist must name exactly the Loki endpoint"
   }
 }
@@ -374,7 +383,7 @@ run "beacon_gets_no_allowlist_without_logs" {
   }
 
   assert {
-    condition     = length(local.beacon_log_proxy_values) == 0
+    condition     = length(local.beacon_observability_proxy_values) == 0
     error_message = "With logs off there is nothing to proxy to, so no allowlist document is rendered"
   }
 }
@@ -383,11 +392,11 @@ run "loki_alone_gives_beacon_nothing_to_proxy" {
   command = plan
 
   variables {
-    logs_enabled = true
+    logs_providers = ["loki"]
   }
 
   assert {
-    condition     = length(local.beacon_log_proxy_values) == 0
+    condition     = length(local.beacon_observability_proxy_values) == 0
     error_message = "Without Beacon there is no proxy to allowlist for"
   }
 }
@@ -400,10 +409,10 @@ run "grafana_provisions_both_datasources" {
   command = plan
 
   variables {
-    logs_enabled     = true
-    metrics_enabled  = true
-    amp_workspace_id = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    grafana_enabled  = true
+    logs_providers    = ["loki"]
+    metrics_providers = ["amp"]
+    amp_workspace_id  = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    grafana_enabled   = true
   }
 
   assert {
@@ -443,7 +452,7 @@ run "grafana_with_logs_only_has_one_datasource" {
   command = plan
 
   variables {
-    logs_enabled    = true
+    logs_providers  = ["loki"]
     grafana_enabled = true
   }
 
