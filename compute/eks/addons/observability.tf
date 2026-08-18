@@ -8,12 +8,10 @@
 #
 # Three things this file establishes:
 #
-#   1. THE EFFECTIVE LISTS. var.logs_providers / var.metrics_providers are
-#      authoritative whenever they are non-null — which the module definition
-#      always makes them, passing [] when the signal's toggle is off. The
-#      deprecated booleans (logs_enabled, metrics_enabled,
-#      cloudwatch_observability_enabled) are read only when they are not, and
-#      disappear in 0.8.2.
+#   1. THE LISTS ARE THE ONLY SWITCH. logs_providers and metrics_providers say
+#      everything: an empty list is the signal turned off, and the module
+#      definition passes one when the section's toggle is off. The booleans this
+#      module carried before 0.8.0 are gone as of 0.8.2.
 #
 #   2. RENDERING ORDER IS A CONTRACT. logs_rendering_providers and
 #      metrics_rendering_providers are the selected members of a fixed list, in
@@ -33,24 +31,13 @@ locals {
   # Effective provider lists
   ##############################################################################
 
-  logs_providers_fallback = coalesce(var.logs_enabled, false) ? ["loki"] : []
-  logs_providers          = distinct(var.logs_providers != null ? var.logs_providers : local.logs_providers_fallback)
-
-  metrics_providers_fallback = coalesce(var.metrics_enabled, false) ? ["amp"] : []
-  metrics_providers_selected = var.metrics_providers != null ? var.metrics_providers : local.metrics_providers_fallback
-
-  # The one deprecated boolean that is additive rather than a fallback: an
-  # instance that had Container Insights on before 0.8.0 upgrades into
-  # [amp, cloudwatch] rather than losing it silently.
-  metrics_providers = distinct(concat(
-    local.metrics_providers_selected,
-    coalesce(var.cloudwatch_observability_enabled, false) ? ["cloudwatch"] : [],
-  ))
+  logs_providers    = distinct(var.logs_providers)
+  metrics_providers = distinct(var.metrics_providers)
 
   # Selected members of the rendering lists, in fallback order. Empty when the
   # signal is off, which is what the tabs read as "turned off for this cluster".
-  logs_rendering_providers    = [for provider in ["loki", "cloudwatch"] : provider if contains(local.logs_providers, provider)]
-  metrics_rendering_providers = [for provider in ["amp", "prometheus", "cloudwatch"] : provider if contains(local.metrics_providers, provider)]
+  logs_rendering_providers    = tolist([for provider in ["loki", "cloudwatch"] : provider if contains(local.logs_providers, provider)])
+  metrics_rendering_providers = tolist([for provider in ["amp", "prometheus", "cloudwatch"] : provider if contains(local.metrics_providers, provider)])
 
   logs_on    = length(local.logs_providers) > 0
   metrics_on = length(local.metrics_providers) > 0
@@ -318,9 +305,11 @@ locals {
 
   metrics_external_links = concat(
     local.metrics_datadog_enabled ? [{
-      provider    = "datadog"
-      name        = "Open in Datadog"
-      href_prefix = "https://app.${local.datadog_config.site}/metric/explorer?exp_metric="
+      provider = "datadog"
+      name     = "Open in Datadog"
+      # exp_scope, not exp_metric: what the service module appends is the
+      # namespace/pod tag query, which is the explorer's scope filter.
+      href_prefix = "https://app.${local.datadog_config.site}/metric/explorer?exp_scope="
     }] : [],
     local.metrics_new_relic_enabled ? [{
       provider    = "new_relic"

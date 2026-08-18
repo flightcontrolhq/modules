@@ -148,55 +148,6 @@ run "both_signals_can_be_turned_off" {
 }
 
 ################################################################################
-# The deprecated booleans, which exist for one release so an upgrade of an
-# existing instance changes nothing it did not ask for.
-################################################################################
-
-run "deprecated_booleans_map_onto_the_provider_lists" {
-  command = plan
-
-  variables {
-    logs_providers                   = null
-    metrics_providers                = null
-    logs_enabled                     = true
-    metrics_enabled                  = true
-    cloudwatch_observability_enabled = true
-  }
-
-  assert {
-    condition     = join(",", output.logs_providers) == "loki"
-    error_message = "logs_enabled = true must fall back to the in-cluster store"
-  }
-
-  # AMP still renders first; Container Insights becomes the fallback behind it.
-  assert {
-    condition     = join(",", output.metrics_rendering_providers) == "amp,cloudwatch"
-    error_message = "An instance that had Container Insights on must upgrade into [amp, cloudwatch], in that order"
-  }
-
-  assert {
-    condition     = length(aws_eks_addon.cloudwatch_observability) == 1
-    error_message = "cloudwatch_observability_enabled must still install the add-on"
-  }
-}
-
-run "deprecated_false_stays_off" {
-  command = plan
-
-  variables {
-    logs_providers    = null
-    metrics_providers = null
-    logs_enabled      = false
-    metrics_enabled   = false
-  }
-
-  assert {
-    condition     = join(",", output.logs_providers) == "" && join(",", output.metrics_providers) == ""
-    error_message = "An instance that had a signal off must stay off across the upgrade, not adopt the new default"
-  }
-}
-
-################################################################################
 # CloudWatch as a provider. Auto-Monitor off is the assertion this file exists
 # for: its default injects an agent into every workload in the cluster.
 ################################################################################
