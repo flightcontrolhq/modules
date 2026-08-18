@@ -59,12 +59,15 @@ locals {
   # rather than off a variable, so "is this installed" has exactly one answer.
   loki_enabled                  = contains(local.logs_providers, "loki")
   amp_enabled                   = contains(local.metrics_providers, "amp")
+  prometheus_enabled            = contains(local.metrics_providers, "prometheus")
   logs_cloudwatch_enabled       = contains(local.logs_providers, "cloudwatch")
   metrics_cloudwatch_enabled    = contains(local.metrics_providers, "cloudwatch")
   cloudwatch_addon_enabled      = local.logs_cloudwatch_enabled || local.metrics_cloudwatch_enabled
   logs_grafana_cloud_enabled    = contains(local.logs_providers, "grafana_cloud")
   logs_datadog_enabled          = contains(local.logs_providers, "datadog")
   logs_new_relic_enabled        = contains(local.logs_providers, "new_relic")
+  logs_opensearch_enabled       = contains(local.logs_providers, "opensearch")
+  logs_splunk_enabled           = contains(local.logs_providers, "splunk")
   logs_otlp_enabled             = contains(local.logs_providers, "otlp")
   metrics_grafana_cloud_enabled = contains(local.metrics_providers, "grafana_cloud")
   metrics_datadog_enabled       = contains(local.metrics_providers, "datadog")
@@ -76,7 +79,7 @@ locals {
   # carries every other log destination. Either can be the only one running.
   alloy_log_providers = [for provider in ["loki", "grafana_cloud"] : provider if contains(local.logs_providers, provider)]
   otel_logs_providers = [
-    for provider in ["cloudwatch", "datadog", "new_relic", "otlp"] :
+    for provider in ["cloudwatch", "datadog", "new_relic", "opensearch", "splunk", "otlp"] :
     provider if contains(local.logs_providers, provider)
   ]
 
@@ -136,6 +139,23 @@ locals {
     stack_url        = try(coalesce(var.logs_grafana_cloud.stack_url, var.metrics_grafana_cloud.stack_url), null)
   }
 
+  prometheus_config = {
+    retention_days = coalesce(var.metrics_prometheus.retention_days, 15)
+    storage_size   = coalesce(var.metrics_prometheus.storage_size, "50Gi")
+    endpoint       = var.metrics_prometheus.endpoint
+  }
+
+  opensearch_config = {
+    endpoint     = var.logs_opensearch.endpoint
+    index_prefix = coalesce(var.logs_opensearch.index_prefix, "ravion-logs")
+  }
+
+  splunk_config = {
+    hec_url              = var.logs_splunk.hec_url
+    hec_token_secret_arn = var.logs_splunk.hec_token_secret_arn
+    index                = var.logs_splunk.index
+  }
+
   otlp_logs_config = {
     endpoint           = var.logs_otlp.endpoint
     headers_secret_arn = var.logs_otlp.headers_secret_arn
@@ -159,9 +179,21 @@ locals {
 
   cloudwatch_log_group_name = local.logs_cloudwatch_enabled ? local.cloudwatch_logs_config.log_group_name : null
 
-  # In-cluster Prometheus arrives in 0.8.1; the output exists from 0.8.0 so the
-  # service modules can map it once and never again.
-  prometheus_endpoint = null
+  prometheus_release_name = "ravion-prometheus"
+
+  # The chart names the server Service <fullname>-server; fullnameOverride pins
+  # the first half so the URL is a constant rather than a function of the
+  # release name. Port 9090 is set on the Service to match the container's.
+  prometheus_service_host = "${local.prometheus_release_name}-server.${local.observability_namespace}.svc.cluster.local"
+
+  # Installed here, or one the customer already runs.
+  prometheus_install = local.prometheus_enabled && local.prometheus_config.endpoint == null
+
+  prometheus_endpoint = local.prometheus_enabled ? (
+    local.prometheus_config.endpoint != null ? local.prometheus_config.endpoint : "http://${local.prometheus_service_host}:9090"
+  ) : null
+
+  prometheus_remote_write_endpoint = local.prometheus_enabled ? "${local.prometheus_endpoint}/api/v1/write" : null
 
   # Grafana Cloud hands out a push URL; the query base is the same service with
   # the push path removed. Loki: <base>/loki/api/v1/push -> <base>/loki.
@@ -205,6 +237,13 @@ locals {
       remote_ref  = local.grafana_cloud_config.token_secret_arn
       environment = "GRAFANA_CLOUD_TOKEN"
     }] : [],
+    local.splunk_config.hec_token_secret_arn != null && local.logs_splunk_enabled ? [{
+      provider    = "splunk"
+      name        = "ravion-observability-splunk"
+      secret_key  = "token"
+      remote_ref  = local.splunk_config.hec_token_secret_arn
+      environment = "SPLUNK_HEC_TOKEN"
+    }] : [],
     local.otlp_logs_config.headers_secret_arn != null && local.logs_otlp_enabled ? [{
       provider    = "otlp_logs"
       name        = "ravion-observability-otlp-logs"
@@ -229,7 +268,7 @@ locals {
 
   otel_logs_secret_env = [
     for secret in local.vendor_secrets : secret
-    if contains(["datadog", "new_relic", "otlp_logs"], secret.provider)
+    if contains(["datadog", "new_relic", "splunk", "otlp_logs"], secret.provider)
   ]
 
   otel_metrics_secret_env = [
@@ -243,6 +282,7 @@ locals {
     local.logs_datadog_enabled || local.metrics_datadog_enabled ? ["datadog"] : [],
     local.logs_new_relic_enabled || local.metrics_new_relic_enabled ? ["new_relic"] : [],
     local.grafana_cloud_enabled ? ["grafana_cloud"] : [],
+    local.logs_splunk_enabled ? ["splunk"] : [],
   )
 
   ##############################################################################
@@ -268,6 +308,11 @@ locals {
       provider    = "grafana_cloud"
       name        = "Open in Grafana Cloud"
       href_prefix = "${trimsuffix(local.grafana_cloud_config.stack_url, "/")}/explore?left="
+    }] : [],
+    local.logs_opensearch_enabled && local.opensearch_config.endpoint != null ? [{
+      provider    = "opensearch"
+      name        = "Open Dashboards"
+      href_prefix = "${trimsuffix(local.opensearch_config.endpoint, "/")}/_dashboards/app/discover#/?_q="
     }] : [],
   )
 

@@ -474,6 +474,16 @@ output "observability_namespace" {
 }
 
 output "otel_logs_collector_role_arn" {
-  description = "ARN of the log collector's Pod Identity role (null unless a log provider needs AWS credentials). Scoped to the Ravion log group alone."
-  value       = local.logs_cloudwatch_enabled ? module.otel_logs_collector_role[0].role_arn : null
+  description = "ARN of the log collector's Pod Identity role (null unless a log provider authenticates with AWS credentials). Scoped to the Ravion log group and, for OpenSearch, to signing domain requests."
+  value       = local.otel_logs_needs_aws ? module.otel_logs_collector_role[0].role_arn : null
+}
+
+output "logs_opensearch_role_arn" {
+  description = "ARN of the role the collector signs OpenSearch requests with (null unless opensearch is in logs_providers). Map it in the domain's access policy or its fine-grained role mapping - that half of the grant lives on the domain, which this module does not manage."
+  value       = local.logs_opensearch_enabled ? module.otel_logs_collector_role[0].role_arn : null
+}
+
+output "prometheus_chart_version" {
+  description = "Installed version of the prometheus Helm chart (null unless the module installed an in-cluster Prometheus)."
+  value       = local.prometheus_install ? helm_release.prometheus[0].version : null
 }

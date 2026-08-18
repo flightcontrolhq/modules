@@ -84,6 +84,19 @@ locals {
         }
       }
     } : {},
+    local.prometheus_enabled ? {
+      # The in-cluster store, written to exactly the way AMP is - it is a
+      # rendering provider, so the same series have to reach it.
+      "prometheusremotewrite/in_cluster" = {
+        endpoint = local.prometheus_remote_write_endpoint
+        tls = {
+          insecure = true
+        }
+        resource_to_telemetry_conversion = {
+          enabled = false
+        }
+      }
+    } : {},
     local.metrics_datadog_enabled ? {
       datadog = {
         api = {
@@ -188,6 +201,9 @@ resource "helm_release" "otel_collector" {
     # Not a hard dependency — a missing target is a failed scrape, not a failed
     # collector — but it keeps the first minutes free of scrape errors.
     helm_release.kube_state_metrics,
+    # Remote-writing into a Prometheus that does not exist yet is a retry loop
+    # and a page of errors in the first minutes of a cluster's life.
+    helm_release.prometheus,
     # A vendor credential that is not materialized yet is a pod that never
     # starts, because the env var references a Secret key.
     helm_release.observability_secrets,
