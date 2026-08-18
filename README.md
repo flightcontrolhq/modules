@@ -74,7 +74,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-ecs-worker` | ECS Worker | v1.2.0 | `compute/ecs_service/` |
 | `rvn-efs` | EFS File System | v1.0.1 | `storage/efs/` |
 | `rvn-eks` | EKS Cluster | v0.2.0 | `compute/eks/` |
-| `rvn-eks-addons` | EKS Add-ons | v0.8.2 | `compute/eks/addons/` |
+| `rvn-eks-addons` | EKS Add-ons | v0.8.3 | `compute/eks/addons/` |
 | `rvn-eks-cron` | EKS Cron Job | v0.4.0 | `compute/eks_service/` |
 | `rvn-eks-web` | EKS Web Service | v0.4.0 | `compute/eks_service/` |
 | `rvn-eks-worker` | EKS Worker | v0.4.0 | `compute/eks_service/` |

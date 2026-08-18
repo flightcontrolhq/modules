@@ -3,17 +3,19 @@ definition:
   name: EKS Add-ons
   description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload logs and metrics shipped to any combination of destinations (an in-cluster log store on S3 and Amazon Managed Prometheus by default; CloudWatch, Grafana Cloud, Datadog, New Relic or a custom OTLP endpoint on request), Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.8.2
+  version: 0.8.3
   description: >-
-    The pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled Terraform
-    variables are gone; the provider lists are the only switch, and an instance upgraded
-    through 0.8.0 or 0.8.1 already carries the selection they mapped onto. An instance still
-    on 0.7.x should upgrade to 0.8.1 first, which is what reads them.
-    Rendering an external store through the Beacon agent is complete: Grafana Cloud's query
-    endpoints and an in-cluster Prometheus are on the agent's proxy allowlist, each paired
-    with the credential Secret the External Secrets Operator materializes into Beacon's
-    namespace, and the module publishes that Secret's name for the control plane to carry as
-    an opaque reference - Ravion asks the agent to present it and never sees the value.
+    Beacon chart 0.4.0. An add-ons apply no longer moves the agent version: the chart re-emits
+    the image the release is already running on every helm upgrade, so a values change, a module
+    release or a rerun carries the agent's RBAC and wiring forward and leaves the version to the
+    control plane's rollout. The chart also gains httpProxy.credentials, which is what lets Ravion
+    render Grafana Cloud metrics and logs and an in-cluster Prometheus through the agent with a
+    credential the cluster holds. The first upgrade onto this chart still passes through the 0.3.0
+    chart's behaviour once - the agent lands on whatever it was running, and Ravion's rollout takes
+    it from there.
+    Previously (0.8.2): the pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled
+    Terraform variables are gone; the provider lists are the only switch. An instance still on 0.7.x
+    should upgrade to 0.8.1 first, which is what reads them.
 module:
   inputs:
     - id: cluster
@@ -1242,7 +1244,7 @@ module:
     | Terraform variable | Default | What it changes |
     | ------------------ | ------- | --------------- |
     | `beacon_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
-    | `beacon_chart_version` | `0.3.0` | Beacon **chart** version, pinned per module release; not the agent version — Ravion rolls the agent image forward independently. Set to `null` to track the registry's latest |
+    | `beacon_chart_version` | `0.4.0` | Beacon **chart** version, pinned per module release; never the agent version — the chart keeps whatever the release is running and Ravion rolls it forward. Set to `null` to track the registry's latest |
     | `beacon_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
     | `beacon_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
 
