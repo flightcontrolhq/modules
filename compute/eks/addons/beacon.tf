@@ -239,11 +239,15 @@ resource "helm_release" "beacon" {
     var.beacon_helm_values,
   )
 
-  # The image tag is the one value the control plane owns: Beacon patches its
-  # own Deployment to roll the fleet forward, and an apply that re-asserted the
-  # tag would revert every staged rollout. It is passed through `set`, which
-  # holds nothing else, so ignore_changes below names exactly it. The chart's
-  # tag is a FLOOR, not the truth (beacon ADR §6).
+  # The agent VERSION is not this module's business. The control plane rolls
+  # the fleet forward by patching Beacon's own Deployment (beacon ADR §6), and
+  # the chart (>= 0.4.0, image.preserveOnUpgrade) re-emits the running image
+  # on every helm upgrade, so an apply — a values change, a module release, a
+  # rerun — carries the chart's RBAC and wiring forward without touching the
+  # version. The chart's appVersion is only the FLOOR a fresh install starts
+  # from. `beacon_image_tag` is the one deliberate exception: an explicit pin,
+  # passed through `set` (which holds nothing else) and then ignored so a
+  # later rollout is not reverted by the next apply.
   set = var.beacon_image_tag == null ? [] : [
     {
       name  = "image.tag"
