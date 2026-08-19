@@ -185,7 +185,7 @@ variable "deploy_timeout_seconds" {
 
 variable "instance_type" {
   type        = string
-  description = "EC2 instance type for the Auto Scaling Group."
+  description = "EC2 instance type for the Auto Scaling Group. Use the newest generation the region offers for the chosen family, such as m8g rather than m7g or m6i; Graviton (g) types need an arm64 image. See the module README for the selection guide."
 }
 
 variable "ami_id" {
