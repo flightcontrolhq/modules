@@ -3,16 +3,22 @@ definition:
   name: EKS Add-ons
   description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload logs and metrics shipped to any combination of destinations (an in-cluster log store on S3 and Amazon Managed Prometheus by default; CloudWatch, Grafana Cloud, Datadog, New Relic or a custom OTLP endpoint on request), Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
 release:
-  version: 0.8.3
+  version: 0.8.4
   description: >-
-    Beacon chart 0.4.0. An add-ons apply no longer moves the agent version: the chart re-emits
-    the image the release is already running on every helm upgrade, so a values change, a module
-    release or a rerun carries the agent's RBAC and wiring forward and leaves the version to the
-    control plane's rollout. The chart also gains httpProxy.credentials, which is what lets Ravion
-    render Grafana Cloud metrics and logs and an in-cluster Prometheus through the agent with a
-    credential the cluster holds. The first upgrade onto this chart still passes through the 0.3.0
-    chart's behaviour once - the agent lands on whatever it was running, and Ravion's rollout takes
-    it from there.
+    Beacon chart 0.4.1, and beacon_image_tag is a plain pin. Every release so far ignored the tag
+    after its first apply (the original "floor, not a pin" design), which froze whatever tag was
+    first applied into the state for good: a cluster once given a since-retired tag was rolled back
+    to it on every upgrade and wedged when that image could not start. Now the pin is asserted for
+    exactly as long as it is configured and removing it hands
+    the version back to the control plane on the next apply. The 0.4.1 chart preserves the running
+    image whole (registry included, so a stale image.repository in beacon_helm_values no longer
+    re-renders a tag that registry never held) and only when the release's rollout has settled;
+    a wedged release takes the chart's floor, so a plain re-apply repairs it. If your instance has
+    beacon_image_tag or an image.repository override in its advanced variables from before 0.8.0,
+    remove both when upgrading.
+    Previously (0.8.3): Beacon chart 0.4.0 - an add-ons apply no longer moves the agent version;
+    the chart re-emits the running image on every helm upgrade, and gains httpProxy.credentials
+    for rendering Grafana Cloud and in-cluster Prometheus through the agent.
     Previously (0.8.2): the pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled
     Terraform variables are gone; the provider lists are the only switch. An instance still on 0.7.x
     should upgrade to 0.8.1 first, which is what reads them.

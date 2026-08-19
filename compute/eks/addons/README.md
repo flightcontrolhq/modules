@@ -372,20 +372,14 @@ To exercise the real registry protocol instead of overriding it, that package's 
 
 #### The image tag is not Terraform's to own
 
-With `beacon_self_update_enabled` on (the default), the control plane rolls each cluster's agent forward by patching Beacon's own Deployment — a namespaced `Role` scoped by `resourceNames` to that one object, and the only write permission the chart creates by default. An apply that re-asserted the image tag would revert every staged rollout, so the release carries:
+With `beacon_self_update_enabled` on (the default), the control plane rolls each cluster's agent forward by patching Beacon's own Deployment — a namespaced `Role` scoped by `resourceNames` to that one object, and the only write permission the chart creates by default. An apply that re-asserted the image tag would revert every staged rollout, so this module passes **no tag at all** by default and the chart (0.4.1+, `image.preserveOnUpgrade`) reads the image the release is already running back on every `helm upgrade` and re-emits it — registry and tag — once that release's rollout has settled. A fresh install starts at the chart's `appVersion` (the floor); every later apply leaves the version with whoever set it last. A release whose last rollout wedged is deliberately *not* preserved: the chart falls back to its floor, so a plain re-apply repairs it instead of re-asserting the image that could not start.
 
-```hcl
-set = [{ name = "image.tag", value = var.beacon_image_tag }]
+`beacon_image_tag` is the one deliberate exception, and it is a **pin**:
 
-lifecycle {
-  ignore_changes = [set]
-}
-```
-
-`set` carries the image tag and nothing else, so ignoring it ignores exactly the tag. `beacon_image_tag` is therefore a **floor, not a pin**: a fresh install starts there and the control plane moves it forward. Consequences worth knowing:
-
-- **Changing `beacon_image_tag` on an existing release does nothing.** Replace the release (`tofu apply -replace='module.eks_addons.helm_release.beacon[0]'`) to move the floor.
-- **To make Terraform the single owner of the version instead**, set `beacon_self_update_enabled = false`, set `beacon_image_tag` explicitly, and remove the `ignore_changes` in `beacon.tf`. You then own keeping the agent current — Ravion supports two agent minor versions back.
+- **While it is set, every apply asserts it** — including over a control-plane rollout that happened in between. Use it to hold a cluster at a version, on purpose.
+- **Removing it hands the version back to the control plane** on the next apply: the chart is rendered with no tag and preserves whatever is running.
+- Releases up to 0.8.3 instead ignored the tag after its first apply (`ignore_changes = [set]`), which froze the first tag ever applied into the state for good; an instance created back then may still carry `beacon_image_tag` (and an `image.repository` override in `beacon_helm_values`) in its advanced variables from a registry that no longer holds that tag. Remove both when upgrading to 0.8.4.
+- **To make Terraform the single owner of the version instead**, set `beacon_self_update_enabled = false` and pin `beacon_image_tag`. You then own keeping the agent current — Ravion supports two agent minor versions back.
 - The running version is reported in every heartbeat, so a cluster stuck on an old build is visible in fleet health rather than discovered during an incident.
 
 #### Namespace scoping and the deploy grant
@@ -512,14 +506,14 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | beacon_enabled | Mint the cluster's Beacon credential (via the `ravion` provider) and install the Ravion Beacon agent. | `bool` | `false` | no |
 | beacon_endpoint | WebSocket endpoint the agent dials — the single destination an egress policy must allow. | `string` | `"wss://websockets.ravion.com/beacon/v1/connect"` | no |
 | beacon_chart_source | `oci://` reference, or a filesystem path to a chart directory for local testing. | `string` | `"oci://public.ecr.aws/ravion/beacon"` | no |
-| beacon_chart_version | Beacon **chart** version (not the agent version). Null resolves the latest; ignored for a filesystem chart. | `string` | `null` | no |
+| beacon_chart_version | Beacon **chart** version (not the agent version), pinned per module release. Null resolves the latest; ignored for a filesystem chart. | `string` | `"0.4.1"` | no |
 | beacon_namespace | Namespace for the agent and its credential Secret (created if missing). | `string` | `"ravion-beacon"` | no |
 | beacon_namespace_scope | Namespaces the agent may observe. Empty is cluster-wide; non-empty renders namespaced Roles and no observation ClusterRole at all. | `list(string)` | `[]` | no |
 | beacon_deploy_enabled | Let Beacon perform Ravion's Helm deploys from inside the cluster. The widest grant the chart can create. | `bool` | `false` | no |
 | beacon_deploy_namespaces | Namespaces Beacon may deploy into. Falls back to `beacon_namespace_scope`; both empty with deploy on fails the apply. | `list(string)` | `[]` | no |
 | beacon_exec_enabled | Grant `create` on `pods/exec` — the only way Beacon can run a command inside a container. | `bool` | `false` | no |
 | beacon_self_update_enabled | Let the control plane roll the agent forward by patching its own Deployment. | `bool` | `true` | no |
-| beacon_image_tag | Agent image tag floor. Not a pin: subsequent changes are ignored (see above). Null uses the chart's `appVersion`. | `string` | `null` | no |
+| beacon_image_tag | Agent image tag **pin**: asserted on every apply while set, released back to the control plane when removed (see above). Null: a fresh install starts at the chart's `appVersion` and upgrades keep the running image. | `string` | `null` | no |
 | beacon_helm_values | Extra YAML docs merged into the Beacon chart values (`portForward`, `helmInventory`, `redaction`, `image.repository`, …). | `list(string)` | `[]` | no |
 | beacon_project_id / beacon_environment_id / beacon_aws_account_id | Ravion record ids recorded on the agent when its credential is minted. Optional. | `string` | `null` | no |
 | public_subnet_ids | Public subnets for internet-facing load balancers. Required when the public ALB or public NLB is enabled. | `list(string)` | `[]` | no |

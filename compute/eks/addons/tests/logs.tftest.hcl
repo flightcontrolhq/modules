@@ -402,6 +402,39 @@ run "loki_alone_gives_beacon_nothing_to_proxy" {
 }
 
 ################################################################################
+# The agent version is the control plane's, not this module's: the release
+# passes no image tag unless one is deliberately pinned, and a pin is a plain
+# input — asserted while set, gone when removed — never frozen into the state.
+################################################################################
+
+run "beacon_release_passes_no_image_tag_by_default" {
+  command = plan
+
+  variables {
+    beacon_enabled = true
+  }
+
+  assert {
+    condition     = length(helm_release.beacon[0].set) == 0
+    error_message = "With beacon_image_tag unset the release must pass no image tag, so the chart preserves whatever the agent is running"
+  }
+}
+
+run "beacon_image_tag_is_a_pin_while_set" {
+  command = plan
+
+  variables {
+    beacon_enabled   = true
+    beacon_image_tag = "v9.9.9"
+  }
+
+  assert {
+    condition     = length(helm_release.beacon[0].set) == 1 && one(helm_release.beacon[0].set).name == "image.tag" && one(helm_release.beacon[0].set).value == "v9.9.9"
+    error_message = "A configured beacon_image_tag must reach the chart as image.tag, and nothing else may travel in `set`"
+  }
+}
+
+################################################################################
 # In-cluster Grafana.
 ################################################################################
 

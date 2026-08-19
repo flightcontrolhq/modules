@@ -710,7 +710,7 @@ variable "beacon_chart_source" {
 variable "beacon_chart_version" {
   type        = string
   description = "Version of the Beacon Helm CHART to install - the agent's RBAC and wiring - pinned per module release so a chart change arrives as a module upgrade rather than as whatever the registry called latest that day. Set null to let Helm resolve the latest. This is NOT the agent version and never moves it: the control plane rolls the agent image forward per cluster, and the chart re-emits the running image on every upgrade, so an apply of this module - any apply - leaves the agent at whatever version it is running."
-  default     = "0.4.0"
+  default     = "0.4.1"
 
   validation {
     condition     = var.beacon_chart_version == null || can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.beacon_chart_version))
@@ -762,7 +762,7 @@ variable "beacon_self_update_enabled" {
 
 variable "beacon_image_tag" {
   type        = string
-  description = "Agent image tag to PIN. Leave null (the default): a fresh install then starts at the chart's appVersion and every later apply keeps whatever version the release is running, because the control plane owns the agent version and the chart re-emits the running image on upgrade. Set it only to force a specific agent version onto a cluster; it is then applied once and ignored afterwards, so a later control-plane rollout is not reverted by the next apply."
+  description = "Agent image tag to PIN. Leave null (the default): a fresh install then starts at the chart's appVersion and every later apply keeps whatever version the release is running, because the control plane owns the agent version and the chart re-emits the running image on upgrade. Set it only to force a specific agent version onto a cluster: while it is set every apply re-asserts it, a control-plane rollout in between included, and removing it hands the version back to the control plane on the next apply. It is a pin, not a one-off - leave it null unless you mean to hold a cluster at a version."
   default     = null
 }
 

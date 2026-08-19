@@ -241,13 +241,22 @@ resource "helm_release" "beacon" {
 
   # The agent VERSION is not this module's business. The control plane rolls
   # the fleet forward by patching Beacon's own Deployment (beacon ADR §6), and
-  # the chart (>= 0.4.0, image.preserveOnUpgrade) re-emits the running image
-  # on every helm upgrade, so an apply — a values change, a module release, a
-  # rerun — carries the chart's RBAC and wiring forward without touching the
-  # version. The chart's appVersion is only the FLOOR a fresh install starts
-  # from. `beacon_image_tag` is the one deliberate exception: an explicit pin,
-  # passed through `set` (which holds nothing else) and then ignored so a
-  # later rollout is not reverted by the next apply.
+  # the chart (>= 0.4.1, image.preserveOnUpgrade) re-emits the running image
+  # — registry and tag — on every helm upgrade, so an apply — a values change,
+  # a module release, a rerun — carries the chart's RBAC and wiring forward
+  # without touching the version. The chart's appVersion is only the FLOOR a
+  # fresh install starts from.
+  #
+  # `beacon_image_tag` is the one deliberate exception: an explicit pin. It is
+  # a pin for exactly as long as it is configured — every apply re-asserts it,
+  # a control-plane rollout in between included — and REMOVING it hands the
+  # version back to the control plane, because the next apply then renders the
+  # chart with no tag and the chart preserves whatever is running. It is NOT
+  # ignored after the first apply: releases up to 0.8.3 did that
+  # (`ignore_changes = [set]`, the original "floor, not a pin" design), which
+  # froze the first tag ever applied into the state for good, so a cluster
+  # that had once been given a since-retired tag was rolled back to it on
+  # every upgrade — and wedged once that image could no longer start.
   set = var.beacon_image_tag == null ? [] : [
     {
       name  = "image.tag"
@@ -260,9 +269,6 @@ resource "helm_release" "beacon" {
   depends_on = [helm_release.beacon_credential]
 
   lifecycle {
-    # Everything except the image tag. See the comment on `set` above.
-    ignore_changes = [set]
-
     precondition {
       condition     = !var.beacon_deploy_enabled || length(local.beacon_deploy_namespaces_effective) > 0
       error_message = "beacon_deploy_enabled is true but neither beacon_deploy_namespaces nor beacon_namespace_scope names a namespace. The chart refuses to render a cluster-wide deploy grant, by design: there is no 'deploy everywhere' posture, because the failure mode is an agent that can delete workloads in namespaces nobody meant to hand it."
