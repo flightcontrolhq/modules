@@ -745,7 +745,7 @@ module:
         geo_restriction_type: << module.input.geo_restriction_type >>
         additional_metrics_enabled: << module.input.additional_metrics_enabled >>
         http_version: << module.input.http_version >>
-        logging_bucket_creation_enabled: << module.input.logging_enabled && module.input.logging_destinations != nil && contains(module.input.logging_destinations, "s3") >>
+        logging_bucket_creation_enabled: << module.input.logging_enabled && module.input.logging_destinations != nil && (module.input.logging_destinations contains "s3") >>
         logging_bucket_domain_name: null
         logging_bucket_retention_days: << module.input.logging_bucket_retention_days >>
         logging_destinations: << module.input.logging_destinations || [] >>
@@ -789,7 +789,7 @@ module:
   ui:
     logs: |-
       <<
-      module.input.logging_enabled && module.input.logging_destinations != nil && contains(module.input.logging_destinations, "cloudwatch") ?
+      module.input.logging_enabled && module.input.logging_destinations != nil && (module.input.logging_destinations contains "cloudwatch") ?
       [{"id": "cloudfront_access_logs", "name": "CloudFront access logs", "source": {"type": "cloudwatch", "aws_account_id": module.input.aws_account_id, "region": "us-east-1", "log_group": stack.output.access_log_group_name}}] :
       []
       >>
