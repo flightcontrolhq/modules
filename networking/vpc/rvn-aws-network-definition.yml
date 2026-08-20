@@ -4,7 +4,7 @@ definition:
   description: Production-ready AWS VPC with public and private subnets, NAT gateways, and compliance-ready flow logs.
 release:
   version: 1.1.0
-  description: Add VPC endpoints, free S3 and DynamoDB gateway endpoints plus selectable interface endpoints for private access to AWS services.
+  description: Add VPC endpoints, a free S3 gateway endpoint enabled by default for new VPCs, an optional DynamoDB gateway endpoint, and selectable interface endpoints for private access to AWS services.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -73,7 +73,7 @@ module:
     - id: section_vpc_endpoints
       label: VPC endpoints
       type: section
-    - default: false
+    - default: true
       description: Route S3 traffic through a free gateway VPC endpoint instead of the NAT gateway. Avoids NAT data processing charges (including ECR image layer pulls) and keeps S3 traffic inside AWS.
       id: vpc_endpoint_s3_gateway_enabled
       label: S3 gateway endpoint
@@ -269,7 +269,7 @@ module:
 
     ### Gateway endpoints (free)
 
-    Gateway endpoints for **S3** and **DynamoDB** are free and simply add routes to the VPC's route tables. Enabling the S3 gateway endpoint keeps S3 traffic — including ECR image layer downloads — off the NAT gateway, cutting NAT data processing charges.
+    Gateway endpoints for **S3** and **DynamoDB** are free and simply add routes to the VPC's route tables. The S3 gateway endpoint is enabled by default for new VPCs: it keeps S3 traffic — including ECR image layer downloads — off the NAT gateway, cutting NAT data processing charges.
 
     One caveat: S3 traffic no longer exits through the NAT gateway's public IP, so S3 bucket policies that allowlist your NAT IP need to be updated (for example to match the endpoint via `aws:SourceVpce`).
 
@@ -297,7 +297,7 @@ module:
     | NAT Gateway                    | No       | `true`               | Enable outbound internet from private subnets                          |
     | NAT Gateway High Availability  | No       | `false`              | Deploy one NAT per AZ instead of a single shared NAT                   |
     | NAT Gateway EIP Allocation IDs | No       | —                    | Pre-allocated EIPs for stable NAT public IPs                           |
-    | S3 gateway endpoint            | No       | `false`              | Free gateway endpoint keeping S3 traffic off the NAT gateway           |
+    | S3 gateway endpoint            | No       | `true`               | Free gateway endpoint keeping S3 traffic off the NAT gateway           |
     | DynamoDB gateway endpoint      | No       | `false`              | Free gateway endpoint keeping DynamoDB traffic off the NAT gateway     |
     | Interface endpoints            | No       | —                    | Interface VPC endpoints (PrivateLink) for private AWS service access   |
     | Flow Logs                      | No       | `false`              | Enable VPC Flow Logs (required for SOC 2)                              |
