@@ -64,7 +64,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-aws-alb` | AWS Application Load Balancer | v1.0.1 | `networking/alb/` |
 | `rvn-aws-iam-policy` | AWS IAM Policy | v1.0.1 | `security/iam_policy/` |
 | `rvn-aws-iam-role` | AWS IAM Role | v1.0.1 | `security/iam/` |
-| `rvn-aws-network` | VPC Network | v1.0.1 | `networking/vpc/` |
+| `rvn-aws-network` | VPC Network | v1.1.0 | `networking/vpc/` |
 | `rvn-aws-static` | Static Hosting | v1.1.1 | `hosting/static_site/` |
 | `rvn-cloudfront` | CloudFront CDN | v1.3.0 | `cdn/cloudfront/` |
 | `rvn-ec2-service` | EC2 Service | v1.4.1 | `compute/ec2_service/` |
