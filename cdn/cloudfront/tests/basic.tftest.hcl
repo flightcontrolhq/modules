@@ -19,6 +19,20 @@ mock_provider "aws" {
     }
   }
 
+  override_data {
+    target = data.aws_iam_policy_document.firehose_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"firehose.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.firehose
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:PutObject\",\"Resource\":\"*\"}]}"
+    }
+  }
+
   override_resource {
     target = aws_cloudfront_distribution.this
     values = {
@@ -63,6 +77,35 @@ mock_provider "aws" {
     target = aws_cloudwatch_log_delivery_destination.access_logs
     values = {
       arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:test-cf-access-logs-cw"
+    }
+  }
+
+  override_resource {
+    target = aws_kinesis_firehose_delivery_stream.access_logs
+    values = {
+      arn = "arn:aws:firehose:us-east-1:123456789012:deliverystream/test-cf-firehose"
+    }
+  }
+
+  override_resource {
+    target = aws_iam_role.firehose
+    values = {
+      arn = "arn:aws:iam::123456789012:role/test-cf-firehose-role"
+    }
+  }
+
+  override_resource {
+    target = aws_s3_bucket.firehose_backup
+    values = {
+      arn = "arn:aws:s3:::test-cf-firehose-backup"
+      id  = "test-cf-firehose-backup"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudwatch_log_delivery_destination.firehose_access_logs
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:test-cf-access-logs-firehose"
     }
   }
 }
@@ -873,6 +916,89 @@ run "test_logging_destination_invalid" {
   expect_failures = [
     var.logging_destination,
   ]
+}
+
+# Test: Invalid logging_destinations value
+run "test_logging_destinations_invalid" {
+  command = plan
+
+  variables {
+    logging_destinations = ["cloudwatch", "invalid"]
+  }
+
+  expect_failures = [
+    var.logging_destinations,
+  ]
+}
+
+# Test: Multiple standard logging v2 destinations can be enabled together
+run "test_logging_multiple_destinations" {
+  command = plan
+
+  variables {
+    logging_destinations                   = ["cloudwatch", "firehose"]
+    logging_firehose_endpoint_url          = "https://example.com/cloudfront"
+    logging_firehose_access_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudfront-firehose"
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 1 && length(aws_cloudwatch_log_delivery.access_logs) == 1
+    error_message = "CloudWatch logging resources must remain enabled alongside Firehose."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_delivery.firehose_access_logs) == 1
+    error_message = "One Firehose delivery must be created per distribution."
+  }
+
+  assert {
+    condition     = length(aws_kinesis_firehose_delivery_stream.access_logs) == 1 && length(aws_s3_bucket.firehose_backup) == 1
+    error_message = "Firehose and its failed-delivery backup bucket must be created."
+  }
+}
+
+# Test: Firehose requires an endpoint URL
+run "test_logging_firehose_missing_endpoint_url" {
+  command = plan
+
+  variables {
+    logging_destinations                   = ["firehose"]
+    logging_firehose_access_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudfront-firehose"
+  }
+
+  expect_failures = [
+    var.logging_firehose_endpoint_url,
+  ]
+}
+
+# Test: Firehose requires exactly one access key source
+run "test_logging_firehose_missing_access_key" {
+  command = plan
+
+  variables {
+    logging_destinations          = ["firehose"]
+    logging_firehose_endpoint_url = "https://example.com/cloudfront"
+  }
+
+  expect_failures = [
+    var.logging_firehose_access_key,
+  ]
+}
+
+# Test: A null logging_destinations value uses the legacy destination
+run "test_logging_legacy_destination_with_null_destinations" {
+  command = plan
+
+  variables {
+    logging_destinations            = null
+    logging_destination             = "s3"
+    logging_bucket_creation_enabled = true
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.logging) == 1 && length(aws_cloudwatch_log_group.access_logs) == 0
+    error_message = "A null logging_destinations value must preserve the legacy S3 destination."
+  }
 }
 
 # Test: Default logging creates the CloudWatch delivery chain (logging is on

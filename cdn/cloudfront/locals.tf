@@ -1,6 +1,10 @@
 locals {
   region = coalesce(var.region, data.aws_region.current.region)
 
+  logging_destinations = var.logging_enabled ? (
+    var.logging_destinations != null ? toset(var.logging_destinations) : toset([var.logging_destination])
+  ) : toset([])
+
   redirects_enabled               = length(var.redirect_rules) > 0
   viewer_request_function_enabled = local.redirects_enabled
   viewer_request_function_name = format(

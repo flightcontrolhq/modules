@@ -1,6 +1,6 @@
 # AWS CloudFront
 
-Creates and manages AWS CloudFront distributions with support for multiple distributions (domain groups), multiple origin types, modern cache policies, Origin Access Control (OAC) for S3, WAF integration, and optional access logging.
+Creates and manages AWS CloudFront distributions with support for multiple distributions (domain groups), multiple origin types, modern cache policies, Origin Access Control (OAC) for S3, WAF integration, and multi-destination access logging.
 
 ## Features
 
@@ -11,7 +11,7 @@ Creates and manages AWS CloudFront distributions with support for multiple distr
 - **Signed URL Enforcement**: Trusted key group wiring for signed URLs and signed cookies
 - **SSL/TLS**: Custom ACM certificates with configurable minimum TLS version, SNI support
 - **WAF Integration**: Associate a WAFv2 Web ACL (global scope) for edge protection
-- **Access Logging**: On by default via CloudFront standard logging v2 into a module-managed CloudWatch Logs group (us-east-1); legacy S3 delivery with lifecycle management and per-distribution log prefixes remains available
+- **Access Logging**: Send logs simultaneously to CloudWatch Logs, legacy S3 logging, and Firehose HTTP endpoints; CloudWatch and Firehose use CloudFront standard logging v2 in us-east-1
 - **Monitoring**: Optional CloudFront additional metrics subscription for cache hit rate, origin latency, and per-status error rates
 - **Edge Functions**: Support for CloudFront Functions and Lambda@Edge associations
 - **Edge Redirects**: Ordered URL-pattern redirects with named segments, catch-all paths, and optional query preservation
@@ -235,11 +235,13 @@ module "cdn" {
   # WAF
   web_acl_id = "arn:aws:wafv2:us-east-1:123456789012:global/webacl/my-acl/abc-123"
 
-  # Logging (CloudWatch Logs is the default; opt into legacy S3 delivery)
+  # Logging (CloudWatch Logs is the default; destinations can be combined)
   logging_enabled                 = true
-  logging_destination             = "s3"
+  logging_destinations            = ["cloudwatch", "s3", "firehose"]
   logging_bucket_creation_enabled = true
   logging_prefix                  = "cloudfront/"
+  logging_firehose_endpoint_url   = "https://example.com/cloudfront"
+  logging_firehose_access_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudfront-firehose"
 
   tags = {
     Environment = "production"
@@ -573,17 +575,27 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 
 ### Logging
 
-Access logging is enabled by default. The default destination is CloudWatch Logs: CloudFront standard logging v2 delivers access logs into a module-managed log group `/aws/cloudfront/<name>` via a per-distribution delivery source, a shared delivery destination (JSON output), and a per-distribution delivery. CloudFront is a global service, so the whole delivery chain is pinned to `us-east-1` with the per-resource `region` argument (AWS provider >= 6.0). Set `logging_destination = "s3"` for legacy standard logging to an S3 bucket, or `logging_enabled = false` to turn logging off.
+Access logging is enabled by default. Set `logging_destinations` to any non-empty combination of `cloudwatch`, `s3`, and `firehose`. When `logging_destinations` is null, the legacy `logging_destination` input is used.
+
+CloudWatch Logs and Firehose use CloudFront standard logging v2. CloudWatch delivers JSON records into a module-managed log group `/aws/cloudfront/<name>` via a shared per-distribution delivery source and one delivery per destination. Firehose delivers the selected `logging_firehose_record_fields` as JSON to an HTTPS endpoint and stores failed deliveries in a module-managed S3 backup bucket. The standard logging v2 chain is pinned to `us-east-1` with each resource's `region` argument (AWS provider >= 6.0).
+
+S3 uses CloudFront legacy standard logging and can be enabled alongside the v2 destinations. Set `logging_enabled = false` to turn logging off.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| logging_enabled | Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see `logging_destination`. | `bool` | `true` | no |
-| logging_destination | Where access logs are delivered: `cloudwatch` (standard logging v2 into a module-managed CloudWatch Logs group) or `s3` (legacy standard logging). | `string` | `"cloudwatch"` | no |
-| logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. Only applies when `logging_destination = "s3"`. | `string` | `null` | no |
-| logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. Only applies when `logging_destination = "s3"`. | `string` | `""` | no |
-| logging_cookies_enabled | Include cookies in access logs. Only applies when `logging_destination = "s3"`. | `bool` | `false` | no |
-| logging_bucket_creation_enabled | Create a new S3 bucket for logging. Only applies when `logging_destination = "s3"`. | `bool` | `false` | no |
-| logging_bucket_retention_days | Days to retain logs: CloudWatch log group retention (`cloudwatch`, must be a valid CloudWatch retention value) or S3 lifecycle expiry on the module-created bucket (`s3`). | `number` | `90` | no |
+| logging_enabled | Enable CloudFront access logging. | `bool` | `true` | no |
+| logging_destination | Legacy single destination used when `logging_destinations` is null: `cloudwatch` or `s3`. | `string` | `"cloudwatch"` | no |
+| logging_destinations | Non-empty set of simultaneous destinations: `cloudwatch`, `s3`, and/or `firehose`. | `set(string)` | `null` | no |
+| logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. Applies when `s3` is selected. | `string` | `null` | no |
+| logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. Applies when `s3` is selected. | `string` | `""` | no |
+| logging_cookies_enabled | Include cookies in access logs. Applies when `s3` is selected. | `bool` | `false` | no |
+| logging_bucket_creation_enabled | Create a new S3 bucket for legacy logging. Applies when `s3` is selected. | `bool` | `false` | no |
+| logging_bucket_retention_days | Days to retain logs in the CloudWatch log group and module-managed S3 buckets. | `number` | `90` | no |
+| logging_firehose_endpoint_url | HTTPS URL receiving Firehose access-log records. Required when `firehose` is selected. | `string` | `null` | no |
+| logging_firehose_endpoint_name | Optional Firehose HTTP endpoint display name. | `string` | `null` | no |
+| logging_firehose_access_key_secret_arn | Secrets Manager ARN containing the Firehose HTTP endpoint access key. Exactly one access-key source is required when `firehose` is selected. | `string` | `null` | no |
+| logging_firehose_access_key | Sensitive Firehose HTTP endpoint access key fallback. Prefer the Secrets Manager ARN. | `string` | `null` | no |
+| logging_firehose_record_fields | JSON fields delivered to Firehose. | `list(string)` | Lightsage-compatible nine fields | no |
 
 ### Origin Access Control
 
@@ -617,6 +629,10 @@ Access logging is enabled by default. The default destination is CloudWatch Logs
 | logging_bucket_domain_name | The domain name of the logging S3 bucket (null if not created). |
 | access_log_group_name | Name of the CloudWatch Logs group receiving CloudFront access logs (null unless CloudWatch logging is active). |
 | access_log_group_arn | ARN of the CloudWatch Logs access-log group (null unless CloudWatch logging is active). |
+| firehose_stream_name | Name of the Firehose HTTP endpoint delivery stream, or null when disabled. |
+| firehose_stream_arn | ARN of the Firehose HTTP endpoint delivery stream, or null when disabled. |
+| firehose_backup_bucket_id | ID of the module-managed S3 backup bucket for failed Firehose deliveries, or null when disabled. |
+| firehose_backup_bucket_arn | ARN of the module-managed S3 backup bucket for failed Firehose deliveries, or null when disabled. |
 
 ## Architecture
 

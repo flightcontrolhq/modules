@@ -7,12 +7,13 @@
 # distribution connecting the two. Everything lives in us-east-1 because
 # CloudFront is a global service; this module has no us-east-1 provider alias,
 # so each resource pins `region = "us-east-1"` (AWS provider 6.x enhanced
-# region support). Created only when logging_enabled && logging_destination ==
-# "cloudwatch"; the legacy S3 path stays in logging.tf.
+# region support). Created only when cloudwatch or firehose logging is enabled;
+# the legacy S3 path stays in logging.tf.
 ################################################################################
 
 locals {
-  cloudwatch_logging_enabled       = var.logging_enabled && var.logging_destination == "cloudwatch"
+  cloudwatch_logging_enabled       = contains(local.logging_destinations, "cloudwatch")
+  access_log_distributions         = local.cloudwatch_logging_enabled || contains(local.logging_destinations, "firehose") ? var.distributions : {}
   cloudwatch_logging_distributions = local.cloudwatch_logging_enabled ? var.distributions : {}
 }
 
@@ -28,7 +29,7 @@ resource "aws_cloudwatch_log_group" "access_logs" {
 }
 
 resource "aws_cloudwatch_log_delivery_source" "access_logs" {
-  for_each = local.cloudwatch_logging_distributions
+  for_each = local.access_log_distributions
 
   region = "us-east-1"
 
