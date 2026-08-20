@@ -575,7 +575,7 @@ The same-host example redirects `/old/guide` to `/docs/guide`. To redirect only 
 
 ### Logging
 
-Access logging is enabled by default. Set `logging_destinations` to any non-empty combination of `cloudwatch`, `s3`, and `firehose`. When `logging_destinations` is null, the legacy `logging_destination` input is used.
+Access logging is enabled by default. Set `logging_destinations` to any combination of `cloudwatch`, `s3`, and `firehose`; an empty set disables access logging. When `logging_destinations` is null, the legacy `logging_destination` input is used.
 
 CloudWatch Logs and Firehose use CloudFront standard logging v2. CloudWatch delivers JSON records into a module-managed log group `/aws/cloudfront/<name>` via a shared per-distribution delivery source and one delivery per destination. Firehose delivers the selected `logging_firehose_record_fields` as JSON to an HTTPS endpoint and stores failed deliveries in a module-managed S3 backup bucket. The standard logging v2 chain is pinned to `us-east-1` with each resource's `region` argument (AWS provider >= 6.0).
 
@@ -585,7 +585,7 @@ S3 uses CloudFront legacy standard logging and can be enabled alongside the v2 d
 |------|-------------|------|---------|----------|
 | logging_enabled | Enable CloudFront access logging. | `bool` | `true` | no |
 | logging_destination | Legacy single destination used when `logging_destinations` is null: `cloudwatch` or `s3`. | `string` | `"cloudwatch"` | no |
-| logging_destinations | Non-empty set of simultaneous destinations: `cloudwatch`, `s3`, and/or `firehose`. | `set(string)` | `null` | no |
+| logging_destinations | Set of simultaneous destinations: `cloudwatch`, `s3`, and/or `firehose`. An empty set disables access logging. | `set(string)` | `null` | no |
 | logging_bucket_domain_name | Domain name of an existing S3 bucket for logs. Applies when `s3` is selected. | `string` | `null` | no |
 | logging_prefix | Base S3 key prefix for log files. Each distribution logs under `<prefix><key>/`. Applies when `s3` is selected. | `string` | `""` | no |
 | logging_cookies_enabled | Include cookies in access logs. Applies when `s3` is selected. | `bool` | `false` | no |

@@ -14,7 +14,7 @@ resource "aws_s3_bucket" "firehose_backup" {
 
   region = "us-east-1"
 
-  bucket = "${substr(var.name, 0, 20)}-cf-firehose-${data.aws_caller_identity.current.account_id}-${substr(md5(var.name), 0, 8)}"
+  bucket = "${substr(var.name, 0, 28)}-cf-firehose-${data.aws_caller_identity.current.account_id}-us-east-1"
   tags   = merge(local.tags, { Name = "${var.name}-cf-firehose" })
 }
 
@@ -88,12 +88,10 @@ data "aws_iam_policy_document" "firehose_assume_role" {
 resource "aws_iam_role" "firehose" {
   count = local.firehose_logging_enabled ? 1 : 0
 
-  name                 = local.firehose_role_name
-  assume_role_policy   = data.aws_iam_policy_document.firehose_assume_role[0].json
-  description          = "Allows CloudFront Firehose access logs to write failed deliveries and read endpoint credentials."
-  max_session_duration = 3600
-
-  tags = local.tags
+  name               = local.firehose_role_name
+  assume_role_policy = data.aws_iam_policy_document.firehose_assume_role[0].json
+  description        = "Allows CloudFront Firehose access logs to write failed deliveries and read endpoint credentials."
+  tags               = local.tags
 }
 
 data "aws_iam_policy_document" "firehose" {

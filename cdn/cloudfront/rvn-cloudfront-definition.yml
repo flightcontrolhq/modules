@@ -669,6 +669,9 @@ module:
       description: Select one or more destinations for CloudFront access logs. CloudWatch Logs keeps the Ravion Logs panel available; Firehose sends JSON records to an HTTP endpoint; S3 uses legacy standard logging.
       default:
         - cloudwatch
+      moved_from:
+        - logging_destination
+      required: true
       show_when:
         logging_enabled: true
       values:
@@ -968,7 +971,7 @@ module:
     | S3 bucket | Legacy standard logging delivers compressed log files to an automatically created S3 bucket. Cheapest for high-traffic sites; not viewable in Ravion. |
     | Firehose | CloudFront standard logging v2 delivers selected fields as JSON through an Amazon Data Firehose HTTP endpoint. Firehose keeps failed deliveries in a module-managed S3 backup bucket. |
 
-    Firehose requires an HTTPS endpoint URL and a Secrets Manager ARN containing the endpoint access key. Logging retention days defaults to 90 and controls the CloudWatch log group and module-managed S3 bucket lifecycle expiry. CloudWatch retention must be one of the standard CloudWatch Logs retention values (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, and larger).
+    Firehose requires an HTTPS endpoint URL and a Secrets Manager ARN containing the endpoint access key. Existing configurations using the legacy `logging_destination` input are migrated to `logging_destinations` when upgrading. Logging retention days defaults to 90 and controls the CloudWatch log group and module-managed S3 bucket lifecycle expiry. CloudWatch retention must be one of the standard CloudWatch Logs retention values (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, and larger).
 
     ## Configuration
 

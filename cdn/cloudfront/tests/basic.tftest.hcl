@@ -985,6 +985,20 @@ run "test_logging_firehose_missing_access_key" {
   ]
 }
 
+# Test: An empty destination set disables logging without validation errors
+run "test_logging_empty_destinations_disables_logging" {
+  command = plan
+
+  variables {
+    logging_destinations = []
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_log_group.access_logs) == 0 && length(aws_cloudwatch_log_delivery_source.access_logs) == 0 && length(aws_kinesis_firehose_delivery_stream.access_logs) == 0 && length(aws_s3_bucket.logging) == 0
+    error_message = "An empty logging_destinations set must disable all access logging resources."
+  }
+}
+
 # Test: A null logging_destinations value uses the legacy destination
 run "test_logging_legacy_destination_with_null_destinations" {
   command = plan

@@ -502,8 +502,8 @@ variable "logging_destinations" {
   default     = null
 
   validation {
-    condition     = var.logging_destinations == null || (length(var.logging_destinations) > 0 && alltrue([for destination in var.logging_destinations : contains(["cloudwatch", "s3", "firehose"], destination)]))
-    error_message = "The logging_destinations must be a non-empty set containing only 'cloudwatch', 's3', or 'firehose'."
+    condition     = var.logging_destinations == null || alltrue([for destination in var.logging_destinations : contains(["cloudwatch", "s3", "firehose"], destination)])
+    error_message = "The logging_destinations must contain only 'cloudwatch', 's3', or 'firehose'."
   }
 }
 
