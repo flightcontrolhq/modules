@@ -3,8 +3,8 @@ definition:
   name: ECS Cluster
   description: Production-ready AWS ECS cluster with Fargate, Fargate Spot, optional EC2 capacity, and shared load balancers.
 release:
-  version: 1.0.1
-  description: Update Terraform module sources and documentation links to the renamed `ravionhq` GitHub organization.
+  version: 1.0.2
+  description: Report cluster CPU and memory as utilization percentages so the charts show headroom against reserved capacity.
 module:
   inputs:
     - id: network
@@ -719,25 +719,25 @@ module:
       >>
     metrics:
       - id: task_cpu_utilization
-        name: CPU used
+        name: CPU utilization
         source:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             ClusterName: << stack.output.cluster_name >>
-          name: CpuUtilized
-          namespace: ECS/ContainerInsights
+          name: CPUUtilization
+          namespace: AWS/ECS
           region: << stack.output.region >>
           statistic: Average
           type: cloudwatch
         type: line
       - id: task_memory_utilization
-        name: Memory used
+        name: Memory utilization
         source:
           aws_account_id: << module.input.aws_account_id >>
           dimensions:
             ClusterName: << stack.output.cluster_name >>
-          name: MemoryUtilized
-          namespace: ECS/ContainerInsights
+          name: MemoryUtilization
+          namespace: AWS/ECS
           region: << stack.output.region >>
           statistic: Average
           type: cloudwatch
