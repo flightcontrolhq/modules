@@ -579,7 +579,7 @@ Access logging is enabled by default. Set `logging_destinations` to any combinat
 
 CloudWatch Logs and Firehose use CloudFront standard logging v2. CloudWatch delivers JSON records into a module-managed log group `/aws/cloudfront/<name>` via a shared per-distribution delivery source and one delivery per destination. Firehose delivers the selected `logging_firehose_record_fields` as JSON to an HTTPS endpoint and stores failed deliveries in a module-managed S3 backup bucket. The standard logging v2 chain is pinned to `us-east-1` with each resource's `region` argument (AWS provider >= 6.0).
 
-S3 uses CloudFront legacy standard logging and can be enabled alongside the v2 destinations. Set `logging_enabled = false` to turn logging off.
+S3 uses CloudFront legacy standard logging and can be enabled alongside the v2 destinations. On upgrade from a 1.x definition, confirm the Logging destinations selection; a prior S3-only configuration must be selected as S3 again. Set `logging_enabled = false` to turn logging off.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
