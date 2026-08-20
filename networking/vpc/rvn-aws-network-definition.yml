@@ -74,6 +74,7 @@ module:
       label: VPC endpoints
       type: section
     - default: true
+      collapsible: true
       description: Route S3 traffic through a free gateway VPC endpoint instead of the NAT gateway. Avoids NAT data processing charges (including ECR image layer pulls) and keeps S3 traffic inside AWS.
       id: vpc_endpoint_s3_gateway_enabled
       label: S3 gateway endpoint
