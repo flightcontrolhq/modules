@@ -6,7 +6,7 @@ locals {
   firehose_logging_enabled       = contains(local.logging_destinations, "firehose")
   firehose_logging_distributions = local.firehose_logging_enabled ? var.distributions : {}
   firehose_stream_name           = "${substr(var.name, 0, 43)}-cf-firehose-${substr(md5(var.name), 0, 8)}"
-  firehose_role_name             = "${substr(var.name, 0, 45)}-cf-firehose-role"
+  firehose_role_name             = "${substr(var.name, 0, 38)}-cf-firehose-role-${substr(md5(var.name), 0, 8)}"
 }
 
 resource "aws_s3_bucket" "firehose_backup" {
@@ -14,7 +14,7 @@ resource "aws_s3_bucket" "firehose_backup" {
 
   region = "us-east-1"
 
-  bucket = "${substr(var.name, 0, 28)}-cf-firehose-${data.aws_caller_identity.current.account_id}-us-east-1"
+  bucket = "${substr(var.name, 0, 19)}-cf-firehose-${data.aws_caller_identity.current.account_id}-us-east-1-${substr(md5(var.name), 0, 8)}"
   tags   = merge(local.tags, { Name = "${var.name}-cf-firehose" })
 }
 
@@ -122,6 +122,17 @@ data "aws_iam_policy_document" "firehose" {
 
       actions   = ["secretsmanager:GetSecretValue"]
       resources = [var.logging_firehose_access_key_secret_arn]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.logging_firehose_access_key_secret_kms_key_arn != null ? [1] : []
+
+    content {
+      sid       = "DecryptEndpointSecret"
+      effect    = "Allow"
+      actions   = ["kms:Decrypt"]
+      resources = [var.logging_firehose_access_key_secret_kms_key_arn]
     }
   }
 }

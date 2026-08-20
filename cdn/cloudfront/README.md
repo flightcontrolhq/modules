@@ -242,6 +242,7 @@ module "cdn" {
   logging_prefix                  = "cloudfront/"
   logging_firehose_endpoint_url   = "https://example.com/cloudfront"
   logging_firehose_access_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudfront-firehose"
+  logging_firehose_access_key_secret_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
 
   tags = {
     Environment = "production"
@@ -594,6 +595,7 @@ S3 uses CloudFront legacy standard logging and can be enabled alongside the v2 d
 | logging_firehose_endpoint_url | HTTPS URL receiving Firehose access-log records. Required when `firehose` is selected. | `string` | `null` | no |
 | logging_firehose_endpoint_name | Optional Firehose HTTP endpoint display name. | `string` | `null` | no |
 | logging_firehose_access_key_secret_arn | Secrets Manager ARN containing the Firehose HTTP endpoint access key. Exactly one access-key source is required when `firehose` is selected. | `string` | `null` | no |
+| logging_firehose_access_key_secret_kms_key_arn | Optional KMS key ARN used to encrypt the Firehose HTTP endpoint access-key secret. | `string` | `null` | no |
 | logging_firehose_access_key | Sensitive Firehose HTTP endpoint access key fallback. Prefer the Secrets Manager ARN. | `string` | `null` | no |
 | logging_firehose_record_fields | JSON fields delivered to Firehose. | `list(string)` | Lightsage-compatible nine fields | no |
 

@@ -957,6 +957,46 @@ run "test_logging_multiple_destinations" {
   }
 }
 
+# Test: A customer-managed secret KMS key is included in Firehose policy configuration
+run "test_logging_firehose_secret_kms_key" {
+  command = apply
+
+  override_data {
+    target = data.aws_iam_policy_document.firehose
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"kms:Decrypt\",\"Resource\":\"arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012\"}]}"
+    }
+  }
+
+  variables {
+    logging_destinations                           = ["firehose"]
+    logging_firehose_endpoint_url                  = "https://example.com/cloudfront"
+    logging_firehose_access_key_secret_arn         = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudfront-firehose"
+    logging_firehose_access_key_secret_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  }
+
+  assert {
+    condition     = strcontains(data.aws_iam_policy_document.firehose[0].json, "kms:Decrypt")
+    error_message = "The Firehose role policy must include kms:Decrypt when the secret KMS key is configured."
+  }
+}
+
+# Test: Firehose policy omits KMS decrypt permission without a customer-managed key
+run "test_logging_firehose_secret_without_kms_key" {
+  command = apply
+
+  variables {
+    logging_destinations                   = ["firehose"]
+    logging_firehose_endpoint_url          = "https://example.com/cloudfront"
+    logging_firehose_access_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudfront-firehose"
+  }
+
+  assert {
+    condition     = !strcontains(data.aws_iam_policy_document.firehose[0].json, "kms:Decrypt")
+    error_message = "The Firehose role policy must omit KMS decrypt permission without a secret KMS key."
+  }
+}
+
 # Test: Firehose requires an endpoint URL
 run "test_logging_firehose_missing_endpoint_url" {
   command = plan

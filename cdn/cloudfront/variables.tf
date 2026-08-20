@@ -580,6 +580,17 @@ variable "logging_firehose_access_key_secret_arn" {
   }
 }
 
+variable "logging_firehose_access_key_secret_kms_key_arn" {
+  type        = string
+  description = "KMS key ARN used to encrypt the Firehose HTTP endpoint access-key secret. Grants the Firehose role kms:Decrypt on this key when set."
+  default     = null
+
+  validation {
+    condition     = var.logging_firehose_access_key_secret_kms_key_arn == null || can(regex("^arn:[^:]+:kms:[^:]+:[^:]+:key/.+$", var.logging_firehose_access_key_secret_kms_key_arn))
+    error_message = "The logging_firehose_access_key_secret_kms_key_arn must be a valid KMS key ARN."
+  }
+}
+
 variable "logging_firehose_access_key" {
   type        = string
   description = "Sensitive Firehose HTTP endpoint access key. Prefer logging_firehose_access_key_secret_arn so the key remains in Secrets Manager. Exactly one of this key or the secret ARN is required when Firehose logging is enabled."
