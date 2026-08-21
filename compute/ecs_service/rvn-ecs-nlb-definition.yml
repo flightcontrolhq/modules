@@ -1,10 +1,10 @@
 definition:
   type: rvn-ecs-nlb
   name: ECS Network Service
-  description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
+  description: Network Load Balanced ECS service for exposing one to five TCP, UDP, or TLS ports through an ECS cluster Network Load Balancer.
 release:
-  version: 1.1.0
-  description: Add Builder IAM policies inputs that attach extra IAM managed policies to the EC2 build runner role or replace the step default policies entirely for the duration of each build.
+  version: 1.1.1
+  description: Clarify that one ECS Network Service can expose up to five TCP, UDP, or TLS ports.
 module:
   inputs:
     - id: section_cluster
@@ -446,7 +446,7 @@ module:
           region: << stack.output.region >>
           statistic: Average
   readme: |
-    Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
+    Network Load Balanced ECS service for exposing one to five TCP, UDP, or TLS ports through an ECS cluster Network Load Balancer.
 
     ## Overview
 

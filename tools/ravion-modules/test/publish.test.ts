@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { type CompiledDefinition } from "../src/compiler.js";
 import { type RemoteModuleDefinition, type RemoteModuleVersion } from "../src/generate-definitions.js";
+import { MODULE_CATEGORIES } from "../src/module-categories.js";
 import {
   createDefaultRavionApiClient,
   dryRunModuleVersions,
@@ -10,10 +11,13 @@ import {
   PublishPlanError,
   publishDefinitions,
   PublishError,
+  type ModuleCategoryInput,
+  type ModuleCategoryPatchInput,
   type ModuleDefinitionInput,
   type ModuleDefinitionPatchInput,
   type ModuleVersionInput,
   type RavionModuleApiClient,
+  type RemoteModuleCategory,
 } from "../src/publish.js";
 
 describe("publish", () => {
@@ -76,7 +80,7 @@ describe("publish", () => {
           type: "ravion-aws-vpc",
           name: "AWS VPC",
           description: "AWS VPC and subnets.",
-          isGlobalPublished: false,
+          organizationId: "organization-1",
         },
       ],
       versionsByDefinitionId: { vpc: [createRemoteVersion({ config: compiled.module })] },
@@ -217,6 +221,160 @@ describe("publish", () => {
 
     assert.deepEqual(result.items.map(({ action }) => action), ["patch-definition", "create-version"]);
     assert.deepEqual(client.patchedDefinitions, [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }]);
+  });
+
+  it("creates and globally publishes missing categories before module definitions", async () => {
+    const definition = createCompiledDefinition({
+      filePath: join("/repo", "networking", "vpc", "rvn-aws-network-definition.yml"),
+      type: "rvn-aws-network",
+      name: "VPC Network",
+    });
+    const client = new MockRavionClient();
+
+    const result = await publishDefinitions([definition], client, { dryRun: false });
+
+    assert.deepEqual(result.categoryItems?.map(({ givenId, action }) => ({ givenId, action })), [
+      { givenId: "network", action: "create-category" },
+    ]);
+    assert.deepEqual(client.createdCategories, [
+      {
+        givenId: "network",
+        name: "Network",
+        description: "For private subnets, internet access, service connectivity, and shared load balancers.",
+        sortOrder: 100,
+      },
+    ]);
+    assert.deepEqual(client.patchedCategories, [
+      { id: "category-1", isGlobalPublished: true },
+    ]);
+    assert.deepEqual(client.createdDefinitions[0].moduleCategoryIds, ["category-1"]);
+  });
+
+  it("plans missing categories without creating them during a dry run", async () => {
+    const definition = createCompiledDefinition({
+      filePath: join("/repo", "compute", "lambda", "rvn-lambda-definition.yml"),
+      type: "rvn-lambda",
+      name: "Lambda Function",
+    });
+    const client = new MockRavionClient();
+
+    const result = await publishDefinitions([definition], client);
+
+    assert.deepEqual(result.categoryItems?.map(({ givenId, action }) => ({ givenId, action })), [
+      { givenId: "function", action: "create-category" },
+    ]);
+    assert.equal(client.createdCategories.length, 0);
+    assert.equal(client.createdDefinitions.length, 0);
+  });
+
+  it("assigns existing categories to existing module definitions", async () => {
+    const definition = createCompiledDefinition({
+      filePath: join("/repo", "networking", "vpc", "rvn-aws-network-definition.yml"),
+      type: "rvn-aws-network",
+      name: "VPC Network",
+    });
+    const client = new MockRavionClient({
+      categories: [
+        {
+          id: "network-category",
+          givenId: "network",
+          name: "Network",
+          description: "For private subnets, internet access, service connectivity, and shared load balancers.",
+          sortOrder: 100,
+        },
+      ],
+      definitions: [
+        {
+          id: "network-definition",
+          type: "rvn-aws-network",
+          name: "VPC Network",
+          description: definition.description,
+        },
+      ],
+      versionsByDefinitionId: {
+        "network-definition": [createRemoteVersion({ moduleDefinitionId: "network-definition", config: definition.module })],
+      },
+    });
+
+    const result = await publishDefinitions([definition], client, { dryRun: false });
+
+    assert.deepEqual(result.categoryItems, []);
+    assert.deepEqual(result.items.map(({ action }) => action), ["patch-definition", "skip-version"]);
+    assert.deepEqual(client.patchedDefinitions[0].moduleCategoryIds, ["network-category"]);
+    assert.equal(client.createdCategories.length, 0);
+  });
+
+  it("assigns every matching category to a multi-category definition", async () => {
+    const categoryGivenIds = ["web-server", "tcp-udp-server", "worker"];
+    const categories = MODULE_CATEGORIES
+      .filter((category) => categoryGivenIds.includes(category.givenId))
+      .map((category) => ({
+        id: `${category.givenId}-category`,
+        givenId: category.givenId,
+        name: category.name,
+        description: category.description,
+        sortOrder: category.sortOrder,
+      }));
+    const definition = createCompiledDefinition({
+      filePath: join("/repo", "compute", "ec2_service", "rvn-ec2-service-definition.yml"),
+      type: "rvn-ec2-service",
+      name: "EC2 Service",
+    });
+    const client = new MockRavionClient({ categories });
+
+    await publishDefinitions([definition], client, { dryRun: false });
+
+    assert.deepEqual(client.createdDefinitions[0].moduleCategoryIds, [
+      "web-server-category",
+      "worker-category",
+    ]);
+  });
+
+  it("renames a previous category ID without creating a duplicate", async () => {
+    const definition = createCompiledDefinition({
+      filePath: join("/repo", "compute", "ecs_service", "rvn-ecs-nlb-definition.yml"),
+      type: "rvn-ecs-nlb",
+      name: "ECS Network Service",
+    });
+    const client = new MockRavionClient({
+      categories: [
+        {
+          id: "web-category",
+          givenId: "web-server",
+          name: "Web server",
+          description: "For websites, HTTP APIs, and services reached through a browser or web client.",
+          sortOrder: 10,
+        },
+        {
+          id: "tcp-category",
+          givenId: "tcp-udp-service",
+          name: "TCP/UDP service",
+          description: "Services exposed over TCP, UDP, or TLS, including HTTP without application-layer routing.",
+          sortOrder: 50,
+        },
+      ],
+      definitions: [
+        {
+          id: "nlb-definition",
+          type: definition.type,
+          name: definition.name,
+          description: definition.description,
+          moduleCategoryIds: ["web-category", "tcp-category"],
+        },
+      ],
+      versionsByDefinitionId: {
+        "nlb-definition": [createRemoteVersion({ moduleDefinitionId: "nlb-definition", config: definition.module })],
+      },
+    });
+
+    const result = await publishDefinitions([definition], client, { dryRun: false });
+
+    assert.deepEqual(result.categoryItems?.map(({ givenId, action }) => ({ givenId, action })), [
+      { givenId: "tcp-udp-server", action: "patch-category" },
+    ]);
+    assert.equal(client.createdCategories.length, 0);
+    assert.equal(client.patchedCategories[0].givenId, "tcp-udp-server");
+    assert.equal(client.categories.find((category) => category.id === "tcp-category")?.givenId, "tcp-udp-server");
   });
 
   it("skips identical existing versions idempotently", async () => {
@@ -502,11 +660,20 @@ describe("publish", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
       calls.push({ url: String(url), method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (String(url).includes("/module-categories?")) {
+        return jsonResponse({ data: [{ id: "network", givenId: "network", name: "Network", sortOrder: 10 }], meta: { limit: 100 } });
+      }
       if (String(url).includes("/module-definitions?")) {
         return jsonResponse({ data: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }], meta: { limit: 100 } });
       }
       if (String(url).includes("/module-versions?")) {
         return jsonResponse({ data: [], meta: { limit: 100 } });
+      }
+      if (String(url).endsWith("/module-categories")) {
+        return jsonResponse({ data: { id: "created-category", givenId: "worker", name: "Worker", sortOrder: 20 } }, 201);
+      }
+      if (String(url).endsWith("/module-categories/network")) {
+        return jsonResponse({ data: { id: "network", givenId: "network", name: "Network", sortOrder: 10 } });
       }
       if (String(url).endsWith("/module-definitions")) {
         return jsonResponse({ data: { id: "created", type: "ravion-aws-new", name: "New", description: "New module." } }, 201);
@@ -526,10 +693,13 @@ describe("publish", () => {
 
     try {
       const client = await createDefaultRavionApiClient({ baseUrl: "https://api.example.test", token: "token" });
+      await client.listModuleCategories();
+      await client.createModuleCategory({ givenId: "worker", name: "Worker", sortOrder: 20 });
+      await client.patchModuleCategory({ id: "network", name: "Network", isGlobalPublished: true });
       await client.listModuleDefinitions();
       await client.listModuleVersions("vpc");
-      await client.createModuleDefinition({ type: "ravion-aws-new", name: "New", description: "New module." });
-      await client.patchModuleDefinition({ id: "vpc", name: "AWS VPC", description: "New description." });
+      await client.createModuleDefinition({ type: "ravion-aws-new", name: "New", description: "New module.", moduleCategoryIds: ["network"] });
+      await client.patchModuleDefinition({ id: "vpc", name: "AWS VPC", description: "New description.", moduleCategoryIds: ["network"] });
       await client.createModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} });
       await client.dryRunModuleVersion({ moduleDefinitionId: "vpc", version: "1.2.3", description: "Add subnet options.", config: {} });
     } finally {
@@ -537,10 +707,13 @@ describe("publish", () => {
     }
 
     assert.deepEqual(calls, [
+      { url: "https://api.example.test/module-categories?limit=100", method: "GET", body: undefined },
+      { url: "https://api.example.test/module-categories", method: "POST", body: { data: { givenId: "worker", name: "Worker", sortOrder: 20 } } },
+      { url: "https://api.example.test/module-categories/network", method: "PATCH", body: { data: { name: "Network", isGlobalPublished: true } } },
       { url: "https://api.example.test/module-definitions?limit=100", method: "GET", body: undefined },
       { url: "https://api.example.test/module-versions?moduleDefinitionId=vpc&limit=100", method: "GET", body: undefined },
-      { url: "https://api.example.test/module-definitions", method: "POST", body: { data: { type: "ravion-aws-new", name: "New", description: "New module." } } },
-      { url: "https://api.example.test/module-definitions/vpc", method: "PATCH", body: { data: { name: "AWS VPC", description: "New description." } } },
+      { url: "https://api.example.test/module-definitions", method: "POST", body: { data: { type: "ravion-aws-new", name: "New", description: "New module.", moduleCategoryIds: ["network"] } } },
+      { url: "https://api.example.test/module-definitions/vpc", method: "PATCH", body: { data: { name: "AWS VPC", description: "New description.", moduleCategoryIds: ["network"] } } },
       {
         url: "https://api.example.test/module-versions",
         method: "POST",
@@ -622,8 +795,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 class MockRavionClient implements RavionModuleApiClient {
+  categories: RemoteModuleCategory[];
   definitions: RemoteModuleDefinition[];
   versionsByDefinitionId: Record<string, RemoteModuleVersion[]>;
+  createdCategories: ModuleCategoryInput[] = [];
+  patchedCategories: ModuleCategoryPatchInput[] = [];
   createdDefinitions: ModuleDefinitionInput[] = [];
   patchedDefinitions: ModuleDefinitionPatchInput[] = [];
   createdVersions: ModuleVersionInput[] = [];
@@ -632,9 +808,53 @@ class MockRavionClient implements RavionModuleApiClient {
   onCreateVersion?: (input: ModuleVersionInput) => Promise<void>;
   onDryRunVersion?: (input: ModuleVersionInput) => Promise<void>;
 
-  constructor(options: { definitions?: RemoteModuleDefinition[]; versionsByDefinitionId?: Record<string, RemoteModuleVersion[]> } = {}) {
+  constructor(options: { categories?: RemoteModuleCategory[]; definitions?: RemoteModuleDefinition[]; versionsByDefinitionId?: Record<string, RemoteModuleVersion[]> } = {}) {
+    this.categories = options.categories ?? [];
     this.definitions = options.definitions ?? [];
     this.versionsByDefinitionId = options.versionsByDefinitionId ?? {};
+  }
+
+  async listModuleCategories(): Promise<RemoteModuleCategory[]> {
+    return this.categories;
+  }
+
+  async createModuleCategory(input: ModuleCategoryInput): Promise<RemoteModuleCategory> {
+    this.createdCategories.push(input);
+    const category = {
+      id: `category-${this.categories.length + 1}`,
+      organizationId: "organization-1",
+      ...input,
+    };
+    this.categories.push(category);
+    return category;
+  }
+
+  async patchModuleCategory(input: ModuleCategoryPatchInput): Promise<RemoteModuleCategory> {
+    this.patchedCategories.push(input);
+    const { id, isGlobalPublished } = input;
+    const updates = {
+      ...(input.givenId !== undefined ? { givenId: input.givenId } : {}),
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
+      ...(input.icon !== undefined ? { icon: input.icon ?? undefined } : {}),
+      ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+    };
+    this.categories = this.categories.map((category) => {
+      if (category.id !== id) {
+        return category;
+      }
+      const updated = { ...category, ...updates };
+      if (isGlobalPublished === true) {
+        const { organizationId: _organizationId, ...globalCategory } = updated;
+        return globalCategory;
+      }
+      return updated;
+    });
+    const category = this.categories.find((item) => item.id === id);
+    if (!category) {
+      throw new Error(`Category ${id} not found`);
+    }
+    return category;
   }
 
   async listModuleDefinitions(): Promise<RemoteModuleDefinition[]> {
@@ -650,7 +870,17 @@ class MockRavionClient implements RavionModuleApiClient {
 
   async patchModuleDefinition(input: ModuleDefinitionPatchInput): Promise<RemoteModuleDefinition> {
     this.patchedDefinitions.push(input);
-    const patched = this.definitions.map((definition) => (definition.id === input.id ? { ...definition, ...input } : definition));
+    const patched = this.definitions.map((definition) => {
+      if (definition.id !== input.id) {
+        return definition;
+      }
+      const updated = { ...definition, ...input };
+      if (input.isGlobalPublished === true) {
+        const { organizationId: _organizationId, ...globalDefinition } = updated;
+        return globalDefinition;
+      }
+      return updated;
+    });
     this.definitions = patched;
     const definition = patched.find((item) => item.id === input.id);
     if (!definition) {
