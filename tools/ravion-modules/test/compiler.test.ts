@@ -81,7 +81,7 @@ describe("compiler", () => {
   });
 
   it("preserves a global publication opt-out outside the canonical module config", async () => {
-    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks", "rvn-eks-definition.yml"));
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks", "rvn-eks-cluster-definition.yml"));
 
     assert.equal(compiled.global, false);
     assert.equal("global" in compiled.module, false);

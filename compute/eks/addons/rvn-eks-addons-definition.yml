@@ -92,7 +92,7 @@ module:
           placeholder: subnet-0fedcba9876543210
           type: string_array
       required: true
-      type: $ref:rvn-eks
+      type: $ref:rvn-eks-cluster
     - description: Ravion's in-cluster agent, Beacon. It dials Ravion outbound over a single WebSocket - nothing ever reaches into the cluster - and reports workload, rollout, and node state back, which is what makes a private-endpoint cluster observable from Ravion at all. Optionally it also runs Ravion's deploys from inside the cluster. Requires Kubernetes API connectivity from the Terraform runner for the install itself.
       id: section_beacon
       label: Ravion EKS Management

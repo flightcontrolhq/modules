@@ -1,6 +1,6 @@
 global: false
 definition:
-  type: rvn-eks
+  type: rvn-eks-cluster
   name: EKS Cluster
   description: Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
@@ -67,7 +67,7 @@ module:
       label: EKS cluster
       type: section
     - default: <<project.given_id>>-<<environment.given_id>>
-      description: Name of the EKS cluster and prefix for related resources.
+      description: Name and prefix for related resources.
       id: name
       immutable: true
       label: EKS cluster name

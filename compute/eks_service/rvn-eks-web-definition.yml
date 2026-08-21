@@ -14,7 +14,7 @@ module:
     - id: cluster
       immutable: true
       label: Cluster
-      type: $ref:rvn-eks
+      type: $ref:rvn-eks-cluster
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
@@ -694,7 +694,7 @@ module:
 
     | Field | Required | Default | Description |
     | ----- | -------- | ------- | ----------- |
-    | Cluster | Yes | - | Existing rvn-eks module instance |
+    | Cluster | Yes | - | Existing rvn-eks-cluster module instance |
     | EKS add-ons | Yes | - | Existing rvn-eks-addons module instance on the same cluster |
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes and load balancer objects |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
