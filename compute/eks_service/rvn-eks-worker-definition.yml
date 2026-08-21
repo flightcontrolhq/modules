@@ -14,7 +14,7 @@ module:
     - id: cluster
       immutable: true
       label: Cluster
-      type: $ref:rvn-eks
+      type: $ref:rvn-eks-cluster
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
@@ -264,11 +264,13 @@ module:
 
     ## Resources and scaling
 
+    Kubernetes schedules on requests and enforces on limits. CPU is measured in cores or millicores: 1 is one vCPU and 100m is a tenth of one. Memory uses binary units: 256Mi, 1Gi (1024Mi).
+
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
-    | Memory request | 256Mi | Memory reserved for the pod |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
+    | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
 
     Autoscaling is **off** by default, unlike the web module. CPU utilization is a poor proxy for worker demand: a worker blocked on a queue poll uses almost no CPU no matter how deep the backlog. Enable it when the work is genuinely CPU-bound, and prefer a fixed pod count otherwise.
@@ -317,7 +319,7 @@ module:
 
     | Field | Required | Default | Description |
     | ----- | -------- | ------- | ----------- |
-    | Cluster | Yes | - | Existing rvn-eks module instance |
+    | Cluster | Yes | - | Existing rvn-eks-cluster module instance |
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes objects |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
     | Create namespace | No | true | Create the namespace if it does not exist |
@@ -336,9 +338,9 @@ module:
     | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace, for Pull from image registry |
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
-    | CPU request | Yes | 100m | CPU reserved per pod |
-    | Memory request | Yes | 256Mi | Memory reserved per pod |
+    | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
     | CPU limit | No | - | Optional CPU ceiling |
+    | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |
     | Autoscaling | No | false | Scale pods with a HorizontalPodAutoscaler |
     | Minimum pods | No | 1 | Lower bound when autoscaling |

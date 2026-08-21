@@ -45,7 +45,7 @@ module "eks" {
 > **Pinning a `ref`:** this repository has no `vX.Y.Z` tags. Releases are tagged
 > per module definition as `rvn-<definition-type>@<x.y.z>` (for example
 > `rvn-aws-network@1.0.1`). Once a release of this stack is cut, pin to
-> `?ref=rvn-eks@<x.y.z>`; until then use `?ref=main` or a commit SHA.
+> `?ref=rvn-eks-cluster@<x.y.z>`; until then use `?ref=main` or a commit SHA.
 
 ## Requirements
 

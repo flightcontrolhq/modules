@@ -49,7 +49,7 @@ describe("module categories", () => {
   });
 
   it("groups EKS infrastructure definitions with clusters", () => {
-    for (const definitionType of ["rvn-eks", "rvn-eks-addons"]) {
+    for (const definitionType of ["rvn-eks-cluster", "rvn-eks-addons"]) {
       assert.deepEqual(
         getModuleCategoriesForDefinitionType(definitionType).map((category) => category.givenId),
         ["cluster"],
