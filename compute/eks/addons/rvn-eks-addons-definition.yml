@@ -57,7 +57,8 @@ module:
         - default: <<ref.stack.output.cluster_name>>
           id: cluster_name
           immutable: true
-          label: Cluster name
+          label: EKS cluster name
+          placeholder: my-eks-cluster
           required: true
           type: string
         - collapsible: true
@@ -65,12 +66,14 @@ module:
           description: IAM role assumed for Kubernetes API authentication when installing Helm charts. Defaults to the cluster's Ravion Runner role.
           id: ravion_runner_role_arn
           label: Ravion Runner role ARN
+          placeholder: arn:aws:iam::123456789012:role/my-eks-cluster-ravion-runner
           type: string
         - collapsible: true
           default: <<ref.stack.output.cluster_security_group_id>>
           description: EKS-managed cluster security group attached to Karpenter-launched nodes.
           id: cluster_security_group_id
           label: Cluster security group ID
+          placeholder: sg-0123456789abcdef0
           type: string
         - add_button_label: Add subnet ID
           collapsible: true
@@ -78,6 +81,7 @@ module:
           description: Subnets the default Karpenter NodePool launches nodes into. Also used by internal shared load balancers.
           id: node_subnet_ids
           label: Node subnet IDs
+          placeholder: subnet-0123456789abcdef0
           type: string_array
         - add_button_label: Add subnet ID
           collapsible: true
@@ -85,6 +89,7 @@ module:
           description: Public subnets for internet-facing shared load balancers.
           id: public_subnet_ids
           label: Public subnet IDs
+          placeholder: subnet-0fedcba9876543210
           type: string_array
       required: true
       type: $ref:rvn-eks

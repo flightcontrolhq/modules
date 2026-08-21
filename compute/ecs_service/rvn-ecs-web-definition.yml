@@ -12,7 +12,7 @@ module:
       type: section
     - id: cluster
       immutable: true
-      label: ECS cluster
+      label: Cluster
       type: $ref:rvn-ecs-cluster
       mapped_inputs:
         - $include: ../../partials/inputs/ecs-service-cluster-common-mapped-inputs.yml
@@ -247,6 +247,14 @@ module:
       collapsible: true
       min: 0
       default: 0
+    - id: target_group_deregistration_delay
+      label: Deregistration delay (secs)
+      type: number
+      description: Seconds the load balancer allows in-flight requests to complete after a task starts deregistering.
+      collapsible: true
+      max: 3600
+      min: 0
+      default: 300
     - id: target_group_slow_start
       label: Slow start duration (secs)
       type: number
@@ -335,6 +343,7 @@ module:
                       (module.input.private_alb_https_listener_arn ||
                       module.input.private_alb_http_listener_arn) >>
                     target_group:
+                      deregistration_delay: << module.input.target_group_deregistration_delay >>
                       health_check:
                         enabled: true
                         healthy_threshold: << module.input.healthy_threshold >>
@@ -640,6 +649,7 @@ module:
     | Healthy threshold                | 2       | Successful checks needed to mark a target healthy              |
     | Unhealthy threshold              | 2       | Failed checks needed to mark a target unhealthy                |
     | Health check grace period (secs) | 0       | Startup window where ECS ignores load balancer health failures |
+    | Deregistration delay (secs)      | 300     | Drain window for a task that is deregistering                   |
 
     Increase the grace period for apps with slow boot times. Keep health check endpoints lightweight and unauthenticated.
 
@@ -776,7 +786,7 @@ module:
     | Public web service              | No       | true                       | Use the public ALB; turn off for the private ALB   |
     | Run in private subnets          | No       | true                       | Run tasks in private subnets without public IPs    |
     | Service name                    | Yes      | {project}-{env}-{module}   | Name for the ECS service and related resources     |
-    | ECS cluster                     | Yes      | -                          | Existing rvn-ecs-cluster module instance           |
+    | Cluster                         | Yes      | -                          | Existing rvn-ecs-cluster module instance           |
     | Build source                    | Yes      | dockerfile                 | Dockerfile, Railpack, Pull from image registry, or Disabled |
     | Git repository                  | Yes*     | -                          | Required for Railpack and Dockerfile builds |
     | Git branch                      | Yes*     | -                          | Required for Railpack and Dockerfile builds |
@@ -786,6 +796,7 @@ module:
     | Start command                   | No       | []                         | Command arguments that override an image default CMD |
     | Container port                  | Yes      | 80                         | Port exposed by the app container                  |
     | Health check path               | Yes      | /                          | HTTP path used by the target group health check    |
+    | Deregistration delay (secs)     | No       | 300                        | Drain window for a task that is deregistering      |
     | Sticky sessions                 | No       | true                       | Keep clients on the same task, and on the same traffic-shift target group when enabled |
     | Domain host rules               | No       | -                          | Hostnames such as app.example.com or *.example.com |
     | Path rules                      | No       | -                          | Path patterns such as /*, /api/*, or /app/*        |
