@@ -1,3 +1,4 @@
+global: false
 definition:
   type: rvn-eks-worker
   name: EKS Worker

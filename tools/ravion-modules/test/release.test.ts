@@ -50,6 +50,7 @@ describe("release metadata", () => {
 function createCompiledDefinition(): CompiledDefinition {
   return {
     filePath: join("/repo", "networking", "vpc", "ravion-aws-vpc-definition.yml"),
+    global: true,
     type: "ravion-aws-vpc",
     name: "AWS VPC",
     description: "AWS VPC and subnets.",

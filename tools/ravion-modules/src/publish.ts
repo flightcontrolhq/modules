@@ -211,11 +211,10 @@ export async function publishDefinitions(
     );
     const categoryChanged = categories.length > 0 &&
       (categoryIds.length !== categories.length || !haveSameValues(remoteCategoryIds, categoryIds));
-    const isOrganizationScoped = remoteDefinition !== undefined &&
-      (remoteDefinition.organizationId !== undefined || remoteDefinition.isGlobalPublished === false);
-    const shouldPlanGlobalPublication = isOrganizationScoped;
-    const shouldPublishDefinitionAfterVersion =
-      !remoteDefinition || isOrganizationScoped;
+    const isInitialPublication =
+      !remoteDefinition || (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).length === 0;
+    const shouldPlanGlobalPublication = isInitialPublication && definition.global;
+    const shouldPublishDefinitionAfterVersion = isInitialPublication && definition.global;
     if (!remoteDefinition) {
       items.push(
         createItem(
@@ -357,7 +356,7 @@ export async function publishDefinitions(
           `Cannot create ${definition.type}@${definition.version}; module definition was not created.`,
         );
       }
-      if (shouldPublishDefinitionAfterVersion) {
+      if (isInitialPublication) {
         await client.dryRunModuleVersion({
           moduleDefinitionId: remoteDefinition.id,
           version: definition.version,
