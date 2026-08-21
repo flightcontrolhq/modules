@@ -67,14 +67,13 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-aws-static` | Static Hosting | v1.1.1 | `hosting/static_site/` |
 | `rvn-cloudfront` | CloudFront CDN | v1.3.0 | `cdn/cloudfront/` |
 | `rvn-ec2-service` | EC2 Service | v1.4.1 | `compute/ec2_service/` |
-| `rvn-ecs-cluster` | ECS Cluster | v1.0.1 | `compute/ecs_cluster/` |
-| `rvn-ecs-nlb` | ECS Network Service | v1.1.1 | `compute/ecs_service/` |
-| `rvn-ecs-web` | ECS Web Service | v1.1.0 | `compute/ecs_service/` |
-| `rvn-ecs-worker` | ECS Worker | v1.1.0 | `compute/ecs_service/` |
+| `rvn-ecs-cluster` | ECS Cluster | v1.0.2 | `compute/ecs_cluster/` |
+| `rvn-ecs-nlb` | ECS Network Service | v1.1.2 | `compute/ecs_service/` |
+| `rvn-ecs-web` | ECS Web Service | v1.1.1 | `compute/ecs_service/` |
+| `rvn-ecs-worker` | ECS Worker | v1.1.1 | `compute/ecs_service/` |
 | `rvn-efs` | EFS File System | v1.0.1 | `storage/efs/` |
 | `rvn-eks` | EKS Cluster | v0.2.0 | `compute/eks/` |
 | `rvn-eks-addons` | EKS Add-ons | v0.8.4 | `compute/eks/addons/` |
-| `rvn-eks-cron` | EKS Cron Job | v0.4.0 | `compute/eks_service/` |
 | `rvn-eks-web` | EKS Web Service | v0.4.0 | `compute/eks_service/` |
 | `rvn-eks-worker` | EKS Worker | v0.4.0 | `compute/eks_service/` |
 | `rvn-elasticache` | ElastiCache | v1.0.1 | `cache/elasticache/` |

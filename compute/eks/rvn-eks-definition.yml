@@ -41,6 +41,7 @@ module:
           id: vpc_id
           immutable: true
           label: VPC ID
+          placeholder: vpc-0123456789abcdef0
           required: true
           type: string
         - add_button_label: Add private subnet ID
@@ -49,6 +50,7 @@ module:
           id: subnet_ids
           immutable: true
           label: Private subnet IDs
+          placeholder: subnet-0123456789abcdef0
           required: true
           type: string_array
         - add_button_label: Add public subnet ID
@@ -57,6 +59,7 @@ module:
           description: Public subnets made available to dependent modules, such as EKS Add-ons shared load balancers. Not used by the cluster itself.
           id: public_subnet_ids
           label: Public subnet IDs
+          placeholder: subnet-0fedcba9876543210
           type: string_array
       required: true
       type: $ref:rvn-aws-network
@@ -67,7 +70,7 @@ module:
       description: Name of the EKS cluster and prefix for related resources.
       id: name
       immutable: true
-      label: Name slug
+      label: EKS cluster name
       patterns:
         - message: 1-100 letters, numbers, hyphens, and underscores. Start with a letter or number.
           pattern: ^[0-9A-Za-z][A-Za-z0-9-_]{0,99}$
@@ -424,7 +427,7 @@ module:
     | Field                  | Required | Default              | Description                                            |
     | ---------------------- | -------- | -------------------- | ------------------------------------------------------ |
     | VPC network            | Yes      | -                    | Existing VPC, subnets, AWS account, and region         |
-    | Name slug              | Yes      | `{project}-{env}`    | Name of the EKS cluster                                |
+    | EKS cluster name       | Yes      | `{project}-{env}`    | Name of the EKS cluster                                |
     | Kubernetes version     | No       | Latest               | Cluster version in MAJOR.MINOR form                    |
     | Deletion protection    | No       | `true`               | Blocks cluster deletion until turned off               |
     | Secrets encryption     | No       | `true`               | Envelope-encrypt Kubernetes secrets with KMS           |

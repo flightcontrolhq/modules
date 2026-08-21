@@ -31,6 +31,7 @@
   type: string
   description: Amazon Managed Prometheus workspace the cluster's metrics collector writes to. Inherited from the selected add-ons module; empty until its stack applies with Amazon Managed Prometheus selected.
   collapsible: true
+  placeholder: ws-01234567-abcd-4abc-8abc-0123456789ab
   required: false
   default: <<ref.stack.output.amp_workspace_id>>
 - id: amp_region
@@ -38,6 +39,7 @@
   type: string
   description: Region of the Amazon Managed Prometheus workspace. Inherited from the selected add-ons module; empty until its stack applies with Amazon Managed Prometheus selected.
   collapsible: true
+  placeholder: us-east-1
   required: false
   default: <<ref.stack.output.amp_region>>
 - id: logs_rendering_providers
@@ -45,6 +47,7 @@
   type: string_array
   description: Log stores the Logs tab reads from, in fallback order. Inherited from the selected add-ons module; blank means the in-cluster Loki store.
   collapsible: true
+  placeholder: loki
   required: false
   default: <<ref.stack.output.logs_rendering_providers>>
 - id: metrics_rendering_providers
@@ -52,6 +55,7 @@
   type: string_array
   description: Metric stores the Metrics tab reads from, in fallback order. Inherited from the selected add-ons module; blank means Amazon Managed Prometheus.
   collapsible: true
+  placeholder: amp
   required: false
   default: <<ref.stack.output.metrics_rendering_providers>>
 - id: logs_cloudwatch_log_group
@@ -59,6 +63,7 @@
   type: string
   description: Log group the cluster's collector writes to when Amazon CloudWatch Logs is a selected logs provider. One stream per pod, named namespace/pod/container.
   collapsible: true
+  placeholder: /aws/containerinsights/my-eks-cluster/application
   required: false
   default: <<ref.stack.output.logs_cloudwatch_log_group>>
 - id: prometheus_endpoint
@@ -66,6 +71,7 @@
   type: string
   description: URL of the Prometheus running in the cluster, queried through the Beacon agent when Prometheus is a selected metrics provider.
   collapsible: true
+  placeholder: http://prometheus.monitoring.svc.cluster.local:9090
   required: false
   default: <<ref.stack.output.prometheus_endpoint>>
 - id: logs_external_links
@@ -73,6 +79,7 @@
   type: array
   description: One entry per logs provider that ships to a vendor rather than rendering in Ravion, as {provider, name, href_prefix}. The Logs tab turns each into an "Open in ..." action pointing at this workload.
   collapsible: true
+  placeholder: '[{"provider":"datadog","name":"Datadog","href_prefix":"https://app.datadoghq.com/logs?query="}]'
   required: false
   default: <<ref.stack.output.logs_external_links>>
 - id: metrics_external_links
@@ -80,6 +87,7 @@
   type: array
   description: One entry per metrics provider that ships to a vendor rather than rendering in Ravion, as {provider, name, href_prefix}. The Metrics tab turns each into an "Open in ..." action pointing at this workload.
   collapsible: true
+  placeholder: '[{"provider":"datadog","name":"Datadog","href_prefix":"https://app.datadoghq.com/metric/explorer?query="}]'
   required: false
   default: <<ref.stack.output.metrics_external_links>>
 # The two Grafana Cloud query URLs and the credentials secret are what the
@@ -92,6 +100,7 @@
   type: string
   description: Grafana Cloud Loki query endpoint, used when Ravion reads Grafana Cloud logs through the Beacon agent.
   collapsible: true
+  placeholder: https://logs-prod-us-central1.grafana.net/loki/api/v1
   required: false
   default: <<ref.stack.output.grafana_cloud_logs_query_url>>
 - id: grafana_cloud_metrics_query_url
@@ -99,6 +108,7 @@
   type: string
   description: Grafana Cloud Prometheus query endpoint, used when Ravion reads Grafana Cloud metrics through the Beacon agent.
   collapsible: true
+  placeholder: https://prometheus-prod-01-prod-us-central-0.grafana.net/api/prom
   required: false
   default: <<ref.stack.output.grafana_cloud_metrics_query_url>>
 - id: observability_credentials_secret_name
@@ -106,5 +116,6 @@
   type: string
   description: Name of the Kubernetes Secret in the Beacon namespace holding vendor query credentials. A name only - Ravion never reads the values.
   collapsible: true
+  placeholder: ravion-observability-credentials
   required: false
   default: <<ref.stack.output.observability_credentials_secret_name>>

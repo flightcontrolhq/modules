@@ -2,10 +2,10 @@ global: false
 definition:
   type: rvn-eks-web
   name: EKS Web Service
-  description: Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
+  description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this service.
+  description: Follow the observability providers chosen on the EKS add-ons module and align load balancer health check timing defaults with ECS Web Service.
 module:
   inputs:
     - id: section_cluster
@@ -13,7 +13,7 @@ module:
       type: section
     - id: cluster
       immutable: true
-      label: EKS cluster
+      label: Cluster
       type: $ref:rvn-eks
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
@@ -31,6 +31,7 @@ module:
           immutable: true
           label: Public ALB HTTP listener ARN
           type: string
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/public-eks-alb/50dc6c495c0c9188/f2f7dc8efc522ab2
           required: false
           default: <<ref.stack.output.public_alb_http_listener_arn>>
         - id: public_alb_https_listener_arn
@@ -39,12 +40,14 @@ module:
           type: string
           description: HTTPS listener ARN from the shared public ALB. Ravion uses it when present, otherwise falls back to HTTP.
           collapsible: true
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/public-eks-alb/50dc6c495c0c9188/4a78a6346492dabc
           required: false
           default: <<ref.stack.output.public_alb_https_listener_arn>>
         - id: private_alb_http_listener_arn
           immutable: true
           label: Private ALB HTTP listener ARN
           type: string
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/private-eks-alb/73e2d6bc24d8a067/2d1d56cfc4b12345
           required: false
           default: <<ref.stack.output.private_alb_http_listener_arn>>
         - id: private_alb_https_listener_arn
@@ -53,6 +56,7 @@ module:
           type: string
           description: HTTPS listener ARN from the shared private ALB. Ravion uses it when present, otherwise falls back to HTTP.
           collapsible: true
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/private-eks-alb/73e2d6bc24d8a067/9f8e7d6c5b4a3210
           required: false
           default: <<ref.stack.output.private_alb_https_listener_arn>>
         - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
@@ -104,7 +108,7 @@ module:
       collapsible: true
       max: 300
       min: 5
-      default: 15
+      default: 5
     - id: health_check_timeout
       label: Timeout (secs)
       type: number
@@ -112,7 +116,7 @@ module:
       collapsible: true
       max: 120
       min: 2
-      default: 5
+      default: 4
     - id: healthy_threshold
       label: Healthy threshold
       type: number
@@ -521,11 +525,13 @@ module:
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
   readme: |
-    Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
+    Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 
     ## Overview
 
-    EKS Web Service runs an HTTP application on an existing Ravion EKS cluster. Ravion builds the image from your repository - or takes one you already have - and brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-web` chart, which renders a Deployment, a Service, a ServiceAccount, an optional HorizontalPodAutoscaler, and the `TargetGroupBinding` that puts your pods behind the load balancer.
+    EKS Web Service deploys a web app - any HTTP application in a container - to an existing Ravion EKS cluster. Point it at a Git repository or an image you already have, set the port, routing rules, health checks, and scaling in a form, and Ravion builds the image, deploys it, and routes traffic to it through the cluster's shared load balancer. There are no Kubernetes manifests to write and no Helm charts to maintain.
+
+    Under the hood, each deploy installs a Helm chart that Ravion maintains - a packaged template of the Kubernetes resources a web service needs. The `rvn-eks-web` chart renders the Deployment that runs your pods, the Service in front of them, a ServiceAccount, an optional HorizontalPodAutoscaler, and the `TargetGroupBinding` that puts your pods behind the load balancer. Each release runs `helm upgrade --install --atomic`, so a failed deploy rolls back to the previous revision on its own.
 
     The module has three parts that update independently:
 
@@ -535,7 +541,9 @@ module:
     | Build | The container image, from a Dockerfile or Railpack | Every build, unless the build source is an existing registry image |
     | Helm deploy | Deployment, Service, HPA, secrets wiring | Every release, and whenever runtime settings change |
 
-    Routing follows the same shape as ECS Web Server: Terraform owns the `aws_lb_target_group` and `aws_lb_listener_rule` against a shared load balancer, and the AWS Load Balancer Controller registers pod IPs into that target group. The chart does not create an Ingress, so no per-service load balancer is provisioned.
+    Terraform owns the `aws_lb_target_group` and `aws_lb_listener_rule` against a shared load balancer, and the AWS Load Balancer Controller registers pod IPs into that target group. The chart does not create an Ingress, so no per-service load balancer is provisioned. This is the same routing shape as ECS Web Server, so a service moving from ECS keeps its routing model.
+
+    Chart source: [ravionhq/modules/charts/rvn-eks-web](https://github.com/ravionhq/modules/tree/$local.module_tag/charts/rvn-eks-web)
 
     Terraform source: [ravionhq/modules/compute/eks_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/eks_service)
 
@@ -545,6 +553,7 @@ module:
     | -------- | --------------------------- |
     | Running a public web app on Kubernetes | Routing host or path traffic through the shared public ALB |
     | Hosting an internal HTTP API | Routing private traffic through the shared private ALB |
+    | Building from source | Creating images with a Dockerfile or Railpack and pushing to ECR |
     | Moving a service from ECS to EKS | Keeping the same routing, health check, and `{name, value_from}` secret shape |
     | Adopting Kubernetes without writing charts | Deploying a maintained chart you configure through a form |
     | Handling variable traffic | Scaling pods with a HorizontalPodAutoscaler on CPU and optionally memory |
@@ -579,8 +588,8 @@ module:
     | Container port | 8080 | Port the application listens on; used by the Service and the target group |
     | Health check path | / | Lightweight HTTP endpoint the load balancer calls |
     | Success codes | 200-399 | Status codes treated as healthy |
-    | Interval (secs) | 15 | Seconds between load balancer checks |
-    | Timeout (secs) | 5 | Seconds to wait for a response; must be lower than the interval |
+    | Interval (secs) | 5 | Seconds between load balancer checks |
+    | Timeout (secs) | 4 | Seconds to wait for a response; must be lower than the interval |
     | Healthy threshold | 2 | Successful checks before a target is healthy |
     | Unhealthy threshold | 2 | Failed checks before a target is unhealthy |
     | Deregistration delay (secs) | 300 | Drain window for a pod that is shutting down |
@@ -685,7 +694,7 @@ module:
 
     | Field | Required | Default | Description |
     | ----- | -------- | ------- | ----------- |
-    | EKS cluster | Yes | - | Existing rvn-eks module instance |
+    | Cluster | Yes | - | Existing rvn-eks module instance |
     | EKS add-ons | Yes | - | Existing rvn-eks-addons module instance on the same cluster |
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes and load balancer objects |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |

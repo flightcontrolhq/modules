@@ -1,8 +1,9 @@
+published: false
 global: false
 definition:
   type: rvn-eks-cron
   name: EKS Cron Job
-  description: Scheduled job on EKS for running a container on a cron schedule, deployed from a container image with no chart of your own.
+  description: Scheduled job on EKS for running a container on a cron schedule, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
   description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this job. Run outcome charts still need a Prometheus provider.
@@ -13,7 +14,7 @@ module:
       type: section
     - id: cluster
       immutable: true
-      label: EKS cluster
+      label: Cluster
       type: $ref:rvn-eks
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
@@ -254,11 +255,13 @@ module:
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
   readme: |
-    Scheduled job on EKS for running a container on a cron schedule, deployed from a container image with no chart of your own.
+    Scheduled job on EKS for running a container on a cron schedule, with no Kubernetes manifests or Helm charts to write.
 
     ## Overview
 
-    EKS Cron Job runs a container on a schedule on an existing Ravion EKS cluster - nightly reports, cleanup tasks, reconciliation passes, digest emails. Ravion builds the image from your repository - or takes one you already have - and brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-cron` chart, which renders a CronJob, a ServiceAccount, and, when the module declares runtime secrets, an `ExternalSecret`.
+    EKS Cron Job runs a container on a schedule on an existing Ravion EKS cluster - nightly reports, cleanup tasks, reconciliation passes, digest emails. Point it at a Git repository or an image you already have, set the schedule and the command in a form, and Ravion builds the image and runs it on that schedule. There are no Kubernetes manifests to write and no Helm charts to maintain.
+
+    Under the hood, each deploy installs a Helm chart that Ravion maintains - a packaged template of the Kubernetes resources a scheduled job needs. The `rvn-eks-cron` chart renders the CronJob that starts each run, a ServiceAccount, and, when the module declares runtime secrets, an `ExternalSecret`. Each release runs `helm upgrade --install --atomic`, so a failed deploy rolls back to the previous revision on its own.
 
     Deploying updates the schedule and the image the next run uses. It does not trigger a run.
 
@@ -390,7 +393,7 @@ module:
 
     | Field | Required | Default | Description |
     | ----- | -------- | ------- | ----------- |
-    | EKS cluster | Yes | - | Existing rvn-eks module instance |
+    | Cluster | Yes | - | Existing rvn-eks module instance |
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the CronJob |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
     | Create namespace | No | true | Create the namespace if it does not exist |

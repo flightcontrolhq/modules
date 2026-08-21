@@ -27,12 +27,13 @@
   default: << ref.input.execution_environment_id >>
   values: $values:ravion/execution_environments
 - id: section_cluster_identity
-  label: Cluster
+  label: EKS cluster
   type: section
 - id: cluster_name
   immutable: true
-  label: Cluster name
+  label: EKS cluster name
   type: string
+  placeholder: my-eks-cluster
   required: true
   default: <<ref.stack.output.cluster_name>>
 - id: cluster_arn
@@ -40,6 +41,7 @@
   label: Cluster ARN
   type: string
   description: Ravion resolves the owning AWS account and region from this ARN, and rejects a deploy whose cluster name or region disagrees with it.
+  placeholder: arn:aws:eks:us-east-1:123456789012:cluster/my-eks-cluster
   required: true
   default: <<ref.stack.output.cluster_arn>>
 - id: cluster_endpoint
@@ -47,7 +49,7 @@
   label: Cluster API endpoint
   type: string
   description: HTTPS endpoint of the Kubernetes API server. May be private-only; the deploy runner executes inside the cluster VPC.
-  collapsible: true
+  placeholder: https://ABCDEF0123456789ABCDEF0123456789.gr7.us-east-1.eks.amazonaws.com
   required: true
   default: <<ref.stack.output.cluster_endpoint>>
 - id: cluster_certificate_authority_data
@@ -55,7 +57,7 @@
   label: Cluster certificate authority data
   type: string
   description: Base64-encoded CA bundle used to verify the API server's TLS certificate. Public key material, not a credential.
-  collapsible: true
+  placeholder: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCg...
   required: true
   default: <<ref.stack.output.cluster_certificate_authority_data>>
 - id: ravion_runner_role_arn
@@ -63,7 +65,7 @@
   label: Ravion Runner role ARN
   type: string
   description: Stable IAM role the deploy runner assumes to obtain a cluster token. Registered as an EKS access entry by the cluster module.
-  collapsible: true
+  placeholder: arn:aws:iam::123456789012:role/my-eks-cluster-ravion-runner
   required: true
   default: <<ref.stack.output.ravion_runner_role_arn>>
 - id: ravion_runner_security_group_id
@@ -75,6 +77,7 @@
     endpoint. Null when the cluster module did not create one, which is only workable if the
     endpoint is public or the execution environment supplies its own group.
   collapsible: true
+  placeholder: sg-0123456789abcdef0
   required: false
   default: <<ref.stack.output.ravion_runner_security_group_id>>
 - id: vpc_id
@@ -82,7 +85,7 @@
   label: VPC ID
   type: string
   description: VPC the cluster runs in. Load balancer target groups must live in the same VPC as the pods they register.
-  collapsible: true
+  placeholder: vpc-0123456789abcdef0
   required: true
   # Read from the cluster's input, not its stack output: the cluster carries
   # vpc_id as an input mapped off its own network reference, so this resolves

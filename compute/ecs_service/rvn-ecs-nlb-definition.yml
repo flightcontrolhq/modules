@@ -3,8 +3,8 @@ definition:
   name: ECS Network Service
   description: Network Load Balanced ECS service for exposing one to five TCP, UDP, or TLS ports through an ECS cluster Network Load Balancer.
 release:
-  version: 1.1.1
-  description: Clarify that one ECS Network Service can expose up to five TCP, UDP, or TLS ports.
+  version: 1.1.2
+  description: Clarify ECS cluster labels in module forms.
 module:
   inputs:
     - id: section_cluster
@@ -12,7 +12,7 @@ module:
       type: section
     - id: cluster
       immutable: true
-      label: ECS cluster
+      label: Cluster
       type: $ref:rvn-ecs-cluster
       mapped_inputs:
         - $include: ../../partials/inputs/ecs-service-cluster-common-mapped-inputs.yml
@@ -603,7 +603,7 @@ module:
 
     | Field                            | Required | Default                  | Description                                      |
     | -------------------------------- | -------- | ------------------------ | ------------------------------------------------ |
-    | ECS cluster                      | Yes      | -                        | Existing rvn-ecs-cluster module instance         |
+    | Cluster                          | Yes      | -                        | Existing rvn-ecs-cluster module instance         |
     | Service name                     | Yes      | {project}-{env}-{module} | Name for the ECS service and related resources   |
     | Public network service           | No       | true                     | Use the public NLB; turn off for the private NLB |
     | Run in private subnets           | No       | true                     | Run tasks in private subnets without public IPs  |
