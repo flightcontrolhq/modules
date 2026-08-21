@@ -174,13 +174,17 @@ export async function publishDefinitions(
   options: PublishOptions = {},
 ): Promise<PublishResult> {
   const dryRun = options.dryRun ?? true;
+  const publishedDefinitions = compiledDefinitions.filter((definition) => definition.published);
+  if (publishedDefinitions.length === 0) {
+    return { dryRun, categoryItems: [], items: [] };
+  }
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
   const definitionsToPublish = options.localDev
-    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main", {
+    ? applyLocalDevVersions(publishedDefinitions, inventory, options.localDevSourceRef ?? "main", {
         force: options.localDevForce,
       })
-    : compiledDefinitions;
+    : publishedDefinitions;
   const statuses = getReleaseStatuses(definitionsToPublish, { inventory });
   const errors = createPublishPlanErrors(statuses, definitionsToPublish, inventory);
   if (errors.length > 0) {
@@ -203,6 +207,8 @@ export async function publishDefinitions(
     left.type.localeCompare(right.type),
   )) {
     let remoteDefinition = definitionsByType.get(definition.type);
+    const isInitialPublication =
+      !remoteDefinition || (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).length === 0;
     const categories = categoryResult.byDefinitionType.get(definition.type) ?? [];
     const categoryIds = categories.flatMap((category) => category.id ? [category.id] : []);
     const remoteCategoryIds = remoteDefinition ? getRemoteModuleCategoryIds(remoteDefinition) : [];
@@ -211,8 +217,6 @@ export async function publishDefinitions(
     );
     const categoryChanged = categories.length > 0 &&
       (categoryIds.length !== categories.length || !haveSameValues(remoteCategoryIds, categoryIds));
-    const isInitialPublication =
-      !remoteDefinition || (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).length === 0;
     const shouldPlanGlobalPublication = isInitialPublication && definition.global;
     const shouldPublishDefinitionAfterVersion = isInitialPublication && definition.global;
     if (!remoteDefinition) {
@@ -395,6 +399,11 @@ async function publishModuleCategories(
   dryRun: boolean,
   logger?: (message: string) => void,
 ): Promise<ModuleCategoryPublishResult> {
+  if (process.env.RAVION_SKIP_MODULE_CATEGORIES) {
+    logger?.("Skipping module category publishing (RAVION_SKIP_MODULE_CATEGORIES is set).");
+    return { items: [], byDefinitionType: new Map(), byId: new Map() };
+  }
+
   const specsByGivenId = new Map<string, ModuleCategorySpec>();
   for (const definition of definitions) {
     for (const spec of getModuleCategoriesForDefinitionType(definition.type)) {
@@ -519,12 +528,16 @@ export async function dryRunModuleVersions(
   client: RavionModuleApiClient,
   options: ModuleVersionDryRunOptions = {},
 ): Promise<ModuleVersionDryRunResult[]> {
+  const publishedDefinitions = compiledDefinitions.filter((definition) => definition.published);
+  if (publishedDefinitions.length === 0) {
+    return [];
+  }
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   const definitionsToValidate = options.localDev
-    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main", {
+    ? applyLocalDevVersions(publishedDefinitions, inventory, options.localDevSourceRef ?? "main", {
         force: options.localDevForce,
       })
-    : compiledDefinitions;
+    : publishedDefinitions;
   const statuses = getReleaseStatuses(definitionsToValidate, { inventory });
   const results = await Promise.all(
     statuses.map(async (status) => {

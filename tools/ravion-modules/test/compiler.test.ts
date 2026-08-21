@@ -10,6 +10,7 @@ describe("compiler", () => {
   it("compiles one definition file to canonical module config", async () => {
     const compiled = await compileDefinitionFile(join(fixturesDir, "modules", "networking", "vpc", "ravion-aws-vpc-definition.yml"));
 
+    assert.equal(compiled.published, true);
     assert.equal(compiled.global, true);
     assert.equal(compiled.type, "ravion-aws-vpc");
     assert.equal(compiled.name, "AWS VPC");
@@ -72,6 +73,12 @@ describe("compiler", () => {
     });
   });
 
+  it("preserves a publication opt-out outside the canonical module config", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks_service", "rvn-eks-cron-definition.yml"));
+
+    assert.equal(compiled.published, false);
+    assert.equal("published" in compiled.module, false);
+  });
 
   it("preserves a global publication opt-out outside the canonical module config", async () => {
     const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks", "rvn-eks-definition.yml"));

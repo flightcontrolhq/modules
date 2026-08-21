@@ -9,6 +9,7 @@ describe("authoring schema", () => {
   it("accepts a valid definition and preserves canonical module data", async () => {
     const definition = await parseAuthoringDefinitionFile(join(fixturesDir, "valid-definition.yml"));
 
+    assert.equal(definition.published, true);
     assert.equal(definition.global, true);
     assert.equal(definition.definition.type, "ravion-aws-vpc");
     assert.equal(definition.release.version, "1.2.3");
@@ -18,6 +19,16 @@ describe("authoring schema", () => {
     ]);
   });
 
+  it("accepts a root publication opt-out", () => {
+    const definition = validateAuthoringDefinition({
+      published: false,
+      definition: { type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets" },
+      release: { version: "1.2.3", description: "Add subnet options." },
+      module: {},
+    });
+
+    assert.equal(definition.published, false);
+  });
 
   it("accepts a root global publication opt-out", () => {
     const definition = validateAuthoringDefinition({
@@ -28,6 +39,18 @@ describe("authoring schema", () => {
     });
 
     assert.equal(definition.global, false);
+  });
+
+  it("rejects a non-boolean publication setting", () => {
+    assert.throws(
+      () => validateAuthoringDefinition({
+        published: "false",
+        definition: { type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets" },
+        release: { version: "1.2.3", description: "Add subnet options." },
+        module: {},
+      }),
+      (error) => hasIssue(error, "published"),
+    );
   });
 
   it("rejects a non-boolean global publication setting", () => {

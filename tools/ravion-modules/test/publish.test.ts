@@ -21,6 +21,20 @@ import {
 } from "../src/publish.js";
 
 describe("publish", () => {
+  it("skips definitions whose root publication setting is false", async () => {
+    const client = new MockRavionClient();
+
+    const result = await publishDefinitions([createCompiledDefinition({ published: false })], client, { dryRun: false });
+    const dryRunResults = await dryRunModuleVersions([createCompiledDefinition({ published: false })], client);
+
+    assert.deepEqual(result, { dryRun: false, categoryItems: [], items: [] });
+    assert.deepEqual(dryRunResults, []);
+    assert.deepEqual(client.createdCategories, []);
+    assert.deepEqual(client.createdDefinitions, []);
+    assert.deepEqual(client.createdVersions, []);
+    assert.deepEqual(client.dryRunVersions, []);
+  });
+
   it("creates missing definitions and versions through the Ravion API", async () => {
     const client = new MockRavionClient();
 
@@ -806,6 +820,7 @@ describe("publish", () => {
 function createCompiledDefinition(overrides: Partial<CompiledDefinition> = {}): CompiledDefinition {
   return {
     filePath: join("/repo", "networking", "vpc", "ravion-aws-vpc-definition.yml"),
+    published: true,
     global: true,
     type: "ravion-aws-vpc",
     name: "AWS VPC",
