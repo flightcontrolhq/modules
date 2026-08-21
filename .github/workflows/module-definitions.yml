@@ -64,6 +64,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -109,6 +111,20 @@ jobs:
         env:
           RAVION_API_TOKEN: ${{ secrets.RAVION_API_TOKEN }}
 
+      - name: Generate module category source diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" HEAD -- tools/ravion-modules/src/module-categories.ts; then
+            exit 0
+          fi
+          {
+            printf '### Module Category Changes\n\n'
+            printf '```diff\n'
+            git diff --no-ext-diff --unified=3 "$BASE_SHA" HEAD -- tools/ravion-modules/src/module-categories.ts
+            printf '```\n'
+          } > category-diff.md
+
       - name: Comment publish dry-run plan
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         if: always()
@@ -118,9 +134,12 @@ jobs:
             const marker = '<!-- ravion-module-publish-plan -->';
             const planPath = 'publish-plan.md';
             const errorPath = 'publish-plan.err';
+            const categoryDiffPath = 'category-diff.md';
             const plan = fs.existsSync(planPath) ? fs.readFileSync(planPath, 'utf8') : '';
             const error = fs.existsSync(errorPath) ? fs.readFileSync(errorPath, 'utf8').trim().slice(-2000) : '';
-            const body = plan || `${marker}\n## Ravion Module Publish Plan\n\nPublish dry run failed before a plan could be generated.\n\n\`\`\`text\n${error || 'No error output was captured.'}\n\`\`\``;
+            const categoryDiff = fs.existsSync(categoryDiffPath) ? fs.readFileSync(categoryDiffPath, 'utf8').trim() : '';
+            const publishBody = plan || `${marker}\n## Ravion Module Publish Plan\n\nPublish dry run failed before a plan could be generated.\n\n\`\`\`text\n${error || 'No error output was captured.'}\n\`\`\``;
+            const body = `${publishBody.trimEnd()}${categoryDiff ? `\n\n${categoryDiff}` : ''}`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
