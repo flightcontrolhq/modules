@@ -128,7 +128,7 @@ run "logs_enabled_creates_bucket_loki_and_alloy" {
 
   assert {
     condition     = length(module.loki_bucket) == 1
-    error_message = "logs_enabled with no loki_s3_bucket must create one"
+    error_message = "Loki logs with no loki_s3_bucket_name must create one"
   }
 
   assert {
@@ -183,13 +183,13 @@ run "byo_bucket_suppresses_creation" {
   command = plan
 
   variables {
-    logs_providers = ["loki"]
-    loki_s3_bucket = "my-existing-log-bucket"
+    logs_providers      = ["loki"]
+    loki_s3_bucket_name = "my-existing-log-bucket"
   }
 
   assert {
     condition     = length(module.loki_bucket) == 0
-    error_message = "An explicit loki_s3_bucket must suppress bucket creation"
+    error_message = "An explicit loki_s3_bucket_name must suppress bucket creation"
   }
 
   assert {

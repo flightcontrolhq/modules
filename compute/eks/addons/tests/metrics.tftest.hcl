@@ -318,9 +318,9 @@ run "grafana_role_scoping" {
   command = plan
 
   variables {
-    metrics_providers    = ["amp"]
-    amp_workspace_id     = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    grafana_role_enabled = true
+    metrics_providers             = ["amp"]
+    amp_workspace_id              = "ws-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    grafana_role_creation_enabled = true
   }
 
   assert {
@@ -340,7 +340,7 @@ run "grafana_role_scoping" {
 
   assert {
     condition     = output.grafana_role_arn != null
-    error_message = "grafana_role_enabled must produce a role ARN"
+    error_message = "grafana_role_creation_enabled must produce a role ARN"
   }
 }
 
@@ -348,7 +348,7 @@ run "grafana_role_without_metrics_carries_logs_only" {
   command = plan
 
   variables {
-    grafana_role_enabled = true
+    grafana_role_creation_enabled = true
   }
 
   assert {

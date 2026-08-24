@@ -84,12 +84,12 @@ module "eks_service" {
   # tag mutability so the test can prove the setting is forwarded.
   ecr_repository_creation_enabled      = true
   ecr_image_tag_mutability             = "IMMUTABLE"
-  ecr_scan_on_push_enabled             = true
+  ecr_image_scan_on_push_enabled       = true
   ecr_default_lifecycle_policy_enabled = true
 
   # Required so terratest can destroy the repository even if an image was
   # pushed into it during the test run.
-  ecr_force_deletion_enabled = true
+  ecr_force_delete_enabled = true
 
   tags = local.common_tags
 }

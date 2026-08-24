@@ -14,7 +14,7 @@ locals {
   # Secrets are created by workloads long after this stack applies, so the
   # module cannot enumerate them. The default is therefore read of every
   # secret and parameter in this account and region — the tightest scope that
-  # still works without knowing the ARNs up front. Set eso_secret_arns to
+  # still works without knowing the ARNs up front. Set eso_secret_and_parameter_arns to
   # narrow it (and to reach other regions or accounts).
   eso_default_secretsmanager_arns = [
     "arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:*",
@@ -27,12 +27,12 @@ locals {
   # Split the caller's list by service so each statement only grants that
   # service's actions. A list with entries for one service only omits the
   # other service's statement entirely.
-  eso_secretsmanager_arns = length(var.eso_secret_arns) > 0 ? [
-    for arn in var.eso_secret_arns : arn if can(regex("^arn:[^:]*:secretsmanager:", arn))
+  eso_secretsmanager_arns = length(var.eso_secret_and_parameter_arns) > 0 ? [
+    for arn in var.eso_secret_and_parameter_arns : arn if can(regex("^arn:[^:]*:secretsmanager:", arn))
   ] : local.eso_default_secretsmanager_arns
 
-  eso_ssm_arns = length(var.eso_secret_arns) > 0 ? [
-    for arn in var.eso_secret_arns : arn if can(regex("^arn:[^:]*:ssm:", arn))
+  eso_ssm_arns = length(var.eso_secret_and_parameter_arns) > 0 ? [
+    for arn in var.eso_secret_and_parameter_arns : arn if can(regex("^arn:[^:]*:ssm:", arn))
   ] : local.eso_default_ssm_arns
 }
 

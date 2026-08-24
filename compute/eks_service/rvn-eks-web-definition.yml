@@ -1,10 +1,11 @@
+global: false
 definition:
   type: rvn-eks-web
   name: EKS Web Service
-  description: Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
+  description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
-  version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this service.
+  version: 1.0.0
+  description: Simplify health configuration and form layout, use consistent routing, scaling, release, and builder field names, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -12,24 +13,22 @@ module:
       type: section
     - id: cluster
       immutable: true
-      label: EKS cluster
-      type: $ref:rvn-eks
+      label: Cluster
+      type: $ref:rvn-eks-cluster
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
-    - id: section_load_balancer
-      label: Shared load balancer
-      type: section
-      description: EKS Add-ons module that owns the shared load balancers. Select the add-ons module attached to the cluster above.
     - id: addons
       immutable: true
       label: EKS add-ons
       type: $ref:rvn-eks-addons
+      description: Select the EKS Add-ons module attached to the cluster above; it owns the shared load balancers.
       mapped_inputs:
         - id: public_alb_http_listener_arn
           immutable: true
           label: Public ALB HTTP listener ARN
           type: string
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/public-eks-alb/50dc6c495c0c9188/f2f7dc8efc522ab2
           required: false
           default: <<ref.stack.output.public_alb_http_listener_arn>>
         - id: public_alb_https_listener_arn
@@ -38,12 +37,14 @@ module:
           type: string
           description: HTTPS listener ARN from the shared public ALB. Ravion uses it when present, otherwise falls back to HTTP.
           collapsible: true
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/public-eks-alb/50dc6c495c0c9188/4a78a6346492dabc
           required: false
           default: <<ref.stack.output.public_alb_https_listener_arn>>
         - id: private_alb_http_listener_arn
           immutable: true
           label: Private ALB HTTP listener ARN
           type: string
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/private-eks-alb/73e2d6bc24d8a067/2d1d56cfc4b12345
           required: false
           default: <<ref.stack.output.private_alb_http_listener_arn>>
         - id: private_alb_https_listener_arn
@@ -52,6 +53,7 @@ module:
           type: string
           description: HTTPS listener ARN from the shared private ALB. Ravion uses it when present, otherwise falls back to HTTP.
           collapsible: true
+          placeholder: arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/private-eks-alb/73e2d6bc24d8a067/9f8e7d6c5b4a3210
           required: false
           default: <<ref.stack.output.private_alb_https_listener_arn>>
         - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
@@ -62,7 +64,7 @@ module:
     - $template: ../../partials/templates/eks-workload-release-inputs.yml
       with:
         name_description: Name for the Helm release, Kubernetes objects, target group, and listener rule.
-    - id: public_web_service_enabled
+    - id: public_alb_routing_enabled
       label: Public web service
       type: boolean
       description: Route this service through the shared public ALB. Turn off to use the shared private ALB.
@@ -70,9 +72,8 @@ module:
     - $include: ../../partials/inputs/eks-workload-build-inputs.yml
     - $include: ../../partials/inputs/eks-workload-image-inputs.yml
     - id: section_health
-      label: Health check
+      label: Application endpoint
       type: section
-      description: Load balancer health check for the target group. Independent of the Kubernetes probes below.
     - id: container_port
       immutable: true
       label: Container port
@@ -83,9 +84,9 @@ module:
       required: true
       default: 8080
     - id: health_check_path
-      label: Health check path
+      label: Traffic health path
       type: string
-      description: HTTP path the load balancer calls to verify a pod is healthy. Use a lightweight endpoint that does not require authentication.
+      description: Unauthenticated endpoint that succeeds when the app can receive requests. Kubernetes readiness and the load balancer both use this path.
       required: true
       default: /
     - id: health_check_matcher
@@ -103,7 +104,7 @@ module:
       collapsible: true
       max: 300
       min: 5
-      default: 15
+      default: 5
     - id: health_check_timeout
       label: Timeout (secs)
       type: number
@@ -111,8 +112,16 @@ module:
       collapsible: true
       max: 120
       min: 2
+      default: 4
+    - id: probe_initial_delay_seconds
+      label: Health check initial delay (secs)
+      type: number
+      description: Seconds Kubernetes waits after the container starts or the startup check succeeds before checking traffic readiness or liveness.
+      collapsible: true
+      max: 600
+      min: 0
       default: 5
-    - id: healthy_threshold
+    - id: health_check_healthy_threshold
       label: Healthy threshold
       type: number
       description: Number of consecutive successful checks required before an unhealthy target is considered healthy.
@@ -120,7 +129,7 @@ module:
       max: 10
       min: 2
       default: 2
-    - id: unhealthy_threshold
+    - id: health_check_unhealthy_threshold
       label: Unhealthy threshold
       type: number
       description: Number of consecutive failed checks required before a target is considered unhealthy.
@@ -128,6 +137,47 @@ module:
       max: 10
       min: 2
       default: 2
+    - id: startup_probe_enabled
+      label: Enforce startup timeout
+      type: boolean
+      description: Restart the container if the app does not become responsive in time. A bad path or short timeout can cause a restart loop.
+      collapsible: true
+      default: false
+    - id: startup_timeout_seconds
+      label: Maximum startup time (secs)
+      type: number
+      description: Maximum time the app may take to start before Kubernetes restarts it. Rounded up to the next five-second check.
+      collapsible: true
+      max: 1500
+      min: 5
+      show_when:
+        startup_probe_enabled: true
+      default: 150
+    - id: startup_probe_path
+      label: Startup health path
+      type: string
+      description: Endpoint used while the app starts. Leave blank to use the liveness path when set, otherwise the traffic health path.
+      collapsible: true
+      required: false
+      show_when:
+        startup_probe_enabled: true
+    - id: liveness_probe_enabled
+      label: Restart unresponsive containers
+      type: boolean
+      description: Restart a running process that stops responding. A dependency-aware path can restart every pod during an outage.
+      collapsible: true
+      default: false
+    - id: liveness_probe_path
+      label: Liveness health path
+      type: string
+      description: Lightweight endpoint that confirms the app process is responsive. Avoid database or external-service checks. Leave blank to use the traffic health path.
+      collapsible: true
+      required: false
+      show_when:
+        liveness_probe_enabled: true
+    - id: section_traffic_behavior
+      label: Traffic behavior
+      type: section
     - id: target_group_deregistration_delay
       label: Deregistration delay (secs)
       type: number
@@ -178,44 +228,6 @@ module:
       collapsible: true
       show_when:
         target_group_stickiness_type: app_cookie
-    - id: section_probes
-      label: Kubernetes probes
-      type: section
-      description: Probes kubelet runs inside the cluster. Readiness decides whether a pod joins the Service, liveness restarts a wedged container, and startup gives a slow boot extra time.
-    - id: readiness_probe_enabled
-      label: Readiness probe
-      type: boolean
-      collapsible: true
-      default: true
-    - id: liveness_probe_enabled
-      label: Liveness probe
-      type: boolean
-      collapsible: true
-      default: true
-    - id: probe_initial_delay_seconds
-      label: Probe initial delay (secs)
-      type: number
-      description: Seconds kubelet waits after the container starts before the first readiness or liveness check.
-      collapsible: true
-      max: 600
-      min: 0
-      default: 5
-    - id: startup_probe_enabled
-      label: Startup probe
-      type: boolean
-      description: Suspends the liveness probe until the app answers once. Use this instead of a long initial delay for apps with slow or variable boot times.
-      collapsible: true
-      default: false
-    - id: startup_probe_failure_threshold
-      label: Startup probe failure threshold
-      type: number
-      description: Failed startup checks allowed before the container is restarted. Multiplied by 5 seconds, this is the boot budget.
-      collapsible: true
-      max: 300
-      min: 1
-      show_when:
-        startup_probe_enabled: true
-      default: 30
     - $template: ../../partials/templates/alb-listener-rule-inputs.yml
       with:
         field_overrides: {}
@@ -228,7 +240,7 @@ module:
       type: boolean
       description: Scale pods with a HorizontalPodAutoscaler. Requires the metrics server or an equivalent metrics API in the cluster.
       default: true
-    - id: min_replicas
+    - id: autoscaling_min_replicas
       label: Minimum pods
       type: number
       max: 1000
@@ -236,7 +248,7 @@ module:
       show_when:
         autoscaling_enabled: true
       default: 1
-    - id: max_replicas
+    - id: autoscaling_max_replicas
       label: Maximum pods
       type: number
       max: 1000
@@ -286,7 +298,7 @@ module:
           - ../../partials/stack/eks-workload-common-terraform-variables.yml
           - container_port: << module.input.container_port >>
             listener_arn: >-
-              << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
+              << module.input.public_alb_routing_enabled ? (module.input.public_alb_https_listener_arn ||
               module.input.public_alb_http_listener_arn) : (module.input.private_alb_https_listener_arn ||
               module.input.private_alb_http_listener_arn) >>
             listener_rule_priority: << module.input.listener_rule_priority >>
@@ -299,15 +311,15 @@ module:
               [{type: "path-pattern", values: ["/*"]}])) >>
             target_group_deregistration_delay: << module.input.target_group_deregistration_delay >>
             target_group_slow_start: << module.input.target_group_slow_start >>
-            health_check:
+            target_group_health_check:
               enabled: true
               path: << module.input.health_check_path >>
               matcher: << module.input.health_check_matcher >>
               interval: << module.input.health_check_interval >>
               timeout: << module.input.health_check_timeout >>
-              healthy_threshold: << module.input.healthy_threshold >>
-              unhealthy_threshold: << module.input.unhealthy_threshold >>
-            stickiness:
+              healthy_threshold: << module.input.health_check_healthy_threshold >>
+              unhealthy_threshold: << module.input.health_check_unhealthy_threshold >>
+            target_group_stickiness:
               enabled: << module.input.target_group_stickiness_enabled >>
               # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
               # (show_when) and renders null, but the Terraform variable validation requires a
@@ -338,16 +350,16 @@ module:
                 probes:
                   liveness:
                     enabled: << module.input.liveness_probe_enabled >>
-                    path: << module.input.health_check_path >>
+                    path: '<< module.input.liveness_probe_path || module.input.health_check_path >>'
                     initialDelaySeconds: '<< module.input.probe_initial_delay_seconds != nil ? module.input.probe_initial_delay_seconds : 5 >>'
                   readiness:
-                    enabled: << module.input.readiness_probe_enabled >>
+                    enabled: true
                     path: << module.input.health_check_path >>
                     initialDelaySeconds: '<< module.input.probe_initial_delay_seconds != nil ? module.input.probe_initial_delay_seconds : 5 >>'
                   startup:
                     enabled: << module.input.startup_probe_enabled >>
-                    path: << module.input.health_check_path >>
-                    failureThreshold: '<< module.input.startup_probe_failure_threshold != nil ? module.input.startup_probe_failure_threshold : 30 >>'
+                    path: '<< module.input.startup_probe_path || module.input.liveness_probe_path || module.input.health_check_path >>'
+                    failureThreshold: '<< module.input.startup_timeout_seconds != nil ? int((module.input.startup_timeout_seconds + 4) / 5) : 30 >>'
                 # The chart renders one TargetGroupBinding per ARN, which is what makes the
                 # AWS Load Balancer Controller register this Service's pod IPs into the
                 # target group the stack above created.
@@ -357,13 +369,13 @@ module:
                   targetType: ip
                   vpcId: << module.input.vpc_id >>
                 replicaCount: >-
-                  << module.input.autoscaling_enabled ? (module.input.min_replicas != nil ?
-                  module.input.min_replicas : 1) : (module.input.replica_count != nil ?
+                  << module.input.autoscaling_enabled ? (module.input.autoscaling_min_replicas != nil ?
+                  module.input.autoscaling_min_replicas : 1) : (module.input.replica_count != nil ?
                   module.input.replica_count : 1) >>
                 autoscaling:
                   enabled: << module.input.autoscaling_enabled >>
-                  minReplicas: '<< module.input.min_replicas != nil ? module.input.min_replicas : 1 >>'
-                  maxReplicas: '<< module.input.max_replicas != nil ? module.input.max_replicas : 3 >>'
+                  minReplicas: '<< module.input.autoscaling_min_replicas != nil ? module.input.autoscaling_min_replicas : 1 >>'
+                  maxReplicas: '<< module.input.autoscaling_max_replicas != nil ? module.input.autoscaling_max_replicas : 3 >>'
                   targetCPUUtilizationPercentage: '<< module.input.autoscaling_cpu_target != nil ? module.input.autoscaling_cpu_target : 70 >>'
                   targetMemoryUtilizationPercentage: << module.input.autoscaling_memory_target >>
   ui:
@@ -385,7 +397,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_available
@@ -430,7 +442,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_desired
@@ -520,11 +532,13 @@ module:
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
   readme: |
-    Web server on EKS for running an HTTP application behind a shared cluster load balancer, deployed from a container image with no chart of your own.
+    Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 
     ## Overview
 
-    EKS Web Service runs an HTTP application on an existing Ravion EKS cluster. Ravion builds the image from your repository - or takes one you already have - and brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-web` chart, which renders a Deployment, a Service, a ServiceAccount, an optional HorizontalPodAutoscaler, and the `TargetGroupBinding` that puts your pods behind the load balancer.
+    EKS Web Service deploys a web app - any HTTP application in a container - to an existing Ravion EKS cluster. Point it at a Git repository or an image you already have, set the port, routing rules, health checks, and scaling in a form, and Ravion builds the image, deploys it, and routes traffic to it through the cluster's shared load balancer. There are no Kubernetes manifests to write and no Helm charts to maintain.
+
+    Under the hood, each deploy installs a Helm chart that Ravion maintains - a packaged template of the Kubernetes resources a web service needs. The `rvn-eks-web` chart renders the Deployment that runs your pods, the Service in front of them, a ServiceAccount, an optional HorizontalPodAutoscaler, and the `TargetGroupBinding` that puts your pods behind the load balancer. Each release runs `helm upgrade --install --atomic`, so a failed deploy rolls back to the previous revision on its own.
 
     The module has three parts that update independently:
 
@@ -534,7 +548,9 @@ module:
     | Build | The container image, from a Dockerfile or Railpack | Every build, unless the build source is an existing registry image |
     | Helm deploy | Deployment, Service, HPA, secrets wiring | Every release, and whenever runtime settings change |
 
-    Routing follows the same shape as ECS Web Server: Terraform owns the `aws_lb_target_group` and `aws_lb_listener_rule` against a shared load balancer, and the AWS Load Balancer Controller registers pod IPs into that target group. The chart does not create an Ingress, so no per-service load balancer is provisioned.
+    Terraform owns the `aws_lb_target_group` and `aws_lb_listener_rule` against a shared load balancer, and the AWS Load Balancer Controller registers pod IPs into that target group. The chart does not create an Ingress, so no per-service load balancer is provisioned. This is the same routing shape as ECS Web Server, so a service moving from ECS keeps its routing model.
+
+    Chart source: [ravionhq/modules/charts/rvn-eks-web](https://github.com/ravionhq/modules/tree/$local.module_tag/charts/rvn-eks-web)
 
     Terraform source: [ravionhq/modules/compute/eks_service](https://github.com/ravionhq/modules/tree/$local.module_tag/compute/eks_service)
 
@@ -544,6 +560,7 @@ module:
     | -------- | --------------------------- |
     | Running a public web app on Kubernetes | Routing host or path traffic through the shared public ALB |
     | Hosting an internal HTTP API | Routing private traffic through the shared private ALB |
+    | Building from source | Creating images with a Dockerfile or Railpack and pushing to ECR |
     | Moving a service from ECS to EKS | Keeping the same routing, health check, and `{name, value_from}` secret shape |
     | Adopting Kubernetes without writing charts | Deploying a maintained chart you configure through a form |
     | Handling variable traffic | Scaling pods with a HorizontalPodAutoscaler on CPU and optionally memory |
@@ -562,31 +579,31 @@ module:
 
     Use **Public web service** when the service should be reachable from the internet through the shared public ALB. Turn it off for internal services on the shared private ALB. Either way, Ravion prefers the HTTPS listener when the selected ALB has one and falls back to HTTP.
 
-    ## Routing and health checks
+    ## Routing, readiness, and recovery
 
     Route traffic with **Domain host rules**, **Path rules**, or both. If both are empty, Ravion creates a default `/*` path rule so the listener rule has a valid condition. Use **Listener rule priority** only when you need a specific rule order; otherwise AWS assigns the next available priority.
 
-    There are two independent health signals, and it is worth keeping them straight:
+    **Traffic health path** is the main application-health setting. It should be a lightweight, unauthenticated endpoint that succeeds only when the app can receive requests. Ravion uses it for both Kubernetes traffic readiness and the load balancer health check, so users configure that decision once even though both systems enforce it.
 
-    | Signal | Checked by | Decides |
-    | ------ | ---------- | ------- |
-    | Health check settings | The load balancer, against the target group | Whether the load balancer sends requests to a pod |
-    | Kubernetes probes | kubelet, inside the cluster | Whether a pod joins the Service and whether a wedged container is restarted |
-
-    | Field | Default | Description |
-    | ----- | ------- | ----------- |
+    | Application endpoint | Default | Description |
+    | -------------------- | ------- | ----------- |
     | Container port | 8080 | Port the application listens on; used by the Service and the target group |
-    | Health check path | / | Lightweight HTTP endpoint the load balancer calls |
+    | Traffic health path | / | Endpoint shared by Kubernetes readiness and the load balancer |
     | Success codes | 200-399 | Status codes treated as healthy |
-    | Interval (secs) | 15 | Seconds between load balancer checks |
-    | Timeout (secs) | 5 | Seconds to wait for a response; must be lower than the interval |
+    | Interval (secs) | 5 | Seconds between load balancer checks |
+    | Timeout (secs) | 4 | Seconds to wait for a response; must be lower than the interval |
     | Healthy threshold | 2 | Successful checks before a target is healthy |
     | Unhealthy threshold | 2 | Failed checks before a target is unhealthy |
+
+    **Startup and recovery** are optional and independent. Enable **Enforce startup timeout** to restart a container that never finishes starting; its **Maximum startup time** defaults to 150 seconds. A bad startup path or a timeout shorter than the app's real boot time causes a restart loop. Enable **Restart unresponsive containers** to restart a process that remains running but stops answering. Processes that exit are restarted automatically even when this setting is off.
+
+    The startup check can use its own **Startup health path**. When blank, it uses the liveness path if one is configured, otherwise the traffic health path. The optional **Liveness health path** should only confirm that the process itself is responsive; do not include database or external-service checks, because an outage in a dependency should not restart every pod.
+
+    | Traffic behavior | Default | Description |
+    | ---------------- | ------- | ----------- |
     | Deregistration delay (secs) | 300 | Drain window for a pod that is shutting down |
     | Slow start duration (secs) | 0 | Ramp window for newly registered pods; 0 disables, otherwise 30-900 |
     | Sticky sessions | false | Load balancer cookie stickiness to the same pod |
-
-    The Kubernetes probes all use the Health check path. **Readiness probe** and **Liveness probe** are on by default. **Probe initial delay (secs)** defaults to 5. For an app with a slow or variable boot, enable the **Startup probe** rather than raising the initial delay: it suspends the liveness probe until the app answers once, and **Startup probe failure threshold** multiplied by five seconds is the boot budget.
 
     ## Build and image options
 
@@ -627,13 +644,14 @@ module:
 
     ## Resources and scaling
 
-    Kubernetes schedules on requests and enforces on limits.
+    Kubernetes schedules on requests and enforces on limits. CPU is measured in cores or millicores: 1 is one vCPU and 100m is a tenth of one. Memory uses binary units: 256Mi, 1Gi (1024Mi).
 
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
-    | Memory request | 256Mi | Memory reserved for the pod |
+    | Capacity type | Any capacity | Schedule on any node, or require On-demand or Spot capacity |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
+    | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
 
     Set the memory request close to steady-state usage and the limit above the worst legitimate spike. Because the CPU target is a percentage of the CPU request, a request set far above real usage keeps the autoscaler from ever scaling out.
@@ -684,7 +702,7 @@ module:
 
     | Field | Required | Default | Description |
     | ----- | -------- | ------- | ----------- |
-    | EKS cluster | Yes | - | Existing rvn-eks module instance |
+    | Cluster | Yes | - | Existing rvn-eks-cluster module instance |
     | EKS add-ons | Yes | - | Existing rvn-eks-addons module instance on the same cluster |
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes and load balancer objects |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
@@ -706,18 +724,21 @@ module:
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
     | Container port | Yes | 8080 | Port the application listens on |
-    | Health check path | Yes | / | Load balancer health check endpoint |
+    | Traffic health path | Yes | / | Endpoint shared by Kubernetes readiness and the load balancer |
     | Success codes | Yes | 200-399 | Health check status code matcher |
     | Sticky sessions | No | false | Keep repeat requests on the same pod |
-    | Readiness probe | No | true | Gate Service membership on a passing check |
-    | Liveness probe | No | true | Restart a container that stops answering |
-    | Startup probe | No | false | Suspend liveness until the app answers once |
+    | Enforce startup timeout | No | false | Restart an app that does not finish starting in time |
+    | Maximum startup time (secs) | No | 150 | Startup time allowed before restarting the container |
+    | Startup health path | No | Traffic or liveness path | Optional endpoint used while the app starts |
+    | Restart unresponsive containers | No | false | Restart a process that remains running but stops answering |
+    | Liveness health path | No | Traffic health path | Optional process-only health endpoint |
     | Domain host rules | No | - | Hostnames such as app.example.com or *.example.com |
     | Path rules | No | - | Path patterns such as /*, /api/*, or /app/* |
     | Listener rule priority | No | Auto | Explicit ALB rule order |
-    | CPU request | Yes | 100m | CPU reserved per pod |
-    | Memory request | Yes | 256Mi | Memory reserved per pod |
+    | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
+    | Capacity type | Yes | Any capacity | Required node capacity type |
     | CPU limit | No | - | Optional CPU ceiling |
+    | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |
     | Autoscaling | No | true | Scale pods with a HorizontalPodAutoscaler |
     | Minimum pods | No | 1 | Lower bound when autoscaling |

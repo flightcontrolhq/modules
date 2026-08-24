@@ -25,5 +25,5 @@ locals {
 
   # The health check speaks the same protocol as the target group unless the
   # caller overrides it, which is what ECS does via primary_health_check_protocol.
-  health_check_protocol = coalesce(var.health_check.protocol, var.target_group_protocol)
+  health_check_protocol = coalesce(var.target_group_health_check.protocol, var.target_group_protocol)
 }

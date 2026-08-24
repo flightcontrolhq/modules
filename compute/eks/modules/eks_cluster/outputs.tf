@@ -110,12 +110,12 @@ output "cloudwatch_log_group_arn" {
 
 output "lb_controller_role_arn" {
   description = "ARN of the AWS Load Balancer Controller Pod Identity role (null if disabled)."
-  value       = var.lb_controller_pod_identity_enabled ? module.lb_controller_role[0].role_arn : null
+  value       = var.aws_load_balancer_controller_pod_identity_creation_enabled ? module.lb_controller_role[0].role_arn : null
 }
 
 output "lb_controller_role_name" {
   description = "Name of the AWS Load Balancer Controller Pod Identity role (null if disabled)."
-  value       = var.lb_controller_pod_identity_enabled ? module.lb_controller_role[0].role_name : null
+  value       = var.aws_load_balancer_controller_pod_identity_creation_enabled ? module.lb_controller_role[0].role_name : null
 }
 
 ################################################################################

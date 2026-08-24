@@ -23,7 +23,7 @@
   patterns:
     - message: 1-63 lowercase letters, numbers, and hyphens. Start and end with a letter or number.
       pattern: ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$
-- id: create_namespace
+- id: namespace_creation_enabled
   label: Create namespace
   type: boolean
   description: Create the namespace if it does not already exist. Turn off when the namespace is managed elsewhere.

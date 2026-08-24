@@ -21,7 +21,7 @@ module "system_node_group" {
   kubernetes_version = var.system_node_group.kubernetes_version
 
   min_size     = var.system_node_group.min_size
-  desired_size = var.system_node_group.desired_size
+  desired_size = var.system_node_group.min_size
   max_size     = var.system_node_group.max_size
 
   max_unavailable              = var.system_node_group.max_unavailable
@@ -44,8 +44,8 @@ module "system_node_group" {
   metadata_http_put_response_hop_limit = var.system_node_group.metadata_http_put_response_hop_limit
 
   node_role_arn                                 = var.system_node_group.node_role_arn
-  additional_node_role_managed_policy_arns      = var.system_node_group.additional_node_role_managed_policy_arns
-  additional_node_role_inline_policy_statements = var.system_node_group.additional_node_role_inline_policy_statements
+  node_role_additional_managed_policy_arns      = var.system_node_group.node_role_additional_managed_policy_arns
+  node_role_additional_inline_policy_statements = var.system_node_group.node_role_additional_inline_policy_statements
 
   tags = local.tags
 }
@@ -56,7 +56,7 @@ module "system_node_group" {
 
 module "node_groups" {
   source   = "./modules/eks_node_group"
-  for_each = var.additional_node_groups
+  for_each = var.node_groups
 
   depends_on = [module.cluster]
 
@@ -72,7 +72,7 @@ module "node_groups" {
   kubernetes_version = each.value.kubernetes_version
 
   min_size     = each.value.min_size
-  desired_size = each.value.desired_size
+  desired_size = each.value.min_size
   max_size     = each.value.max_size
 
   max_unavailable              = each.value.max_unavailable
@@ -95,8 +95,8 @@ module "node_groups" {
   metadata_http_put_response_hop_limit = each.value.metadata_http_put_response_hop_limit
 
   node_role_arn                                 = each.value.node_role_arn
-  additional_node_role_managed_policy_arns      = each.value.additional_node_role_managed_policy_arns
-  additional_node_role_inline_policy_statements = each.value.additional_node_role_inline_policy_statements
+  node_role_additional_managed_policy_arns      = each.value.node_role_additional_managed_policy_arns
+  node_role_additional_inline_policy_statements = each.value.node_role_additional_inline_policy_statements
 
   tags = local.tags
 }

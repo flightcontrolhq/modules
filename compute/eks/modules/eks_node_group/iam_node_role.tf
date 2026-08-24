@@ -24,10 +24,10 @@ module "node_role" {
       "arn:${local.partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
       "arn:${local.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore",
     ],
-    var.additional_node_role_managed_policy_arns,
+    var.node_role_additional_managed_policy_arns,
   )
 
-  inline_policy_statements = var.additional_node_role_inline_policy_statements
+  inline_policy_statements = var.node_role_additional_inline_policy_statements
 
   tags = local.tags
 }

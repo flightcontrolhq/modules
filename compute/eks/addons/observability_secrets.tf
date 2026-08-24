@@ -73,8 +73,8 @@ resource "helm_release" "observability_secrets" {
 
   lifecycle {
     precondition {
-      condition     = var.eso_enabled && var.eso_cluster_secret_stores_enabled
-      error_message = "A vendor observability provider was selected with a secret ARN, but the External Secrets Operator is off (eso_enabled / eso_cluster_secret_stores_enabled). Vendor credentials are materialized in-cluster by ESO and are never passed as Helm values, so the operator and its ClusterSecretStore are a hard requirement: turn External Secrets on, or drop the vendor provider."
+      condition     = var.eso_enabled && var.eso_cluster_secret_stores_creation_enabled
+      error_message = "A vendor observability provider was selected with a secret ARN, but the External Secrets Operator is off (eso_enabled / eso_cluster_secret_stores_creation_enabled). Vendor credentials are materialized in-cluster by ESO and are never passed as Helm values, so the operator and its ClusterSecretStore are a hard requirement: turn External Secrets on, or drop the vendor provider."
     }
   }
 }

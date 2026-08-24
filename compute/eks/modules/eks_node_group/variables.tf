@@ -317,13 +317,13 @@ variable "node_role_arn" {
   }
 }
 
-variable "additional_node_role_managed_policy_arns" {
+variable "node_role_additional_managed_policy_arns" {
   type        = list(string)
   description = "Extra managed policy ARNs to attach to the module-created node role. Ignored if node_role_arn is supplied."
   default     = []
 }
 
-variable "additional_node_role_inline_policy_statements" {
+variable "node_role_additional_inline_policy_statements" {
   type = list(object({
     sid       = optional(string)
     effect    = optional(string, "Allow")

@@ -116,7 +116,7 @@ module "eks_service" {
   target_group_deregistration_delay = 30
   target_group_slow_start           = 60
 
-  health_check = {
+  target_group_health_check = {
     enabled             = true
     path                = "/healthz"
     port                = "traffic-port"
@@ -128,7 +128,7 @@ module "eks_service" {
     unhealthy_threshold = 4
   }
 
-  stickiness = {
+  target_group_stickiness = {
     enabled         = true
     type            = "lb_cookie"
     cookie_duration = 3600

@@ -82,7 +82,7 @@ locals {
 
   loki_config = {
     retention_days      = var.logs_loki.retention_days != null ? var.logs_loki.retention_days : var.log_retention_days
-    s3_bucket           = var.logs_loki.s3_bucket != null ? var.logs_loki.s3_bucket : var.loki_s3_bucket
+    s3_bucket           = var.logs_loki.s3_bucket_name != null ? var.logs_loki.s3_bucket_name : var.loki_s3_bucket_name
     persistence_enabled = var.logs_loki.persistence_enabled != null ? var.logs_loki.persistence_enabled : var.loki_persistence_enabled
     persistence_size    = var.logs_loki.persistence_size != null ? var.logs_loki.persistence_size : var.loki_persistence_size
   }
@@ -93,7 +93,7 @@ locals {
   }
 
   cloudwatch_metrics_config = {
-    enhanced_observability         = var.metrics_cloudwatch.enhanced_observability != null ? var.metrics_cloudwatch.enhanced_observability : true
+    enhanced_observability         = var.metrics_cloudwatch.enhanced_observability_enabled != null ? var.metrics_cloudwatch.enhanced_observability_enabled : true
     application_signals_enabled    = coalesce(var.metrics_cloudwatch.application_signals_enabled, false)
     application_signals_namespaces = coalesce(var.metrics_cloudwatch.application_signals_namespaces, [])
     addon_version                  = var.metrics_cloudwatch.addon_version != null ? var.metrics_cloudwatch.addon_version : var.cloudwatch_observability_addon_version

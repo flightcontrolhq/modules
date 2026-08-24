@@ -53,7 +53,7 @@
   source:
     type: prometheus
     aws_account_id: << module.input.aws_account_id >>
-    region: << module.input.amp_region >>
+    region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
     query: 'sum(rate(container_cpu_usage_seconds_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
     unit: cores
@@ -90,7 +90,7 @@
   source:
     type: prometheus
     aws_account_id: << module.input.aws_account_id >>
-    region: << module.input.amp_region >>
+    region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
     query: 'sum(container_memory_working_set_bytes{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"})'
     unit: B
@@ -127,7 +127,7 @@
   source:
     type: prometheus
     aws_account_id: << module.input.aws_account_id >>
-    region: << module.input.amp_region >>
+    region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
     query: 'sum(increase(kube_pod_container_status_restarts_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
 - id: restarts
@@ -166,7 +166,7 @@
   source:
     type: prometheus
     aws_account_id: << module.input.aws_account_id >>
-    region: << module.input.amp_region >>
+    region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
     query: 'sum(rate(container_network_receive_bytes_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
     unit: B/s
@@ -203,7 +203,7 @@
   source:
     type: prometheus
     aws_account_id: << module.input.aws_account_id >>
-    region: << module.input.amp_region >>
+    region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
     query: 'sum(rate(container_network_transmit_bytes_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
     unit: B/s

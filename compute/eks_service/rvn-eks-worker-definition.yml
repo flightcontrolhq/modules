@@ -1,10 +1,11 @@
+global: false
 definition:
   type: rvn-eks-worker
   name: EKS Worker
-  description: Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
+  description: Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this worker.
+  description: Follow the selected observability providers, group add-ons with cluster selection, use consistent scaling, release, and builder field names, clarify ECR image scanning and deletion settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -12,18 +13,15 @@ module:
       type: section
     - id: cluster
       immutable: true
-      label: EKS cluster
-      type: $ref:rvn-eks
+      label: Cluster
+      type: $ref:rvn-eks-cluster
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
-    - id: section_addons
-      label: EKS add-ons
-      type: section
-      description: Add-ons module attached to the cluster above. Selecting it points the Metrics and Logs tabs at whichever observability providers that module has selected.
     - id: addons
       label: EKS add-ons
       type: $ref:rvn-eks-addons
+      description: Select the EKS Add-ons module attached to the cluster above to use its observability providers in the Metrics and Logs tabs.
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
       required: false
@@ -44,7 +42,7 @@ module:
       type: boolean
       description: Scale pods with a HorizontalPodAutoscaler. Requires the metrics server or an equivalent metrics API in the cluster.
       default: false
-    - id: min_replicas
+    - id: autoscaling_min_replicas
       label: Minimum pods
       type: number
       max: 1000
@@ -52,7 +50,7 @@ module:
       show_when:
         autoscaling_enabled: true
       default: 1
-    - id: max_replicas
+    - id: autoscaling_max_replicas
       label: Maximum pods
       type: number
       max: 1000
@@ -131,13 +129,13 @@ module:
               - ../../partials/deploy/eks-workload-helm-values-common.yml
               - terminationGracePeriodSeconds: '<< module.input.termination_grace_period_seconds != nil ? module.input.termination_grace_period_seconds : 30 >>'
                 replicaCount: >-
-                  << module.input.autoscaling_enabled ? (module.input.min_replicas != nil ?
-                  module.input.min_replicas : 1) : (module.input.replica_count != nil ?
+                  << module.input.autoscaling_enabled ? (module.input.autoscaling_min_replicas != nil ?
+                  module.input.autoscaling_min_replicas : 1) : (module.input.replica_count != nil ?
                   module.input.replica_count : 1) >>
                 autoscaling:
                   enabled: '<< module.input.autoscaling_enabled != nil ? module.input.autoscaling_enabled : false >>'
-                  minReplicas: '<< module.input.min_replicas != nil ? module.input.min_replicas : 1 >>'
-                  maxReplicas: '<< module.input.max_replicas != nil ? module.input.max_replicas : 3 >>'
+                  minReplicas: '<< module.input.autoscaling_min_replicas != nil ? module.input.autoscaling_min_replicas : 1 >>'
+                  maxReplicas: '<< module.input.autoscaling_max_replicas != nil ? module.input.autoscaling_max_replicas : 3 >>'
                   targetCPUUtilizationPercentage: '<< module.input.autoscaling_cpu_target != nil ? module.input.autoscaling_cpu_target : 70 >>'
                   targetMemoryUtilizationPercentage: << module.input.autoscaling_memory_target >>
   ui:
@@ -160,7 +158,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_available
@@ -180,7 +178,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_desired
@@ -196,13 +194,15 @@ module:
     logs:
       - $include: ../../partials/ui/eks-workload-logs.yml
   readme: |
-    Background worker on EKS for running a long-lived private process with no exposed port, deployed from a container image with no chart of your own.
+    Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 
     ## Overview
 
-    EKS Worker runs queue consumers, event processors, and other long-lived background processes on an existing Ravion EKS cluster. Ravion builds the image from your repository - or takes one you already have - and brings the chart. Each deploy runs `helm upgrade --install --atomic` of the Ravion-maintained `rvn-eks-worker` chart, which renders a Deployment, a ServiceAccount, an optional HorizontalPodAutoscaler, and, when the module declares runtime secrets, an `ExternalSecret`.
+    EKS Worker runs queue consumers, event processors, and other long-lived background processes on an existing Ravion EKS cluster. Point it at a Git repository or an image you already have, set the start command, resources, and pod count in a form, and Ravion builds the image and keeps the process running on your cluster. There are no Kubernetes manifests to write and no Helm charts to maintain.
 
-    The chart deliberately renders no Service, no container port, and no probes. A worker is reached by nothing; it reaches out.
+    Under the hood, each deploy installs a Helm chart that Ravion maintains - a packaged template of the Kubernetes resources a worker needs. The `rvn-eks-worker` chart renders the Deployment that runs your pods, a ServiceAccount, an optional HorizontalPodAutoscaler, and, when the module declares runtime secrets, an `ExternalSecret`. Each release runs `helm upgrade --install --atomic`, so a failed deploy rolls back to the previous revision on its own.
+
+    The chart deliberately includes no Service, no container port, and no probes. A worker is reached by nothing; it reaches out.
 
     The only AWS resource this module creates is the ECR repository that Dockerfile and Railpack builds push to, so its Terraform stack is a single repository and nothing else. On the Pull from image registry path the stack creates nothing at all. Everything else the module needs - cluster endpoint, certificate authority data, and the Ravion Runner role - comes from the selected EKS Cluster module.
 
@@ -261,11 +261,14 @@ module:
 
     ## Resources and scaling
 
+    Kubernetes schedules on requests and enforces on limits. CPU is measured in cores or millicores: 1 is one vCPU and 100m is a tenth of one. Memory uses binary units: 256Mi, 1Gi (1024Mi).
+
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
-    | Memory request | 256Mi | Memory reserved for the pod |
+    | Capacity type | Any capacity | Schedule on any node, or require On-demand or Spot capacity |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
+    | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
 
     Autoscaling is **off** by default, unlike the web module. CPU utilization is a poor proxy for worker demand: a worker blocked on a queue poll uses almost no CPU no matter how deep the backlog. Enable it when the work is genuinely CPU-bound, and prefer a fixed pod count otherwise.
@@ -314,7 +317,7 @@ module:
 
     | Field | Required | Default | Description |
     | ----- | -------- | ------- | ----------- |
-    | EKS cluster | Yes | - | Existing rvn-eks module instance |
+    | Cluster | Yes | - | Existing rvn-eks-cluster module instance |
     | Service name | Yes | {project}-{env}-{module} | Helm release name and name of the Kubernetes objects |
     | Namespace | Yes | {project}-{env} | Kubernetes namespace the release installs into |
     | Create namespace | No | true | Create the namespace if it does not exist |
@@ -333,9 +336,10 @@ module:
     | Image pull secret names | No | [] | Existing dockerconfigjson Secrets in the namespace, for Pull from image registry |
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
-    | CPU request | Yes | 100m | CPU reserved per pod |
-    | Memory request | Yes | 256Mi | Memory reserved per pod |
+    | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
+    | Capacity type | Yes | Any capacity | Required node capacity type |
     | CPU limit | No | - | Optional CPU ceiling |
+    | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |
     | Autoscaling | No | false | Scale pods with a HorizontalPodAutoscaler |
     | Minimum pods | No | 1 | Lower bound when autoscaling |

@@ -28,37 +28,37 @@ variable "tags" {
 # AWS Load Balancer Controller
 ################################################################################
 
-variable "lb_controller_enabled" {
+variable "aws_load_balancer_controller_enabled" {
   type        = bool
   description = "Install the AWS Load Balancer Controller even when no shared load balancer is enabled, e.g. to provision ALBs/NLBs directly from Ingress and LoadBalancer resources. The controller is installed automatically whenever any shared load balancer is enabled, since workload target registration (TargetGroupBinding) depends on it."
   default     = false
 }
 
-variable "lb_controller_chart_version" {
+variable "aws_load_balancer_controller_chart_version" {
   type        = string
   description = "Version of the aws-load-balancer-controller Helm chart to install."
   default     = "1.14.0"
   nullable    = false
 
   validation {
-    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.lb_controller_chart_version))
-    error_message = "The lb_controller_chart_version must be a semantic version like '1.14.0' (no leading 'v')."
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+", var.aws_load_balancer_controller_chart_version))
+    error_message = "The aws_load_balancer_controller_chart_version must be a semantic version like '1.14.0' (no leading 'v')."
   }
 }
 
-variable "lb_controller_namespace" {
+variable "aws_load_balancer_controller_namespace" {
   type        = string
   description = "Namespace the controller is installed into. Must match the Pod Identity association created by the compute/eks stack."
   default     = "kube-system"
 }
 
-variable "lb_controller_service_account" {
+variable "aws_load_balancer_controller_service_account" {
   type        = string
   description = "Service account name for the controller. Must match the Pod Identity association created by the compute/eks stack."
   default     = "aws-load-balancer-controller"
 }
 
-variable "lb_controller_helm_values" {
+variable "aws_load_balancer_controller_helm_values" {
   type        = list(string)
   description = "Extra YAML documents merged into the aws-load-balancer-controller chart values (later entries win)."
   default     = []
@@ -142,14 +142,14 @@ variable "eso_service_account" {
   nullable    = false
 }
 
-variable "eso_secret_arns" {
+variable "eso_secret_and_parameter_arns" {
   type        = list(string)
   description = "Secrets Manager secret and SSM parameter ARNs (wildcards allowed) the operator may read. When empty, the role can read every secret and parameter in this account and region. Set this to scope the role down, or to grant access to other regions and accounts."
   default     = []
 
   validation {
-    condition     = alltrue([for arn in var.eso_secret_arns : can(regex("^arn:[^:]*:(secretsmanager|ssm):", arn))])
-    error_message = "All eso_secret_arns must be Secrets Manager or SSM ARNs, e.g. 'arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*' or 'arn:aws:ssm:us-east-2:111122223333:parameter/prod/*'."
+    condition     = alltrue([for arn in var.eso_secret_and_parameter_arns : can(regex("^arn:[^:]*:(secretsmanager|ssm):", arn))])
+    error_message = "All eso_secret_and_parameter_arns must be Secrets Manager or SSM ARNs, e.g. 'arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*' or 'arn:aws:ssm:us-east-2:111122223333:parameter/prod/*'."
   }
 }
 
@@ -164,7 +164,7 @@ variable "eso_kms_key_arns" {
   }
 }
 
-variable "eso_cluster_secret_stores_enabled" {
+variable "eso_cluster_secret_stores_creation_enabled" {
   type        = bool
   description = "Create the Ravion ClusterSecretStores. Disable to manage SecretStore resources yourself; workload charts then need their own store reference."
   default     = true
@@ -265,7 +265,7 @@ variable "karpenter_helm_values" {
 # Default NodePool
 ################################################################################
 
-variable "karpenter_default_node_pool_enabled" {
+variable "karpenter_default_node_pool_creation_enabled" {
   type        = bool
   description = "Create a general-purpose default NodePool and EC2NodeClass so Karpenter can provision nodes out of the box. Disable to manage NodePools yourself."
   default     = true
@@ -282,13 +282,13 @@ variable "node_subnet_ids" {
   }
 
   validation {
-    condition     = !(var.karpenter_enabled && var.karpenter_default_node_pool_enabled) || (var.node_subnet_ids != null && length(coalesce(var.node_subnet_ids, [])) >= 1)
-    error_message = "node_subnet_ids is required when karpenter_enabled and karpenter_default_node_pool_enabled are true."
+    condition     = !(var.karpenter_enabled && var.karpenter_default_node_pool_creation_enabled) || (var.node_subnet_ids != null && length(coalesce(var.node_subnet_ids, [])) >= 1)
+    error_message = "node_subnet_ids is required when karpenter_enabled and karpenter_default_node_pool_creation_enabled are true."
   }
 
   validation {
-    condition     = !(var.private_alb_enabled || var.private_nlb_enabled) || (var.node_subnet_ids != null && length(coalesce(var.node_subnet_ids, [])) >= 1)
-    error_message = "node_subnet_ids is required when private_alb_enabled or private_nlb_enabled is true."
+    condition     = !(var.private_alb_creation_enabled || var.private_nlb_creation_enabled) || (var.node_subnet_ids != null && length(coalesce(var.node_subnet_ids, [])) >= 1)
+    error_message = "node_subnet_ids is required when private_alb_creation_enabled or private_nlb_creation_enabled is true."
   }
 }
 
@@ -303,12 +303,12 @@ variable "cluster_security_group_id" {
   }
 
   validation {
-    condition     = !(var.karpenter_enabled && var.karpenter_default_node_pool_enabled) || var.cluster_security_group_id != null
-    error_message = "cluster_security_group_id is required when karpenter_enabled and karpenter_default_node_pool_enabled are true."
+    condition     = !(var.karpenter_enabled && var.karpenter_default_node_pool_creation_enabled) || var.cluster_security_group_id != null
+    error_message = "cluster_security_group_id is required when karpenter_enabled and karpenter_default_node_pool_creation_enabled are true."
   }
 
   validation {
-    condition     = !(var.public_alb_enabled || var.private_alb_enabled || var.public_nlb_enabled || var.private_nlb_enabled) || var.cluster_security_group_id != null
+    condition     = !(var.public_alb_creation_enabled || var.private_alb_creation_enabled || var.public_nlb_creation_enabled || var.private_nlb_creation_enabled) || var.cluster_security_group_id != null
     error_message = "cluster_security_group_id is required when any shared load balancer is enabled."
   }
 }
@@ -328,8 +328,8 @@ variable "public_subnet_ids" {
   }
 
   validation {
-    condition     = !(var.public_alb_enabled || var.public_nlb_enabled) || length(var.public_subnet_ids) >= 1
-    error_message = "public_subnet_ids is required when public_alb_enabled or public_nlb_enabled is true."
+    condition     = !(var.public_alb_creation_enabled || var.public_nlb_creation_enabled) || length(var.public_subnet_ids) >= 1
+    error_message = "public_subnet_ids is required when public_alb_creation_enabled or public_nlb_creation_enabled is true."
   }
 }
 
@@ -343,7 +343,7 @@ variable "load_balancer_deletion_protection_enabled" {
 # Public ALB
 ################################################################################
 
-variable "public_alb_enabled" {
+variable "public_alb_creation_enabled" {
   type        = bool
   description = "Create a shared public (internet-facing) Application Load Balancer that workloads attach to via TargetGroupBinding."
   default     = false
@@ -443,7 +443,7 @@ variable "public_alb_web_acl_arn" {
 # Private ALB
 ################################################################################
 
-variable "private_alb_enabled" {
+variable "private_alb_creation_enabled" {
   type        = bool
   description = "Create a shared private (internal) Application Load Balancer that workloads attach to via TargetGroupBinding."
   default     = false
@@ -532,7 +532,7 @@ variable "private_alb_access_logs_bucket_arn" {
 # Public NLB
 ################################################################################
 
-variable "public_nlb_enabled" {
+variable "public_nlb_creation_enabled" {
   type        = bool
   description = "Create a shared public (internet-facing) Network Load Balancer that workloads attach to via TargetGroupBinding."
   default     = false
@@ -593,7 +593,7 @@ variable "public_nlb_elastic_ip_allocation_ids" {
 # Private NLB
 ################################################################################
 
-variable "private_nlb_enabled" {
+variable "private_nlb_creation_enabled" {
   type        = bool
   description = "Create a shared private (internal) Network Load Balancer that workloads attach to via TargetGroupBinding."
   default     = false
@@ -785,7 +785,7 @@ variable "beacon_environment_id" {
   default     = null
 }
 
-variable "beacon_aws_account_id" {
+variable "beacon_aws_account_record_id" {
   type        = string
   description = "Ravion AWS account record the cluster lives in, recorded on the agent when its credential is minted. This is the Ravion record id (awsact_...), not the 12-digit AWS account number. Optional."
   default     = null
@@ -934,7 +934,7 @@ variable "kube_state_metrics_helm_values" {
 # Grafana read access
 ################################################################################
 
-variable "grafana_role_enabled" {
+variable "grafana_role_creation_enabled" {
   type        = bool
   description = "Create an IAM role that Amazon Managed Grafana can assume to read this cluster's telemetry: query access to the AMP workspace and read access to the Container Insights log groups. No Grafana workspace is created - provisioning one requires IAM Identity Center wiring that belongs at the organization level, not in a cluster module."
   default     = false
@@ -956,7 +956,7 @@ variable "grafana_source_account_id" {
 # Workload logs (Loki on S3)
 ################################################################################
 
-variable "loki_s3_bucket" {
+variable "loki_s3_bucket_name" {
   type        = string
   description = "Existing S3 bucket to store log chunks and the index in. When null, the module creates 'ravion-loki-<cluster>-<account>'. Bring your own to control naming, encryption, or lifecycle policy yourself - the module then manages neither the bucket nor its retention."
   default     = null
@@ -1156,7 +1156,7 @@ variable "observability_namespace" {
   default     = null
 }
 
-variable "logs_namespace_exclude" {
+variable "logs_excluded_namespaces" {
   type        = list(string)
   description = "Namespaces no log collector reads from. Applies to every logs provider: Alloy drops them at discovery, the OpenTelemetry collector never opens their files. Ravion's own namespace is excluded by default so the collectors do not tail themselves into a loop."
   default     = ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"]
@@ -1168,7 +1168,7 @@ variable "logs_namespace_exclude" {
 #
 # One object per provider. Only the objects whose provider is selected are read,
 # so passing them all is free. Every field is optional: where a field has an
-# older flat variable (log_retention_days, loki_s3_bucket, amp_workspace_id,
+# older flat variable (log_retention_days, loki_s3_bucket_name, amp_workspace_id,
 # amp_region, cloudwatch_observability_addon_version), the object wins and the
 # flat variable is the fallback.
 #
@@ -1181,11 +1181,11 @@ variable "logs_namespace_exclude" {
 variable "logs_loki" {
   type = object({
     retention_days      = optional(number)
-    s3_bucket           = optional(string)
+    s3_bucket_name      = optional(string)
     persistence_enabled = optional(bool)
     persistence_size    = optional(string)
   })
-  description = "In-cluster Loki settings: how long logs stay queryable, an existing bucket to store chunks in, and the local working volume. Falls back to log_retention_days / loki_s3_bucket / loki_persistence_* when a field is null."
+  description = "In-cluster Loki settings: how long logs stay queryable, an existing bucket to store chunks in, and the local working volume. Falls back to log_retention_days / loki_s3_bucket_name / loki_persistence_* when a field is null."
   default     = {}
   nullable    = false
 }
@@ -1278,7 +1278,7 @@ variable "metrics_amp" {
 
 variable "metrics_cloudwatch" {
   type = object({
-    enhanced_observability         = optional(bool)
+    enhanced_observability_enabled = optional(bool)
     application_signals_enabled    = optional(bool)
     application_signals_namespaces = optional(list(string))
     addon_version                  = optional(string)
