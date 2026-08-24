@@ -31,7 +31,8 @@ release:
     directly below Ravion EKS Management. User-facing module text and form field IDs now use the
     Ravion Operator name. New configurations enable Ravion Operator, operator-run deployments,
     and the public Application Load Balancer by default. Default NodePool creation and log retention
-    now stay collapsed until customized.
+    now stay collapsed until customized. Load balancer, Loki, AMP, and metrics credential fields now
+    use names that reflect their exact scope.
 module:
   inputs:
     - id: cluster
@@ -301,7 +302,7 @@ module:
     - add_button_label: Add security group ID
       collapsible: true
       description: Additional security groups for the public NLB.
-      id: public_nlb_security_group_ids
+      id: public_nlb_additional_security_group_ids
       label: Additional security group IDs
       placeholder: sg-...
       show_when:
@@ -358,7 +359,7 @@ module:
     - add_button_label: Add security group ID
       collapsible: true
       description: Additional security groups for the private NLB.
-      id: private_nlb_security_group_ids
+      id: private_nlb_additional_security_group_ids
       label: Additional security group IDs
       placeholder: sg-...
       show_when:
@@ -592,7 +593,7 @@ module:
     - collapsible: true
       default: 30
       description: Number of days logs remain searchable before deletion. Enter 1-3650.
-      id: log_retention_days
+      id: loki_retention_days
       label: Retention (days)
       max: 3650
       min: 1
@@ -835,7 +836,7 @@ module:
       type: string
     - collapsible: true
       description: AWS Region containing the workspace. Leave blank to use the cluster Region. A different Region sends metrics across Regions.
-      id: amp_region
+      id: amp_workspace_region
       label: Workspace region
       show_when:
         metrics_enabled: true
@@ -918,7 +919,7 @@ module:
         metrics_providers: grafana_cloud
       type: string
     - description: Secrets Manager ARN containing a Grafana Cloud token with metrics:write. The logs credential is reused when Grafana Cloud Logs is also selected.
-      id: metrics_grafana_cloud_token_secret_arn
+      id: grafana_cloud_metrics_token_secret_arn
       label: Grafana Cloud token secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:grafana-cloud-token
       show_when:
@@ -929,7 +930,7 @@ module:
       type: string
     - default: datadoghq.com
       description: Datadog site that receives metrics. The logs selection is reused when Datadog Logs is also enabled.
-      id: metrics_datadog_site
+      id: datadog_metrics_site
       label: Datadog site
       show_when:
         logs_providers:
@@ -951,7 +952,7 @@ module:
         - label: US1-FED (ddog-gov.com)
           value: ddog-gov.com
     - description: Secrets Manager ARN containing the Datadog API key. The logs credential is reused when Datadog Logs is also enabled.
-      id: metrics_datadog_api_key_secret_arn
+      id: datadog_metrics_api_key_secret_arn
       label: Datadog API key secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:datadog-api-key
       show_when:
@@ -962,7 +963,7 @@ module:
       type: string
     - default: us
       description: New Relic data region used to select the ingestion endpoint. The logs selection is reused when New Relic Logs is also enabled.
-      id: metrics_new_relic_region
+      id: new_relic_metrics_region
       label: New Relic region
       show_when:
         logs_providers:
@@ -976,7 +977,7 @@ module:
         - label: Europe
           value: eu
     - description: Secrets Manager ARN containing the New Relic license key. The logs credential is reused when New Relic Logs is also enabled.
-      id: metrics_new_relic_license_key_secret_arn
+      id: new_relic_metrics_license_key_secret_arn
       label: New Relic license key secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:new-relic-license-key
       show_when:
@@ -995,7 +996,7 @@ module:
       type: string
     - collapsible: true
       description: Secrets Manager ARN containing the complete Authorization header value. The logs credential is reused when the same OTLP destination is selected for logs.
-      id: metrics_otlp_headers_secret_arn
+      id: otlp_metrics_headers_secret_arn
       label: OTLP authorization secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:otlp-authorization
       show_when:
@@ -1073,7 +1074,7 @@ module:
         metrics_providers: '<< module.input.metrics_enabled == false ? [] : (module.input.metrics_providers != nil ? module.input.metrics_providers : ["amp"]) >>'
         logs_excluded_namespaces: '<< module.input.logs_excluded_namespaces != nil ? module.input.logs_excluded_namespaces : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"] >>'
         logs_loki:
-          retention_days: '<< module.input.log_retention_days != nil ? module.input.log_retention_days : 30 >>'
+          retention_days: '<< module.input.loki_retention_days != nil ? module.input.loki_retention_days : 30 >>'
           s3_bucket_name: << module.input.loki_s3_bucket_name >>
         logs_cloudwatch:
           retention_days: '<< module.input.cloudwatch_logs_retention_days != nil ? module.input.cloudwatch_logs_retention_days : 30 >>'
@@ -1103,7 +1104,7 @@ module:
         # id only exists for a metrics-only selection.
         metrics_amp:
           workspace_id: << module.input.amp_workspace_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
         metrics_prometheus:
           retention_days: << module.input.prometheus_retention_days >>
           storage_size: << module.input.prometheus_storage_size >>
@@ -1116,17 +1117,17 @@ module:
         metrics_grafana_cloud:
           url: << module.input.grafana_cloud_metrics_url >>
           user: << module.input.grafana_cloud_metrics_user >>
-          token_secret_arn: << module.input.grafana_cloud_token_secret_arn || module.input.metrics_grafana_cloud_token_secret_arn >>
+          token_secret_arn: << module.input.grafana_cloud_token_secret_arn || module.input.grafana_cloud_metrics_token_secret_arn >>
           stack_url: << module.input.grafana_cloud_stack_url >>
         metrics_datadog:
-          site: << module.input.datadog_site || module.input.metrics_datadog_site >>
-          api_key_secret_arn: << module.input.datadog_api_key_secret_arn || module.input.metrics_datadog_api_key_secret_arn >>
+          site: << module.input.datadog_site || module.input.datadog_metrics_site >>
+          api_key_secret_arn: << module.input.datadog_api_key_secret_arn || module.input.datadog_metrics_api_key_secret_arn >>
         metrics_new_relic:
-          region: << module.input.new_relic_region || module.input.metrics_new_relic_region >>
-          license_key_secret_arn: << module.input.new_relic_license_key_secret_arn || module.input.metrics_new_relic_license_key_secret_arn >>
+          region: << module.input.new_relic_region || module.input.new_relic_metrics_region >>
+          license_key_secret_arn: << module.input.new_relic_license_key_secret_arn || module.input.new_relic_metrics_license_key_secret_arn >>
         metrics_otlp:
           endpoint: << module.input.otlp_metrics_endpoint >>
-          headers_secret_arn: << module.input.otlp_headers_secret_arn || module.input.metrics_otlp_headers_secret_arn >>
+          headers_secret_arn: << module.input.otlp_headers_secret_arn || module.input.otlp_metrics_headers_secret_arn >>
         grafana_role_creation_enabled: << module.input.grafana_role_creation_enabled >>
         grafana_enabled: << module.input.grafana_enabled >>
         eso_enabled: '<< module.input.eso_enabled != nil ? module.input.eso_enabled : true >>'
@@ -1164,14 +1165,14 @@ module:
         private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
         private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
         public_nlb_creation_enabled: << module.input.public_nlb_creation_enabled >>
-        public_nlb_security_group_ids: << module.input.public_nlb_security_group_ids >>
+        public_nlb_security_group_ids: << module.input.public_nlb_additional_security_group_ids >>
         public_nlb_cross_zone_load_balancing_enabled: << module.input.public_nlb_cross_zone_load_balancing_enabled >>
         public_nlb_elastic_ips_enabled: << module.input.public_nlb_elastic_ips_enabled >>
         public_nlb_elastic_ip_allocation_ids: << module.input.public_nlb_elastic_ip_allocation_ids >>
         public_nlb_access_logs_enabled: << module.input.public_nlb_access_logs_enabled >>
         public_nlb_access_logs_bucket_arn: << module.input.public_nlb_access_logs_bucket_arn >>
         private_nlb_creation_enabled: << module.input.private_nlb_creation_enabled >>
-        private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
+        private_nlb_security_group_ids: << module.input.private_nlb_additional_security_group_ids >>
         private_nlb_cross_zone_load_balancing_enabled: << module.input.private_nlb_cross_zone_load_balancing_enabled >>
         private_nlb_elastic_ips_enabled: << module.input.private_nlb_elastic_ips_enabled >>
         private_nlb_elastic_ip_allocation_ids: << module.input.private_nlb_elastic_ip_allocation_ids >>

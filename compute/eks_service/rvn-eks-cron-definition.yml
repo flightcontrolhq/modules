@@ -6,7 +6,7 @@ definition:
   description: Scheduled job on EKS for running a container on a cron schedule, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the selected observability providers, group add-ons with cluster selection, clarify ECR image scanning and deletion settings, keep run outcome charts on Prometheus, and let jobs target On-demand, Spot, or any available node capacity.
+  description: Follow the selected observability providers, group add-ons with cluster selection, use positive scheduling and consistent release and builder field names, clarify ECR image scanning and deletion settings, keep run outcome charts on Prometheus, and let jobs target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -52,11 +52,11 @@ module:
       description: IANA time zone the schedule is interpreted in, such as America/New_York. Leave blank to use the cluster's zone, which is normally UTC.
       placeholder: UTC
       required: false
-    - id: suspend
-      label: Suspend
+    - id: scheduling_enabled
+      label: Scheduling
       type: boolean
-      description: Stop scheduling new runs without deleting the job. Runs already in flight are not affected.
-      default: false
+      description: Schedule new runs for this job. Turn off to pause future runs without deleting the job; runs already in flight are not affected.
+      default: true
     - id: concurrency_policy
       label: Concurrency policy
       type: string
@@ -181,7 +181,7 @@ module:
               - ../../partials/deploy/eks-workload-helm-values-common.yml
               - schedule: << module.input.schedule >>
                 timeZone: '<< module.input.time_zone != nil ? module.input.time_zone : "" >>'
-                suspend: '<< module.input.suspend != nil ? module.input.suspend : false >>'
+                suspend: '<< module.input.scheduling_enabled != nil ? !module.input.scheduling_enabled : false >>'
                 concurrencyPolicy: '<< module.input.concurrency_policy != nil ? module.input.concurrency_policy : "Forbid" >>'
                 startingDeadlineSeconds: << module.input.starting_deadline_seconds >>
                 successfulJobsHistoryLimit: '<< module.input.successful_jobs_history_limit != nil ? module.input.successful_jobs_history_limit : 3 >>'
@@ -216,7 +216,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(increase(kube_job_status_succeeded{namespace="<< module.input.namespace >>",job_name=~"<< module.input.name >>-[0-9]+"}[$__interval]))'
       - id: job_runs_succeeded
@@ -236,7 +236,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(increase(kube_job_status_failed{namespace="<< module.input.namespace >>",job_name=~"<< module.input.name >>-[0-9]+"}[$__interval]))'
       - id: job_runs_failed

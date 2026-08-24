@@ -4,7 +4,7 @@ definition:
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
   version: 1.2.0
-  description: Automatically enable SOCI lazy loading for Fargate builds to reduce task startup time while keeping it disabled for EC2 capacity.
+  description: Automatically enable SOCI lazy loading for Fargate builds while keeping it disabled for EC2 capacity, clarify ECS cluster labels, standardize builder fields, and keep build policies in advanced settings.
 module:
   inputs:
     - id: section_cluster

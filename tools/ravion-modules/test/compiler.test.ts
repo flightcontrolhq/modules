@@ -75,9 +75,25 @@ describe("compiler", () => {
 
   it("preserves a publication opt-out outside the canonical module config", async () => {
     const compiled = await compileDefinitionFile(join(process.cwd(), "test", "fixtures", "disabled-definition.yml"));
+    assert.equal(compiled.published, false);
+    assert.equal("published" in compiled.module, false);
+  });
+
+  it("compiles EKS cron scheduling controls and keeps the definition unpublished", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks_service", "rvn-eks-cron-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
+    const deploy = assertRecord(compiled.module.deploy, "module.deploy");
+    const definition = assertRecord(deploy.definition, "module.deploy.definition");
+    const values = assertRecord(definition.values, "module.deploy.definition.values");
 
     assert.equal(compiled.published, false);
     assert.equal("published" in compiled.module, false);
+    assert.equal(findInput(inputs, "scheduling_enabled").default, true);
+    assert.equal(inputs.some((input) => input.id === "suspend"), false);
+    assert.equal(
+      values.suspend,
+      "<< module.input.scheduling_enabled != nil ? !module.input.scheduling_enabled : false >>",
+    );
   });
 
   it("preserves a global publication opt-out outside the canonical module config", async () => {
@@ -221,6 +237,9 @@ describe("compiler", () => {
       inputs.findIndex((input) => input.id === "health_check_timeout") + 1,
     );
     assert.equal(inputs.some((input) => input.id === "section_load_balancer"), false);
+    assert.equal(inputs.some((input) => input.id === "public_web_service_enabled"), false);
+    assert.equal(inputs.some((input) => input.id === "healthy_threshold"), false);
+    assert.equal(inputs.some((input) => input.id === "unhealthy_threshold"), false);
   });
 
   it("compiles EKS capacity forms and workload placement with safe defaults", async () => {
@@ -261,6 +280,9 @@ describe("compiler", () => {
     assert.ok(clusterInputs.findIndex((input) => input.id === "section_access") < clusterInputs.findIndex((input) => input.id === "endpoint_private_access_enabled"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "section_fargate") < clusterInputs.findIndex((input) => input.id === "section_access"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "access_entries") < clusterInputs.findIndex((input) => input.id === "section_observability"));
+    assert.equal(clusterInputs.some((input) => input.id === "public_access_cidrs"), false);
+    assert.equal(clusterInputs.some((input) => input.id === "enabled_cluster_log_types"), false);
+    assert.equal(clusterInputs.some((input) => input.id === "cluster_log_retention_in_days"), false);
 
     const systemNodeInstanceTypes = findInput(clusterInputs, "system_node_instance_types");
     assert.equal(systemNodeInstanceTypes.type, "string_array");
@@ -310,9 +332,11 @@ describe("compiler", () => {
       },
     ]);
 
-    assert.equal(findInput(inputs, "log_retention_days").min, 1);
-    assert.equal(findInput(inputs, "log_retention_days").max, 3650);
-    assert.equal(findInput(inputs, "log_retention_days").collapsible, true);
+    const lokiRetention = findInput(inputs, "loki_retention_days");
+    assert.equal(lokiRetention.min, 1);
+    assert.equal(lokiRetention.max, 3650);
+    assert.equal(lokiRetention.collapsible, true);
+    assert.equal(inputs.some((input) => input.id === "log_retention_days"), false);
     assert.equal(findInput(inputs, "karpenter_default_node_pool_creation_enabled").collapsible, true);
     assert.equal(findInput(inputs, "prometheus_retention_days").min, 1);
     assert.match(
@@ -332,6 +356,9 @@ describe("compiler", () => {
       "beacon_deploy_namespaces",
     ]);
     assert.equal(findInput(inputs, "public_alb_creation_enabled").default, true);
+    assert.equal(inputs.some((input) => input.id === "public_nlb_security_group_ids"), false);
+    assert.equal(inputs.some((input) => input.id === "private_nlb_security_group_ids"), false);
+    assert.equal(inputs.some((input) => input.id === "amp_region"), false);
     assert.equal(inputs.some((input) => input.id === "beacon_enabled"), false);
     assert.equal(inputs.some((input) => input.id === "beacon_deploy_enabled"), false);
     assert.equal(inputs.some((input) => input.id === "beacon_deploy_namespaces"), false);
@@ -420,6 +447,7 @@ describe("compiler", () => {
       assert.equal(addonsIndex, clusterIndex + 1, `${definitionName} should place add-ons after cluster`);
       assert.ok(addonsIndex < serviceSectionIndex, `${definitionName} should keep add-ons in the cluster section`);
       assert.equal(inputs.some((input) => input.id === "section_addons"), false);
+      assert.equal(inputs.some((input) => input.id === "create_namespace"), false);
     }
   });
 
@@ -839,7 +867,7 @@ describe("compiler", () => {
         `${definition.type} should include shared Git source guidance`,
       );
 
-      const builderType = findInput(inputs, "build_infrastructure_type");
+      const builderType = findInput(inputs, "build_capacity_type");
       assert.equal(
         builderType.description,
         "Use on-demand EC2 for predictable availability or EC2 Spot for lower cost with possible capacity delays or interruption.",
@@ -857,6 +885,14 @@ describe("compiler", () => {
           ["ec2-spot", "Use lower-cost Spot capacity that can wait for capacity or be interrupted by AWS."],
         ],
       );
+      for (const removedInputId of [
+        "build_infrastructure_type",
+        "build_instance_size",
+        "build_ami",
+        "dockerfile_inject_env_variables",
+      ]) {
+        assert.equal(inputs.some((input) => input.id === removedInputId), false);
+      }
       assert.equal(
         findInput(inputs, "build_default_policies_enabled").collapsible,
         true,
