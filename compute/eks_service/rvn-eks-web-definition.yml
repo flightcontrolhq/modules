@@ -4,8 +4,8 @@ definition:
   name: EKS Web Service
   description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
-  version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module and align load balancer health check timing defaults with ECS Web Service.
+  version: 1.0.0
+  description: Simplify health configuration around traffic readiness, startup timeout, and automatic recovery, and keep default build policies in advanced builder settings.
 module:
   inputs:
     - id: section_cluster
@@ -75,9 +75,8 @@ module:
     - $include: ../../partials/inputs/eks-workload-build-inputs.yml
     - $include: ../../partials/inputs/eks-workload-image-inputs.yml
     - id: section_health
-      label: Health check
+      label: Application endpoint
       type: section
-      description: Load balancer health check for the target group. Independent of the Kubernetes probes below.
     - id: container_port
       immutable: true
       label: Container port
@@ -88,9 +87,9 @@ module:
       required: true
       default: 8080
     - id: health_check_path
-      label: Health check path
+      label: Traffic health path
       type: string
-      description: HTTP path the load balancer calls to verify a pod is healthy. Use a lightweight endpoint that does not require authentication.
+      description: Unauthenticated endpoint that succeeds when the app can receive requests. Kubernetes readiness and the load balancer both use this path.
       required: true
       default: /
     - id: health_check_matcher
@@ -133,6 +132,56 @@ module:
       max: 10
       min: 2
       default: 2
+    - id: startup_probe_enabled
+      label: Enforce startup timeout
+      type: boolean
+      description: Restart the container if the app does not become responsive in time. A bad path or short timeout can cause a restart loop.
+      collapsible: true
+      default: false
+    - id: startup_timeout_seconds
+      label: Maximum startup time (secs)
+      type: number
+      description: Maximum time the app may take to start before Kubernetes restarts it. Rounded up to the next five-second check.
+      collapsible: true
+      max: 1500
+      min: 5
+      show_when:
+        startup_probe_enabled: true
+      default: 150
+    - id: startup_probe_path
+      label: Startup health path
+      type: string
+      description: Endpoint used while the app starts. Leave blank to use the liveness path when set, otherwise the traffic health path.
+      collapsible: true
+      required: false
+      show_when:
+        startup_probe_enabled: true
+    - id: liveness_probe_enabled
+      label: Restart unresponsive containers
+      type: boolean
+      description: Restart a running process that stops responding. A dependency-aware path can restart every pod during an outage.
+      collapsible: true
+      default: false
+    - id: liveness_probe_path
+      label: Liveness health path
+      type: string
+      description: Lightweight endpoint that confirms the app process is responsive. Avoid database or external-service checks. Leave blank to use the traffic health path.
+      collapsible: true
+      required: false
+      show_when:
+        liveness_probe_enabled: true
+    - id: probe_initial_delay_seconds
+      label: Health check initial delay (secs)
+      type: number
+      description: Seconds Kubernetes waits after the container starts or the startup check succeeds before checking traffic readiness or liveness.
+      collapsible: true
+      max: 600
+      min: 0
+      default: 5
+    - id: section_traffic_behavior
+      label: Traffic behavior
+      type: section
+      description: How the load balancer drains, warms, and keeps traffic on registered pods.
     - id: target_group_deregistration_delay
       label: Deregistration delay (secs)
       type: number
@@ -183,44 +232,6 @@ module:
       collapsible: true
       show_when:
         target_group_stickiness_type: app_cookie
-    - id: section_probes
-      label: Kubernetes probes
-      type: section
-      description: Probes kubelet runs inside the cluster. Readiness decides whether a pod joins the Service, liveness restarts a wedged container, and startup gives a slow boot extra time.
-    - id: readiness_probe_enabled
-      label: Readiness probe
-      type: boolean
-      collapsible: true
-      default: true
-    - id: liveness_probe_enabled
-      label: Liveness probe
-      type: boolean
-      collapsible: true
-      default: true
-    - id: probe_initial_delay_seconds
-      label: Probe initial delay (secs)
-      type: number
-      description: Seconds kubelet waits after the container starts before the first readiness or liveness check.
-      collapsible: true
-      max: 600
-      min: 0
-      default: 5
-    - id: startup_probe_enabled
-      label: Startup probe
-      type: boolean
-      description: Suspends the liveness probe until the app answers once. Use this instead of a long initial delay for apps with slow or variable boot times.
-      collapsible: true
-      default: false
-    - id: startup_probe_failure_threshold
-      label: Startup probe failure threshold
-      type: number
-      description: Failed startup checks allowed before the container is restarted. Multiplied by 5 seconds, this is the boot budget.
-      collapsible: true
-      max: 300
-      min: 1
-      show_when:
-        startup_probe_enabled: true
-      default: 30
     - $template: ../../partials/templates/alb-listener-rule-inputs.yml
       with:
         field_overrides: {}
@@ -343,16 +354,16 @@ module:
                 probes:
                   liveness:
                     enabled: << module.input.liveness_probe_enabled >>
-                    path: << module.input.health_check_path >>
+                    path: '<< module.input.liveness_probe_path || module.input.health_check_path >>'
                     initialDelaySeconds: '<< module.input.probe_initial_delay_seconds != nil ? module.input.probe_initial_delay_seconds : 5 >>'
                   readiness:
-                    enabled: << module.input.readiness_probe_enabled >>
+                    enabled: true
                     path: << module.input.health_check_path >>
                     initialDelaySeconds: '<< module.input.probe_initial_delay_seconds != nil ? module.input.probe_initial_delay_seconds : 5 >>'
                   startup:
                     enabled: << module.input.startup_probe_enabled >>
-                    path: << module.input.health_check_path >>
-                    failureThreshold: '<< module.input.startup_probe_failure_threshold != nil ? module.input.startup_probe_failure_threshold : 30 >>'
+                    path: '<< module.input.startup_probe_path || module.input.liveness_probe_path || module.input.health_check_path >>'
+                    failureThreshold: '<< module.input.startup_timeout_seconds != nil ? int((module.input.startup_timeout_seconds + 4) / 5) : 30 >>'
                 # The chart renders one TargetGroupBinding per ARN, which is what makes the
                 # AWS Load Balancer Controller register this Service's pod IPs into the
                 # target group the stack above created.
@@ -572,31 +583,31 @@ module:
 
     Use **Public web service** when the service should be reachable from the internet through the shared public ALB. Turn it off for internal services on the shared private ALB. Either way, Ravion prefers the HTTPS listener when the selected ALB has one and falls back to HTTP.
 
-    ## Routing and health checks
+    ## Routing, readiness, and recovery
 
     Route traffic with **Domain host rules**, **Path rules**, or both. If both are empty, Ravion creates a default `/*` path rule so the listener rule has a valid condition. Use **Listener rule priority** only when you need a specific rule order; otherwise AWS assigns the next available priority.
 
-    There are two independent health signals, and it is worth keeping them straight:
+    **Traffic health path** is the main application-health setting. It should be a lightweight, unauthenticated endpoint that succeeds only when the app can receive requests. Ravion uses it for both Kubernetes traffic readiness and the load balancer health check, so users configure that decision once even though both systems enforce it.
 
-    | Signal | Checked by | Decides |
-    | ------ | ---------- | ------- |
-    | Health check settings | The load balancer, against the target group | Whether the load balancer sends requests to a pod |
-    | Kubernetes probes | kubelet, inside the cluster | Whether a pod joins the Service and whether a wedged container is restarted |
-
-    | Field | Default | Description |
-    | ----- | ------- | ----------- |
+    | Application endpoint | Default | Description |
+    | -------------------- | ------- | ----------- |
     | Container port | 8080 | Port the application listens on; used by the Service and the target group |
-    | Health check path | / | Lightweight HTTP endpoint the load balancer calls |
+    | Traffic health path | / | Endpoint shared by Kubernetes readiness and the load balancer |
     | Success codes | 200-399 | Status codes treated as healthy |
     | Interval (secs) | 5 | Seconds between load balancer checks |
     | Timeout (secs) | 4 | Seconds to wait for a response; must be lower than the interval |
     | Healthy threshold | 2 | Successful checks before a target is healthy |
     | Unhealthy threshold | 2 | Failed checks before a target is unhealthy |
+
+    **Startup and recovery** are optional and independent. Enable **Enforce startup timeout** to restart a container that never finishes starting; its **Maximum startup time** defaults to 150 seconds. A bad startup path or a timeout shorter than the app's real boot time causes a restart loop. Enable **Restart unresponsive containers** to restart a process that remains running but stops answering. Processes that exit are restarted automatically even when this setting is off.
+
+    The startup check can use its own **Startup health path**. When blank, it uses the liveness path if one is configured, otherwise the traffic health path. The optional **Liveness health path** should only confirm that the process itself is responsive; do not include database or external-service checks, because an outage in a dependency should not restart every pod.
+
+    | Traffic behavior | Default | Description |
+    | ---------------- | ------- | ----------- |
     | Deregistration delay (secs) | 300 | Drain window for a pod that is shutting down |
     | Slow start duration (secs) | 0 | Ramp window for newly registered pods; 0 disables, otherwise 30-900 |
     | Sticky sessions | false | Load balancer cookie stickiness to the same pod |
-
-    The Kubernetes probes all use the Health check path. **Readiness probe** and **Liveness probe** are on by default. **Probe initial delay (secs)** defaults to 5. For an app with a slow or variable boot, enable the **Startup probe** rather than raising the initial delay: it suspends the liveness probe until the app answers once, and **Startup probe failure threshold** multiplied by five seconds is the boot budget.
 
     ## Build and image options
 
@@ -637,13 +648,13 @@ module:
 
     ## Resources and scaling
 
-    Kubernetes schedules on requests and enforces on limits.
+    Kubernetes schedules on requests and enforces on limits. CPU is measured in cores or millicores: 1 is one vCPU and 100m is a tenth of one. Memory uses binary units: 256Mi, 1Gi (1024Mi).
 
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
-    | Memory request | 256Mi | Memory reserved for the pod |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
+    | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
 
     Set the memory request close to steady-state usage and the limit above the worst legitimate spike. Because the CPU target is a percentage of the CPU request, a request set far above real usage keeps the autoscaler from ever scaling out.
@@ -716,18 +727,20 @@ module:
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
     | Container port | Yes | 8080 | Port the application listens on |
-    | Health check path | Yes | / | Load balancer health check endpoint |
+    | Traffic health path | Yes | / | Endpoint shared by Kubernetes readiness and the load balancer |
     | Success codes | Yes | 200-399 | Health check status code matcher |
     | Sticky sessions | No | false | Keep repeat requests on the same pod |
-    | Readiness probe | No | true | Gate Service membership on a passing check |
-    | Liveness probe | No | true | Restart a container that stops answering |
-    | Startup probe | No | false | Suspend liveness until the app answers once |
+    | Enforce startup timeout | No | false | Restart an app that does not finish starting in time |
+    | Maximum startup time (secs) | No | 150 | Startup time allowed before restarting the container |
+    | Startup health path | No | Traffic or liveness path | Optional endpoint used while the app starts |
+    | Restart unresponsive containers | No | false | Restart a process that remains running but stops answering |
+    | Liveness health path | No | Traffic health path | Optional process-only health endpoint |
     | Domain host rules | No | - | Hostnames such as app.example.com or *.example.com |
     | Path rules | No | - | Path patterns such as /*, /api/*, or /app/* |
     | Listener rule priority | No | Auto | Explicit ALB rule order |
-    | CPU request | Yes | 100m | CPU reserved per pod |
-    | Memory request | Yes | 256Mi | Memory reserved per pod |
+    | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
     | CPU limit | No | - | Optional CPU ceiling |
+    | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |
     | Autoscaling | No | true | Scale pods with a HorizontalPodAutoscaler |
     | Minimum pods | No | 1 | Lower bound when autoscaling |

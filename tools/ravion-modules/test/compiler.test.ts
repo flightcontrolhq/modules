@@ -125,6 +125,28 @@ describe("compiler", () => {
     );
   });
 
+  it("compiles EKS web startup and recovery probes with safe path and timeout fallbacks", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks_service", "rvn-eks-web-definition.yml"));
+    const deploy = assertRecord(compiled.module.deploy, "module.deploy");
+    const definition = assertRecord(deploy.definition, "module.deploy.definition");
+    const values = assertRecord(definition.values, "module.deploy.definition.values");
+    const probes = assertRecord(values.probes, "module.deploy.definition.values.probes");
+    const readiness = assertRecord(probes.readiness, "probes.readiness");
+    const liveness = assertRecord(probes.liveness, "probes.liveness");
+    const startup = assertRecord(probes.startup, "probes.startup");
+
+    assert.equal(readiness.enabled, true);
+    assert.equal(liveness.path, "<< module.input.liveness_probe_path || module.input.health_check_path >>");
+    assert.equal(
+      startup.path,
+      "<< module.input.startup_probe_path || module.input.liveness_probe_path || module.input.health_check_path >>",
+    );
+    assert.equal(
+      startup.failureThreshold,
+      "<< module.input.startup_timeout_seconds != nil ? int((module.input.startup_timeout_seconds + 4) / 5) : 30 >>",
+    );
+  });
+
   it("fails when a local token remains after compilation", async () => {
     await assert.rejects(
       compileDefinitionFile(join(fixturesDir, "invalid-local-token.yml")),
@@ -525,6 +547,9 @@ describe("compiler", () => {
       ["compute", "ecs_service", "rvn-ecs-nlb-definition.yml"],
       ["compute", "ecs_service", "rvn-ecs-web-definition.yml"],
       ["compute", "ecs_service", "rvn-ecs-worker-definition.yml"],
+      ["compute", "eks_service", "rvn-eks-cron-definition.yml"],
+      ["compute", "eks_service", "rvn-eks-web-definition.yml"],
+      ["compute", "eks_service", "rvn-eks-worker-definition.yml"],
       ["compute", "lambda", "rvn-lambda-definition.yml"],
       ["hosting", "static_site", "rvn-aws-static-definition.yml"],
     ];
@@ -555,6 +580,11 @@ describe("compiler", () => {
           ["ec2", "Use on-demand capacity for predictable availability without Spot interruption."],
           ["ec2-spot", "Use lower-cost Spot capacity that can wait for capacity or be interrupted by AWS."],
         ],
+      );
+      assert.equal(
+        findInput(inputs, "build_default_policies_enabled").collapsible,
+        true,
+        `${definition.type} should keep default build policies in collapsible builder settings`,
       );
     }
 

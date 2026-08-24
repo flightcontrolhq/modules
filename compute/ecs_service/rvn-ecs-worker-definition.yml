@@ -4,7 +4,7 @@ definition:
   description: Background worker ECS service for running private container workloads without exposed ports.
 release:
   version: 1.1.1
-  description: Clarify ECS cluster labels in module forms.
+  description: Clarify ECS cluster labels and keep default build policies in advanced builder settings.
 module:
   inputs:
     - id: section_cluster

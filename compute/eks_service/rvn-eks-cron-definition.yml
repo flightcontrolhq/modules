@@ -6,7 +6,7 @@ definition:
   description: Scheduled job on EKS for running a container on a cron schedule, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module. The Metrics and Logs tabs read whichever stores that module selected, falling back in order when one cannot answer - so a cluster that also ships to CloudWatch keeps showing logs while the in-cluster agent is offline - and providers that ship to a vendor add an "Open in ..." action pointing at this job. Run outcome charts still need a Prometheus provider.
+  description: Follow the observability providers chosen on the EKS add-ons module, keep run outcome charts on Prometheus, and keep default build policies in advanced builder settings.
 module:
   inputs:
     - id: section_cluster
