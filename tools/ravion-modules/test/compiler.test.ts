@@ -312,17 +312,26 @@ describe("compiler", () => {
 
     assert.equal(findInput(inputs, "log_retention_days").min, 1);
     assert.equal(findInput(inputs, "log_retention_days").max, 3650);
+    assert.equal(findInput(inputs, "log_retention_days").collapsible, true);
+    assert.equal(findInput(inputs, "karpenter_default_node_pool_creation_enabled").collapsible, true);
     assert.equal(findInput(inputs, "prometheus_retention_days").min, 1);
     assert.match(
       String(findInput(inputs, "cloudwatch_application_signals_namespaces").description),
       /does not add injection annotations/,
     );
-    assert.deepEqual(findInput(inputs, "ravion_operator_enabled").moved_from, ["beacon_enabled"]);
-    assert.equal(findInput(inputs, "ravion_operator_deploy_enabled").label, "Ravion Operator deployments");
-    assert.deepEqual(findInput(inputs, "ravion_operator_deploy_enabled").moved_from, ["beacon_deploy_enabled"]);
-    assert.deepEqual(findInput(inputs, "ravion_operator_deploy_namespaces").moved_from, [
+    const operator = findInput(inputs, "ravion_operator_enabled");
+    const operatorDeploy = findInput(inputs, "ravion_operator_deploy_enabled");
+    const operatorDeployNamespaces = findInput(inputs, "ravion_operator_deploy_namespaces");
+    assert.equal(operator.default, true);
+    assert.deepEqual(operator.moved_from, ["beacon_enabled"]);
+    assert.equal(operatorDeploy.default, true);
+    assert.equal(operatorDeploy.label, "Ravion Operator deployments");
+    assert.deepEqual(operatorDeploy.moved_from, ["beacon_deploy_enabled"]);
+    assert.equal(operatorDeployNamespaces.required, true);
+    assert.deepEqual(operatorDeployNamespaces.moved_from, [
       "beacon_deploy_namespaces",
     ]);
+    assert.equal(findInput(inputs, "public_alb_creation_enabled").default, true);
     assert.equal(inputs.some((input) => input.id === "beacon_enabled"), false);
     assert.equal(inputs.some((input) => input.id === "beacon_deploy_enabled"), false);
     assert.equal(inputs.some((input) => input.id === "beacon_deploy_namespaces"), false);
