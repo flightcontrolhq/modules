@@ -64,13 +64,13 @@ variable "subnet_ids" {
   }
 }
 
-variable "public_endpoint_access_enabled" {
+variable "endpoint_public_access_enabled" {
   type        = bool
   description = "Whether the EKS API server endpoint is reachable from the public internet."
   default     = false
 }
 
-variable "private_endpoint_access_enabled" {
+variable "endpoint_private_access_enabled" {
   type        = bool
   description = "Whether the EKS API server endpoint is reachable from inside the VPC."
   default     = true
@@ -78,7 +78,7 @@ variable "private_endpoint_access_enabled" {
 
 variable "public_access_cidrs" {
   type        = list(string)
-  description = "CIDR blocks allowed to reach the public EKS API server endpoint. Only applies when public_endpoint_access_enabled is true."
+  description = "CIDR blocks allowed to reach the public EKS API server endpoint. Only applies when endpoint_public_access_enabled is true."
   default     = ["0.0.0.0/0"]
 
   validation {
@@ -109,7 +109,7 @@ variable "ip_family" {
   }
 }
 
-variable "additional_cluster_security_group_ingress" {
+variable "cluster_security_group_additional_cidr_ingress_rules" {
   type = list(object({
     description = optional(string)
     from_port   = number
@@ -121,7 +121,7 @@ variable "additional_cluster_security_group_ingress" {
   default     = []
 }
 
-variable "additional_cluster_security_group_ingress_sg" {
+variable "cluster_security_group_additional_referenced_security_group_ingress_rules" {
   type = list(object({
     description                  = optional(string)
     from_port                    = number
@@ -137,7 +137,7 @@ variable "additional_cluster_security_group_ingress_sg" {
 # Access
 ################################################################################
 
-variable "cluster_creator_admin_permissions_enabled" {
+variable "bootstrap_cluster_creator_admin_permissions_enabled" {
   type        = bool
   description = "Whether to grant the IAM principal that creates the cluster the EKS cluster admin permissions automatically. AWS recommends managing access via aws_eks_access_entry instead."
   default     = true
@@ -276,19 +276,19 @@ variable "pod_identity_agent_addon_version" {
   default     = null
 }
 
-variable "lb_controller_pod_identity_enabled" {
+variable "aws_load_balancer_controller_pod_identity_creation_enabled" {
   type        = bool
   description = "Create an IAM role and Pod Identity association for the AWS Load Balancer Controller (Helm-installed by the consumer)."
   default     = true
 }
 
-variable "lb_controller_namespace" {
+variable "aws_load_balancer_controller_namespace" {
   type        = string
   description = "Kubernetes namespace where the AWS Load Balancer Controller's service account lives."
   default     = "kube-system"
 }
 
-variable "lb_controller_service_account" {
+variable "aws_load_balancer_controller_service_account" {
   type        = string
   description = "Kubernetes service account name used by the AWS Load Balancer Controller."
   default     = "aws-load-balancer-controller"

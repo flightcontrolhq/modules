@@ -82,7 +82,7 @@ module "eks_service" {
 
   ecr_repository_creation_enabled = true
   ecr_repository_name             = var.ecr_repository_name
-  ecr_force_deletion_enabled      = true
+  ecr_force_delete_enabled        = true
 
   tags = local.common_tags
 }

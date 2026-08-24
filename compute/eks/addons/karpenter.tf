@@ -70,7 +70,7 @@ resource "helm_release" "karpenter" {
 ################################################################################
 
 resource "helm_release" "karpenter_default_node_pool" {
-  count = var.karpenter_enabled && var.karpenter_default_node_pool_enabled ? 1 : 0
+  count = var.karpenter_enabled && var.karpenter_default_node_pool_creation_enabled ? 1 : 0
 
   name      = "karpenter-default-node-pool"
   namespace = var.karpenter_controller_namespace

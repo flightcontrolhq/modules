@@ -20,7 +20,7 @@ locals {
 ################################################################################
 
 module "public_alb" {
-  count = var.public_alb_enabled ? 1 : 0
+  count = var.public_alb_creation_enabled ? 1 : 0
 
   source = "../../../networking/alb"
 
@@ -58,7 +58,7 @@ module "public_alb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster_from_public_alb" {
-  count = var.public_alb_enabled ? 1 : 0
+  count = var.public_alb_creation_enabled ? 1 : 0
 
   security_group_id            = var.cluster_security_group_id
   description                  = "Public ALB to pods (${var.cluster_name})"
@@ -75,7 +75,7 @@ resource "aws_vpc_security_group_ingress_rule" "cluster_from_public_alb" {
 ################################################################################
 
 module "private_alb" {
-  count = var.private_alb_enabled ? 1 : 0
+  count = var.private_alb_creation_enabled ? 1 : 0
 
   source = "../../../networking/alb"
 
@@ -110,7 +110,7 @@ module "private_alb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster_from_private_alb" {
-  count = var.private_alb_enabled ? 1 : 0
+  count = var.private_alb_creation_enabled ? 1 : 0
 
   security_group_id            = var.cluster_security_group_id
   description                  = "Private ALB to pods (${var.cluster_name})"
@@ -127,7 +127,7 @@ resource "aws_vpc_security_group_ingress_rule" "cluster_from_private_alb" {
 ################################################################################
 
 module "public_nlb" {
-  count = var.public_nlb_enabled ? 1 : 0
+  count = var.public_nlb_creation_enabled ? 1 : 0
 
   source = "../../../networking/nlb"
 
@@ -155,7 +155,7 @@ module "public_nlb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster_from_public_nlb" {
-  count = var.public_nlb_enabled ? 1 : 0
+  count = var.public_nlb_creation_enabled ? 1 : 0
 
   security_group_id            = var.cluster_security_group_id
   description                  = "Public NLB to pods (${var.cluster_name})"
@@ -172,7 +172,7 @@ resource "aws_vpc_security_group_ingress_rule" "cluster_from_public_nlb" {
 ################################################################################
 
 module "private_nlb" {
-  count = var.private_nlb_enabled ? 1 : 0
+  count = var.private_nlb_creation_enabled ? 1 : 0
 
   source = "../../../networking/nlb"
 
@@ -200,7 +200,7 @@ module "private_nlb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster_from_private_nlb" {
-  count = var.private_nlb_enabled ? 1 : 0
+  count = var.private_nlb_creation_enabled ? 1 : 0
 
   security_group_id            = var.cluster_security_group_id
   description                  = "Private NLB to pods (${var.cluster_name})"

@@ -17,8 +17,8 @@ module "ecr" {
   tags = var.tags
 
   image_tag_mutability       = var.ecr_image_tag_mutability
-  image_scan_on_push_enabled = var.ecr_scan_on_push_enabled
-  force_delete_enabled       = var.ecr_force_deletion_enabled
+  image_scan_on_push_enabled = var.ecr_image_scan_on_push_enabled
+  force_delete_enabled       = var.ecr_force_delete_enabled
 
   default_lifecycle_policy_enabled = var.ecr_default_lifecycle_policy_enabled
 }

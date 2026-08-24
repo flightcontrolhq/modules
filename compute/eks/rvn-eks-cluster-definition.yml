@@ -5,7 +5,7 @@ definition:
   description: Production-ready Amazon EKS cluster with default managed capacity, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
   version: 0.2.0
-  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, keep the Ravion Runner role in advanced settings, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
+  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, clarify endpoint, node group, security group, and controller settings, keep the Ravion Runner role in advanced settings, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
 module:
   inputs:
     - id: network
@@ -147,7 +147,7 @@ module:
       type: number
     - default: {}
       description: Add independently sized On-demand or Spot managed node groups when workloads need more or separate capacity. Create one of each to make both capacity types available.
-      id: additional_node_groups
+      id: node_groups
       item_inputs:
         - default: ON_DEMAND
           description: On-demand is stable capacity; Spot is lower cost but can be interrupted by AWS.
@@ -251,12 +251,12 @@ module:
       type: section
     - default: true
       description: Allow access to the Kubernetes API server from inside the VPC.
-      id: private_endpoint_access_enabled
+      id: endpoint_private_access_enabled
       label: Private endpoint access
       type: boolean
     - default: false
       description: Allow access to the Kubernetes API server from the public internet.
-      id: public_endpoint_access_enabled
+      id: endpoint_public_access_enabled
       label: Public endpoint access
       type: boolean
     - add_button_label: Add CIDR block
@@ -265,7 +265,7 @@ module:
       label: Public access CIDRs
       placeholder: 0.0.0.0/0
       show_when:
-        public_endpoint_access_enabled: true
+        endpoint_public_access_enabled: true
       type: string_array
     - default: true
       description: Create a security group allowed to reach the Kubernetes API endpoint. Attach it to the Ravion execution environment used by modules that talk to the cluster (such as EKS Add-ons with Karpenter) so their pipeline runs can reach a private endpoint.
@@ -332,8 +332,8 @@ module:
         deletion_protection_enabled: << module.input.deletion_protection_enabled >>
         secrets_encryption_enabled: << module.input.secrets_encryption_enabled >>
         secrets_kms_key_arn: << module.input.secrets_kms_key_arn >>
-        private_endpoint_access_enabled: << module.input.private_endpoint_access_enabled >>
-        public_endpoint_access_enabled: << module.input.public_endpoint_access_enabled >>
+        endpoint_private_access_enabled: << module.input.endpoint_private_access_enabled >>
+        endpoint_public_access_enabled: << module.input.endpoint_public_access_enabled >>
         public_access_cidrs: << module.input.public_access_cidrs || ["0.0.0.0/0"] >>
         ravion_runner_security_group_creation_enabled: << module.input.ravion_runner_security_group_creation_enabled >>
         ravion_runner_role_creation_enabled: << module.input.ravion_runner_role_creation_enabled >>
@@ -343,7 +343,7 @@ module:
           min_size: << module.input.system_node_min_size >>
           max_size: << module.input.system_node_max_size >>
           disk_size: << module.input.system_node_disk_size >>
-        additional_node_groups: << module.input.additional_node_groups || {} >>
+        node_groups: << module.input.node_groups || {} >>
         fargate_profiles: << module.input.fargate_profiles || {} >>
         access_entries: << module.input.access_entries || {} >>
         enabled_cluster_log_types: << module.input.enabled_cluster_log_types >>

@@ -52,7 +52,7 @@ locals {
   # excluded unconditionally: shipping a shipper's logs about shipping is how a
   # feedback loop starts.
   otel_logs_exclude_paths = concat(
-    [for namespace in var.logs_namespace_exclude : "/var/log/pods/${namespace}_*/*/*.log"],
+    [for namespace in var.logs_excluded_namespaces : "/var/log/pods/${namespace}_*/*/*.log"],
     ["/var/log/pods/*/${local.otel_logs_collector_name}/*.log"],
     ["/var/log/pods/*/otc-container/*.log"],
   )

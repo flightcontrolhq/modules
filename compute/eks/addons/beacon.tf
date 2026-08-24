@@ -92,7 +92,7 @@ resource "ravion_beacon_credential" "this" {
   # alone, so a null simply records nothing.
   project_id     = var.beacon_project_id
   environment_id = var.beacon_environment_id
-  aws_account_id = var.beacon_aws_account_id
+  aws_account_id = var.beacon_aws_account_record_id
 
   # A nested attribute, not a block — note the `=`. Absent flags mean NOT
   # granted. These record on the agent what the chart below grants in the

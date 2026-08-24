@@ -5,7 +5,7 @@ definition:
   description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 1.0.0
-  description: Simplify health configuration and form layout, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
+  description: Simplify health configuration and form layout, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -311,7 +311,7 @@ module:
               [{type: "path-pattern", values: ["/*"]}])) >>
             target_group_deregistration_delay: << module.input.target_group_deregistration_delay >>
             target_group_slow_start: << module.input.target_group_slow_start >>
-            health_check:
+            target_group_health_check:
               enabled: true
               path: << module.input.health_check_path >>
               matcher: << module.input.health_check_matcher >>
@@ -319,7 +319,7 @@ module:
               timeout: << module.input.health_check_timeout >>
               healthy_threshold: << module.input.healthy_threshold >>
               unhealthy_threshold: << module.input.unhealthy_threshold >>
-            stickiness:
+            target_group_stickiness:
               enabled: << module.input.target_group_stickiness_enabled >>
               # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
               # (show_when) and renders null, but the Terraform variable validation requires a

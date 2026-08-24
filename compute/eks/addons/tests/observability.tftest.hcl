@@ -280,9 +280,9 @@ run "namespace_exclusions_reach_both_collectors" {
   command = plan
 
   variables {
-    logs_providers         = ["loki", "cloudwatch"]
-    metrics_providers      = []
-    logs_namespace_exclude = ["kube-system", "ravion-beacon"]
+    logs_providers           = ["loki", "cloudwatch"]
+    metrics_providers        = []
+    logs_excluded_namespaces = ["kube-system", "ravion-beacon"]
   }
 
   assert {

@@ -2,12 +2,13 @@ global: false
 definition:
   type: rvn-eks-addons
   name: EKS Add-ons
-  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload logs and metrics shipped to any combination of destinations (an in-cluster log store on S3 and Amazon Managed Prometheus by default; CloudWatch, Grafana Cloud, Datadog, New Relic or a custom OTLP endpoint on request), Ravion EKS Management via the in-cluster Beacon agent, and shared application/network load balancers, each toggled and configured independently.
+  description: Selectable add-ons for an existing EKS cluster - Karpenter autoscaling, the AWS Load Balancer Controller, the External Secrets Operator, EBS CSI storage, workload logs and metrics shipped to any combination of destinations (an in-cluster log store on S3 and Amazon Managed Prometheus by default; CloudWatch, Grafana Cloud, Datadog, New Relic or a custom OTLP endpoint on request), Ravion EKS Management via the in-cluster Ravion Operator, and shared application/network load balancers, each toggled and configured independently.
 release:
   version: 0.8.4
   description: >-
-    Configure the default Karpenter NodePool's On-demand and Spot capacity, instance categories,
-    architectures, CPU limit, and node lifetime directly in the module form. Beacon chart 0.4.1,
+    Clarify which settings create managed resources and distinguish AWS account records, bucket names,
+    excluded namespaces, and enhanced observability. Configure the default Karpenter NodePool's On-demand and Spot capacity, instance categories,
+    architectures, CPU limit, and node lifetime directly in the module form. Ravion Operator chart 0.4.1,
     and beacon_image_tag is a plain pin. Every release so far ignored the tag
     after its first apply (the original "floor, not a pin" design), which froze whatever tag was
     first applied into the state for good: a cluster once given a since-retired tag was rolled back
@@ -19,13 +20,16 @@ release:
     a wedged release takes the chart's floor, so a plain re-apply repairs it. If your instance has
     beacon_image_tag or an image.repository override in its advanced variables from before 0.8.0,
     remove both when upgrading.
-    Previously (0.8.3): Beacon chart 0.4.0 - an add-ons apply no longer moves the agent version;
+    Previously (0.8.3): Ravion Operator chart 0.4.0 - an add-ons apply no longer moves the agent version;
     the chart re-emits the running image on every helm upgrade, and gains httpProxy.credentials
     for rendering Grafana Cloud and in-cluster Prometheus through the agent.
     Previously (0.8.2): the pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled
     Terraform variables are gone; the provider lists are the only switch. An instance still on 0.7.x
     should upgrade to 0.8.1 first, which is what reads them.
-    Form guidance now keeps field-specific details on fields and reserves section text for shared concepts.
+    Form guidance now uses concise, field-specific instructions and documents accepted version,
+    duration, storage, endpoint, and credential formats. Shared load balancer settings now appear
+    directly below Ravion EKS Management. User-facing module text and form field IDs now use the
+    Ravion Operator name.
 module:
   inputs:
     - id: cluster
@@ -49,13 +53,13 @@ module:
           values: $values:aws/regions
         - collapsible: true
           default: << ref.input.execution_environment_id >>
-          description: Execution environment for Pipeline Terraform runners. Defaults to the cluster module's execution environment. When Karpenter is enabled on a private cluster, it must run inside the cluster VPC with the cluster's Ravion Runner security group attached so Helm can reach the Kubernetes API endpoint.
+          description: Execution environment used by Terraform. For a private endpoint, choose one in the cluster VPC with the Ravion Runner security group attached so Terraform can reach the Kubernetes API.
           id: execution_environment_id
           label: Terraform execution environment
           type: string
           values: $values:ravion/execution_environments
         - id: section_cluster
-          label: EKS cluster
+          label: Cluster details
           type: section
         - default: <<ref.stack.output.cluster_name>>
           id: cluster_name
@@ -66,14 +70,14 @@ module:
           type: string
         - collapsible: true
           default: <<ref.stack.output.ravion_runner_role_arn>>
-          description: IAM role assumed for Kubernetes API authentication when installing Helm charts. Defaults to the cluster's Ravion Runner role.
+          description: IAM role Terraform assumes when authenticating to the Kubernetes API.
           id: ravion_runner_role_arn
           label: Ravion Runner role ARN
           placeholder: arn:aws:iam::123456789012:role/my-eks-cluster-ravion-runner
           type: string
         - collapsible: true
           default: <<ref.stack.output.cluster_security_group_id>>
-          description: EKS-managed cluster security group attached to Karpenter-launched nodes.
+          description: EKS-managed security group used by Karpenter nodes and shared load balancers. Required when the default NodePool or any shared load balancer is enabled.
           id: cluster_security_group_id
           label: Cluster security group ID
           placeholder: sg-0123456789abcdef0
@@ -96,32 +100,323 @@ module:
           type: string_array
       required: true
       type: $ref:rvn-eks-cluster
-    - description: Beacon connects outbound to Ravion for workload, rollout, and node visibility, including for private-endpoint clusters. Installation requires Kubernetes API connectivity from the Terraform runner.
-      id: section_beacon
+    - description: Ravion Operator connects outbound to Ravion for workload, rollout, and node visibility.
+      id: section_ravion_operator
       label: Ravion EKS Management
       type: section
     - default: false
-      description: Register this cluster with the Ravion control plane and install the Beacon agent. Ravion issues the agent's credential during the deployment - there is nothing to paste - and it is written into a Kubernetes secret and mirrored into AWS Secrets Manager in your own account. The agent is read-only unless Beacon-run deployments below are enabled. Advanced settings - the agent WebSocket endpoint, Helm chart version, install namespace, and the namespaces the agent may observe - are available through Advanced Terraform variables.
-      id: beacon_enabled
+      description: Register the cluster with Ravion and install Ravion Operator. The operator is read-only unless Ravion Operator deployments are enabled.
+      id: ravion_operator_enabled
       label: Ravion EKS Management
+      moved_from:
+        - beacon_enabled
       type: boolean
     - default: false
-      description: Let Beacon run Ravion's deploys from inside the cluster instead of Ravion reaching in from outside. In the namespaces below the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. Leaving this off still gives a fully working agent - deploys continue to run from outside the cluster.
-      id: beacon_deploy_enabled
-      label: Beacon-run deployments
+      description: Run Ravion deployments through Ravion Operator inside the cluster. Ravion Operator may create, update, and delete workload resources only in the selected namespaces; it cannot modify RBAC, namespaces, or cluster-scoped resources.
+      id: ravion_operator_deploy_enabled
+      label: Ravion Operator deployments
+      moved_from:
+        - beacon_deploy_enabled
       show_when:
-        beacon_enabled: true
+        ravion_operator_enabled: true
       type: boolean
     - add_button_label: Add namespace
       collapsible: true
-      description: Namespaces Beacon may deploy into. Falls back to the observed namespaces (beacon_namespace_scope) when empty. If both are empty the install fails rather than granting cluster-wide write - there is deliberately no deploy-everywhere posture.
-      id: beacon_deploy_namespaces
-      label: Deploy namespaces
+      description: Namespaces Ravion Operator may deploy into. If empty, the advanced operator observation scope is used. Installation fails if neither list contains a namespace.
+      id: ravion_operator_deploy_namespaces
+      label: Deployment namespaces
+      moved_from:
+        - beacon_deploy_namespaces
       placeholder: default
       show_when:
-        beacon_deploy_enabled: true
+        ravion_operator_deploy_enabled: true
       type: string_array
-    - description: Provides just-in-time node autoscaling with the IAM roles, interruption handling, controller, and optional default NodePool it needs. Installation requires Kubernetes API connectivity from the Terraform runner.
+    - description: Shared Application Load Balancers for HTTP and HTTPS workloads. EKS Web services attach through TargetGroupBinding.
+      id: section_alb
+      label: Application load balancers
+      type: section
+    - default: false
+      description: Create an internet-facing Application Load Balancer for traffic from the public internet.
+      id: public_alb_creation_enabled
+      label: Public ALB
+      type: boolean
+    - default: true
+      description: Add an HTTPS listener and redirect HTTP requests to it.
+      id: public_alb_https_enabled
+      label: HTTPS
+      show_when:
+        public_alb_creation_enabled: true
+      type: boolean
+    - $template: ../../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the public ALB HTTPS listener for SNI.
+        additional_certificate_arns_input_id: public_alb_additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs supplied by the selected module. The first certificate is used by default.
+        certificate_arns_input_id: public_alb_certificate_arns
+        certificate_description: ACM certificate module that supplies the default certificate for the public HTTPS listener.
+        certificate_input_id: public_alb_certificate
+        show_when:
+          public_alb_creation_enabled: true
+          public_alb_https_enabled: true
+    - collapsible: true
+      description: AWS ELB security policy name for the public HTTPS listener.
+      id: public_alb_ssl_policy
+      label: SSL policy
+      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
+      show_when:
+        public_alb_creation_enabled: true
+        public_alb_https_enabled: true
+      type: string
+    - collapsible: true
+      id: public_alb_idle_timeout
+      label: Idle timeout (seconds)
+      max: 4000
+      min: 1
+      placeholder: "60"
+      show_when:
+        public_alb_creation_enabled: true
+      type: number
+    - collapsible: true
+      description: WAFv2 Web ACL to associate with the public ALB.
+      id: public_alb_web_acl_arn
+      label: WAF web ACL ARN
+      placeholder: arn:aws:wafv2:...
+      show_when:
+        public_alb_creation_enabled: true
+      type: string
+    - collapsible: true
+      default: false
+      description: Write public ALB request logs to S3.
+      id: public_alb_access_logs_enabled
+      label: Access logs
+      show_when:
+        public_alb_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for access logs. Leave blank to create a private bucket with 90-day retention.
+      id: public_alb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        public_alb_creation_enabled: true
+        public_alb_access_logs_enabled: true
+      type: string
+    - default: false
+      description: Create an internal Application Load Balancer reachable only inside the VPC, for internal APIs, admin tools, and service-to-service traffic.
+      id: private_alb_creation_enabled
+      label: Private ALB
+      type: boolean
+    - default: false
+      description: Add an HTTPS listener and redirect HTTP requests to it.
+      id: private_alb_https_enabled
+      label: HTTPS
+      show_when:
+        private_alb_creation_enabled: true
+      type: boolean
+    - $template: ../../../partials/templates/alb-certificate-input.yml
+      with:
+        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the private ALB HTTPS listener for SNI.
+        additional_certificate_arns_input_id: private_alb_additional_certificate_arns
+        certificate_arns_description: ACM certificate ARNs supplied by the selected module. The first certificate is used by default.
+        certificate_arns_input_id: private_alb_certificate_arns
+        certificate_description: ACM certificate module that supplies the default certificate for the private HTTPS listener.
+        certificate_input_id: private_alb_certificate
+        show_when:
+          private_alb_creation_enabled: true
+          private_alb_https_enabled: true
+    - collapsible: true
+      description: AWS ELB security policy name for the private HTTPS listener.
+      id: private_alb_ssl_policy
+      label: SSL policy
+      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
+      show_when:
+        private_alb_creation_enabled: true
+        private_alb_https_enabled: true
+      type: string
+    - add_button_label: Add CIDR block
+      collapsible: true
+      description: IPv4 CIDR blocks allowed to reach the private ALB. Leave empty to use the RFC1918 private ranges.
+      id: private_alb_ingress_cidr_blocks
+      label: Allowed IPv4 CIDRs
+      placeholder: 10.0.0.0/8
+      show_when:
+        private_alb_creation_enabled: true
+      type: string_array
+    - add_button_label: Add IPv6 CIDR block
+      collapsible: true
+      description: IPv6 CIDR blocks allowed to reach the private ALB. Leave empty to allow no IPv6 ingress.
+      id: private_alb_ingress_ipv6_cidr_blocks
+      label: Allowed IPv6 CIDRs
+      placeholder: fd00::/8
+      show_when:
+        private_alb_creation_enabled: true
+      type: string_array
+    - add_button_label: Add security group
+      collapsible: true
+      description: Security groups whose members can access the private ALB. Useful for sources without static CIDRs, such as CloudFront VPC origins.
+      id: private_alb_ingress_security_group_ids
+      label: Allowed security group IDs
+      placeholder: sg-...
+      show_when:
+        private_alb_creation_enabled: true
+      type: string_array
+    - collapsible: true
+      id: private_alb_idle_timeout
+      label: Idle timeout (seconds)
+      max: 4000
+      min: 1
+      placeholder: "60"
+      show_when:
+        private_alb_creation_enabled: true
+      type: number
+    - collapsible: true
+      default: false
+      description: Write private ALB request logs to S3.
+      id: private_alb_access_logs_enabled
+      label: Access logs
+      show_when:
+        private_alb_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for access logs. Leave blank to create a private bucket with 90-day retention.
+      id: private_alb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        private_alb_creation_enabled: true
+        private_alb_access_logs_enabled: true
+      type: string
+    - description: Network Load Balancers support TCP/UDP traffic, static IPs, and protocols that do not use HTTP routing. Use an Application Load Balancer for HTTP host or path routing.
+      id: section_nlb
+      label: Network load balancers
+      type: section
+    - default: false
+      description: Create an internet-facing Network Load Balancer.
+      id: public_nlb_creation_enabled
+      label: Public NLB
+      type: boolean
+    - add_button_label: Add security group ID
+      collapsible: true
+      description: Additional security groups for the public NLB.
+      id: public_nlb_security_group_ids
+      label: Additional security group IDs
+      placeholder: sg-...
+      show_when:
+        public_nlb_creation_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Distribute traffic to healthy targets in every enabled Availability Zone.
+      id: public_nlb_cross_zone_load_balancing_enabled
+      label: Cross-zone load balancing
+      show_when:
+        public_nlb_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Assign one static Elastic IP address to each public subnet.
+      id: public_nlb_elastic_ips_enabled
+      label: Use Elastic IP addresses
+      show_when:
+        public_nlb_creation_enabled: true
+      type: boolean
+    - add_button_label: Add allocation ID
+      collapsible: true
+      description: One Elastic IP allocation ID for each public subnet, in matching order.
+      id: public_nlb_elastic_ip_allocation_ids
+      label: Elastic IP allocation IDs
+      placeholder: eipalloc-...
+      show_when:
+        public_nlb_creation_enabled: true
+        public_nlb_elastic_ips_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Write public NLB TLS listener connection logs to S3. AWS does not log TCP or UDP listeners.
+      id: public_nlb_access_logs_enabled
+      label: Access logs
+      show_when:
+        public_nlb_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for access logs. Leave blank to create a private bucket with 90-day retention.
+      id: public_nlb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        public_nlb_creation_enabled: true
+        public_nlb_access_logs_enabled: true
+      type: string
+    - default: false
+      description: Create an internal Network Load Balancer.
+      id: private_nlb_creation_enabled
+      label: Private NLB
+      type: boolean
+    - add_button_label: Add security group ID
+      collapsible: true
+      description: Additional security groups for the private NLB.
+      id: private_nlb_security_group_ids
+      label: Additional security group IDs
+      placeholder: sg-...
+      show_when:
+        private_nlb_creation_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Distribute traffic to healthy targets in every enabled Availability Zone.
+      id: private_nlb_cross_zone_load_balancing_enabled
+      label: Cross-zone load balancing
+      show_when:
+        private_nlb_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      default: false
+      description: Assign static Elastic IPs to the private NLB.
+      id: private_nlb_elastic_ips_enabled
+      label: Use elastic IPs
+      show_when:
+        private_nlb_creation_enabled: true
+      type: boolean
+    - add_button_label: Add allocation ID
+      collapsible: true
+      description: Elastic IP allocation IDs for the private NLB, one per subnet.
+      id: private_nlb_elastic_ip_allocation_ids
+      label: Elastic IP allocation IDs
+      placeholder: eipalloc-...
+      show_when:
+        private_nlb_creation_enabled: true
+        private_nlb_elastic_ips_enabled: true
+      type: string_array
+    - collapsible: true
+      default: false
+      description: Write private NLB TLS listener connection logs to S3. AWS does not log TCP or UDP listeners.
+      id: private_nlb_access_logs_enabled
+      label: Access logs
+      show_when:
+        private_nlb_creation_enabled: true
+      type: boolean
+    - collapsible: true
+      description: Existing S3 bucket ARN for access logs. Leave blank to create a private bucket with 90-day retention.
+      id: private_nlb_access_logs_bucket_arn
+      label: Access logs bucket ARN
+      placeholder: arn:aws:s3:::my-bucket
+      show_when:
+        private_nlb_creation_enabled: true
+        private_nlb_access_logs_enabled: true
+      type: string
+    - collapsible: true
+      default: true
+      description: Prevent accidental deletion of load balancers created by this module.
+      id: load_balancer_deletion_protection_enabled
+      label: Load balancer deletion protection
+      type: boolean
+    - collapsible: true
+      description: AWS Load Balancer Controller Helm chart version without a leading v, for example 1.14.0. The controller is installed when any shared load balancer is enabled.
+      id: aws_load_balancer_controller_chart_version
+      label: Load balancer controller chart version
+      placeholder: 1.14.0
+      type: string
+    - description: Provides just-in-time node autoscaling and an optional general-purpose NodePool.
       id: section_karpenter
       label: Karpenter
       type: section
@@ -130,7 +425,7 @@ module:
       label: Karpenter
       type: boolean
     - collapsible: true
-      description: Version of the Karpenter Helm chart (and karpenter-crd chart) to install.
+      description: Karpenter and Karpenter CRD Helm chart version without a leading v, for example 1.14.0.
       id: karpenter_chart_version
       label: Chart version
       placeholder: 1.14.0
@@ -138,7 +433,7 @@ module:
         karpenter_enabled: true
       type: string
     - collapsible: true
-      description: Namespace where the Karpenter controller is installed.
+      description: Kubernetes namespace for the Karpenter controller, for example kube-system.
       id: karpenter_controller_namespace
       label: Controller namespace
       placeholder: kube-system
@@ -146,7 +441,7 @@ module:
         karpenter_enabled: true
       type: string
     - collapsible: true
-      description: Service account name used by the Karpenter controller.
+      description: Kubernetes service account name for the Karpenter controller, for example karpenter.
       id: karpenter_controller_service_account
       label: Controller service account
       placeholder: karpenter
@@ -155,7 +450,7 @@ module:
       type: string
     - default: true
       description: Create a general-purpose default NodePool and EC2NodeClass so Karpenter can provision nodes out of the box. Disable to manage NodePools yourself.
-      id: karpenter_default_node_pool_enabled
+      id: karpenter_default_node_pool_creation_enabled
       label: Default NodePool
       show_when:
         karpenter_enabled: true
@@ -164,12 +459,12 @@ module:
       default:
         - on-demand
         - spot
-      description: Capacity Karpenter may provision. Keep both for cost-aware placement with On-demand fallback, or select one to restrict the pool.
+      description: EC2 purchasing models Karpenter may use. Selecting only Spot can leave workloads pending when Spot capacity is unavailable.
       id: karpenter_default_node_pool_capacity_types
       label: Capacity types
       required: true
       show_when:
-        karpenter_default_node_pool_enabled: true
+        karpenter_default_node_pool_creation_enabled: true
         karpenter_enabled: true
       type: string_array
       values:
@@ -182,13 +477,13 @@ module:
         - c
         - m
         - r
-      description: EC2 instance-family categories Karpenter may choose from.
+      description: Single-letter EC2 instance-family categories Karpenter may use, such as c, m, or r.
       id: karpenter_default_node_pool_instance_categories
       label: EC2 instance categories
       placeholder: m
       required: true
       show_when:
-        karpenter_default_node_pool_enabled: true
+        karpenter_default_node_pool_creation_enabled: true
         karpenter_enabled: true
       type: string_array
     - add_button_label: Add architecture
@@ -200,7 +495,7 @@ module:
       label: CPU architectures
       required: true
       show_when:
-        karpenter_default_node_pool_enabled: true
+        karpenter_default_node_pool_creation_enabled: true
         karpenter_enabled: true
       type: string_array
       values:
@@ -216,29 +511,32 @@ module:
       min: 1
       required: true
       show_when:
-        karpenter_default_node_pool_enabled: true
+        karpenter_default_node_pool_creation_enabled: true
         karpenter_enabled: true
       type: number
     - collapsible: true
       default: 720h
-      description: Maximum node lifetime before Karpenter replaces it, such as 720h for 30 days.
+      description: Maximum node age before Karpenter drains and replaces it. Use integer segments with s, m, or h, such as 1h30m or 720h; use Never to disable expiration.
       id: karpenter_default_node_pool_expire_after
       label: Node lifetime
+      patterns:
+        - message: Use integer segments with s, m, or h, such as 1h30m or 720h, or Never.
+          pattern: ^(([0-9]+(s|m|h))+|Never)$
       required: true
       show_when:
-        karpenter_default_node_pool_enabled: true
+        karpenter_default_node_pool_creation_enabled: true
         karpenter_enabled: true
       type: string
     - id: section_ebs_csi
       label: EBS CSI driver
       type: section
     - default: false
-      description: Provide EBS-backed persistent volumes through the aws-ebs-csi-driver EKS add-on and its Pod Identity role.
+      description: Enable EBS-backed Kubernetes persistent volumes.
       id: ebs_csi_driver_enabled
       label: EBS CSI driver
       type: boolean
     - collapsible: true
-      description: Pinned add-on version. Leave blank to let AWS resolve the most recent compatible version.
+      description: AWS EBS CSI add-on version, for example v1.49.0-eksbuild.1. Leave blank to use the latest compatible version.
       id: ebs_csi_addon_version
       label: Add-on version
       placeholder: Latest compatible
@@ -249,82 +547,72 @@ module:
       label: Logs
       type: section
     - default: true
-      description: >-
-        Collect container logs. On by default into the in-cluster store, whose only cost
-        is storage and requests on the S3 bucket plus the pods that run the collector -
-        there is no per-gigabyte ingestion charge. Turn this off to run no collector and
-        create no store; the Logs tab then says logs are off for this cluster. Installation
-        requires Kubernetes API connectivity from the Terraform runner. Advanced settings -
-        install namespace, chart versions, resources, and local disk - are available through
-        Advanced Terraform variables.
+      description: Collect container logs and send them to the selected destinations. Disabling logs removes the managed collectors and in-cluster log store.
       id: logs_enabled
       label: Logs
       type: boolean
     - add_button_label: Add destination
       default:
         - loki
-      description: >-
-        Where the logs go. Pick as many as you like. Ravion's Logs tab reads from the
-        first destination in the first group that can answer, and falls back to the next
-        when it cannot - the in-cluster store, then CloudWatch Logs. Everything in the
-        second group receives a copy and gets an "Open in ..." link in the tab; the
-        collectors read each file once whatever the number of destinations, but every
-        vendor bills for what it receives.
+      description: Send logs to one or more destinations. Ravion queries the in-cluster store first, then CloudWatch. External destinations each receive a copy.
       id: logs_providers
-      label: Providers
+      label: Log destinations
       show_when:
         logs_enabled: true
       type: string_array
       values:
-        - group_label: Renders in Ravion's Logs tab (read first)
+        - group_label: Shown in Ravion (primary)
           label: In-cluster log store (Loki, S3-backed)
           value: loki
-        - group_label: Renders in Ravion's Logs tab (fallback)
+        - group_label: Shown in Ravion (fallback)
           label: Amazon CloudWatch Logs
           value: cloudwatch
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Grafana Cloud Logs
           value: grafana_cloud
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Datadog
           value: datadog
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: New Relic
           value: new_relic
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Amazon OpenSearch Service
           value: opensearch
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Splunk (HEC)
           value: splunk
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Custom OTLP endpoint
           value: otlp
     - default: 30
-      description: How long logs stay searchable in the in-cluster store. Older logs are deleted from the bucket automatically.
+      description: Number of days logs remain searchable before deletion. Enter 1-3650.
       id: log_retention_days
       label: Retention (days)
+      max: 3650
+      min: 1
       show_when:
         logs_enabled: true
         logs_providers: loki
       type: number
     - collapsible: true
-      description: Store logs in an existing S3 bucket instead of creating one. Leave blank to create a bucket for this cluster. When you bring your own, its lifecycle and encryption settings stay yours to manage.
-      id: loki_s3_bucket
-      label: Existing log bucket
+      description: S3 bucket name for log storage. Leave blank to create a bucket. Lifecycle and encryption remain your responsibility for an existing bucket.
+      id: loki_s3_bucket_name
+      label: Existing S3 log bucket
+      placeholder: my-cluster-logs
       show_when:
         logs_enabled: true
         logs_providers: loki
       type: string
     - default: 30
-      description: Retention on the CloudWatch log group /ravion/eks/<cluster>, which carries one stream per pod. CloudWatch Logs bills per gigabyte ingested and then for storage.
+      description: Retention for the module-managed CloudWatch log groups, in days.
       id: cloudwatch_logs_retention_days
       label: CloudWatch retention (days)
       show_when:
         logs_enabled: true
         logs_providers: cloudwatch
       type: number
-    - description: Grafana Cloud's Loki push URL, from the stack's Logs data source details - for example https://logs-prod-006.grafana.net/loki/api/v1/push.
+    - description: Loki push URL from your Grafana Cloud Logs connection details.
       id: grafana_cloud_logs_url
       label: Grafana Cloud Loki push URL
       placeholder: https://logs-prod-006.grafana.net/loki/api/v1/push
@@ -332,23 +620,23 @@ module:
         logs_enabled: true
         logs_providers: grafana_cloud
       type: string
-    - description: The numeric user id shown beside that push URL in Grafana Cloud.
+    - description: Numeric user or tenant ID from your Grafana Cloud Logs connection details.
       id: grafana_cloud_logs_user
-      label: Grafana Cloud Loki user
+      label: Grafana Cloud Logs user ID
       show_when:
         logs_enabled: true
         logs_providers: grafana_cloud
       type: string
-    - description: Secrets Manager ARN holding a Grafana Cloud access token with logs:write (and metrics:write, if Grafana Cloud is also a metrics destination). Read in-cluster by External Secrets; never stored by Ravion.
+    - description: Secrets Manager ARN containing a Grafana Cloud token with logs:write; also grant metrics:write when used for metrics.
       id: grafana_cloud_token_secret_arn
-      label: Grafana Cloud token secret
+      label: Grafana Cloud token secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:grafana-cloud-token
       show_when:
         logs_enabled: true
         logs_providers: grafana_cloud
       type: string
     - collapsible: true
-      description: Your Grafana Cloud stack URL, used only to build the "Open in Grafana Cloud" link on the Logs and Metrics tabs. Leave blank for no link.
+      description: Grafana Cloud stack URL used for links from Ravion. Leave blank to omit the link.
       id: grafana_cloud_stack_url
       label: Grafana Cloud stack URL
       placeholder: https://myorg.grafana.net
@@ -357,7 +645,7 @@ module:
         logs_providers: grafana_cloud
       type: string
     - default: datadoghq.com
-      description: Datadog site the collectors ship to. Datadog bills per gigabyte of logs ingested and per host for metrics.
+      description: Datadog site that receives this cluster's telemetry.
       id: datadog_site
       label: Datadog site
       show_when:
@@ -377,16 +665,16 @@ module:
           value: ap1.datadoghq.com
         - label: US1-FED (ddog-gov.com)
           value: ddog-gov.com
-    - description: Secrets Manager ARN holding the Datadog API key. Read in-cluster by External Secrets, which this module installs; the key never passes through Ravion, Helm values, or release history.
+    - description: Secrets Manager ARN containing the Datadog API key.
       id: datadog_api_key_secret_arn
-      label: Datadog API key secret
+      label: Datadog API key secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:datadog-api-key
       show_when:
         logs_enabled: true
         logs_providers: datadog
       type: string
     - default: us
-      description: New Relic data region, which decides the OTLP endpoint the collector ships to. New Relic bills per gigabyte ingested.
+      description: New Relic data region used to select the ingestion endpoint.
       id: new_relic_region
       label: New Relic region
       show_when:
@@ -398,15 +686,15 @@ module:
           value: us
         - label: Europe
           value: eu
-    - description: Secrets Manager ARN holding the New Relic license key. Read in-cluster by External Secrets.
+    - description: Secrets Manager ARN containing the New Relic license key.
       id: new_relic_license_key_secret_arn
-      label: New Relic license key secret
+      label: New Relic license key secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:new-relic-license-key
       show_when:
         logs_enabled: true
         logs_providers: new_relic
       type: string
-    - description: Endpoint of the Amazon OpenSearch Service domain, https://... . The collector signs its requests with the cluster's own IAM role - after the first deployment, map the role from the logs_opensearch_role_arn output into the domain's access policy or its fine-grained role mapping, which is the half of the grant that lives on the domain.
+    - description: HTTPS endpoint for a managed OpenSearch domain in the cluster account and region. After deployment, grant the logs_opensearch_role_arn output access in the domain policy or fine-grained role mapping.
       id: opensearch_endpoint
       label: OpenSearch domain endpoint
       placeholder: https://search-logs-abc123.us-east-2.es.amazonaws.com
@@ -415,9 +703,9 @@ module:
         logs_providers: opensearch
       type: string
     - default: ravion-logs
-      description: Index the logs are written to. OpenSearch bills for the instances and storage behind the domain, not per gigabyte ingested.
+      description: Prefix used for OpenSearch log indexes.
       id: opensearch_index_prefix
-      label: OpenSearch index
+      label: OpenSearch index prefix
       show_when:
         logs_enabled: true
         logs_providers: opensearch
@@ -430,9 +718,9 @@ module:
         logs_enabled: true
         logs_providers: splunk
       type: string
-    - description: Secrets Manager ARN holding the HEC token. Read in-cluster by External Secrets; never stored by Ravion.
+    - description: Secrets Manager ARN containing the Splunk HEC token.
       id: splunk_hec_token_secret_arn
-      label: Splunk HEC token secret
+      label: Splunk HEC token secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:splunk-hec-token
       show_when:
         logs_enabled: true
@@ -446,7 +734,7 @@ module:
         logs_enabled: true
         logs_providers: splunk
       type: string
-    - description: OTLP/HTTP endpoint logs are sent to - Honeycomb, Dynatrace, Elastic, or anything else that speaks OTLP.
+    - description: HTTPS OTLP/HTTP endpoint that receives logs.
       id: otlp_logs_endpoint
       label: OTLP logs endpoint
       placeholder: https://api.honeycomb.io
@@ -455,9 +743,10 @@ module:
         logs_providers: otlp
       type: string
     - collapsible: true
-      description: Secrets Manager ARN holding the value of an Authorization header sent with every OTLP request. Leave blank for an endpoint that needs no header.
+      description: Secrets Manager ARN containing the complete Authorization header value. Leave blank when authentication is not required.
       id: otlp_headers_secret_arn
-      label: OTLP authorization secret
+      label: OTLP authorization secret ARN
+      placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:otlp-authorization
       show_when:
         logs_enabled: true
         logs_providers: otlp
@@ -469,24 +758,24 @@ module:
         - kube-node-lease
         - amazon-cloudwatch
         - ravion-beacon
-      description: Namespaces no log collector reads from. Applies to every destination. Ravion's own namespace is excluded by default so the collectors do not tail themselves.
-      id: logs_namespace_exclude
-      label: Namespaces to skip
+      description: Kubernetes namespaces whose container logs are excluded from every destination.
+      id: logs_excluded_namespaces
+      label: Excluded namespaces
       show_when:
         logs_enabled: true
       type: string_array
-    - description: Optional Grafana access for teams that already use it. Ravion's Metrics and Logs tabs do not require these integrations.
+    - description: Optional in-cluster Grafana and Amazon Managed Grafana access. Ravion's Logs and Metrics tabs do not require either option.
       id: section_grafana
       label: Grafana
       type: section
     - default: false
-      description: Install Grafana inside the cluster, already wired to this cluster's metrics and logs. This is the only way to see the in-cluster logs in Grafana - Amazon Managed Grafana runs outside your cluster and cannot reach the log store. Needs Metrics or Logs to be on, since those are what it shows. No public address is created; reach it with a port-forward.
+      description: Install private Grafana with data sources for selected Loki, Amazon Managed Prometheus, and in-cluster Prometheus destinations. No ingress is created; connect with a port-forward or advanced Helm values.
       id: grafana_enabled
       label: In-cluster Grafana
       type: boolean
     - default: false
-      description: Create a read-only IAM role that Amazon Managed Grafana can assume to query this cluster's metrics. Metrics only - Amazon Managed Grafana cannot reach the in-cluster log store.
-      id: grafana_role_enabled
+      description: Create an assumable role for querying the selected Amazon Managed Prometheus workspace plus Container Insights and EKS control-plane log groups. No Grafana workspace is created.
+      id: grafana_role_creation_enabled
       label: Amazon Managed Grafana access
       show_when:
         metrics_enabled: true
@@ -495,52 +784,39 @@ module:
       label: Metrics
       type: section
     - default: true
-      description: >-
-        Collect a curated set of workload metrics. On by default into Amazon Managed
-        Prometheus, billed per metric sample ingested - roughly $25-50 a month for a
-        20-service cluster. Turn this off to run no collector at all; the Metrics tabs then
-        say metrics are off for this cluster. Installation requires Kubernetes API
-        connectivity from the Terraform runner. Advanced settings - scrape interval,
-        extra metric names to keep, chart versions, collector resources, and the install
-        namespace - are available through Advanced Terraform variables.
+      description: Collect workload and Kubernetes metrics and send them to the selected destinations. Disabling metrics removes the managed metrics collectors.
       id: metrics_enabled
       label: Metrics
       type: boolean
     - add_button_label: Add destination
       default:
         - amp
-      description: >-
-        Where the metrics go. Pick as many as you like. Ravion's Metrics tabs read from
-        the first destination in the first group that can answer and fall back to the
-        next - Amazon Managed Prometheus, then CloudWatch Container Insights. Everything
-        in the second group receives a copy and gets an "Open in ..." link; the cluster
-        is scraped once whatever the number of destinations, but every vendor bills for
-        what it receives.
+      description: Send metrics to one or more destinations. Ravion queries Amazon Managed Prometheus first, then in-cluster Prometheus and CloudWatch. External destinations each receive a copy.
       id: metrics_providers
-      label: Providers
+      label: Metrics destinations
       show_when:
         metrics_enabled: true
       type: string_array
       values:
-        - group_label: Renders in Ravion's Metrics tab (read first)
+        - group_label: Shown in Ravion (primary)
           label: Amazon Managed Prometheus
           value: amp
-        - group_label: Renders in Ravion's Metrics tab (fallback)
+        - group_label: Shown in Ravion (fallback)
           label: Prometheus in your cluster
           value: prometheus
-        - group_label: Renders in Ravion's Metrics tab (fallback)
+        - group_label: Shown in Ravion (fallback)
           label: Amazon CloudWatch (Container Insights)
           value: cloudwatch
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Grafana Cloud Metrics
           value: grafana_cloud
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Datadog
           value: datadog
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: New Relic
           value: new_relic
-        - group_label: Ships to your vendor
+        - group_label: External destination
           label: Custom OTLP endpoint
           value: otlp
     - collapsible: true
@@ -553,7 +829,7 @@ module:
         metrics_providers: amp
       type: string
     - collapsible: true
-      description: Region the workspace lives in. Leave blank to use the cluster's region. Set this when the cluster runs in a region where Amazon Managed Prometheus is not offered - metrics are written across regions, at the cost of inter-region data transfer.
+      description: AWS Region containing the workspace. Leave blank to use the cluster Region. A different Region sends metrics across Regions.
       id: amp_region
       label: Workspace region
       show_when:
@@ -562,15 +838,16 @@ module:
       type: string
       values: $values:aws/regions
     - default: 15
-      description: How long the in-cluster Prometheus keeps metrics. Storage is the volume below, in your own account, with no per-sample charge.
+      description: Number of days the in-cluster Prometheus retains metrics.
       id: prometheus_retention_days
       label: Prometheus retention (days)
+      min: 1
       show_when:
         metrics_enabled: true
         metrics_providers: prometheus
       type: number
     - default: 50Gi
-      description: Size of the persistent volume Prometheus stores metrics on. Needs a working storage class, which on a Ravion cluster means the EBS CSI driver add-on above.
+      description: Persistent volume size as a Kubernetes quantity, for example 50Gi. Requires a working storage class; Ravion clusters normally use the EBS CSI driver.
       id: prometheus_storage_size
       label: Prometheus volume size
       show_when:
@@ -578,7 +855,7 @@ module:
         metrics_providers: prometheus
       type: string
     - collapsible: true
-      description: Write into a Prometheus you already run instead of installing one. Give its in-cluster URL; the module then installs nothing and only remote-writes to it.
+      description: In-cluster base URL of an existing Prometheus remote-write receiver. The module appends /api/v1/write and does not install Prometheus.
       id: prometheus_endpoint
       label: Existing Prometheus URL
       placeholder: http://prometheus.monitoring.svc.cluster.local:9090
@@ -587,19 +864,15 @@ module:
         metrics_providers: prometheus
       type: string
     - default: true
-      description: Container Insights with enhanced pod and container metrics. CloudWatch bills per metric and per log ingested; enhanced collection is the more expensive of the two modes.
-      id: cloudwatch_enhanced_observability
+      description: Collect enhanced Container Insights metrics for pods and containers.
+      id: cloudwatch_enhanced_observability_enabled
       label: Enhanced observability
       show_when:
         metrics_enabled: true
         metrics_providers: cloudwatch
       type: boolean
     - default: false
-      description: >-
-        Off unless you ask for it. When on, the add-on's webhook injects the AWS
-        OpenTelemetry agent into the workloads of the namespaces below and restarts their
-        pods to do it. This is the setting that used to be on silently whenever Container
-        Insights was enabled.
+      description: Enable AWS Application Signals auto-instrumentation. Existing pods receive the OpenTelemetry agent when they are recreated.
       id: cloudwatch_application_signals_enabled
       label: Application Signals auto-instrumentation
       show_when:
@@ -607,7 +880,7 @@ module:
         metrics_providers: cloudwatch
       type: boolean
     - add_button_label: Add namespace
-      description: Namespaces to instrument. Leave empty to instrument the whole cluster - every workload in it, restarted on the next rollout.
+      description: Namespaces intended for Application Signals. This module publishes the list but does not add injection annotations. Leave empty to enable cluster-wide auto-monitoring.
       id: cloudwatch_application_signals_namespaces
       label: Namespaces to instrument
       show_when:
@@ -616,7 +889,7 @@ module:
         metrics_providers: cloudwatch
       type: string_array
     - collapsible: true
-      description: Pinned amazon-cloudwatch-observability add-on version. Leave blank to let AWS resolve the most recent compatible version. Also applies when CloudWatch is chosen as a logs destination.
+      description: Amazon CloudWatch Observability add-on version, for example v4.7.0-eksbuild.1. Leave blank to use the latest compatible version. Also applies to CloudWatch Logs.
       id: cloudwatch_observability_addon_version
       label: CloudWatch add-on version
       placeholder: Latest compatible
@@ -624,7 +897,7 @@ module:
         metrics_enabled: true
         metrics_providers: cloudwatch
       type: string
-    - description: Grafana Cloud's Prometheus remote-write URL, from the stack's Prometheus data source details.
+    - description: Prometheus remote-write URL from your Grafana Cloud Metrics connection details.
       id: grafana_cloud_metrics_url
       label: Grafana Cloud remote-write URL
       placeholder: https://prometheus-prod-01.grafana.net/api/prom/push
@@ -632,16 +905,16 @@ module:
         metrics_enabled: true
         metrics_providers: grafana_cloud
       type: string
-    - description: The numeric instance id shown beside that remote-write URL in Grafana Cloud.
+    - description: Numeric instance ID from your Grafana Cloud Metrics connection details.
       id: grafana_cloud_metrics_user
-      label: Grafana Cloud instance id
+      label: Grafana Cloud instance ID
       show_when:
         metrics_enabled: true
         metrics_providers: grafana_cloud
       type: string
-    - description: Secrets Manager ARN holding a Grafana Cloud access token with metrics:write. Read in-cluster by External Secrets; never stored by Ravion. Shown only when Grafana Cloud is not already a logs destination, which asks for the same token.
+    - description: Secrets Manager ARN containing a Grafana Cloud token with metrics:write. The logs credential is reused when Grafana Cloud Logs is also selected.
       id: metrics_grafana_cloud_token_secret_arn
-      label: Grafana Cloud token secret
+      label: Grafana Cloud token secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:grafana-cloud-token
       show_when:
         logs_providers:
@@ -650,7 +923,7 @@ module:
         metrics_providers: grafana_cloud
       type: string
     - default: datadoghq.com
-      description: Datadog site the collector ships metrics to. Shown only when Datadog is not already a logs destination, which asks for the same site.
+      description: Datadog site that receives metrics. The logs selection is reused when Datadog Logs is also enabled.
       id: metrics_datadog_site
       label: Datadog site
       show_when:
@@ -672,9 +945,9 @@ module:
           value: ap1.datadoghq.com
         - label: US1-FED (ddog-gov.com)
           value: ddog-gov.com
-    - description: Secrets Manager ARN holding the Datadog API key. Read in-cluster by External Secrets. Shown only when Datadog is not already a logs destination, which asks for the same key.
+    - description: Secrets Manager ARN containing the Datadog API key. The logs credential is reused when Datadog Logs is also enabled.
       id: metrics_datadog_api_key_secret_arn
-      label: Datadog API key secret
+      label: Datadog API key secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:datadog-api-key
       show_when:
         logs_providers:
@@ -683,7 +956,7 @@ module:
         metrics_providers: datadog
       type: string
     - default: us
-      description: New Relic data region. Shown only when New Relic is not already a logs destination.
+      description: New Relic data region used to select the ingestion endpoint. The logs selection is reused when New Relic Logs is also enabled.
       id: metrics_new_relic_region
       label: New Relic region
       show_when:
@@ -697,9 +970,9 @@ module:
           value: us
         - label: Europe
           value: eu
-    - description: Secrets Manager ARN holding the New Relic license key. Read in-cluster by External Secrets. Shown only when New Relic is not already a logs destination.
+    - description: Secrets Manager ARN containing the New Relic license key. The logs credential is reused when New Relic Logs is also enabled.
       id: metrics_new_relic_license_key_secret_arn
-      label: New Relic license key secret
+      label: New Relic license key secret ARN
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:new-relic-license-key
       show_when:
         logs_providers:
@@ -707,7 +980,7 @@ module:
         metrics_enabled: true
         metrics_providers: new_relic
       type: string
-    - description: OTLP/HTTP endpoint metrics are sent to.
+    - description: HTTPS OTLP/HTTP endpoint that receives metrics.
       id: otlp_metrics_endpoint
       label: OTLP metrics endpoint
       placeholder: https://api.honeycomb.io
@@ -716,16 +989,17 @@ module:
         metrics_providers: otlp
       type: string
     - collapsible: true
-      description: Secrets Manager ARN holding the value of an Authorization header sent with every OTLP request. Shown only when a custom OTLP endpoint is not already a logs destination.
+      description: Secrets Manager ARN containing the complete Authorization header value. The logs credential is reused when the same OTLP destination is selected for logs.
       id: metrics_otlp_headers_secret_arn
-      label: OTLP authorization secret
+      label: OTLP authorization secret ARN
+      placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:otlp-authorization
       show_when:
         logs_providers:
           not: otlp
         metrics_enabled: true
         metrics_providers: otlp
       type: string
-    - description: Materializes Secrets Manager secrets and SSM parameters referenced by ARN into Kubernetes secrets, so values never pass through Ravion or Helm. Installation requires Kubernetes API connectivity from the Terraform runner.
+    - description: Makes referenced Secrets Manager secrets and SSM parameters available as Kubernetes Secrets without sending their values through Ravion.
       id: section_external_secrets
       label: External secrets
       type: section
@@ -736,14 +1010,14 @@ module:
     - add_button_label: Add ARN
       collapsible: true
       description: Secrets Manager secret and SSM parameter ARNs (wildcards allowed) the operator may read. Leave empty to allow reading every secret and parameter in this account and region. Add entries to scope the operator down, or to reach other regions and accounts.
-      id: eso_secret_arns
+      id: eso_secret_and_parameter_arns
       label: Readable secret ARNs
       placeholder: arn:aws:secretsmanager:us-east-2:111122223333:secret:prod/*
       show_when:
         eso_enabled: true
       type: string_array
     - collapsible: true
-      description: Version of the external-secrets Helm chart to install.
+      description: External Secrets Helm chart version without a leading v, for example 2.8.0.
       id: eso_chart_version
       label: Chart version
       placeholder: 2.8.0
@@ -751,299 +1025,12 @@ module:
         eso_enabled: true
       type: string
     - collapsible: true
-      description: Namespace the operator is installed into. Created if it does not exist.
+      description: Kubernetes namespace for External Secrets. It is created if necessary.
       id: eso_namespace
       label: Operator namespace
       placeholder: external-secrets
       show_when:
         eso_enabled: true
-      type: string
-    - description: Application Load Balancers that web workloads attach to via the load balancer controller's TargetGroupBinding. Use these for HTTP/HTTPS traffic - websites, APIs, and webhook endpoints.
-      id: section_alb
-      label: Application load balancers
-      type: section
-    - default: false
-      description: Create an internet-facing Application Load Balancer for traffic from the public internet.
-      id: public_alb_enabled
-      label: Public ALB
-      type: boolean
-    - default: true
-      description: Enable HTTPS listener on the public ALB.
-      id: public_alb_https_enabled
-      label: HTTPS
-      show_when:
-        public_alb_enabled: true
-      type: boolean
-    - $template: ../../../partials/templates/alb-certificate-input.yml
-      with:
-        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the public ALB HTTPS listener for SNI.
-        additional_certificate_arns_input_id: public_alb_additional_certificate_arns
-        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
-        certificate_arns_input_id: public_alb_certificate_arns
-        certificate_description: Primary ACM certificate module for public ALB HTTPS.
-        certificate_input_id: public_alb_certificate
-        show_when:
-          public_alb_enabled: true
-          public_alb_https_enabled: true
-    - collapsible: true
-      description: SSL policy for public ALB HTTPS.
-      id: public_alb_ssl_policy
-      label: SSL policy
-      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
-      show_when:
-        public_alb_enabled: true
-        public_alb_https_enabled: true
-      type: string
-    - collapsible: true
-      description: Idle timeout for the public ALB.
-      id: public_alb_idle_timeout
-      label: Idle timeout (seconds)
-      max: 4000
-      min: 1
-      placeholder: "60"
-      show_when:
-        public_alb_enabled: true
-      type: number
-    - collapsible: true
-      description: WAFv2 Web ACL ARN for the public ALB.
-      id: public_alb_web_acl_arn
-      label: WAF web ACL ARN
-      placeholder: arn:aws:wafv2:...
-      show_when:
-        public_alb_enabled: true
-      type: string
-    - collapsible: true
-      default: false
-      description: Enable public ALB access logging.
-      id: public_alb_access_logs_enabled
-      label: Access logs
-      show_when:
-        public_alb_enabled: true
-      type: boolean
-    - collapsible: true
-      description: Existing S3 bucket ARN for public ALB access logs.
-      id: public_alb_access_logs_bucket_arn
-      label: Access logs bucket ARN
-      placeholder: arn:aws:s3:::my-bucket
-      show_when:
-        public_alb_enabled: true
-        public_alb_access_logs_enabled: true
-      type: string
-    - default: false
-      description: Create an internal Application Load Balancer reachable only inside the VPC, for internal APIs, admin tools, and service-to-service traffic.
-      id: private_alb_enabled
-      label: Private ALB
-      type: boolean
-    - default: false
-      description: Enable HTTPS listener on the private ALB.
-      id: private_alb_https_enabled
-      label: HTTPS
-      show_when:
-        private_alb_enabled: true
-      type: boolean
-    - $template: ../../../partials/templates/alb-certificate-input.yml
-      with:
-        additional_certificate_arns_description: Additional ACM certificate ARNs attached to the private ALB HTTPS listener for SNI.
-        additional_certificate_arns_input_id: private_alb_additional_certificate_arns
-        certificate_arns_description: ACM certificate ARNs resolved from the selected module. The first ARN is the default certificate.
-        certificate_arns_input_id: private_alb_certificate_arns
-        certificate_description: Primary ACM certificate module for private ALB HTTPS.
-        certificate_input_id: private_alb_certificate
-        show_when:
-          private_alb_enabled: true
-          private_alb_https_enabled: true
-    - collapsible: true
-      description: SSL policy for private ALB HTTPS.
-      id: private_alb_ssl_policy
-      label: SSL policy
-      placeholder: ELBSecurityPolicy-TLS13-1-2-2021-06
-      show_when:
-        private_alb_enabled: true
-        private_alb_https_enabled: true
-      type: string
-    - add_button_label: Add CIDR block
-      collapsible: true
-      description: Allowed IPv4 CIDRs for private ALB access. Terraform defaults to RFC1918 private ranges.
-      id: private_alb_ingress_cidr_blocks
-      label: Ingress CIDRs
-      placeholder: 10.0.0.0/8
-      show_when:
-        private_alb_enabled: true
-      type: string_array
-    - add_button_label: Add IPv6 CIDR block
-      collapsible: true
-      description: Allowed IPv6 CIDRs for private ALB access. Defaults to no IPv6 ingress.
-      id: private_alb_ingress_ipv6_cidr_blocks
-      label: Ingress IPv6 CIDRs
-      placeholder: fd00::/8
-      show_when:
-        private_alb_enabled: true
-      type: string_array
-    - add_button_label: Add security group
-      collapsible: true
-      description: Security groups whose members can access the private ALB. Useful for sources without static CIDRs, such as CloudFront VPC origins.
-      id: private_alb_ingress_security_group_ids
-      label: Ingress security groups
-      placeholder: sg-...
-      show_when:
-        private_alb_enabled: true
-      type: string_array
-    - collapsible: true
-      description: Idle timeout for the private ALB.
-      id: private_alb_idle_timeout
-      label: Idle timeout (seconds)
-      max: 4000
-      min: 1
-      placeholder: "60"
-      show_when:
-        private_alb_enabled: true
-      type: number
-    - collapsible: true
-      default: false
-      description: Enable private ALB access logging.
-      id: private_alb_access_logs_enabled
-      label: Access logs
-      show_when:
-        private_alb_enabled: true
-      type: boolean
-    - collapsible: true
-      description: Existing S3 bucket ARN for private ALB access logs.
-      id: private_alb_access_logs_bucket_arn
-      label: Access logs bucket ARN
-      placeholder: arn:aws:s3:::my-bucket
-      show_when:
-        private_alb_enabled: true
-        private_alb_access_logs_enabled: true
-      type: string
-    - description: Use Network Load Balancers for TCP/UDP workloads, static IP requirements, very high-throughput connections, or protocols that do not need HTTP routing. For normal web apps and HTTP APIs, prefer the Application Load Balancers section above.
-      id: section_nlb
-      label: Network load balancers
-      type: section
-    - default: false
-      description: Create an internet-facing Network Load Balancer.
-      id: public_nlb_enabled
-      label: Public NLB
-      type: boolean
-    - add_button_label: Add security group ID
-      collapsible: true
-      description: Additional security groups for the public NLB.
-      id: public_nlb_security_group_ids
-      label: Security groups
-      placeholder: sg-...
-      show_when:
-        public_nlb_enabled: true
-      type: string_array
-    - collapsible: true
-      default: false
-      description: Enable cross-zone load balancing for the public NLB.
-      id: public_nlb_cross_zone_load_balancing_enabled
-      label: Cross-zone load balancing
-      show_when:
-        public_nlb_enabled: true
-      type: boolean
-    - collapsible: true
-      default: false
-      description: Assign static Elastic IPs to the public NLB.
-      id: public_nlb_elastic_ips_enabled
-      label: Use elastic IPs
-      show_when:
-        public_nlb_enabled: true
-      type: boolean
-    - add_button_label: Add allocation ID
-      collapsible: true
-      description: Elastic IP allocation IDs for the public NLB, one per subnet.
-      id: public_nlb_elastic_ip_allocation_ids
-      label: Elastic IP allocation IDs
-      placeholder: eipalloc-...
-      show_when:
-        public_nlb_enabled: true
-        public_nlb_elastic_ips_enabled: true
-      type: string_array
-    - collapsible: true
-      default: false
-      description: Enable public NLB access logging.
-      id: public_nlb_access_logs_enabled
-      label: Access logs
-      show_when:
-        public_nlb_enabled: true
-      type: boolean
-    - collapsible: true
-      description: Existing S3 bucket ARN for public NLB access logs.
-      id: public_nlb_access_logs_bucket_arn
-      label: Access logs bucket ARN
-      placeholder: arn:aws:s3:::my-bucket
-      show_when:
-        public_nlb_enabled: true
-        public_nlb_access_logs_enabled: true
-      type: string
-    - default: false
-      description: Create an internal Network Load Balancer.
-      id: private_nlb_enabled
-      label: Private NLB
-      type: boolean
-    - add_button_label: Add security group ID
-      collapsible: true
-      description: Additional security groups for the private NLB.
-      id: private_nlb_security_group_ids
-      label: Security groups
-      placeholder: sg-...
-      show_when:
-        private_nlb_enabled: true
-      type: string_array
-    - collapsible: true
-      default: false
-      description: Enable cross-zone load balancing for the private NLB.
-      id: private_nlb_cross_zone_load_balancing_enabled
-      label: Cross-zone load balancing
-      show_when:
-        private_nlb_enabled: true
-      type: boolean
-    - collapsible: true
-      default: false
-      description: Assign static Elastic IPs to the private NLB.
-      id: private_nlb_elastic_ips_enabled
-      label: Use elastic IPs
-      show_when:
-        private_nlb_enabled: true
-      type: boolean
-    - add_button_label: Add allocation ID
-      collapsible: true
-      description: Elastic IP allocation IDs for the private NLB, one per subnet.
-      id: private_nlb_elastic_ip_allocation_ids
-      label: Elastic IP allocation IDs
-      placeholder: eipalloc-...
-      show_when:
-        private_nlb_enabled: true
-        private_nlb_elastic_ips_enabled: true
-      type: string_array
-    - collapsible: true
-      default: false
-      description: Enable private NLB access logging.
-      id: private_nlb_access_logs_enabled
-      label: Access logs
-      show_when:
-        private_nlb_enabled: true
-      type: boolean
-    - collapsible: true
-      description: Existing S3 bucket ARN for private NLB access logs.
-      id: private_nlb_access_logs_bucket_arn
-      label: Access logs bucket ARN
-      placeholder: arn:aws:s3:::my-bucket
-      show_when:
-        private_nlb_enabled: true
-        private_nlb_access_logs_enabled: true
-      type: string
-    - collapsible: true
-      default: true
-      description: Prevent accidental deletion of load balancers created by this module.
-      id: load_balancer_deletion_protection_enabled
-      label: Load balancer deletion protection
-      type: boolean
-    - collapsible: true
-      description: Version of the aws-load-balancer-controller Helm chart to install. The controller is installed automatically when any load balancer is enabled, to register workload pods into the load balancer target groups.
-      id: lb_controller_chart_version
-      label: Load balancer controller chart version
-      placeholder: 1.14.0
       type: string
     - $include: ../../../partials/inputs/misc-section.yml
     - $include: ../../../partials/inputs/tags.yml
@@ -1061,7 +1048,7 @@ module:
         karpenter_controller_service_account: << module.input.karpenter_controller_service_account || "karpenter" >>
         karpenter_chart_version: << module.input.karpenter_chart_version || "1.14.0" >>
         karpenter_helm_values: []
-        karpenter_default_node_pool_enabled: '<< module.input.karpenter_default_node_pool_enabled != nil ? module.input.karpenter_default_node_pool_enabled : true >>'
+        karpenter_default_node_pool_creation_enabled: '<< module.input.karpenter_default_node_pool_creation_enabled != nil ? module.input.karpenter_default_node_pool_creation_enabled : true >>'
         karpenter_default_node_pool:
           capacity_types: '<< module.input.karpenter_default_node_pool_capacity_types != nil ? module.input.karpenter_default_node_pool_capacity_types : ["on-demand", "spot"] >>'
           instance_categories: '<< module.input.karpenter_default_node_pool_instance_categories != nil ? module.input.karpenter_default_node_pool_instance_categories : ["c", "m", "r"] >>'
@@ -1071,7 +1058,7 @@ module:
         node_subnet_ids: << module.input.node_subnet_ids >>
         cluster_security_group_id: << module.input.cluster_security_group_id >>
         ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
-        lb_controller_chart_version: << module.input.lb_controller_chart_version || "1.14.0" >>
+        aws_load_balancer_controller_chart_version: << module.input.aws_load_balancer_controller_chart_version || "1.14.0" >>
         ebs_csi_driver_enabled: << module.input.ebs_csi_driver_enabled >>
         ebs_csi_addon_version: << module.input.ebs_csi_addon_version >>
         # The signal toggle folds into the provider list: off is an empty list, on
@@ -1079,10 +1066,10 @@ module:
         # lists and never the toggles.
         logs_providers: '<< module.input.logs_enabled == false ? [] : (module.input.logs_providers != nil ? module.input.logs_providers : ["loki"]) >>'
         metrics_providers: '<< module.input.metrics_enabled == false ? [] : (module.input.metrics_providers != nil ? module.input.metrics_providers : ["amp"]) >>'
-        logs_namespace_exclude: '<< module.input.logs_namespace_exclude != nil ? module.input.logs_namespace_exclude : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"] >>'
+        logs_excluded_namespaces: '<< module.input.logs_excluded_namespaces != nil ? module.input.logs_excluded_namespaces : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"] >>'
         logs_loki:
           retention_days: '<< module.input.log_retention_days != nil ? module.input.log_retention_days : 30 >>'
-          s3_bucket: << module.input.loki_s3_bucket >>
+          s3_bucket_name: << module.input.loki_s3_bucket_name >>
         logs_cloudwatch:
           retention_days: '<< module.input.cloudwatch_logs_retention_days != nil ? module.input.cloudwatch_logs_retention_days : 30 >>'
         logs_grafana_cloud:
@@ -1117,7 +1104,7 @@ module:
           storage_size: << module.input.prometheus_storage_size >>
           endpoint: << module.input.prometheus_endpoint >>
         metrics_cloudwatch:
-          enhanced_observability: '<< module.input.cloudwatch_enhanced_observability != nil ? module.input.cloudwatch_enhanced_observability : true >>'
+          enhanced_observability_enabled: '<< module.input.cloudwatch_enhanced_observability_enabled != nil ? module.input.cloudwatch_enhanced_observability_enabled : true >>'
           application_signals_enabled: '<< module.input.cloudwatch_application_signals_enabled != nil ? module.input.cloudwatch_application_signals_enabled : false >>'
           application_signals_namespaces: '<< module.input.cloudwatch_application_signals_namespaces != nil ? module.input.cloudwatch_application_signals_namespaces : [] >>'
           addon_version: << module.input.cloudwatch_observability_addon_version >>
@@ -1135,21 +1122,21 @@ module:
         metrics_otlp:
           endpoint: << module.input.otlp_metrics_endpoint >>
           headers_secret_arn: << module.input.otlp_headers_secret_arn || module.input.metrics_otlp_headers_secret_arn >>
-        grafana_role_enabled: << module.input.grafana_role_enabled >>
+        grafana_role_creation_enabled: << module.input.grafana_role_creation_enabled >>
         grafana_enabled: << module.input.grafana_enabled >>
         eso_enabled: '<< module.input.eso_enabled != nil ? module.input.eso_enabled : true >>'
         eso_chart_version: << module.input.eso_chart_version || "2.8.0" >>
         eso_namespace: << module.input.eso_namespace || "external-secrets" >>
-        eso_secret_arns: '<< module.input.eso_secret_arns != nil ? module.input.eso_secret_arns : [] >>'
-        beacon_enabled: << module.input.beacon_enabled >>
-        beacon_deploy_enabled: << module.input.beacon_deploy_enabled >>
-        beacon_deploy_namespaces: '<< module.input.beacon_deploy_namespaces != nil ? module.input.beacon_deploy_namespaces : [] >>'
+        eso_secret_and_parameter_arns: '<< module.input.eso_secret_and_parameter_arns != nil ? module.input.eso_secret_and_parameter_arns : [] >>'
+        beacon_enabled: << module.input.ravion_operator_enabled >>
+        beacon_deploy_enabled: << module.input.ravion_operator_deploy_enabled >>
+        beacon_deploy_namespaces: '<< module.input.ravion_operator_deploy_namespaces != nil ? module.input.ravion_operator_deploy_namespaces : [] >>'
         beacon_project_id: << project.id >>
         beacon_environment_id: << environment.id >>
-        beacon_aws_account_id: << module.input.aws_account_id >>
+        beacon_aws_account_record_id: << module.input.aws_account_id >>
         public_subnet_ids: << module.input.public_subnet_ids >>
         load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
-        public_alb_enabled: << module.input.public_alb_enabled >>
+        public_alb_creation_enabled: << module.input.public_alb_creation_enabled >>
         public_alb_https_enabled: << module.input.public_alb_https_enabled >>
         public_alb_certificate_arns: >-
           << (module.input.public_alb_certificate_arns != nil ? module.input.public_alb_certificate_arns : []) |
@@ -1159,7 +1146,7 @@ module:
         public_alb_web_acl_arn: << module.input.public_alb_web_acl_arn >>
         public_alb_access_logs_enabled: << module.input.public_alb_access_logs_enabled >>
         public_alb_access_logs_bucket_arn: << module.input.public_alb_access_logs_bucket_arn >>
-        private_alb_enabled: << module.input.private_alb_enabled >>
+        private_alb_creation_enabled: << module.input.private_alb_creation_enabled >>
         private_alb_https_enabled: << module.input.private_alb_https_enabled >>
         private_alb_certificate_arns: >-
           << (module.input.private_alb_certificate_arns != nil ? module.input.private_alb_certificate_arns : []) |
@@ -1171,14 +1158,14 @@ module:
         private_alb_idle_timeout: << module.input.private_alb_idle_timeout >>
         private_alb_access_logs_enabled: << module.input.private_alb_access_logs_enabled >>
         private_alb_access_logs_bucket_arn: << module.input.private_alb_access_logs_bucket_arn >>
-        public_nlb_enabled: << module.input.public_nlb_enabled >>
+        public_nlb_creation_enabled: << module.input.public_nlb_creation_enabled >>
         public_nlb_security_group_ids: << module.input.public_nlb_security_group_ids >>
         public_nlb_cross_zone_load_balancing_enabled: << module.input.public_nlb_cross_zone_load_balancing_enabled >>
         public_nlb_elastic_ips_enabled: << module.input.public_nlb_elastic_ips_enabled >>
         public_nlb_elastic_ip_allocation_ids: << module.input.public_nlb_elastic_ip_allocation_ids >>
         public_nlb_access_logs_enabled: << module.input.public_nlb_access_logs_enabled >>
         public_nlb_access_logs_bucket_arn: << module.input.public_nlb_access_logs_bucket_arn >>
-        private_nlb_enabled: << module.input.private_nlb_enabled >>
+        private_nlb_creation_enabled: << module.input.private_nlb_creation_enabled >>
         private_nlb_security_group_ids: << module.input.private_nlb_security_group_ids >>
         private_nlb_cross_zone_load_balancing_enabled: << module.input.private_nlb_cross_zone_load_balancing_enabled >>
         private_nlb_elastic_ips_enabled: << module.input.private_nlb_elastic_ips_enabled >>
@@ -1190,10 +1177,10 @@ module:
   ui:
     links: |-
       <<
-      (module.input.public_alb_enabled && stack.output.public_alb_dns_name ? [{"name":"Public ALB","href":(module.input.public_alb_https_enabled ? "https://" : "http://") + stack.output.public_alb_dns_name}] : []) +
-      (module.input.private_alb_enabled && stack.output.private_alb_dns_name ? [{"name":"Private ALB","href":(module.input.private_alb_https_enabled ? "https://" : "http://") + stack.output.private_alb_dns_name}] : []) +
-      (module.input.public_nlb_enabled && stack.output.public_nlb_dns_name ? [{"name":"Public NLB","href":"http://" + stack.output.public_nlb_dns_name}] : []) +
-      (module.input.private_nlb_enabled && stack.output.private_nlb_dns_name ? [{"name":"Private NLB","href":"http://" + stack.output.private_nlb_dns_name}] : [])
+      (module.input.public_alb_creation_enabled && stack.output.public_alb_dns_name ? [{"name":"Public ALB","href":(module.input.public_alb_https_enabled ? "https://" : "http://") + stack.output.public_alb_dns_name}] : []) +
+      (module.input.private_alb_creation_enabled && stack.output.private_alb_dns_name ? [{"name":"Private ALB","href":(module.input.private_alb_https_enabled ? "https://" : "http://") + stack.output.private_alb_dns_name}] : []) +
+      (module.input.public_nlb_creation_enabled && stack.output.public_nlb_dns_name ? [{"name":"Public NLB","href":"http://" + stack.output.public_nlb_dns_name}] : []) +
+      (module.input.private_nlb_creation_enabled && stack.output.private_nlb_dns_name ? [{"name":"Private NLB","href":"http://" + stack.output.private_nlb_dns_name}] : [])
       >>
     # Cluster-health charts from this module's own Amazon Managed Prometheus
     # workspace. Every workspace identifier is a stack output that is null
@@ -1272,7 +1259,7 @@ module:
     | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
     | **Logs** | On (in-cluster store) | Container output collected on every node and delivered to the destinations you choose - an in-cluster store on S3 by default, plus CloudWatch Logs or a vendor on request |
     | **Metrics** | On (Amazon Managed Prometheus) | Per-container CPU, memory, network, restart and scaling metrics, delivered to the destinations you choose - Amazon Managed Prometheus by default, plus CloudWatch Container Insights or a vendor on request |
-    | **Ravion EKS Management** | Off | Registers the cluster with the Ravion control plane and installs the Beacon agent, which reports workload and node state outbound over a single WebSocket and can optionally run Ravion's deploys from inside the cluster |
+    | **Ravion EKS Management** | Off | Registers the cluster with the Ravion control plane and installs Ravion Operator, which reports workload and node state outbound over a single WebSocket and can optionally run Ravion's deploys from inside the cluster |
     | **Shared load balancers** | Off | Terraform-managed public/private ALBs and NLBs that web workloads attach to via the load balancer controller's TargetGroupBinding — the same shared-LB pattern the ECS Cluster module uses |
 
     EBS CSI and the CloudWatch Observability add-on are native EKS add-ons installed purely through the AWS API. Karpenter, the load balancer controller, the External Secrets Operator, Ravion EKS Management, and both observability pipelines additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
@@ -1306,13 +1293,13 @@ module:
 
     ## Ravion EKS Management
 
-    Beacon is Ravion's in-cluster agent. It dials the control plane outbound over a single WebSocket and reports workload, rollout, and node state back — the control plane can never dial in, which is what makes a cluster with a private API endpoint observable from Ravion at all. Outbound 443 to the agent endpoint is the only egress a cluster has to allow.
+    Ravion Operator is Ravion's in-cluster agent. It dials the control plane outbound over a single WebSocket and reports workload, rollout, and node state back — the control plane can never dial in, which is what makes a cluster with a private API endpoint observable from Ravion at all. Outbound 443 to the agent endpoint is the only egress a cluster has to allow.
 
     Enabling the toggle does three things in one deployment: Ravion issues the agent's credential — server-side, authorized by the pipeline's own credentials, so there is no API key to paste — writes it into the agent's Kubernetes secret and mirrors it into a Secrets Manager secret **in your own AWS account**, and installs the agent's Helm chart. The plaintext is issued exactly once; rotating or revoking it is a redeploy, not an API call.
 
     By default the agent is read-only. One grant widens it, declined by default:
 
-    - **Beacon-run deployments** — lets Ravion's Helm upgrades run from inside the cluster instead of reaching in from outside. Within the named **deploy namespaces** the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. There is no cluster-wide deploy posture: with no namespace named, the install fails rather than granting one. Leaving this off still gives a fully working agent — deploys continue to run from outside the cluster.
+    - **Ravion Operator deployments** — lets Ravion's Helm upgrades run from inside the cluster instead of reaching in from outside. Within the named **deployment namespaces** the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. There is no cluster-wide deploy posture: with no namespace named, the install fails rather than granting one. Leaving this off still gives a fully working agent — deploys continue to run from outside the cluster.
 
     The project, environment, and AWS account this module belongs to are recorded on the agent automatically when its credential is issued; there is nothing to fill in.
 
@@ -1321,11 +1308,11 @@ module:
     | Terraform variable | Default | What it changes |
     | ------------------ | ------- | --------------- |
     | `beacon_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
-    | `beacon_chart_version` | `0.4.0` | Beacon **chart** version, pinned per module release; never the agent version — the chart keeps whatever the release is running and Ravion rolls it forward. Set to `null` to track the registry's latest |
+    | `beacon_chart_version` | `0.4.0` | Ravion Operator **chart** version, pinned per module release; never the agent version — the chart keeps whatever the release is running and Ravion rolls it forward. Set to `null` to track the registry's latest |
     | `beacon_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
     | `beacon_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
 
-    **Deploy namespaces** falls back to `beacon_namespace_scope` when left empty, so a cluster scoped through the advanced variable also bounds Beacon's deploys by default.
+    **Deployment namespaces** falls back to `beacon_namespace_scope` when left empty, so a cluster scoped through the advanced variable also bounds Ravion Operator's deploys by default.
 
     ## External secrets
 
@@ -1389,8 +1376,8 @@ module:
     | Existing log bucket    | No       | Creates one          | Store logs in an existing bucket instead of `ravion-loki-<cluster>-<account>` |
     | In-cluster Grafana     | No       | `false`              | Grafana in the cluster, wired to both metrics and logs |
     | Grafana read access    | No       | `false`              | Read-only IAM role for Amazon Managed Grafana over the AMP workspace |
-    | Ravion EKS Management  | No       | `false`              | Registers the cluster and installs the Beacon agent    |
-    | Beacon-run deployments | No       | `false`             | Lets Beacon run Ravion's deploys from inside the cluster, scoped to named namespaces |
+    | Ravion EKS Management  | No       | `false`              | Registers the cluster and installs Ravion Operator     |
+    | Ravion Operator deployments | No     | `false`              | Lets Ravion Operator run Ravion's deploys from inside the cluster, scoped to named namespaces |
     | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
     | Private ALB            | No       | `false`              | Shared internal ALB                                    |
     | Public / private NLB   | No       | `false`              | Shared Network Load Balancers for TCP/UDP workloads    |

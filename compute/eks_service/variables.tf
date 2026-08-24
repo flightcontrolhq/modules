@@ -86,7 +86,7 @@ variable "target_group_slow_start" {
   }
 }
 
-variable "health_check" {
+variable "target_group_health_check" {
   type = object({
     enabled             = optional(bool, true)
     path                = optional(string, "/")
@@ -102,17 +102,17 @@ variable "health_check" {
   default     = {}
 
   validation {
-    condition     = var.health_check.protocol == null || contains(["HTTP", "HTTPS"], coalesce(var.health_check.protocol, "HTTP"))
-    error_message = "The health_check.protocol must be HTTP or HTTPS when set."
+    condition     = var.target_group_health_check.protocol == null || contains(["HTTP", "HTTPS"], coalesce(var.target_group_health_check.protocol, "HTTP"))
+    error_message = "The target_group_health_check.protocol must be HTTP or HTTPS when set."
   }
 
   validation {
-    condition     = var.health_check.timeout < var.health_check.interval
-    error_message = "The health_check.timeout must be lower than health_check.interval."
+    condition     = var.target_group_health_check.timeout < var.target_group_health_check.interval
+    error_message = "The target_group_health_check.timeout must be lower than target_group_health_check.interval."
   }
 }
 
-variable "stickiness" {
+variable "target_group_stickiness" {
   type = object({
     enabled         = optional(bool, false)
     type            = optional(string, "lb_cookie")
@@ -123,13 +123,13 @@ variable "stickiness" {
   default     = {}
 
   validation {
-    condition     = contains(["lb_cookie", "app_cookie"], var.stickiness.type)
-    error_message = "The stickiness.type must be lb_cookie or app_cookie."
+    condition     = contains(["lb_cookie", "app_cookie"], var.target_group_stickiness.type)
+    error_message = "The target_group_stickiness.type must be lb_cookie or app_cookie."
   }
 
   validation {
-    condition     = !(var.stickiness.enabled && var.stickiness.type == "app_cookie") || try(length(var.stickiness.cookie_name), 0) > 0
-    error_message = "The stickiness.cookie_name is required when stickiness.type is app_cookie."
+    condition     = !(var.target_group_stickiness.enabled && var.target_group_stickiness.type == "app_cookie") || try(length(var.target_group_stickiness.cookie_name), 0) > 0
+    error_message = "The target_group_stickiness.cookie_name is required when target_group_stickiness.type is app_cookie."
   }
 }
 
@@ -218,13 +218,13 @@ variable "ecr_image_tag_mutability" {
   }
 }
 
-variable "ecr_scan_on_push_enabled" {
+variable "ecr_image_scan_on_push_enabled" {
   type        = bool
   description = "Scan images for vulnerabilities on push."
   default     = true
 }
 
-variable "ecr_force_deletion_enabled" {
+variable "ecr_force_delete_enabled" {
   type        = bool
   description = "Allow the ECR repository to be deleted even when it contains images."
   default     = false

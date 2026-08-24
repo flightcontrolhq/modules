@@ -110,8 +110,8 @@ module "eks_service" {
   # ECR half
   ecr_repository_creation_enabled = true
   ecr_image_tag_mutability        = "MUTABLE"
-  ecr_scan_on_push_enabled        = true
-  ecr_force_deletion_enabled      = true
+  ecr_image_scan_on_push_enabled  = true
+  ecr_force_delete_enabled        = true
 
   tags = local.common_tags
 }

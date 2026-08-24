@@ -7,7 +7,7 @@
 ################################################################################
 
 module "lb_controller_role" {
-  count = var.lb_controller_pod_identity_enabled ? 1 : 0
+  count = var.aws_load_balancer_controller_pod_identity_creation_enabled ? 1 : 0
 
   source = "../../../../security/iam"
 
@@ -24,11 +24,11 @@ module "lb_controller_role" {
 }
 
 resource "aws_eks_pod_identity_association" "lb_controller" {
-  count = var.lb_controller_pod_identity_enabled ? 1 : 0
+  count = var.aws_load_balancer_controller_pod_identity_creation_enabled ? 1 : 0
 
   cluster_name    = aws_eks_cluster.this.name
-  namespace       = var.lb_controller_namespace
-  service_account = var.lb_controller_service_account
+  namespace       = var.aws_load_balancer_controller_namespace
+  service_account = var.aws_load_balancer_controller_service_account
   role_arn        = module.lb_controller_role[0].role_arn
 
   tags = local.tags
