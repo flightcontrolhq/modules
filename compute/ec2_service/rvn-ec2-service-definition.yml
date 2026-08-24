@@ -4,7 +4,7 @@ definition:
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
   version: 1.4.2
-  description: Keep default build policies in advanced builder settings so routine build forms stay focused.
+  description: Keep default build policies in advanced builder settings and remove contradictory listener-rule guidance.
 module:
   inputs:
     - id: network

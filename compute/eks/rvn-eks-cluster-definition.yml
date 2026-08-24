@@ -2,10 +2,10 @@ global: false
 definition:
   type: rvn-eks-cluster
   name: EKS Cluster
-  description: Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
+  description: Production-ready Amazon EKS cluster with default managed capacity, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
   version: 0.2.0
-  description: Drop the Container Insights charts from the Metrics tab. The EKS Add-ons module defaults Container Insights off, so those charts rendered empty on new clusters; cluster-health charts now live on the add-ons module, read from its Amazon Managed Prometheus workspace. The control-plane charts (API server requests, errors, throttling, pending pods) remain - EKS publishes those under AWS/EKS with no agent involved.
+  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, keep the Ravion Runner role in advanced settings, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
 module:
   inputs:
     - id: network
@@ -80,6 +80,7 @@ module:
       description: Kubernetes version for the EKS cluster.
       id: kubernetes_version
       label: Kubernetes version
+      min_current_value: true
       required: true
       type: string
       values: $values:aws/eks_versions?region=<<module.input.aws_region>>&currentVersion=<<instance.input.kubernetes_version>>
@@ -102,9 +103,151 @@ module:
       show_when:
         secrets_encryption_enabled: true
       type: string
-    - description: Controls how the Kubernetes API server endpoint can be reached. Private access keeps traffic inside the VPC; public access exposes the endpoint to the internet.
-      id: section_endpoint
-      label: API endpoint access
+    - description: Reserve roughly 0.5 vCPU and 1 GiB of node capacity as a starting allowance for baseline cluster services such as CoreDNS, networking agents, and Ravion add-ons. The EKS control plane itself runs on AWS-managed infrastructure.
+      id: section_capacity
+      label: Default capacity
+      type: section
+    - default: ON_DEMAND
+      description: On-demand is stable default capacity; Spot is lower cost but nodes can be interrupted.
+      id: system_node_capacity_type
+      label: Capacity type
+      type: string
+      values:
+        - label: On-demand
+          value: ON_DEMAND
+        - label: Spot
+          value: SPOT
+    - default:
+        - t3.medium
+      description: EC2 instance types AWS may use for this node group. Multiple types improve Spot availability.
+      id: system_node_instance_types
+      label: Instance types
+      placeholder: Select an instance type
+      required: true
+      type: string_array
+      values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
+    - default: 2
+      description: Minimum nodes in the default managed node group. Set it high enough to run cluster components and leave spare capacity for workloads and rolling node updates.
+      id: system_node_min_size
+      label: Minimum nodes
+      min: 1
+      type: number
+    - default: 10
+      description: Maximum nodes in the default managed node group. Set it high enough for peak workloads and replacement capacity during rolling node updates, otherwise pods can remain pending.
+      id: system_node_max_size
+      label: Maximum nodes
+      min: 1
+      type: number
+    - collapsible: true
+      description: Root EBS volume size for default capacity nodes. Leave blank for the AMI default.
+      id: system_node_disk_size
+      label: Disk size (GB)
+      min: 20
+      placeholder: "20"
+      type: number
+    - default: {}
+      description: Add independently sized On-demand or Spot managed node groups when workloads need more or separate capacity. Create one of each to make both capacity types available.
+      id: additional_node_groups
+      item_inputs:
+        - default: ON_DEMAND
+          description: On-demand is stable capacity; Spot is lower cost but can be interrupted by AWS.
+          id: capacity_type
+          label: Capacity type
+          required: true
+          type: string
+          values:
+            - label: On-demand
+              value: ON_DEMAND
+            - label: Spot
+              value: SPOT
+        - default:
+            - t3.medium
+          description: EC2 instance types AWS may use for this node group. Multiple types improve Spot availability.
+          id: instance_types
+          label: Instance types
+          placeholder: Select an instance type
+          required: true
+          type: string_array
+          values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
+        - default: 1
+          description: Minimum nodes in this managed node group. Set it high enough to leave spare capacity for workloads and rolling node updates.
+          id: min_size
+          label: Minimum nodes
+          min: 0
+          required: true
+          type: number
+        - default: 3
+          description: Maximum nodes in this managed node group. Set it high enough for peak workloads and replacement capacity during rolling node updates, otherwise pods can remain pending.
+          id: max_size
+          label: Maximum nodes
+          min: 1
+          required: true
+          type: number
+        - collapsible: true
+          description: Root EBS volume size for nodes. Leave blank for the AMI default.
+          id: disk_size
+          label: Root volume size (GB)
+          min: 20
+          type: number
+        - collapsible: true
+          default: {}
+          description: Kubernetes labels applied to nodes in this group.
+          id: labels
+          label: Node labels
+          type: keyvalue
+        - collapsible: true
+          default: []
+          description: Kubernetes taints that restrict which pods can use this group.
+          id: taints
+          item_inputs:
+            - id: key
+              label: Key
+              required: true
+              type: string
+            - id: value
+              label: Value
+              type: string
+            - id: effect
+              label: Effect
+              required: true
+              type: string
+              values:
+                - label: No schedule
+                  value: NO_SCHEDULE
+                - label: Prefer no schedule
+                  value: PREFER_NO_SCHEDULE
+                - label: No execute
+                  value: NO_EXECUTE
+          item_label: Taint
+          item_title:
+            fallback: Taint
+            template: "{key}"
+          label: Taints
+          type: object_array
+      item_label: Managed node group
+      item_title:
+        template: "{key}"
+      key:
+        description: Unique EKS managed node group name.
+        label: Node group name
+        patterns:
+          - message: 1-63 letters, numbers, hyphens, and underscores. Start with a letter or number.
+            pattern: ^[0-9A-Za-z][A-Za-z0-9-_]{0,62}$
+        placeholder: applications-spot
+      label: Additional node groups
+      required: false
+      type: object_map
+    - id: section_fargate
+      label: Fargate
+      type: section
+    - collapsible: true
+      default: {}
+      description: 'Run selected namespaces on AWS Fargate instead of EC2 nodes. Define optional profiles keyed by name; each value follows the composite module''s fargate_profiles object shape, for example {"selectors": [{"namespace": "my-namespace"}]}.'
+      id: fargate_profiles
+      label: Fargate profiles
+      type: object
+    - id: section_access
+      label: Cluster access
       type: section
     - default: true
       description: Allow access to the Kubernetes API server from inside the VPC.
@@ -129,75 +272,15 @@ module:
       id: ravion_runner_security_group_creation_enabled
       label: Ravion Runner security group
       type: boolean
-    - default: true
+    - collapsible: true
+      default: true
       description: Create an IAM role that Ravion Runner step executions assume for Kubernetes API access, registered as an EKS access entry with cluster-admin. Used by the EKS Add-ons module to install Helm charts.
       id: ravion_runner_role_creation_enabled
       label: Ravion Runner role
       type: boolean
-    - description: Required managed node group that runs system workloads such as CoreDNS. Sized small by default; add more compute with additional node groups, Karpenter, or Fargate.
-      id: section_system_nodes
-      label: System node group
-      type: section
-    - add_button_label: Add instance type
-      default:
-        - t3.medium
-      description: EC2 instance types for system nodes.
-      id: system_node_instance_types
-      label: Instance types
-      placeholder: t3.medium
-      type: string_array
-    - default: ON_DEMAND
-      description: Spot is cheaper but nodes can be interrupted. Use On-demand for system workloads unless cost is critical.
-      id: system_node_capacity_type
-      label: Capacity type
-      type: string
-      values:
-        - label: On-demand
-          value: ON_DEMAND
-        - label: Spot
-          value: SPOT
-    - default: 2
-      description: Minimum system nodes. Also used as the initial node count; after creation, node count is managed outside Terraform.
-      id: system_node_min_size
-      label: Min nodes
-      min: 1
-      type: number
-    - default: 4
-      description: Maximum system nodes.
-      id: system_node_max_size
-      label: Max nodes
-      min: 1
-      type: number
-    - collapsible: true
-      description: Root EBS volume size for system nodes. Leave blank for the AMI default.
-      id: system_node_disk_size
-      label: Disk size (GB)
-      min: 20
-      placeholder: "20"
-      type: number
     - collapsible: true
       default: {}
-      description: Optional additional managed node groups keyed by name. Each value follows the composite module's additional_node_groups object shape (instance_types, capacity_type, min_size, max_size, labels, taints, and more).
-      id: additional_node_groups
-      label: Additional node groups
-      type: object
-    - description: Run selected namespaces on AWS Fargate instead of EC2 nodes.
-      id: section_fargate
-      label: Fargate
-      type: section
-    - collapsible: true
-      default: {}
-      description: 'Optional Fargate profiles keyed by name. Each value follows the composite module''s fargate_profiles object shape, for example {"selectors": [{"namespace": "my-namespace"}]}.'
-      id: fargate_profiles
-      label: Fargate profiles
-      type: object
-    - description: Additional EKS access entries for IAM principals that need cluster access. The IAM principal that creates the cluster is granted admin access automatically. Automatic access for Ravion deploys will be wired here in a future release.
-      id: section_access
-      label: Cluster access
-      type: section
-    - collapsible: true
-      default: {}
-      description: Map of access entries keyed by a stable identifier. Each value follows the composite module's access_entries object shape (principal_arn, type, kubernetes_groups, policy_associations).
+      description: Additional IAM principals that need cluster access. The principal that creates the cluster receives admin access automatically. Define entries by a stable key; each value follows the composite module's access_entries object shape (principal_arn, type, kubernetes_groups, policy_associations).
       id: access_entries
       label: Access entries
       type: object
@@ -258,7 +341,6 @@ module:
           instance_types: << module.input.system_node_instance_types >>
           capacity_type: << module.input.system_node_capacity_type >>
           min_size: << module.input.system_node_min_size >>
-          desired_size: << module.input.system_node_min_size >>
           max_size: << module.input.system_node_max_size >>
           disk_size: << module.input.system_node_disk_size >>
         additional_node_groups: << module.input.additional_node_groups || {} >>
@@ -361,14 +443,14 @@ module:
           region: << stack.output.region >>
           log_group: /aws/containerinsights/<< stack.output.cluster_name >>/dataplane
   readme: |-
-    Production-ready Amazon EKS cluster with a system node group, core add-ons, and optional Fargate compute. Extend with the **EKS Add-ons** module (Karpenter, load balancer controller, EBS CSI, Container Insights).
+    Production-ready Amazon EKS cluster with default managed capacity, core add-ons, and optional Fargate compute. Extend with the **EKS Add-ons** module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 
     ## Overview
 
     Amazon EKS (Elastic Kubernetes Service) runs managed Kubernetes control planes on AWS. This module creates an EKS cluster inside your selected VPC and provisions everything a working cluster needs, in the correct order:
 
     1. **Cluster** - control plane, OIDC provider, secrets encryption, VPC CNI, kube-proxy, Pod Identity Agent, and the AWS Load Balancer Controller IAM role
-    2. **System node group** - a small managed node group that gives system workloads somewhere to run
+    2. **Default capacity** - a managed node group for cluster components, add-ons, and workloads without stricter placement
     3. **CoreDNS** - installed only after compute exists so it starts healthy
     4. **Optional compute** - additional managed node groups and Fargate profiles
 
@@ -388,13 +470,13 @@ module:
 
     ## Compute
 
-    ### System node group
+    ### Default capacity
 
-    Every cluster gets a required managed node group for system workloads such as CoreDNS. It defaults to 2-4 On-demand `t3.medium` nodes. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds.
+    Every cluster gets a required managed node group that provides default compute for cluster components such as CoreDNS, add-ons, and workloads without stricter placement. It defaults to 2-10 On-demand `t3.medium` nodes. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds. Each workload module can select Any capacity, On-demand, or Spot placement.
 
     ### Additional node groups
 
-    Add more managed node groups for application workloads using the **Additional node groups** map. Each entry supports the same options as the system node group plus labels and taints.
+    Add managed node groups for application workloads through the **Additional node groups** form. Each group independently chooses On-demand or Spot capacity, instance types, size bounds, labels, and taints. The minimum node count is also the initial node count. Add one On-demand group and one Spot group when workloads should be able to use both. Multiple instance types are especially useful for Spot because AWS can choose from more available pools.
 
     ### Karpenter
 
@@ -404,15 +486,13 @@ module:
 
     Fargate profiles run pods from selected namespaces on serverless compute instead of EC2 nodes. Each profile matches one or more namespace selectors, optionally narrowed by pod labels.
 
-    ## API endpoint access
+    ## Cluster access
 
     By default the Kubernetes API server is reachable only from inside the VPC. Enable **Public endpoint access** to reach it from the internet, and restrict the allowed source ranges with **Public access CIDRs**.
 
     A **Ravion Runner security group** is created by default and allowed to reach the API endpoint on port 443. Attach it to the Ravion execution environment used by modules that talk to the Kubernetes API (such as **EKS Add-ons** with Karpenter enabled) so their pipeline runs can reach a private endpoint. Its ID is available as the `ravion_runner_security_group_id` stack output.
 
     A **Ravion Runner role** is also created by default: a stable IAM role registered as an EKS access entry with cluster-admin, which Ravion Runner step executions assume when they need the Kubernetes API. This keeps per-run pipeline roles out of the cluster's access configuration — the EKS Add-ons module assumes it automatically via `aws eks get-token`. Its ARN is available as the `ravion_runner_role_arn` stack output. The trust policy admits only this AWS account; tighten it further with the `ravion_runner_role_trusted_principal_arns` Terraform variable.
-
-    ## Cluster access
 
     EKS access entries control which IAM principals can access the cluster. The IAM principal that creates the cluster is granted admin access automatically. Additional principals can be granted access through the **Access entries** map. Automatic access for Ravion deploys will be wired here in a future release.
 
@@ -435,8 +515,8 @@ module:
     | Public endpoint access | No       | `false`              | Expose the API server to the internet                  |
     | Ravion Runner security group | No | `true`               | Security group allowed to reach the API endpoint       |
     | Ravion Runner role     | No       | `true`               | Assumable IAM role with cluster-admin access entry     |
-    | System node group      | No       | 2-4 `t3.medium`      | Instance types, capacity type, size bounds, disk size  |
-    | Additional node groups | No       | -                    | Extra managed node groups keyed by name                |
+    | Default capacity       | No       | 2-10 `t3.medium`     | Capacity type, instance types, size bounds, and disk size   |
+    | Additional node groups | No       | -                    | Structured On-demand or Spot managed node groups       |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
     | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
     | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |
@@ -446,7 +526,7 @@ module:
 
     This module follows AWS EKS production patterns:
 
-    - **Ordered provisioning:** CoreDNS is installed only after the system node group exists, avoiding the add-on deadlock that occurs on clusters without compute
+    - **Ordered provisioning:** CoreDNS is installed only after the default capacity node group exists, avoiding the add-on deadlock that occurs on clusters without compute
     - **Private by default:** the API endpoint is private unless public access is explicitly enabled
     - **Encrypted secrets:** Kubernetes secrets are envelope-encrypted with KMS by default
     - **Deletion protection on:** the cluster cannot be deleted until protection is turned off, preventing accidental destroys

@@ -315,8 +315,7 @@ variable "system_node_group" {
     ami_type                     = optional(string, "AL2023_x86_64_STANDARD")
     kubernetes_version           = optional(string)
     min_size                     = optional(number, 2)
-    desired_size                 = optional(number, 2)
-    max_size                     = optional(number, 4)
+    max_size                     = optional(number, 10)
     max_unavailable              = optional(number)
     max_unavailable_percentage   = optional(number, 33)
     version_force_update_enabled = optional(bool, false)
@@ -350,7 +349,7 @@ variable "system_node_group" {
       })), [])
     })), [])
   })
-  description = "Configuration for the required system managed node group that provides compute for Deployment-kind add-ons (CoreDNS, etc.)."
+  description = "Configuration for the required default managed node group that provides compute for cluster components, add-ons, and workloads without stricter placement."
   default     = {}
 }
 
@@ -362,7 +361,6 @@ variable "additional_node_groups" {
     ami_type                     = optional(string, "AL2023_x86_64_STANDARD")
     kubernetes_version           = optional(string)
     min_size                     = optional(number, 1)
-    desired_size                 = optional(number, 1)
     max_size                     = optional(number, 3)
     max_unavailable              = optional(number)
     max_unavailable_percentage   = optional(number, 33)

@@ -4,7 +4,7 @@ definition:
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
   version: 1.1.1
-  description: Clarify ECS cluster labels, add configurable target group deregistration delay, and keep default build policies in advanced builder settings.
+  description: Clarify ECS cluster labels, add configurable target group deregistration delay, keep default build policies in advanced builder settings, and remove contradictory listener-rule guidance.
 module:
   inputs:
     - id: section_cluster

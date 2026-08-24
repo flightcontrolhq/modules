@@ -1,7 +1,19 @@
 - id: section_resources
   label: Resources
   type: section
-  description: Kubernetes schedules pods on requests and enforces ceilings with limits.
+- id: capacity_type
+  label: Capacity type
+  type: string
+  description: Choose where Kubernetes may schedule this workload. The selected EKS cluster or Karpenter NodePool must provide that capacity type.
+  required: true
+  default: any
+  values:
+    - label: Any capacity
+      value: any
+    - label: On-demand
+      value: on_demand
+    - label: Spot
+      value: spot
 - id: cpu_request
   label: CPU request
   type: string

@@ -21,7 +21,7 @@ module "system_node_group" {
   kubernetes_version = var.system_node_group.kubernetes_version
 
   min_size     = var.system_node_group.min_size
-  desired_size = var.system_node_group.desired_size
+  desired_size = var.system_node_group.min_size
   max_size     = var.system_node_group.max_size
 
   max_unavailable              = var.system_node_group.max_unavailable
@@ -72,7 +72,7 @@ module "node_groups" {
   kubernetes_version = each.value.kubernetes_version
 
   min_size     = each.value.min_size
-  desired_size = each.value.desired_size
+  desired_size = each.value.min_size
   max_size     = each.value.max_size
 
   max_unavailable              = each.value.max_unavailable

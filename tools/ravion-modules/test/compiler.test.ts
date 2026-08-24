@@ -125,8 +125,23 @@ describe("compiler", () => {
     );
   });
 
+  it("prevents EKS and database major version downgrades", async () => {
+    const eks = await compileDefinitionFile(join(repoRoot, "compute", "eks", "rvn-eks-cluster-definition.yml"));
+    const rds = await compileDefinitionFile(join(repoRoot, "database", "rds", "rvn-rds-definition.yml"));
+    const aurora = await compileDefinitionFile(join(repoRoot, "database", "aurora", "rvn-aurora-definition.yml"));
+
+    assert.equal(findInput(getModuleInputs(eks.module), "kubernetes_version").min_current_value, true);
+
+    const rdsMajorVersion = findInput(getModuleInputs(rds.module), "engine_major_version");
+    assert.equal(rdsMajorVersion.min_current_value, true);
+    assert.equal(rdsMajorVersion.immutable, undefined);
+
+    assert.equal(findInput(getModuleInputs(aurora.module), "engine_major_version").min_current_value, true);
+  });
+
   it("compiles EKS web startup and recovery probes with safe path and timeout fallbacks", async () => {
     const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks_service", "rvn-eks-web-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
     const deploy = assertRecord(compiled.module.deploy, "module.deploy");
     const definition = assertRecord(deploy.definition, "module.deploy.definition");
     const values = assertRecord(definition.values, "module.deploy.definition.values");
@@ -145,6 +160,140 @@ describe("compiler", () => {
       startup.failureThreshold,
       "<< module.input.startup_timeout_seconds != nil ? int((module.input.startup_timeout_seconds + 4) / 5) : 30 >>",
     );
+    assert.equal(
+      inputs.findIndex((input) => input.id === "probe_initial_delay_seconds"),
+      inputs.findIndex((input) => input.id === "health_check_timeout") + 1,
+    );
+    assert.equal(inputs.some((input) => input.id === "section_load_balancer"), false);
+  });
+
+  it("compiles EKS capacity forms and workload placement with safe defaults", async () => {
+    const cluster = await compileDefinitionFile(join(repoRoot, "compute", "eks", "rvn-eks-cluster-definition.yml"));
+    const addons = await compileDefinitionFile(join(repoRoot, "compute", "eks", "addons", "rvn-eks-addons-definition.yml"));
+    const web = await compileDefinitionFile(join(repoRoot, "compute", "eks_service", "rvn-eks-web-definition.yml"));
+    const clusterInputs = getModuleInputs(cluster.module);
+
+    const additionalNodeGroups = findInput(clusterInputs, "additional_node_groups");
+    assert.equal(additionalNodeGroups.type, "object_map");
+    const additionalNodeGroupInputs = additionalNodeGroups.item_inputs;
+    assert.ok(Array.isArray(additionalNodeGroupInputs));
+    const additionalNodeGroupFields = additionalNodeGroupInputs.map((input) =>
+      assertRecord(input, "additional_node_groups.item_inputs[]"),
+    );
+    assert.equal(
+      additionalNodeGroupFields.some((input) => input.id === "desired_size"),
+      false,
+    );
+    const additionalMinSize = findInput(additionalNodeGroupFields, "min_size");
+    const additionalMaxSize = findInput(additionalNodeGroupFields, "max_size");
+    assert.equal(additionalMinSize.label, "Minimum nodes");
+    assert.equal(additionalMaxSize.label, "Maximum nodes");
+    assert.match(String(additionalMinSize.description), /spare capacity/);
+    assert.match(String(additionalMaxSize.description), /pods can remain pending/);
+    assert.equal(findInput(clusterInputs, "system_node_min_size").label, "Minimum nodes");
+    assert.equal(findInput(clusterInputs, "system_node_max_size").label, "Maximum nodes");
+    assert.equal(findInput(clusterInputs, "system_node_max_size").default, 10);
+    assert.match(String(findInput(clusterInputs, "system_node_min_size").description), /spare capacity/);
+    assert.match(String(findInput(clusterInputs, "system_node_max_size").description), /pods can remain pending/);
+    assert.equal(clusterInputs.some((input) => input.id === "section_system_nodes"), false);
+    assert.equal(clusterInputs.some((input) => input.id === "section_application_capacity"), false);
+    assert.match(String(findInput(clusterInputs, "section_capacity").description), /0\.5 vCPU and 1 GiB/);
+    assert.ok(clusterInputs.findIndex((input) => input.id === "section_capacity") < clusterInputs.findIndex((input) => input.id === "system_node_capacity_type"));
+    assert.ok(clusterInputs.findIndex((input) => input.id === "system_node_capacity_type") < clusterInputs.findIndex((input) => input.id === "system_node_instance_types"));
+    assert.ok(clusterInputs.findIndex((input) => input.id === "system_node_disk_size") < clusterInputs.findIndex((input) => input.id === "additional_node_groups"));
+    assert.equal(clusterInputs.some((input) => input.id === "section_endpoint"), false);
+    assert.ok(clusterInputs.findIndex((input) => input.id === "section_access") < clusterInputs.findIndex((input) => input.id === "private_endpoint_access_enabled"));
+    assert.ok(clusterInputs.findIndex((input) => input.id === "section_fargate") < clusterInputs.findIndex((input) => input.id === "section_access"));
+    assert.ok(clusterInputs.findIndex((input) => input.id === "access_entries") < clusterInputs.findIndex((input) => input.id === "section_observability"));
+
+    const systemNodeInstanceTypes = findInput(clusterInputs, "system_node_instance_types");
+    assert.equal(systemNodeInstanceTypes.type, "string_array");
+    assert.deepEqual(systemNodeInstanceTypes.default, ["t3.medium"]);
+    assert.equal(
+      systemNodeInstanceTypes.values,
+      "$values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>",
+    );
+    assert.equal(
+      findInput(additionalNodeGroupFields, "instance_types").values,
+      systemNodeInstanceTypes.values,
+    );
+    const systemNodeGroup = assertRecord(getTerraformVariable(cluster.module, "system_node_group"), "system_node_group");
+    assert.equal(systemNodeGroup.instance_types, "<< module.input.system_node_instance_types >>");
+    assert.equal("desired_size" in systemNodeGroup, false);
+
+    const karpenterNodePool = assertRecord(
+      getTerraformVariable(addons.module, "karpenter_default_node_pool"),
+      "karpenter_default_node_pool",
+    );
+    assert.equal(
+      karpenterNodePool.capacity_types,
+      '<< module.input.karpenter_default_node_pool_capacity_types != nil ? module.input.karpenter_default_node_pool_capacity_types : ["on-demand", "spot"] >>',
+    );
+
+    const deploy = assertRecord(web.module.deploy, "module.deploy");
+    const definition = assertRecord(deploy.definition, "module.deploy.definition");
+    const values = assertRecord(definition.values, "module.deploy.definition.values");
+    assert.equal(
+      values.affinity,
+      '<< module.input.capacity_type == nil || module.input.capacity_type == "any" ? {} : {"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"eks.amazonaws.com/capacityType","operator":"In","values":[module.input.capacity_type == "spot" ? "SPOT" : "ON_DEMAND"]}]},{"matchExpressions":[{"key":"karpenter.sh/capacity-type","operator":"In","values":[module.input.capacity_type == "spot" ? "spot" : "on-demand"]}]}]}}} >>',
+    );
+  });
+
+  it("keeps EKS section descriptions only for cross-field guidance", async () => {
+    const definitions = [
+      {
+        path: ["compute", "eks", "rvn-eks-cluster-definition.yml"],
+        sectionIds: ["section_capacity"],
+      },
+      {
+        path: ["compute", "eks", "addons", "rvn-eks-addons-definition.yml"],
+        sectionIds: [
+          "section_beacon",
+          "section_karpenter",
+          "section_grafana",
+          "section_external_secrets",
+          "section_alb",
+          "section_nlb",
+        ],
+      },
+      {
+        path: ["compute", "eks_service", "rvn-eks-web-definition.yml"],
+        sectionIds: [],
+      },
+      {
+        path: ["compute", "eks_service", "rvn-eks-worker-definition.yml"],
+        sectionIds: [],
+      },
+      {
+        path: ["compute", "eks_service", "rvn-eks-cron-definition.yml"],
+        sectionIds: [],
+      },
+    ];
+
+    for (const definition of definitions) {
+      const compiled = await compileDefinitionFile(join(repoRoot, ...definition.path));
+      const describedSections = getModuleInputs(compiled.module)
+        .filter((input) => input.type === "section" && typeof input.description === "string")
+        .map((input) => input.id);
+
+      assert.deepEqual(describedSections, definition.sectionIds, `${compiled.type} has redundant section guidance`);
+    }
+  });
+
+  it("groups EKS add-ons with cluster selection", async () => {
+    for (const definitionName of ["rvn-eks-web", "rvn-eks-worker", "rvn-eks-cron"]) {
+      const compiled = await compileDefinitionFile(
+        join(repoRoot, "compute", "eks_service", `${definitionName}-definition.yml`),
+      );
+      const inputs = getModuleInputs(compiled.module);
+      const clusterIndex = inputs.findIndex((input) => input.id === "cluster");
+      const addonsIndex = inputs.findIndex((input) => input.id === "addons");
+      const serviceSectionIndex = inputs.findIndex((input) => input.id === "section_service");
+
+      assert.equal(addonsIndex, clusterIndex + 1, `${definitionName} should place add-ons after cluster`);
+      assert.ok(addonsIndex < serviceSectionIndex, `${definitionName} should keep add-ons in the cluster section`);
+      assert.equal(inputs.some((input) => input.id === "section_addons"), false);
+    }
   });
 
   it("fails when a local token remains after compilation", async () => {

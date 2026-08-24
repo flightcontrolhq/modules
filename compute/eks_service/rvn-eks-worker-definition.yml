@@ -5,7 +5,7 @@ definition:
   description: Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module and keep default build policies in advanced builder settings.
+  description: Follow the selected observability providers, group add-ons with cluster selection, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -18,13 +18,10 @@ module:
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
-    - id: section_addons
-      label: EKS add-ons
-      type: section
-      description: Add-ons module attached to the cluster above. Selecting it points the Metrics and Logs tabs at whichever observability providers that module has selected.
     - id: addons
       label: EKS add-ons
       type: $ref:rvn-eks-addons
+      description: Select the EKS Add-ons module attached to the cluster above to use its observability providers in the Metrics and Logs tabs.
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
       required: false
@@ -269,6 +266,7 @@ module:
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
+    | Capacity type | Any capacity | Schedule on any node, or require On-demand or Spot capacity |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
     | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
@@ -339,6 +337,7 @@ module:
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
     | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
+    | Capacity type | Yes | Any capacity | Required node capacity type |
     | CPU limit | No | - | Optional CPU ceiling |
     | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |

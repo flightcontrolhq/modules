@@ -6,7 +6,9 @@ definition:
 release:
   version: 0.8.4
   description: >-
-    Beacon chart 0.4.1, and beacon_image_tag is a plain pin. Every release so far ignored the tag
+    Configure the default Karpenter NodePool's On-demand and Spot capacity, instance categories,
+    architectures, CPU limit, and node lifetime directly in the module form. Beacon chart 0.4.1,
+    and beacon_image_tag is a plain pin. Every release so far ignored the tag
     after its first apply (the original "floor, not a pin" design), which froze whatever tag was
     first applied into the state for good: a cluster once given a since-retired tag was rolled back
     to it on every upgrade and wedged when that image could not start. Now the pin is asserted for
@@ -23,6 +25,7 @@ release:
     Previously (0.8.2): the pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled
     Terraform variables are gone; the provider lists are the only switch. An instance still on 0.7.x
     should upgrade to 0.8.1 first, which is what reads them.
+    Form guidance now keeps field-specific details on fields and reserves section text for shared concepts.
 module:
   inputs:
     - id: cluster
@@ -93,7 +96,7 @@ module:
           type: string_array
       required: true
       type: $ref:rvn-eks-cluster
-    - description: Ravion's in-cluster agent, Beacon. It dials Ravion outbound over a single WebSocket - nothing ever reaches into the cluster - and reports workload, rollout, and node state back, which is what makes a private-endpoint cluster observable from Ravion at all. Optionally it also runs Ravion's deploys from inside the cluster. Requires Kubernetes API connectivity from the Terraform runner for the install itself.
+    - description: Beacon connects outbound to Ravion for workload, rollout, and node visibility, including for private-endpoint clusters. Installation requires Kubernetes API connectivity from the Terraform runner.
       id: section_beacon
       label: Ravion EKS Management
       type: section
@@ -118,7 +121,7 @@ module:
       show_when:
         beacon_deploy_enabled: true
       type: string_array
-    - description: Just-in-time node autoscaling. Provisions Karpenter end to end - controller and node IAM roles, Pod Identity association, instance profile, interruption queue, EventBridge rules, the controller Helm charts, and a default NodePool. Requires Kubernetes API connectivity from the Terraform runner.
+    - description: Provides just-in-time node autoscaling with the IAM roles, interruption handling, controller, and optional default NodePool it needs. Installation requires Kubernetes API connectivity from the Terraform runner.
       id: section_karpenter
       label: Karpenter
       type: section
@@ -157,11 +160,80 @@ module:
       show_when:
         karpenter_enabled: true
       type: boolean
-    - description: EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role.
-      id: section_ebs_csi
+    - add_button_label: Add capacity type
+      default:
+        - on-demand
+        - spot
+      description: Capacity Karpenter may provision. Keep both for cost-aware placement with On-demand fallback, or select one to restrict the pool.
+      id: karpenter_default_node_pool_capacity_types
+      label: Capacity types
+      required: true
+      show_when:
+        karpenter_default_node_pool_enabled: true
+        karpenter_enabled: true
+      type: string_array
+      values:
+        - label: On-demand
+          value: on-demand
+        - label: Spot
+          value: spot
+    - add_button_label: Add instance category
+      default:
+        - c
+        - m
+        - r
+      description: EC2 instance-family categories Karpenter may choose from.
+      id: karpenter_default_node_pool_instance_categories
+      label: EC2 instance categories
+      placeholder: m
+      required: true
+      show_when:
+        karpenter_default_node_pool_enabled: true
+        karpenter_enabled: true
+      type: string_array
+    - add_button_label: Add architecture
+      collapsible: true
+      default:
+        - amd64
+      description: CPU architectures Karpenter may provision. Workload images must support every selected architecture.
+      id: karpenter_default_node_pool_architectures
+      label: CPU architectures
+      required: true
+      show_when:
+        karpenter_default_node_pool_enabled: true
+        karpenter_enabled: true
+      type: string_array
+      values:
+        - label: x86_64
+          value: amd64
+        - label: ARM64
+          value: arm64
+    - collapsible: true
+      default: 100
+      description: Maximum total vCPUs Karpenter may provision through the default NodePool.
+      id: karpenter_default_node_pool_cpu_limit
+      label: CPU limit (vCPUs)
+      min: 1
+      required: true
+      show_when:
+        karpenter_default_node_pool_enabled: true
+        karpenter_enabled: true
+      type: number
+    - collapsible: true
+      default: 720h
+      description: Maximum node lifetime before Karpenter replaces it, such as 720h for 30 days.
+      id: karpenter_default_node_pool_expire_after
+      label: Node lifetime
+      required: true
+      show_when:
+        karpenter_default_node_pool_enabled: true
+        karpenter_enabled: true
+      type: string
+    - id: section_ebs_csi
       label: EBS CSI driver
       type: section
     - default: false
+      description: Provide EBS-backed persistent volumes through the aws-ebs-csi-driver EKS add-on and its Pod Identity role.
       id: ebs_csi_driver_enabled
       label: EBS CSI driver
       type: boolean
@@ -173,15 +245,7 @@ module:
       show_when:
         ebs_csi_driver_enabled: true
       type: string
-    - description: >-
-        Container output, collected on every node and delivered to the destinations you
-        choose. On by default into a log store that runs inside your cluster and keeps
-        every line in an S3 bucket in your own AWS account - Ravion reads that through
-        the same agent connection Ravion EKS Management uses, so there is no endpoint to
-        secure and no log data leaves your account except in answer to a query. Add
-        CloudWatch Logs or a vendor beside it, or instead of it. Requires Kubernetes API
-        connectivity from the Terraform runner.
-      id: section_logs
+    - id: section_logs
       label: Logs
       type: section
     - default: true
@@ -189,9 +253,10 @@ module:
         Collect container logs. On by default into the in-cluster store, whose only cost
         is storage and requests on the S3 bucket plus the pods that run the collector -
         there is no per-gigabyte ingestion charge. Turn this off to run no collector and
-        create no store; the Logs tab then says logs are off for this cluster. Advanced
-        settings - install namespace, chart versions, resources, and local disk - are
-        available through Advanced Terraform variables.
+        create no store; the Logs tab then says logs are off for this cluster. Installation
+        requires Kubernetes API connectivity from the Terraform runner. Advanced settings -
+        install namespace, chart versions, resources, and local disk - are available through
+        Advanced Terraform variables.
       id: logs_enabled
       label: Logs
       type: boolean
@@ -410,7 +475,7 @@ module:
       show_when:
         logs_enabled: true
       type: string_array
-    - description: Grafana access to this cluster's metrics and logs. Ravion's own Metrics and Logs tabs need none of this - these toggles are for teams who already work in Grafana.
+    - description: Optional Grafana access for teams that already use it. Ravion's Metrics and Logs tabs do not require these integrations.
       id: section_grafana
       label: Grafana
       type: section
@@ -426,24 +491,18 @@ module:
       show_when:
         metrics_enabled: true
       type: boolean
-    - description: >-
-        Per-container CPU, memory, network, restart, and scaling metrics, collected by
-        one agent and delivered to the destinations you choose. On by default into an
-        Amazon Managed Prometheus workspace in your own account, which is what the
-        service Metrics tabs read. The collector keeps a curated metric set chosen to
-        keep the bill predictable. Requires Kubernetes API connectivity from the
-        Terraform runner.
-      id: section_metrics
+    - id: section_metrics
       label: Metrics
       type: section
     - default: true
       description: >-
-        Collect workload metrics. On by default into Amazon Managed Prometheus, billed
-        per metric sample ingested - roughly $25-50 a month for a 20-service cluster.
-        Turn this off to run no collector at all; the Metrics tabs then say metrics are
-        off for this cluster. Advanced settings - scrape interval, extra metric names to
-        keep, chart versions, collector resources, and the install namespace - are
-        available through Advanced Terraform variables.
+        Collect a curated set of workload metrics. On by default into Amazon Managed
+        Prometheus, billed per metric sample ingested - roughly $25-50 a month for a
+        20-service cluster. Turn this off to run no collector at all; the Metrics tabs then
+        say metrics are off for this cluster. Installation requires Kubernetes API
+        connectivity from the Terraform runner. Advanced settings - scrape interval,
+        extra metric names to keep, chart versions, collector resources, and the install
+        namespace - are available through Advanced Terraform variables.
       id: metrics_enabled
       label: Metrics
       type: boolean
@@ -666,7 +725,7 @@ module:
         metrics_enabled: true
         metrics_providers: otlp
       type: string
-    - description: Reference-only secrets for workloads. The External Secrets Operator reads the Secrets Manager secrets and SSM parameters that services reference by ARN and materializes them into Kubernetes secrets, so secret values never pass through Ravion, Helm values, or release history. Requires Kubernetes API connectivity from the Terraform runner.
+    - description: Materializes Secrets Manager secrets and SSM parameters referenced by ARN into Kubernetes secrets, so values never pass through Ravion or Helm. Installation requires Kubernetes API connectivity from the Terraform runner.
       id: section_external_secrets
       label: External secrets
       type: section
@@ -1003,6 +1062,12 @@ module:
         karpenter_chart_version: << module.input.karpenter_chart_version || "1.14.0" >>
         karpenter_helm_values: []
         karpenter_default_node_pool_enabled: '<< module.input.karpenter_default_node_pool_enabled != nil ? module.input.karpenter_default_node_pool_enabled : true >>'
+        karpenter_default_node_pool:
+          capacity_types: '<< module.input.karpenter_default_node_pool_capacity_types != nil ? module.input.karpenter_default_node_pool_capacity_types : ["on-demand", "spot"] >>'
+          instance_categories: '<< module.input.karpenter_default_node_pool_instance_categories != nil ? module.input.karpenter_default_node_pool_instance_categories : ["c", "m", "r"] >>'
+          architectures: '<< module.input.karpenter_default_node_pool_architectures != nil ? module.input.karpenter_default_node_pool_architectures : ["amd64"] >>'
+          cpu_limit: '<< module.input.karpenter_default_node_pool_cpu_limit != nil ? module.input.karpenter_default_node_pool_cpu_limit : 100 >>'
+          expire_after: '<< module.input.karpenter_default_node_pool_expire_after || "720h" >>'
         node_subnet_ids: << module.input.node_subnet_ids >>
         cluster_security_group_id: << module.input.cluster_security_group_id >>
         ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
@@ -1305,6 +1370,11 @@ module:
     | Karpenter              | No       | `true`               | Autoscaling end to end (IAM, queue, controller, NodePool) |
     | Chart version          | No       | `1.14.0`             | Karpenter and karpenter-crd Helm chart version         |
     | Default NodePool       | No       | `true`               | General-purpose NodePool and EC2NodeClass              |
+    | Capacity types         | Yes*     | On-demand and Spot   | Capacity Karpenter may provision                       |
+    | EC2 instance categories | Yes*   | `c`, `m`, `r`        | Instance-family categories Karpenter may choose        |
+    | CPU architectures      | Yes*     | x86_64               | Architectures Karpenter may provision                  |
+    | CPU limit              | Yes*     | `100`                | Maximum vCPUs provisioned through the default NodePool |
+    | Node lifetime          | Yes*     | `720h`               | Maximum age before Karpenter replaces a node           |
     | Load balancer controller chart version | No | `1.14.0`    | aws-load-balancer-controller Helm chart version (controller installed automatically with any load balancer) |
     | External Secrets Operator | No    | `true`               | Reference-only secrets, ClusterSecretStores, and a scoped Pod Identity role |
     | Readable secret ARNs   | No       | Account + region     | Scopes which Secrets Manager secrets and SSM parameters the operator may read |
@@ -1329,7 +1399,9 @@ module:
 
     ## Default NodePool
 
-    The default NodePool provisions Linux nodes from current-generation `c`, `m`, and `r` instance families, using On-demand and Spot capacity, up to a total limit of 100 vCPUs. Nodes expire after 30 days so they are regularly replaced with patched AMIs. Disable it and bring your own NodePool manifests for full control.
+    The default NodePool provisions Linux nodes from the selected instance categories and CPU architectures. Capacity types default to both On-demand and Spot, allowing Karpenter to use lower-cost Spot capacity while retaining On-demand as an availability fallback. Restrict the list when workloads require one capacity type. The pool defaults to 100 vCPUs and a 30-day node lifetime. Disable it and bring your own NodePool manifests for full control.
+
+    *Default NodePool fields are required only when Karpenter and the default NodePool are enabled.
 
     ## Learn more
 
