@@ -5,7 +5,7 @@ definition:
   description: Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the selected observability providers, group add-ons with cluster selection, clarify ECR image scanning and deletion settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
+  description: Follow the selected observability providers, group add-ons with cluster selection, use consistent scaling, release, and builder field names, clarify ECR image scanning and deletion settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -42,7 +42,7 @@ module:
       type: boolean
       description: Scale pods with a HorizontalPodAutoscaler. Requires the metrics server or an equivalent metrics API in the cluster.
       default: false
-    - id: min_replicas
+    - id: autoscaling_min_replicas
       label: Minimum pods
       type: number
       max: 1000
@@ -50,7 +50,7 @@ module:
       show_when:
         autoscaling_enabled: true
       default: 1
-    - id: max_replicas
+    - id: autoscaling_max_replicas
       label: Maximum pods
       type: number
       max: 1000
@@ -129,13 +129,13 @@ module:
               - ../../partials/deploy/eks-workload-helm-values-common.yml
               - terminationGracePeriodSeconds: '<< module.input.termination_grace_period_seconds != nil ? module.input.termination_grace_period_seconds : 30 >>'
                 replicaCount: >-
-                  << module.input.autoscaling_enabled ? (module.input.min_replicas != nil ?
-                  module.input.min_replicas : 1) : (module.input.replica_count != nil ?
+                  << module.input.autoscaling_enabled ? (module.input.autoscaling_min_replicas != nil ?
+                  module.input.autoscaling_min_replicas : 1) : (module.input.replica_count != nil ?
                   module.input.replica_count : 1) >>
                 autoscaling:
                   enabled: '<< module.input.autoscaling_enabled != nil ? module.input.autoscaling_enabled : false >>'
-                  minReplicas: '<< module.input.min_replicas != nil ? module.input.min_replicas : 1 >>'
-                  maxReplicas: '<< module.input.max_replicas != nil ? module.input.max_replicas : 3 >>'
+                  minReplicas: '<< module.input.autoscaling_min_replicas != nil ? module.input.autoscaling_min_replicas : 1 >>'
+                  maxReplicas: '<< module.input.autoscaling_max_replicas != nil ? module.input.autoscaling_max_replicas : 3 >>'
                   targetCPUUtilizationPercentage: '<< module.input.autoscaling_cpu_target != nil ? module.input.autoscaling_cpu_target : 70 >>'
                   targetMemoryUtilizationPercentage: << module.input.autoscaling_memory_target >>
   ui:
@@ -158,7 +158,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_available
@@ -178,7 +178,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_desired

@@ -34,7 +34,7 @@
   placeholder: ws-01234567-abcd-4abc-8abc-0123456789ab
   required: false
   default: <<ref.stack.output.amp_workspace_id>>
-- id: amp_region
+- id: amp_workspace_region
   label: AMP region
   type: string
   description: Region of the Amazon Managed Prometheus workspace. Inherited from the selected add-ons module; empty until its stack applies with Amazon Managed Prometheus selected.

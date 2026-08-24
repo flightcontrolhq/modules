@@ -13,5 +13,5 @@
 engine: helm
 release_name: << module.input.name >>
 namespace: << module.input.namespace >>
-create_namespace: '<< module.input.create_namespace != nil ? module.input.create_namespace : true >>'
+create_namespace: '<< module.input.namespace_creation_enabled != nil ? module.input.namespace_creation_enabled : true >>'
 secrets: '<< module.input.secrets != nil ? module.input.secrets : [] >>'

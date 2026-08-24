@@ -5,7 +5,7 @@ definition:
   description: Production-ready Amazon EKS cluster with default managed capacity, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
   version: 0.2.0
-  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, clarify endpoint, node group, security group, and controller settings, keep the Ravion Runner role in advanced settings, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
+  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, use consistent endpoint and control-plane logging field names, clarify node group, security group, and controller settings, keep the Ravion Runner role in advanced settings, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
 module:
   inputs:
     - id: network
@@ -261,7 +261,7 @@ module:
       type: boolean
     - add_button_label: Add CIDR block
       description: IPv4 CIDR blocks allowed to reach the public API server endpoint. Terraform defaults to 0.0.0.0/0.
-      id: public_access_cidrs
+      id: endpoint_public_access_cidrs
       label: Public access CIDRs
       placeholder: 0.0.0.0/0
       show_when:
@@ -293,7 +293,7 @@ module:
         - audit
         - authenticator
       description: Control plane log types shipped to CloudWatch Logs. Remove all entries to disable control plane logging.
-      id: enabled_cluster_log_types
+      id: control_plane_log_types
       label: Control plane log types
       type: string_array
       values:
@@ -310,7 +310,7 @@ module:
     - collapsible: true
       default: 30
       description: Retention in days for the control plane CloudWatch log group.
-      id: cluster_log_retention_in_days
+      id: control_plane_log_retention_days
       label: Log retention (days)
       min: 1
       type: number
@@ -334,7 +334,7 @@ module:
         secrets_kms_key_arn: << module.input.secrets_kms_key_arn >>
         endpoint_private_access_enabled: << module.input.endpoint_private_access_enabled >>
         endpoint_public_access_enabled: << module.input.endpoint_public_access_enabled >>
-        public_access_cidrs: << module.input.public_access_cidrs || ["0.0.0.0/0"] >>
+        public_access_cidrs: << module.input.endpoint_public_access_cidrs || ["0.0.0.0/0"] >>
         ravion_runner_security_group_creation_enabled: << module.input.ravion_runner_security_group_creation_enabled >>
         ravion_runner_role_creation_enabled: << module.input.ravion_runner_role_creation_enabled >>
         system_node_group:
@@ -346,8 +346,8 @@ module:
         node_groups: << module.input.node_groups || {} >>
         fargate_profiles: << module.input.fargate_profiles || {} >>
         access_entries: << module.input.access_entries || {} >>
-        enabled_cluster_log_types: << module.input.enabled_cluster_log_types >>
-        cluster_log_retention_in_days: << module.input.cluster_log_retention_in_days >>
+        enabled_cluster_log_types: << module.input.control_plane_log_types >>
+        cluster_log_retention_in_days: << module.input.control_plane_log_retention_days >>
         tags:
           $include: ../stack/ravion-tags.yml
   ui:

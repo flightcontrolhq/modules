@@ -5,7 +5,7 @@ definition:
   description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 1.0.0
-  description: Simplify health configuration and form layout, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
+  description: Simplify health configuration and form layout, use consistent routing, scaling, release, and builder field names, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -64,7 +64,7 @@ module:
     - $template: ../../partials/templates/eks-workload-release-inputs.yml
       with:
         name_description: Name for the Helm release, Kubernetes objects, target group, and listener rule.
-    - id: public_web_service_enabled
+    - id: public_alb_routing_enabled
       label: Public web service
       type: boolean
       description: Route this service through the shared public ALB. Turn off to use the shared private ALB.
@@ -121,7 +121,7 @@ module:
       max: 600
       min: 0
       default: 5
-    - id: healthy_threshold
+    - id: health_check_healthy_threshold
       label: Healthy threshold
       type: number
       description: Number of consecutive successful checks required before an unhealthy target is considered healthy.
@@ -129,7 +129,7 @@ module:
       max: 10
       min: 2
       default: 2
-    - id: unhealthy_threshold
+    - id: health_check_unhealthy_threshold
       label: Unhealthy threshold
       type: number
       description: Number of consecutive failed checks required before a target is considered unhealthy.
@@ -240,7 +240,7 @@ module:
       type: boolean
       description: Scale pods with a HorizontalPodAutoscaler. Requires the metrics server or an equivalent metrics API in the cluster.
       default: true
-    - id: min_replicas
+    - id: autoscaling_min_replicas
       label: Minimum pods
       type: number
       max: 1000
@@ -248,7 +248,7 @@ module:
       show_when:
         autoscaling_enabled: true
       default: 1
-    - id: max_replicas
+    - id: autoscaling_max_replicas
       label: Maximum pods
       type: number
       max: 1000
@@ -298,7 +298,7 @@ module:
           - ../../partials/stack/eks-workload-common-terraform-variables.yml
           - container_port: << module.input.container_port >>
             listener_arn: >-
-              << module.input.public_web_service_enabled ? (module.input.public_alb_https_listener_arn ||
+              << module.input.public_alb_routing_enabled ? (module.input.public_alb_https_listener_arn ||
               module.input.public_alb_http_listener_arn) : (module.input.private_alb_https_listener_arn ||
               module.input.private_alb_http_listener_arn) >>
             listener_rule_priority: << module.input.listener_rule_priority >>
@@ -317,8 +317,8 @@ module:
               matcher: << module.input.health_check_matcher >>
               interval: << module.input.health_check_interval >>
               timeout: << module.input.health_check_timeout >>
-              healthy_threshold: << module.input.healthy_threshold >>
-              unhealthy_threshold: << module.input.unhealthy_threshold >>
+              healthy_threshold: << module.input.health_check_healthy_threshold >>
+              unhealthy_threshold: << module.input.health_check_unhealthy_threshold >>
             target_group_stickiness:
               enabled: << module.input.target_group_stickiness_enabled >>
               # Fall back to lb_cookie when stickiness is disabled: the type input is hidden
@@ -369,13 +369,13 @@ module:
                   targetType: ip
                   vpcId: << module.input.vpc_id >>
                 replicaCount: >-
-                  << module.input.autoscaling_enabled ? (module.input.min_replicas != nil ?
-                  module.input.min_replicas : 1) : (module.input.replica_count != nil ?
+                  << module.input.autoscaling_enabled ? (module.input.autoscaling_min_replicas != nil ?
+                  module.input.autoscaling_min_replicas : 1) : (module.input.replica_count != nil ?
                   module.input.replica_count : 1) >>
                 autoscaling:
                   enabled: << module.input.autoscaling_enabled >>
-                  minReplicas: '<< module.input.min_replicas != nil ? module.input.min_replicas : 1 >>'
-                  maxReplicas: '<< module.input.max_replicas != nil ? module.input.max_replicas : 3 >>'
+                  minReplicas: '<< module.input.autoscaling_min_replicas != nil ? module.input.autoscaling_min_replicas : 1 >>'
+                  maxReplicas: '<< module.input.autoscaling_max_replicas != nil ? module.input.autoscaling_max_replicas : 3 >>'
                   targetCPUUtilizationPercentage: '<< module.input.autoscaling_cpu_target != nil ? module.input.autoscaling_cpu_target : 70 >>'
                   targetMemoryUtilizationPercentage: << module.input.autoscaling_memory_target >>
   ui:
@@ -397,7 +397,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_available
@@ -442,7 +442,7 @@ module:
         source:
           type: prometheus
           aws_account_id: << module.input.aws_account_id >>
-          region: << module.input.amp_region >>
+          region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
       - id: replicas_desired
