@@ -5,8 +5,9 @@ into a single hosting unit with enforced provisioning order:
 
 1. **Cluster** (`modules/eks_cluster`) — control plane, OIDC, secrets KMS,
    vpc-cni / kube-proxy / Pod Identity Agent, LB Controller role
-2. **System node group** (`modules/eks_node_group`) — required compute so
-   Deployment-kind add-ons can schedule
+2. **Default capacity node group** (`system_node_group`, using
+   `modules/eks_node_group`) — required compute for cluster components, add-ons,
+   and workloads without stricter placement
 3. **Post-compute add-ons** (`modules/eks_addons`) — CoreDNS
    (deadlock without step 2)
 4. **Optional Fargate** (`modules/eks_fargate_profile`) — after add-ons are
@@ -90,8 +91,8 @@ module "eks" {
 | ravion_runner_role_trusted_principal_arns | ArnLike patterns restricting who can assume the Ravion Runner role (empty = same-account principals with sts:AssumeRole). | `list(string)` | `[]` | no |
 | pod_identity_associations | Extra Pod Identity associations. | `map(object)` | `{}` | no |
 | deletion_protection_enabled | Protect the cluster from API deletion. | `bool` | `true` | no |
-| system_node_group | System managed node group config (object with optional attrs). | `object` | `{}` (defaults: name=`system`, 2/2/4 ON_DEMAND t3.medium) | no |
-| additional_node_groups | Extra node groups keyed by name. | `map(object)` | `{}` | no |
+| system_node_group | Default managed node group config. The minimum size is also its initial size. | `object` | `{}` (defaults: name=`system`, 2-10 ON_DEMAND t3.medium) | no |
+| additional_node_groups | Extra node groups keyed by name. Each group's minimum size is also its initial size. | `map(object)` | `{}` | no |
 | coredns_addon_version / coredns_addon_configuration_values | CoreDNS pin / JSON overrides. | `string` | `null` | no |
 | fargate_profiles | Fargate profiles keyed by name (`selectors` required). | `map(object)` | `{}` | no |
 

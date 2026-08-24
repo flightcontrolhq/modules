@@ -6,7 +6,7 @@ definition:
   description: Scheduled job on EKS for running a container on a cron schedule, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the observability providers chosen on the EKS add-ons module, keep run outcome charts on Prometheus, and keep default build policies in advanced builder settings.
+  description: Follow the selected observability providers, group add-ons with cluster selection, keep run outcome charts on Prometheus, and let jobs target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster
@@ -19,13 +19,10 @@ module:
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-cluster-mapped-inputs.yml
       required: true
-    - id: section_addons
-      label: EKS add-ons
-      type: section
-      description: Add-ons module attached to the cluster above. Selecting it points the Metrics and Logs tabs at whichever observability providers that module has selected.
     - id: addons
       label: EKS add-ons
       type: $ref:rvn-eks-addons
+      description: Select the EKS Add-ons module attached to the cluster above to use its observability providers in the Metrics and Logs tabs.
       mapped_inputs:
         - $include: ../../partials/inputs/eks-workload-observability-mapped-inputs.yml
       required: false
@@ -353,6 +350,7 @@ module:
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the run |
+    | Capacity type | Any capacity | Schedule on any node, or require On-demand or Spot capacity |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a run burst into spare node CPU |
     | Memory request | 256Mi | Memory reserved for the run |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
@@ -427,6 +425,7 @@ module:
     | Successful runs kept | No | 3 | Successful Job objects retained |
     | Failed runs kept | No | 1 | Failed Job objects retained |
     | CPU request | Yes | 100m | CPU reserved per run, in cores or millicores |
+    | Capacity type | Yes | Any capacity | Required node capacity type |
     | CPU limit | No | - | Optional CPU ceiling |
     | Memory request | Yes | 256Mi | Memory reserved per run |
     | Memory limit | Yes | 512Mi | Memory ceiling per run |
