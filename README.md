@@ -65,7 +65,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-aws-iam-role` | AWS IAM Role | v1.0.1 | `security/iam/` |
 | `rvn-aws-kms` | AWS KMS Key | v0.1.0 | `security/kms/` |
 | `rvn-aws-network` | VPC Network | v1.1.0 | `networking/vpc/` |
-| `rvn-aws-static` | Static Hosting | v1.1.1 | `hosting/static_site/` |
+| `rvn-aws-static` | Static Hosting | v1.1.2 | `hosting/static_site/` |
 | `rvn-cloudfront` | CloudFront CDN | v1.3.0 | `cdn/cloudfront/` |
 | `rvn-ec2-service` | EC2 Service | v1.4.2 | `compute/ec2_service/` |
 | `rvn-ecs-cluster` | ECS Cluster | v1.0.2 | `compute/ecs_cluster/` |
@@ -78,7 +78,7 @@ sync by `node tools/ravion-modules/dist/src/cli.js readme` (enforced in CI, and 
 | `rvn-eks-web` | EKS Web Service | v1.0.0 | `compute/eks_service/` |
 | `rvn-eks-worker` | EKS Worker | v0.4.0 | `compute/eks_service/` |
 | `rvn-elasticache` | ElastiCache | v1.0.1 | `cache/elasticache/` |
-| `rvn-lambda` | Lambda Function | v1.1.0 | `compute/lambda/` |
+| `rvn-lambda` | Lambda Function | v1.1.1 | `compute/lambda/` |
 | `rvn-rds` | RDS Database | v1.2.0 | `database/rds/` |
 | `rvn-rds-proxy` | RDS Proxy | v0.1.0 | `database/rds-proxy/` |
 | `rvn-route53` | Route 53 DNS | v1.0.3 | `networking/route53/` |
