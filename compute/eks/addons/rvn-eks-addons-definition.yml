@@ -29,7 +29,9 @@ release:
     Form guidance now uses concise, field-specific instructions and documents accepted version,
     duration, storage, endpoint, and credential formats. Shared load balancer settings now appear
     directly below Ravion EKS Management. User-facing module text and form field IDs now use the
-    Ravion Operator name.
+    Ravion Operator name. New configurations enable Ravion Operator, operator-run deployments,
+    and the public Application Load Balancer by default. Default NodePool creation and log retention
+    now stay collapsed until customized.
 module:
   inputs:
     - id: cluster
@@ -104,14 +106,14 @@ module:
       id: section_ravion_operator
       label: Ravion EKS Management
       type: section
-    - default: false
-      description: Register the cluster with Ravion and install Ravion Operator. The operator is read-only unless Ravion Operator deployments are enabled.
+    - default: true
+      description: Register the cluster with Ravion and install Ravion Operator for cluster visibility and in-cluster deployments.
       id: ravion_operator_enabled
       label: Ravion EKS Management
       moved_from:
         - beacon_enabled
       type: boolean
-    - default: false
+    - default: true
       description: Run Ravion deployments through Ravion Operator inside the cluster. Ravion Operator may create, update, and delete workload resources only in the selected namespaces; it cannot modify RBAC, namespaces, or cluster-scoped resources.
       id: ravion_operator_deploy_enabled
       label: Ravion Operator deployments
@@ -128,6 +130,7 @@ module:
       moved_from:
         - beacon_deploy_namespaces
       placeholder: default
+      required: true
       show_when:
         ravion_operator_deploy_enabled: true
       type: string_array
@@ -135,7 +138,7 @@ module:
       id: section_alb
       label: Application load balancers
       type: section
-    - default: false
+    - default: true
       description: Create an internet-facing Application Load Balancer for traffic from the public internet.
       id: public_alb_creation_enabled
       label: Public ALB
@@ -448,7 +451,8 @@ module:
       show_when:
         karpenter_enabled: true
       type: string
-    - default: true
+    - collapsible: true
+      default: true
       description: Create a general-purpose default NodePool and EC2NodeClass so Karpenter can provision nodes out of the box. Disable to manage NodePools yourself.
       id: karpenter_default_node_pool_creation_enabled
       label: Default NodePool
@@ -585,7 +589,8 @@ module:
         - group_label: External destination
           label: Custom OTLP endpoint
           value: otlp
-    - default: 30
+    - collapsible: true
+      default: 30
       description: Number of days logs remain searchable before deletion. Enter 1-3650.
       id: log_retention_days
       label: Retention (days)
@@ -1259,8 +1264,8 @@ module:
     | **EBS CSI driver** | Off | EBS-backed persistent volumes via the aws-ebs-csi-driver EKS add-on and its Pod Identity role |
     | **Logs** | On (in-cluster store) | Container output collected on every node and delivered to the destinations you choose - an in-cluster store on S3 by default, plus CloudWatch Logs or a vendor on request |
     | **Metrics** | On (Amazon Managed Prometheus) | Per-container CPU, memory, network, restart and scaling metrics, delivered to the destinations you choose - Amazon Managed Prometheus by default, plus CloudWatch Container Insights or a vendor on request |
-    | **Ravion EKS Management** | Off | Registers the cluster with the Ravion control plane and installs Ravion Operator, which reports workload and node state outbound over a single WebSocket and can optionally run Ravion's deploys from inside the cluster |
-    | **Shared load balancers** | Off | Terraform-managed public/private ALBs and NLBs that web workloads attach to via the load balancer controller's TargetGroupBinding — the same shared-LB pattern the ECS Cluster module uses |
+    | **Ravion EKS Management** | On | Registers the cluster with the Ravion control plane and installs Ravion Operator, which reports workload and node state outbound over a single WebSocket and can run Ravion's deploys from inside the cluster |
+    | **Shared load balancers** | Public ALB on | Terraform-managed public/private ALBs and NLBs that web workloads attach to via the load balancer controller's TargetGroupBinding — the same shared-LB pattern the ECS Cluster module uses |
 
     EBS CSI and the CloudWatch Observability add-on are native EKS add-ons installed purely through the AWS API. Karpenter, the load balancer controller, the External Secrets Operator, Ravion EKS Management, and both observability pipelines additionally install Helm charts into the cluster, which are the only parts that need Kubernetes API connectivity.
 
@@ -1297,9 +1302,9 @@ module:
 
     Enabling the toggle does three things in one deployment: Ravion issues the agent's credential — server-side, authorized by the pipeline's own credentials, so there is no API key to paste — writes it into the agent's Kubernetes secret and mirrors it into a Secrets Manager secret **in your own AWS account**, and installs the agent's Helm chart. The plaintext is issued exactly once; rotating or revoking it is a redeploy, not an API call.
 
-    By default the agent is read-only. One grant widens it, declined by default:
+    Ravion Operator deployments are enabled by default. This widens the otherwise read-only agent with one bounded grant:
 
-    - **Ravion Operator deployments** — lets Ravion's Helm upgrades run from inside the cluster instead of reaching in from outside. Within the named **deployment namespaces** the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. There is no cluster-wide deploy posture: with no namespace named, the install fails rather than granting one. Leaving this off still gives a fully working agent — deploys continue to run from outside the cluster.
+    - **Ravion Operator deployments** — lets Ravion's Helm upgrades run from inside the cluster instead of reaching in from outside. Within the required **deployment namespaces** the agent can create, update, and delete workload objects; it can never create RBAC objects, namespaces, or anything cluster-scoped. There is no cluster-wide deploy posture. Disabling this still leaves a fully working agent; deploys continue to run from outside the cluster.
 
     The project, environment, and AWS account this module belongs to are recorded on the agent automatically when its credential is issued; there is nothing to fill in.
 
@@ -1376,9 +1381,10 @@ module:
     | Existing log bucket    | No       | Creates one          | Store logs in an existing bucket instead of `ravion-loki-<cluster>-<account>` |
     | In-cluster Grafana     | No       | `false`              | Grafana in the cluster, wired to both metrics and logs |
     | Grafana read access    | No       | `false`              | Read-only IAM role for Amazon Managed Grafana over the AMP workspace |
-    | Ravion EKS Management  | No       | `false`              | Registers the cluster and installs Ravion Operator     |
-    | Ravion Operator deployments | No     | `false`              | Lets Ravion Operator run Ravion's deploys from inside the cluster, scoped to named namespaces |
-    | Public ALB             | No       | `false`              | Shared internet-facing ALB (HTTPS with ACM certificate) |
+    | Ravion EKS Management  | No       | `true`               | Registers the cluster and installs Ravion Operator     |
+    | Ravion Operator deployments | No  | `true`               | Lets Ravion Operator run Ravion's deploys from inside the cluster, scoped to named namespaces |
+    | Deployment namespaces  | Yes*     | -                    | Namespaces where Ravion Operator may manage workloads  |
+    | Public ALB             | No       | `true`               | Shared internet-facing ALB (HTTPS with ACM certificate) |
     | Private ALB            | No       | `false`              | Shared internal ALB                                    |
     | Public / private NLB   | No       | `false`              | Shared Network Load Balancers for TCP/UDP workloads    |
     | Load balancer deletion protection | No | `true`         | Prevent accidental deletion of the shared load balancers |
