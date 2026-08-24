@@ -574,7 +574,7 @@ cd test && go test -v -timeout 30m -run TestEksService ./...
   fixtures set `nat_gateway_enabled = false`, keeping a run to a VPC (and two
   ALBs) for a few minutes.
 - **Force delete on ECR**: every ECR-enabled fixture sets
-  `ecr_force_deletion_enabled = true` so `terraform destroy` succeeds even if
+  `ecr_force_delete_enabled = true` so `terraform destroy` succeeds even if
   an image was pushed during a run.
 - **Null vs empty**: disabled outputs must be `null`, not `""`.
   `terraform.Output` renders a null as `"<nil>"`, so the tests compare the raw

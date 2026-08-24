@@ -13,9 +13,9 @@ resource "aws_eks_cluster" "this" {
 
   vpc_config {
     subnet_ids              = var.subnet_ids
-    endpoint_public_access  = var.public_endpoint_access_enabled
-    endpoint_private_access = var.private_endpoint_access_enabled
-    public_access_cidrs     = var.public_endpoint_access_enabled ? var.public_access_cidrs : null
+    endpoint_public_access  = var.endpoint_public_access_enabled
+    endpoint_private_access = var.endpoint_private_access_enabled
+    public_access_cidrs     = var.endpoint_public_access_enabled ? var.public_access_cidrs : null
   }
 
   kubernetes_network_config {
@@ -25,7 +25,7 @@ resource "aws_eks_cluster" "this" {
 
   access_config {
     authentication_mode                         = "API"
-    bootstrap_cluster_creator_admin_permissions = var.cluster_creator_admin_permissions_enabled
+    bootstrap_cluster_creator_admin_permissions = var.bootstrap_cluster_creator_admin_permissions_enabled
   }
 
   dynamic "encryption_config" {

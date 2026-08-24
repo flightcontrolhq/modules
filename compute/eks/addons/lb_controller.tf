@@ -12,13 +12,13 @@ locals {
   # The controller is installed only when something needs it: any shared load
   # balancer (workload modules register pods into their target groups via
   # TargetGroupBinding, which only the controller reconciles), or an explicit
-  # lb_controller_enabled opt-in for Ingress/LoadBalancer-resource use.
+  # aws_load_balancer_controller_enabled opt-in for Ingress/LoadBalancer-resource use.
   lb_controller_install = (
-    var.lb_controller_enabled ||
-    var.public_alb_enabled ||
-    var.private_alb_enabled ||
-    var.public_nlb_enabled ||
-    var.private_nlb_enabled
+    var.aws_load_balancer_controller_enabled ||
+    var.public_alb_creation_enabled ||
+    var.private_alb_creation_enabled ||
+    var.public_nlb_creation_enabled ||
+    var.private_nlb_creation_enabled
   )
 }
 
@@ -26,10 +26,10 @@ resource "helm_release" "lb_controller" {
   count = local.lb_controller_install ? 1 : 0
 
   name       = "aws-load-balancer-controller"
-  namespace  = var.lb_controller_namespace
+  namespace  = var.aws_load_balancer_controller_namespace
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
-  version    = var.lb_controller_chart_version
+  version    = var.aws_load_balancer_controller_chart_version
 
   # Adopt a same-named release already in the cluster (e.g. left behind by a
   # deleted module instance) instead of failing on install.
@@ -45,10 +45,10 @@ resource "helm_release" "lb_controller" {
         # stack, or the controller falls back to the node role and fails.
         serviceAccount = {
           create = true
-          name   = var.lb_controller_service_account
+          name   = var.aws_load_balancer_controller_service_account
         }
       }),
     ],
-    var.lb_controller_helm_values,
+    var.aws_load_balancer_controller_helm_values,
   )
 }

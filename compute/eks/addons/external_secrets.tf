@@ -64,7 +64,7 @@ resource "helm_release" "external_secrets" {
 ################################################################################
 
 resource "helm_release" "external_secrets_stores" {
-  count = var.eso_enabled && var.eso_cluster_secret_stores_enabled ? 1 : 0
+  count = var.eso_enabled && var.eso_cluster_secret_stores_creation_enabled ? 1 : 0
 
   name      = "external-secrets-stores"
   namespace = var.eso_namespace

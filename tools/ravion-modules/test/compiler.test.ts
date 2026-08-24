@@ -229,12 +229,12 @@ describe("compiler", () => {
     const web = await compileDefinitionFile(join(repoRoot, "compute", "eks_service", "rvn-eks-web-definition.yml"));
     const clusterInputs = getModuleInputs(cluster.module);
 
-    const additionalNodeGroups = findInput(clusterInputs, "additional_node_groups");
+    const additionalNodeGroups = findInput(clusterInputs, "node_groups");
     assert.equal(additionalNodeGroups.type, "object_map");
     const additionalNodeGroupInputs = additionalNodeGroups.item_inputs;
     assert.ok(Array.isArray(additionalNodeGroupInputs));
     const additionalNodeGroupFields = additionalNodeGroupInputs.map((input) =>
-      assertRecord(input, "additional_node_groups.item_inputs[]"),
+      assertRecord(input, "node_groups.item_inputs[]"),
     );
     assert.equal(
       additionalNodeGroupFields.some((input) => input.id === "desired_size"),
@@ -256,9 +256,9 @@ describe("compiler", () => {
     assert.match(String(findInput(clusterInputs, "section_capacity").description), /0\.5 vCPU and 1 GiB/);
     assert.ok(clusterInputs.findIndex((input) => input.id === "section_capacity") < clusterInputs.findIndex((input) => input.id === "system_node_capacity_type"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "system_node_capacity_type") < clusterInputs.findIndex((input) => input.id === "system_node_instance_types"));
-    assert.ok(clusterInputs.findIndex((input) => input.id === "system_node_disk_size") < clusterInputs.findIndex((input) => input.id === "additional_node_groups"));
+    assert.ok(clusterInputs.findIndex((input) => input.id === "system_node_disk_size") < clusterInputs.findIndex((input) => input.id === "node_groups"));
     assert.equal(clusterInputs.some((input) => input.id === "section_endpoint"), false);
-    assert.ok(clusterInputs.findIndex((input) => input.id === "section_access") < clusterInputs.findIndex((input) => input.id === "private_endpoint_access_enabled"));
+    assert.ok(clusterInputs.findIndex((input) => input.id === "section_access") < clusterInputs.findIndex((input) => input.id === "endpoint_private_access_enabled"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "section_fargate") < clusterInputs.findIndex((input) => input.id === "section_access"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "access_entries") < clusterInputs.findIndex((input) => input.id === "section_observability"));
 
@@ -295,6 +295,68 @@ describe("compiler", () => {
     );
   });
 
+  it("compiles concise EKS add-on guidance and input constraints", async () => {
+    const compiled = await compileDefinitionFile(
+      join(repoRoot, "compute", "eks", "addons", "rvn-eks-addons-definition.yml"),
+    );
+    const inputs = getModuleInputs(compiled.module);
+
+    const nodeLifetime = findInput(inputs, "karpenter_default_node_pool_expire_after");
+    assert.match(String(nodeLifetime.description), /1h30m.*720h.*Never/);
+    assert.deepEqual(nodeLifetime.patterns, [
+      {
+        message: "Use integer segments with s, m, or h, such as 1h30m or 720h, or Never.",
+        pattern: "^(([0-9]+(s|m|h))+|Never)$",
+      },
+    ]);
+
+    assert.equal(findInput(inputs, "log_retention_days").min, 1);
+    assert.equal(findInput(inputs, "log_retention_days").max, 3650);
+    assert.equal(findInput(inputs, "prometheus_retention_days").min, 1);
+    assert.match(
+      String(findInput(inputs, "cloudwatch_application_signals_namespaces").description),
+      /does not add injection annotations/,
+    );
+    assert.deepEqual(findInput(inputs, "ravion_operator_enabled").moved_from, ["beacon_enabled"]);
+    assert.equal(findInput(inputs, "ravion_operator_deploy_enabled").label, "Ravion Operator deployments");
+    assert.deepEqual(findInput(inputs, "ravion_operator_deploy_enabled").moved_from, ["beacon_deploy_enabled"]);
+    assert.deepEqual(findInput(inputs, "ravion_operator_deploy_namespaces").moved_from, [
+      "beacon_deploy_namespaces",
+    ]);
+    assert.equal(inputs.some((input) => input.id === "beacon_enabled"), false);
+    assert.equal(inputs.some((input) => input.id === "beacon_deploy_enabled"), false);
+    assert.equal(inputs.some((input) => input.id === "beacon_deploy_namespaces"), false);
+    assert.equal(
+      getTerraformVariable(compiled.module, "beacon_deploy_enabled"),
+      "<< module.input.ravion_operator_deploy_enabled >>",
+    );
+    for (const sectionId of ["section_ravion_operator", "section_karpenter", "section_external_secrets"]) {
+      assert.doesNotMatch(String(findInput(inputs, sectionId).description), /Terraform runner/);
+    }
+    assert.doesNotMatch(compiled.description, /Beacon/);
+    assert.doesNotMatch(compiled.releaseDescription, /Beacon/);
+    assert.doesNotMatch(String(compiled.module.readme), /Beacon/);
+
+    for (const input of inputs) {
+      if (typeof input.description === "string") {
+        assert.doesNotMatch(input.description, /on by default/i, `${String(input.id)} repeats its visible default`);
+      }
+    }
+  });
+
+  it("places EKS add-on load balancers below Ravion EKS Management", async () => {
+    const compiled = await compileDefinitionFile(
+      join(repoRoot, "compute", "eks", "addons", "rvn-eks-addons-definition.yml"),
+    );
+    const inputs = getModuleInputs(compiled.module);
+    const indexOf = (id: string) => inputs.findIndex((input) => input.id === id);
+
+    assert.equal(indexOf("section_alb"), indexOf("ravion_operator_deploy_namespaces") + 1);
+    assert.ok(indexOf("section_alb") < indexOf("section_nlb"));
+    assert.ok(indexOf("section_nlb") < indexOf("aws_load_balancer_controller_chart_version"));
+    assert.ok(indexOf("aws_load_balancer_controller_chart_version") < indexOf("section_karpenter"));
+  });
+
   it("keeps EKS section descriptions only for cross-field guidance", async () => {
     const definitions = [
       {
@@ -304,12 +366,12 @@ describe("compiler", () => {
       {
         path: ["compute", "eks", "addons", "rvn-eks-addons-definition.yml"],
         sectionIds: [
-          "section_beacon",
+          "section_ravion_operator",
+          "section_alb",
+          "section_nlb",
           "section_karpenter",
           "section_grafana",
           "section_external_secrets",
-          "section_alb",
-          "section_nlb",
         ],
       },
       {

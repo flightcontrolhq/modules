@@ -5,7 +5,7 @@ definition:
   description: Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the selected observability providers, group add-ons with cluster selection, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
+  description: Follow the selected observability providers, group add-ons with cluster selection, clarify ECR image scanning and deletion settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster

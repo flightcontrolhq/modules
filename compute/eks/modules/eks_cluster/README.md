@@ -47,14 +47,14 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | kubernetes_version | Kubernetes version (`MAJOR.MINOR`). | `string` | `null` | no |
 | vpc_id | VPC ID to launch the control plane ENIs into. | `string` | n/a | yes |
 | subnet_ids | Subnets for control plane ENIs (>=2, multi-AZ). | `list(string)` | n/a | yes |
-| public_endpoint_access_enabled | Expose the API server publicly. | `bool` | `false` | no |
-| private_endpoint_access_enabled | Expose the API server inside the VPC. | `bool` | `true` | no |
+| endpoint_public_access_enabled | Expose the API server publicly. | `bool` | `false` | no |
+| endpoint_private_access_enabled | Expose the API server inside the VPC. | `bool` | `true` | no |
 | public_access_cidrs | CIDRs allowed to hit the public endpoint. | `list(string)` | `["0.0.0.0/0"]` | no |
 | service_ipv4_cidr | Override the service CIDR (IPv4 only). | `string` | `null` | no |
 | ip_family | `ipv4` or `ipv6`. | `string` | `"ipv4"` | no |
-| additional_cluster_security_group_ingress | Extra cluster-SG ingress rules sourced by IPv4 CIDR. | `list(object)` | `[]` | no |
-| additional_cluster_security_group_ingress_sg | Extra cluster-SG ingress rules sourced by another SG. | `list(object)` | `[]` | no |
-| cluster_creator_admin_permissions_enabled | Auto-grant cluster-admin to the creating principal. | `bool` | `true` | no |
+| cluster_security_group_additional_cidr_ingress_rules | Extra cluster-SG ingress rules sourced by IPv4 CIDR. | `list(object)` | `[]` | no |
+| cluster_security_group_additional_referenced_security_group_ingress_rules | Extra cluster-SG ingress rules sourced by another security group. | `list(object)` | `[]` | no |
+| bootstrap_cluster_creator_admin_permissions_enabled | Auto-grant cluster-admin to the creating principal during cluster bootstrap. | `bool` | `true` | no |
 | access_entries | EKS access entries to create (replaces aws-auth ConfigMap). | `map(object)` | `{}` | no |
 | enabled_cluster_log_types | Control plane log types to ship to CloudWatch. | `list(string)` | `["api","audit","authenticator"]` | no |
 | cluster_log_retention_in_days | Retention for the control plane log group. | `number` | `30` | no |
@@ -64,9 +64,9 @@ Prefer the [`compute/eks`](../..) composite. This module is nested under
 | vpc_cni_addon_configuration_values / kube_proxy_addon_configuration_values | JSON config overrides. | `string` | `null` | no |
 | pod_identity_agent_enabled | Install eks-pod-identity-agent. | `bool` | `true` | no |
 | pod_identity_agent_addon_version | Pin pod identity agent add-on version. | `string` | `null` | no |
-| lb_controller_pod_identity_enabled | Create LB Controller Pod Identity role/association. | `bool` | `true` | no |
-| lb_controller_namespace | Namespace of the LB Controller SA. | `string` | `"kube-system"` | no |
-| lb_controller_service_account | Name of the LB Controller SA. | `string` | `"aws-load-balancer-controller"` | no |
+| aws_load_balancer_controller_pod_identity_creation_enabled | Create the AWS Load Balancer Controller Pod Identity role and association. | `bool` | `true` | no |
+| aws_load_balancer_controller_namespace | Namespace of the AWS Load Balancer Controller service account. | `string` | `"kube-system"` | no |
+| aws_load_balancer_controller_service_account | Name of the AWS Load Balancer Controller service account. | `string` | `"aws-load-balancer-controller"` | no |
 | pod_identity_associations | Extra `{ namespace, service_account, role_arn }` associations. | `map(object)` | `{}` | no |
 | tags | Tags applied to all created resources. | `map(string)` | `{}` | no |
 | deletion_protection_enabled | If true, the resource cannot be deleted via the AWS API until this is set to false. | `bool` | `true` | no |

@@ -7,7 +7,7 @@
 ################################################################################
 
 resource "aws_vpc_security_group_ingress_rule" "additional_cidr" {
-  for_each = { for idx, rule in var.additional_cluster_security_group_ingress : idx => rule }
+  for_each = { for idx, rule in var.cluster_security_group_additional_cidr_ingress_rules : idx => rule }
 
   security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
   description       = each.value.description
@@ -20,7 +20,7 @@ resource "aws_vpc_security_group_ingress_rule" "additional_cidr" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "additional_sg" {
-  for_each = { for idx, rule in var.additional_cluster_security_group_ingress_sg : idx => rule }
+  for_each = { for idx, rule in var.cluster_security_group_additional_referenced_security_group_ingress_rules : idx => rule }
 
   security_group_id            = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
   description                  = each.value.description

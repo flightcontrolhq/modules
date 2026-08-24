@@ -66,12 +66,12 @@ output "eso_role_arn" {
 
 output "eso_secrets_manager_store_name" {
   description = "Name of the cluster-scoped AWS Secrets Manager store (kind ClusterSecretStore, apiVersion external-secrets.io/v1) that workload charts reference for Secrets Manager secrets (null if disabled)."
-  value       = var.eso_enabled && var.eso_cluster_secret_stores_enabled ? var.eso_secrets_manager_store_name : null
+  value       = var.eso_enabled && var.eso_cluster_secret_stores_creation_enabled ? var.eso_secrets_manager_store_name : null
 }
 
 output "eso_parameter_store_store_name" {
   description = "Name of the cluster-scoped AWS SSM Parameter Store store (kind ClusterSecretStore, apiVersion external-secrets.io/v1) that workload charts reference for SSM parameters (null if disabled)."
-  value       = var.eso_enabled && var.eso_cluster_secret_stores_enabled ? var.eso_parameter_store_store_name : null
+  value       = var.eso_enabled && var.eso_cluster_secret_stores_creation_enabled ? var.eso_parameter_store_store_name : null
 }
 
 ################################################################################
@@ -90,7 +90,7 @@ output "karpenter_chart_version" {
 
 output "karpenter_default_node_pool_release" {
   description = "Helm release name of the default NodePool chart (null if disabled)."
-  value       = var.karpenter_enabled && var.karpenter_default_node_pool_enabled ? helm_release.karpenter_default_node_pool[0].name : null
+  value       = var.karpenter_enabled && var.karpenter_default_node_pool_creation_enabled ? helm_release.karpenter_default_node_pool[0].name : null
 }
 
 output "karpenter_controller_role_arn" {
@@ -119,122 +119,122 @@ output "karpenter_interruption_queue_name" {
 
 output "public_alb_arn" {
   description = "ARN of the shared public ALB (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].alb_arn : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].alb_arn : null
 }
 
 output "public_alb_dns_name" {
   description = "DNS name of the shared public ALB (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].alb_dns_name : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].alb_dns_name : null
 }
 
 output "public_alb_zone_id" {
   description = "Route 53 zone ID of the shared public ALB (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].alb_zone_id : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].alb_zone_id : null
 }
 
 output "public_alb_arn_suffix" {
   description = "ARN suffix of the shared public ALB, for CloudWatch metrics (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].alb_arn_suffix : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].alb_arn_suffix : null
 }
 
 output "public_alb_security_group_id" {
   description = "Security group ID of the shared public ALB (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].security_group_id : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].security_group_id : null
 }
 
 output "public_alb_http_listener_arn" {
   description = "ARN of the shared public ALB HTTP listener (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].http_listener_arn : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].http_listener_arn : null
 }
 
 output "public_alb_https_listener_arn" {
   description = "ARN of the shared public ALB HTTPS listener (null if disabled)."
-  value       = var.public_alb_enabled ? module.public_alb[0].https_listener_arn : null
+  value       = var.public_alb_creation_enabled ? module.public_alb[0].https_listener_arn : null
 }
 
 output "private_alb_arn" {
   description = "ARN of the shared private ALB (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].alb_arn : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].alb_arn : null
 }
 
 output "private_alb_dns_name" {
   description = "DNS name of the shared private ALB (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].alb_dns_name : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].alb_dns_name : null
 }
 
 output "private_alb_zone_id" {
   description = "Route 53 zone ID of the shared private ALB (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].alb_zone_id : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].alb_zone_id : null
 }
 
 output "private_alb_arn_suffix" {
   description = "ARN suffix of the shared private ALB, for CloudWatch metrics (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].alb_arn_suffix : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].alb_arn_suffix : null
 }
 
 output "private_alb_security_group_id" {
   description = "Security group ID of the shared private ALB (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].security_group_id : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].security_group_id : null
 }
 
 output "private_alb_http_listener_arn" {
   description = "ARN of the shared private ALB HTTP listener (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].http_listener_arn : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].http_listener_arn : null
 }
 
 output "private_alb_https_listener_arn" {
   description = "ARN of the shared private ALB HTTPS listener (null if disabled)."
-  value       = var.private_alb_enabled ? module.private_alb[0].https_listener_arn : null
+  value       = var.private_alb_creation_enabled ? module.private_alb[0].https_listener_arn : null
 }
 
 output "public_nlb_arn" {
   description = "ARN of the shared public NLB (null if disabled)."
-  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn : null
+  value       = var.public_nlb_creation_enabled ? module.public_nlb[0].nlb_arn : null
 }
 
 output "public_nlb_dns_name" {
   description = "DNS name of the shared public NLB (null if disabled)."
-  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_dns_name : null
+  value       = var.public_nlb_creation_enabled ? module.public_nlb[0].nlb_dns_name : null
 }
 
 output "public_nlb_zone_id" {
   description = "Route 53 zone ID of the shared public NLB (null if disabled)."
-  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_zone_id : null
+  value       = var.public_nlb_creation_enabled ? module.public_nlb[0].nlb_zone_id : null
 }
 
 output "public_nlb_arn_suffix" {
   description = "ARN suffix of the shared public NLB, for CloudWatch metrics (null if disabled)."
-  value       = var.public_nlb_enabled ? module.public_nlb[0].nlb_arn_suffix : null
+  value       = var.public_nlb_creation_enabled ? module.public_nlb[0].nlb_arn_suffix : null
 }
 
 output "public_nlb_security_group_id" {
   description = "Security group ID of the shared public NLB (null if disabled)."
-  value       = var.public_nlb_enabled ? module.public_nlb[0].security_group_id : null
+  value       = var.public_nlb_creation_enabled ? module.public_nlb[0].security_group_id : null
 }
 
 output "private_nlb_arn" {
   description = "ARN of the shared private NLB (null if disabled)."
-  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn : null
+  value       = var.private_nlb_creation_enabled ? module.private_nlb[0].nlb_arn : null
 }
 
 output "private_nlb_dns_name" {
   description = "DNS name of the shared private NLB (null if disabled)."
-  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_dns_name : null
+  value       = var.private_nlb_creation_enabled ? module.private_nlb[0].nlb_dns_name : null
 }
 
 output "private_nlb_zone_id" {
   description = "Route 53 zone ID of the shared private NLB (null if disabled)."
-  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_zone_id : null
+  value       = var.private_nlb_creation_enabled ? module.private_nlb[0].nlb_zone_id : null
 }
 
 output "private_nlb_arn_suffix" {
   description = "ARN suffix of the shared private NLB, for CloudWatch metrics (null if disabled)."
-  value       = var.private_nlb_enabled ? module.private_nlb[0].nlb_arn_suffix : null
+  value       = var.private_nlb_creation_enabled ? module.private_nlb[0].nlb_arn_suffix : null
 }
 
 output "private_nlb_security_group_id" {
   description = "Security group ID of the shared private NLB (null if disabled)."
-  value       = var.private_nlb_enabled ? module.private_nlb[0].security_group_id : null
+  value       = var.private_nlb_creation_enabled ? module.private_nlb[0].security_group_id : null
 }
 
 ################################################################################
@@ -328,7 +328,7 @@ output "kube_state_metrics_chart_version" {
 
 output "grafana_role_arn" {
   description = "ARN of the role Amazon Managed Grafana assumes to query the AMP workspace and read the Container Insights log groups (null if disabled)."
-  value       = var.grafana_role_enabled ? module.grafana_role[0].role_arn : null
+  value       = var.grafana_role_creation_enabled ? module.grafana_role[0].role_arn : null
 }
 
 ################################################################################
@@ -346,7 +346,7 @@ output "loki_namespace" {
 }
 
 output "loki_s3_bucket" {
-  description = "S3 bucket holding the log chunks and index (null if logs are disabled). Created by this module unless loki_s3_bucket brought an existing one."
+  description = "S3 bucket holding the log chunks and index (null if logs are disabled). Created by this module unless loki_s3_bucket_name brought an existing one."
   value       = local.loki_bucket_name
 }
 

@@ -93,13 +93,13 @@ variable "kubernetes_version" {
   }
 }
 
-variable "public_endpoint_access_enabled" {
+variable "endpoint_public_access_enabled" {
   type        = bool
   description = "Whether the EKS API server endpoint is reachable from the public internet."
   default     = false
 }
 
-variable "private_endpoint_access_enabled" {
+variable "endpoint_private_access_enabled" {
   type        = bool
   description = "Whether the EKS API server endpoint is reachable from inside the VPC."
   default     = true
@@ -107,7 +107,7 @@ variable "private_endpoint_access_enabled" {
 
 variable "public_access_cidrs" {
   type        = list(string)
-  description = "CIDR blocks allowed to reach the public EKS API server endpoint. Only applies when public_endpoint_access_enabled is true."
+  description = "CIDR blocks allowed to reach the public EKS API server endpoint. Only applies when endpoint_public_access_enabled is true."
   default     = ["0.0.0.0/0"]
 
   validation {
@@ -138,7 +138,7 @@ variable "ip_family" {
   }
 }
 
-variable "additional_cluster_security_group_ingress" {
+variable "cluster_security_group_additional_cidr_ingress_rules" {
   type = list(object({
     description = optional(string)
     from_port   = number
@@ -173,7 +173,7 @@ variable "ravion_runner_security_group_creation_enabled" {
   default     = true
 }
 
-variable "additional_cluster_security_group_ingress_sg" {
+variable "cluster_security_group_additional_referenced_security_group_ingress_rules" {
   type = list(object({
     description                  = optional(string)
     from_port                    = number
@@ -185,7 +185,7 @@ variable "additional_cluster_security_group_ingress_sg" {
   default     = []
 }
 
-variable "cluster_creator_admin_permissions_enabled" {
+variable "bootstrap_cluster_creator_admin_permissions_enabled" {
   type        = bool
   description = "Whether to grant the IAM principal that creates the cluster the EKS cluster admin permissions automatically."
   default     = true
@@ -269,19 +269,19 @@ variable "pod_identity_agent_addon_version" {
   default     = null
 }
 
-variable "lb_controller_pod_identity_enabled" {
+variable "aws_load_balancer_controller_pod_identity_creation_enabled" {
   type        = bool
   description = "Create an IAM role and Pod Identity association for the AWS Load Balancer Controller."
   default     = true
 }
 
-variable "lb_controller_namespace" {
+variable "aws_load_balancer_controller_namespace" {
   type        = string
   description = "Kubernetes namespace where the AWS Load Balancer Controller's service account lives."
   default     = "kube-system"
 }
 
-variable "lb_controller_service_account" {
+variable "aws_load_balancer_controller_service_account" {
   type        = string
   description = "Kubernetes service account name used by the AWS Load Balancer Controller."
   default     = "aws-load-balancer-controller"
@@ -336,8 +336,8 @@ variable "system_node_group" {
     metadata_http_tokens                     = optional(string, "required")
     metadata_http_put_response_hop_limit     = optional(number, 2)
     node_role_arn                            = optional(string)
-    additional_node_role_managed_policy_arns = optional(list(string), [])
-    additional_node_role_inline_policy_statements = optional(list(object({
+    node_role_additional_managed_policy_arns = optional(list(string), [])
+    node_role_additional_inline_policy_statements = optional(list(object({
       sid       = optional(string)
       effect    = optional(string, "Allow")
       actions   = list(string)
@@ -353,7 +353,7 @@ variable "system_node_group" {
   default     = {}
 }
 
-variable "additional_node_groups" {
+variable "node_groups" {
   type = map(object({
     subnet_ids                   = optional(list(string))
     capacity_type                = optional(string, "ON_DEMAND")
@@ -382,8 +382,8 @@ variable "additional_node_groups" {
     metadata_http_tokens                     = optional(string, "required")
     metadata_http_put_response_hop_limit     = optional(number, 2)
     node_role_arn                            = optional(string)
-    additional_node_role_managed_policy_arns = optional(list(string), [])
-    additional_node_role_inline_policy_statements = optional(list(object({
+    node_role_additional_managed_policy_arns = optional(list(string), [])
+    node_role_additional_inline_policy_statements = optional(list(object({
       sid       = optional(string)
       effect    = optional(string, "Allow")
       actions   = list(string)

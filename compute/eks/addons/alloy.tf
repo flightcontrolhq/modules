@@ -63,7 +63,7 @@ locals {
 
   # Alloy matches on a whole label, so the exclusion list is one anchored
   # alternation rather than a rule per namespace.
-  alloy_namespace_exclude_regex = join("|", var.logs_namespace_exclude)
+  alloy_namespace_exclude_regex = join("|", var.logs_excluded_namespaces)
 
   alloy_config = local.alloy_enabled ? templatefile("${path.module}/templates/alloy_config.alloy.tpl", {
     destinations            = local.alloy_destinations

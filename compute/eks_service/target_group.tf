@@ -28,22 +28,22 @@ resource "aws_lb_target_group" "this" {
   slow_start           = var.target_group_slow_start
 
   health_check {
-    enabled             = var.health_check.enabled
-    path                = var.health_check.path
-    port                = var.health_check.port
+    enabled             = var.target_group_health_check.enabled
+    path                = var.target_group_health_check.path
+    port                = var.target_group_health_check.port
     protocol            = local.health_check_protocol
-    matcher             = var.health_check.matcher
-    interval            = var.health_check.interval
-    timeout             = var.health_check.timeout
-    healthy_threshold   = var.health_check.healthy_threshold
-    unhealthy_threshold = var.health_check.unhealthy_threshold
+    matcher             = var.target_group_health_check.matcher
+    interval            = var.target_group_health_check.interval
+    timeout             = var.target_group_health_check.timeout
+    healthy_threshold   = var.target_group_health_check.healthy_threshold
+    unhealthy_threshold = var.target_group_health_check.unhealthy_threshold
   }
 
   stickiness {
-    enabled         = var.stickiness.enabled
-    type            = var.stickiness.type
-    cookie_duration = var.stickiness.cookie_duration
-    cookie_name     = var.stickiness.type == "app_cookie" ? var.stickiness.cookie_name : null
+    enabled         = var.target_group_stickiness.enabled
+    type            = var.target_group_stickiness.type
+    cookie_duration = var.target_group_stickiness.cookie_duration
+    cookie_name     = var.target_group_stickiness.type == "app_cookie" ? var.target_group_stickiness.cookie_name : null
   }
 
   tags = merge(local.tags, {

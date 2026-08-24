@@ -6,7 +6,7 @@ definition:
   description: Scheduled job on EKS for running a container on a cron schedule, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the selected observability providers, group add-ons with cluster selection, keep run outcome charts on Prometheus, and let jobs target On-demand, Spot, or any available node capacity.
+  description: Follow the selected observability providers, group add-ons with cluster selection, clarify ECR image scanning and deletion settings, keep run outcome charts on Prometheus, and let jobs target On-demand, Spot, or any available node capacity.
 module:
   inputs:
     - id: section_cluster

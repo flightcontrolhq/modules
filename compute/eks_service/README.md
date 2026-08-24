@@ -39,7 +39,7 @@ module "web" {
     }
   ]
 
-  health_check = {
+  target_group_health_check = {
     path    = "/healthz"
     matcher = "200-399"
   }
@@ -87,21 +87,21 @@ module "worker" {
 | ecr_repository_creation_enabled | Create an ECR repository for this workload's container image | `bool` | `false` | no |
 | ecr_repository_name | Name of the ECR repository; falls back to `name` | `string` | `null` | no |
 | ecr_image_tag_mutability | Tag mutability, `MUTABLE` or `IMMUTABLE` | `string` | `"MUTABLE"` | no |
-| ecr_scan_on_push_enabled | Scan images for vulnerabilities on push | `bool` | `true` | no |
-| ecr_force_deletion_enabled | Allow deleting the repository while it still holds images | `bool` | `false` | no |
+| ecr_image_scan_on_push_enabled | Scan images for vulnerabilities on push | `bool` | `true` | no |
+| ecr_force_delete_enabled | Allow deleting the repository while it still holds images | `bool` | `false` | no |
 | ecr_default_lifecycle_policy_enabled | Apply the `containers/ecr` built-in lifecycle policy | `bool` | `false` | no |
 | container_port | Port the application container listens on | `number` | `8080` | no |
 | target_group_protocol | Protocol the load balancer uses to reach pods (`HTTP` or `HTTPS`) | `string` | `"HTTP"` | no |
 | target_group_deregistration_delay | Seconds before a target is deregistered, letting in-flight requests drain | `number` | `300` | no |
 | target_group_slow_start | Seconds over which traffic ramps to a newly registered target; `0` disables | `number` | `0` | no |
-| health_check | Load balancer health check settings for the target group | `object` | see below | no |
-| stickiness | Target group cookie stickiness settings | `object` | see below | no |
+| target_group_health_check | Load balancer health check settings for the target group | `object` | see below | no |
+| target_group_stickiness | Target group cookie stickiness settings | `object` | see below | no |
 | listener_rule_priority | Listener rule priority; when null AWS assigns the next available one | `number` | `null` | no |
 | listener_rule_conditions | Conditions that route requests to this service | `list(object)` | catch-all `/*` | no |
 
 Every variable from `container_port` down is load-balancer-only and ignored when `listener_arn` is `null`. All of them have defaults, so a worker or cron caller can omit the whole block.
 
-### `health_check`
+### `target_group_health_check`
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -117,7 +117,7 @@ Every variable from `container_port` down is load-balancer-only and ignored when
 
 This health check is independent of the chart's Kubernetes readiness probe. The probe decides whether kubelet considers the pod ready; this one decides whether the load balancer sends it traffic.
 
-### `stickiness`
+### `target_group_stickiness`
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|

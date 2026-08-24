@@ -37,7 +37,7 @@ module "eks" {
   subnet_ids = module.vpc.private_subnet_ids
 
   kubernetes_version             = "1.31"
-  public_endpoint_access_enabled = true
+  endpoint_public_access_enabled = true
 
   tags = { Environment = "prod" }
 }
@@ -67,14 +67,14 @@ module "eks" {
 | region | AWS region for the root provider. | `string` | `null` | no |
 | tags | Tags applied to all created resources. | `map(string)` | `{}` | no |
 | kubernetes_version | Cluster Kubernetes version (`MAJOR.MINOR`). | `string` | `null` | no |
-| public_endpoint_access_enabled | Expose the API server publicly. | `bool` | `false` | no |
-| private_endpoint_access_enabled | Expose the API server inside the VPC. | `bool` | `true` | no |
+| endpoint_public_access_enabled | Expose the API server publicly. | `bool` | `false` | no |
+| endpoint_private_access_enabled | Expose the API server inside the VPC. | `bool` | `true` | no |
 | public_access_cidrs | CIDRs allowed to hit the public endpoint. | `list(string)` | `["0.0.0.0/0"]` | no |
 | service_ipv4_cidr | Override the service CIDR. | `string` | `null` | no |
 | ip_family | `ipv4` or `ipv6`. | `string` | `"ipv4"` | no |
-| additional_cluster_security_group_ingress | Extra cluster-SG ingress (CIDR). | `list(object)` | `[]` | no |
-| additional_cluster_security_group_ingress_sg | Extra cluster-SG ingress (SG). | `list(object)` | `[]` | no |
-| cluster_creator_admin_permissions_enabled | Auto-grant cluster-admin to the creating principal. | `bool` | `true` | no |
+| cluster_security_group_additional_cidr_ingress_rules | Extra cluster-SG ingress sourced by IPv4 CIDR. | `list(object)` | `[]` | no |
+| cluster_security_group_additional_referenced_security_group_ingress_rules | Extra cluster-SG ingress sourced by another security group. | `list(object)` | `[]` | no |
+| bootstrap_cluster_creator_admin_permissions_enabled | Auto-grant cluster-admin to the creating principal during cluster bootstrap. | `bool` | `true` | no |
 | access_entries | EKS access entries. | `map(object)` | `{}` | no |
 | enabled_cluster_log_types | Control plane log types. | `list(string)` | `["api","audit","authenticator"]` | no |
 | cluster_log_retention_in_days | Control plane log retention. | `number` | `30` | no |
@@ -84,15 +84,15 @@ module "eks" {
 | vpc_cni_addon_configuration_values / kube_proxy_addon_configuration_values | JSON config overrides. | `string` | `null` | no |
 | pod_identity_agent_enabled | Install eks-pod-identity-agent. | `bool` | `true` | no |
 | pod_identity_agent_addon_version | Pin pod identity agent version. | `string` | `null` | no |
-| lb_controller_pod_identity_enabled | Create LB Controller Pod Identity role. | `bool` | `true` | no |
-| lb_controller_namespace / lb_controller_service_account | LB Controller SA location. | `string` | `"kube-system"` / `"aws-load-balancer-controller"` | no |
+| aws_load_balancer_controller_pod_identity_creation_enabled | Create the AWS Load Balancer Controller Pod Identity role and association. | `bool` | `true` | no |
+| aws_load_balancer_controller_namespace / aws_load_balancer_controller_service_account | AWS Load Balancer Controller service account location. | `string` | `"kube-system"` / `"aws-load-balancer-controller"` | no |
 | ravion_runner_security_group_creation_enabled | Create a Ravion Runner SG allowed to reach the API endpoint (443). | `bool` | `true` | no |
 | ravion_runner_role_creation_enabled | Create an assumable IAM role registered as an EKS access entry with cluster-admin, for runner Kubernetes API access. | `bool` | `true` | no |
 | ravion_runner_role_trusted_principal_arns | ArnLike patterns restricting who can assume the Ravion Runner role (empty = same-account principals with sts:AssumeRole). | `list(string)` | `[]` | no |
 | pod_identity_associations | Extra Pod Identity associations. | `map(object)` | `{}` | no |
 | deletion_protection_enabled | Protect the cluster from API deletion. | `bool` | `true` | no |
 | system_node_group | Default managed node group config. The minimum size is also its initial size. | `object` | `{}` (defaults: name=`system`, 2-10 ON_DEMAND t3.medium) | no |
-| additional_node_groups | Extra node groups keyed by name. Each group's minimum size is also its initial size. | `map(object)` | `{}` | no |
+| node_groups | Extra node groups keyed by name. Each group's minimum size is also its initial size. | `map(object)` | `{}` | no |
 | coredns_addon_version / coredns_addon_configuration_values | CoreDNS pin / JSON overrides. | `string` | `null` | no |
 | fargate_profiles | Fargate profiles keyed by name (`selectors` required). | `map(object)` | `{}` | no |
 

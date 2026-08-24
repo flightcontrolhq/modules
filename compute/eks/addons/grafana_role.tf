@@ -29,7 +29,7 @@ locals {
 }
 
 data "aws_iam_policy_document" "grafana_read" {
-  count = var.grafana_role_enabled ? 1 : 0
+  count = var.grafana_role_creation_enabled ? 1 : 0
 
   # Only rendered when there is a workspace to point at, so the role is still
   # useful for logs on a cluster with metrics off.
@@ -77,7 +77,7 @@ data "aws_iam_policy_document" "grafana_read" {
 }
 
 module "grafana_role" {
-  count = var.grafana_role_enabled ? 1 : 0
+  count = var.grafana_role_creation_enabled ? 1 : 0
 
   source = "../../../security/iam"
 
