@@ -22,6 +22,7 @@ This repository contains reusable infrastructure modules designed for enterprise
 | `compute/`    | `ecs_cluster`     | AWS ECS clusters with Fargate/EC2 capacity providers and optional ALBs/NLBs | v1.0.0  |
 | `compute/`    | `ecs_service`     | AWS ECS services with task definitions, task IAM policies, load balancing, and auto scaling | v1.0.0  |
 | `compute/`    | `lambda`          | AWS Lambda functions                                                   | v1.0.0  |
+| `compute/`    | `sandbox_pool`    | Ravion Sandboxes host pool: EC2 nested-virt fleet launch template, host IAM, ingress NLB/ACM/Route53, snapshot bucket, VPC endpoints. Ravion-managed (internal definition, seeded by the control plane) | v0.1.0  |
 | `database/`   | `aurora`          | AWS Aurora clusters (MySQL, PostgreSQL, Serverless v2, Global Database) (includes `rvn-aurora` module definition) | v1.1.0  |
 | `database/`   | `dynamodb`        | AWS DynamoDB tables                                                    | v1.0.0  |
 | `database/`   | `rds`             | AWS RDS instances                                                      | v1.1.0  |
