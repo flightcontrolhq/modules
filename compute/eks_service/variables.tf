@@ -235,3 +235,69 @@ variable "ecr_default_lifecycle_policy_enabled" {
   description = "Apply the submodule's built-in lifecycle policy (expire untagged images and cap retained tagged images)."
   default     = false
 }
+
+################################################################################
+# Workload release teardown
+################################################################################
+
+variable "workload_release_cleanup_enabled" {
+  type        = bool
+  description = "Uninstall the workload's Helm release when this stack is destroyed. Requires cluster_name, ravion_runner_role_arn, release_name and release_namespace."
+  default     = false
+}
+
+variable "cluster_name" {
+  type        = string
+  description = "Name of the EKS cluster the workload's Helm release is installed on. Required when workload_release_cleanup_enabled is true."
+  default     = null
+}
+
+variable "ravion_runner_role_arn" {
+  type        = string
+  description = "ARN of the cluster's `<cluster>-ravion-runner` IAM role, assumed via `aws eks get-token` to reach the Kubernetes API when removing the release. Required when workload_release_cleanup_enabled is true."
+  default     = null
+
+  validation {
+    condition     = var.ravion_runner_role_arn == null || can(regex("^arn:aws[a-zA-Z-]*:iam::[0-9]{12}:role/", var.ravion_runner_role_arn))
+    error_message = "ravion_runner_role_arn must be an IAM role ARN."
+  }
+}
+
+variable "release_name" {
+  type        = string
+  description = "Name of the Helm release Ravion installs for this workload. Required when workload_release_cleanup_enabled is true."
+  default     = null
+
+  validation {
+    condition     = var.release_name == null || can(regex("^[a-z0-9]([a-z0-9-]{0,51}[a-z0-9])?$", var.release_name))
+    error_message = "release_name must be 1-53 lowercase letters, numbers, and hyphens, starting and ending with a letter or number."
+  }
+}
+
+variable "release_namespace" {
+  type        = string
+  description = "Kubernetes namespace the Helm release is installed into. Required when workload_release_cleanup_enabled is true. The namespace itself is never removed; it may be shared."
+  default     = null
+
+  validation {
+    condition     = var.release_namespace == null || can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.release_namespace))
+    error_message = "release_namespace must be 1-63 lowercase letters, numbers, and hyphens, starting and ending with a letter or number."
+  }
+}
+
+variable "workload_release_helm_version" {
+  type        = string
+  description = "Helm version downloaded for the uninstall when no `helm` binary is on the PATH of the machine running `terraform destroy`."
+  default     = "v4.2.4"
+
+  validation {
+    condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+$", var.workload_release_helm_version))
+    error_message = "workload_release_helm_version must look like vX.Y.Z."
+  }
+}
+
+variable "workload_release_uninstall_timeout" {
+  type        = string
+  description = "How long `helm uninstall --wait` waits for the workload's objects to be gone before the destroy fails."
+  default     = "10m"
+}

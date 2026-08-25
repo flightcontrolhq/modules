@@ -17,5 +17,14 @@ ecr_repository_name: << module.input.name >>
 ecr_image_scan_on_push_enabled: << module.input.ecr_image_scan_on_push_enabled >>
 ecr_force_delete_enabled: << module.input.ecr_force_delete_enabled >>
 ecr_default_lifecycle_policy_enabled: true
+# Destroying the stack uninstalls the workload's Helm release before the target
+# group, listener rule and repository go. The identity is the same one the
+# deploy block installs under (deploy.definition.release_name / namespace), so
+# the release Terraform removes is the release Ravion installed.
+workload_release_cleanup_enabled: true
+cluster_name: << module.input.cluster_name >>
+ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
+release_name: << module.input.name >>
+release_namespace: << module.input.namespace >>
 tags:
   $include: ./ravion-tags.yml
