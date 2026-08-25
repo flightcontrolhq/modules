@@ -21,10 +21,10 @@ resource "aws_launch_template" "host" {
     arn = aws_iam_instance_profile.host.arn
   }
 
-  vpc_security_group_ids = [
-    aws_security_group.host.id,
-    var.execution_environment.security_group_id,
-  ]
+  # The pool's own host SG only. There is no base security group to layer on:
+  # the pool is a tenant of the network module, which owns no per-workload SG,
+  # so everything a host may send or receive is stated in security_groups.tf.
+  vpc_security_group_ids = [aws_security_group.host.id]
 
   # The setting that makes this a KVM host: without it /dev/kvm does not exist
   # and the CPU shows no vmx flag, whatever the instance size. Opt-in per
@@ -119,7 +119,7 @@ resource "aws_launch_template" "host" {
 
   lifecycle {
     precondition {
-      condition     = !local.vpc_ip_mode || length(var.execution_environment.subnet_ids) > 0
+      condition     = !local.vpc_ip_mode || length(var.private_subnet_ids) > 0
       error_message = "vpc-ip network mode requires at least one subnet with room for prefix delegation."
     }
   }

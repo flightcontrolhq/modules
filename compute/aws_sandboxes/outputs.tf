@@ -18,11 +18,11 @@ output "launch_template_latest_version" {
 
 output "subnet_ids" {
   description = "Subnets hosts are launched into."
-  value       = var.execution_environment.subnet_ids
+  value       = var.private_subnet_ids
 }
 
 output "host_sg_id" {
-  description = "Pool host security group, layered on top of the execution environment's."
+  description = "Pool host security group. Self-contained: it is the only SG a host carries."
   value       = aws_security_group.host.id
 }
 

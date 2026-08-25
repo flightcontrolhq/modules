@@ -7,7 +7,7 @@ Provisions the static half of a Ravion sandbox pool in a customer's AWS account:
 ## Features
 
 - Host IAM role, instance profile and a least-privilege policy: its own M2M credential from SSM, read/write on the snapshots bucket, log delivery, public-ECR auth, and — in `vpc-ip` mode — ENI address management scoped to the pool's own ENIs
-- Host and NLB security groups, layered on top of the execution environment's SG
+- Self-contained host and NLB security groups — a host carries the pool's own group and nothing else
 - Network Load Balancer with a TLS listener on 443, an instance target group for the host ingress proxy, and an IP target group for raw TCP exposure of sandbox IPs
 - ACM wildcard certificate for `*.sbx.<env>.<domain>`, validated automatically when the Route 53 zone is yours and reported as records to add when it is not
 - Route 53 wildcard alias record, plus a private hosted zone (`sbx.<env>.internal`) for per-sandbox records in `vpc-ip` mode
@@ -26,11 +26,11 @@ module "aws_sandboxes" {
   pool_id  = "clz9x8y7w6v5u4t3"
   env_slug = "prod"
 
-  execution_environment = {
-    vpc_id            = module.vpc.vpc_id
-    subnet_ids        = module.vpc.private_subnet_ids
-    security_group_id = aws_security_group.execution_environment.id
-  }
+  # From the environment's `rvn-aws-network` module instance: hosts launch into
+  # the private subnets, the internet-facing NLB into the public ones.
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+  public_subnet_ids  = module.vpc.public_subnet_ids
 
   host_ami_id         = "ami-0123456789abcdef0"
   host_instance_types = ["m8i.2xlarge", "m8i.4xlarge"]
@@ -57,11 +57,8 @@ module "aws_sandboxes" {
   pool_id  = "clz9x8y7w6v5u4t3"
   env_slug = "staging"
 
-  execution_environment = {
-    vpc_id            = var.vpc_id
-    subnet_ids        = var.subnet_ids
-    security_group_id = var.security_group_id
-  }
+  vpc_id             = var.vpc_id
+  private_subnet_ids = var.private_subnet_ids
 
   host_ami_id = var.host_ami_id
 
@@ -125,7 +122,10 @@ See `variables.tf`. The ones that shape everything else:
 | ------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------- |
 | `pool_id`                 | SandboxPool id; names every resource and keys the `ravion:pool` tag                                     | —                         |
 | `env_slug`                | Environment slug; appears in the ingress domain, bucket name and private zone                           | —                         |
-| `execution_environment`   | `{vpc_id, subnet_ids, security_group_id}` from the pool's ExecutionEnvironment                          | —                         |
+| `vpc_id`                  | VPC from the pool's `rvn-aws-network` module instance                                                   | —                         |
+| `private_subnet_ids`      | Private subnets from the same network; hosts launch here                                                | —                         |
+| `public_subnet_ids`       | Public subnets from the same network; used by an internet-facing NLB                                    | `[]`                      |
+| `nlb_subnet_ids`          | Overrides where the ingress NLB lives                                                                   | public or private subnets |
 | `host_ami_id`             | Ravion sandbox host AMI, shared to this account for this region                                         | —                         |
 | `host_instance_types`     | Preference-ordered; the launch template pins the first, the reconciler uses the rest as fleet overrides | `["m8i.2xlarge"]`         |
 | `network_mode`            | `vpc-ip` or `nat`                                                                                       | `vpc-ip`                  |
@@ -167,6 +167,6 @@ The tests run entirely in plan mode against a mocked AWS provider — no credent
 
 ## Notes
 
-- **VPC endpoints.** None are created here: the execution environment's network stack owns the S3 gateway and SSM/ECR interface endpoints the hosts use.
+- **VPC endpoints.** None are created here: the `rvn-aws-network` module the pool is bound to owns the S3 gateway and SSM/ECR interface endpoints the hosts use.
 - **Host egress** defaults to TCP 443 plus DNS, matching the plan. Sandboxes that need other outbound ports need `host_allow_all_egress = true`; per-sandbox egress policy is enforced on the host by nftables either way, so this security group is the outer envelope, not the policy.
 - **TCP exposure** pre-authorises `tcp_exposure_port_range` on both security groups. The NLB still drops traffic on any port without a listener, and listeners are added per exposed port by Tower.

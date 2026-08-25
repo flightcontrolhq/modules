@@ -35,47 +35,60 @@ variable "tags" {
 }
 
 ################################################################################
-# Network — from the pool's ExecutionEnvironment
+# Network — from the pool's `rvn-aws-network` module instance
+#
+# The pool is bound to a Ravion network module instance, not to a Terraform
+# execution environment: the VPC and subnets below are that network's own
+# outputs. Nothing here is created by this module, and nothing here is mutated
+# by it — a pool is a tenant of the network, the same way every other workload
+# module is.
 ################################################################################
 
-variable "execution_environment" {
-  type = object({
-    vpc_id            = string
-    subnet_ids        = list(string)
-    security_group_id = string
-  })
+variable "vpc_id" {
+  type        = string
+  description = "VPC the pool lives in. Hosts, the ingress NLB and the private hosted zone all attach to it."
+
+  validation {
+    condition     = can(regex("^vpc-", var.vpc_id))
+    error_message = "The vpc_id must be a valid VPC ID starting with 'vpc-'."
+  }
+}
+
+variable "private_subnet_ids" {
+  type        = list(string)
   description = <<-EOT
-    The org-level ExecutionEnvironment the pool runs in — the same object runners
-    use. The module layers its own SG on top of `security_group_id` rather than
-    replacing it, and launches hosts into `subnet_ids`. In `vpc-ip` network mode
-    these subnets must be large enough for prefix delegation (a /22 per pool is
-    comfortable: each host takes /28 IPv4 prefixes off its ENI).
+    Private subnets hosts launch into. Hosts have no public address: they reach
+    the internet through the network's NAT and are reached only through the
+    ingress NLB. In `vpc-ip` network mode these subnets must be large enough for
+    prefix delegation (a /22 per pool is comfortable: each host takes /28 IPv4
+    prefixes off its ENI).
   EOT
 
   validation {
-    condition     = can(regex("^vpc-", var.execution_environment.vpc_id))
-    error_message = "The execution_environment.vpc_id must be a valid VPC ID starting with 'vpc-'."
+    condition     = length(var.private_subnet_ids) > 0
+    error_message = "At least one subnet ID is required in private_subnet_ids."
   }
 
   validation {
-    condition     = length(var.execution_environment.subnet_ids) > 0
-    error_message = "At least one subnet ID is required in execution_environment.subnet_ids."
+    condition     = alltrue([for s in var.private_subnet_ids : can(regex("^subnet-", s))])
+    error_message = "All private_subnet_ids must be valid subnet IDs starting with 'subnet-'."
   }
+}
+
+variable "public_subnet_ids" {
+  type        = list(string)
+  description = "Public subnets of the same network. Used for an internet-facing ingress NLB; leave empty for an internal pool."
+  default     = []
 
   validation {
-    condition     = alltrue([for s in var.execution_environment.subnet_ids : can(regex("^subnet-", s))])
-    error_message = "All execution_environment.subnet_ids must be valid subnet IDs starting with 'subnet-'."
-  }
-
-  validation {
-    condition     = can(regex("^sg-", var.execution_environment.security_group_id))
-    error_message = "The execution_environment.security_group_id must be a valid security group ID starting with 'sg-'."
+    condition     = alltrue([for s in var.public_subnet_ids : can(regex("^subnet-", s))])
+    error_message = "All public_subnet_ids must be valid subnet IDs starting with 'subnet-'."
   }
 }
 
 variable "nlb_subnet_ids" {
   type        = list(string)
-  description = "Subnets for the NLB. Defaults to the execution environment's subnets; set this to public subnets when `ingress.internet_facing` is true and the execution environment is private."
+  description = "Subnets for the ingress NLB. Defaults to `public_subnet_ids` when the pool is internet-facing and `private_subnet_ids` when it is not."
   default     = null
 
   validation {

@@ -28,7 +28,7 @@ resource "aws_lb_target_group" "proxy" {
   port        = var.proxy_port
   protocol    = "TCP"
   target_type = "instance"
-  vpc_id      = var.execution_environment.vpc_id
+  vpc_id      = var.vpc_id
 
   deregistration_delay = 30
 
@@ -57,7 +57,7 @@ resource "aws_lb_target_group" "tcp" {
   port        = 443
   protocol    = "TCP"
   target_type = "ip"
-  vpc_id      = var.execution_environment.vpc_id
+  vpc_id      = var.vpc_id
 
   deregistration_delay = 10
 

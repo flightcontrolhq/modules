@@ -48,7 +48,7 @@ resource "aws_route53_zone" "private" {
   force_destroy = true
 
   vpc {
-    vpc_id = var.execution_environment.vpc_id
+    vpc_id = var.vpc_id
   }
 
   tags = merge(local.tags, { Name = local.private_zone })

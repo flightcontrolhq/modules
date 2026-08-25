@@ -34,7 +34,7 @@ locals {
   create_dns       = var.ingress.hosted_zone_id != null
   internet_facing  = coalesce(var.ingress.internet_facing, true)
   ingress_cidrs    = coalesce(var.ingress.allowed_cidrs, ["0.0.0.0/0"])
-  nlb_subnet_ids   = var.nlb_subnet_ids != null ? var.nlb_subnet_ids : var.execution_environment.subnet_ids
+  nlb_subnet_ids   = length(coalesce(var.nlb_subnet_ids, [])) > 0 ? var.nlb_subnet_ids : (local.internet_facing ? var.public_subnet_ids : var.private_subnet_ids)
   ip_address_type  = var.ipv6_enabled ? "dualstack" : "ipv4"
   private_zone     = coalesce(var.private_zone_name, "sbx.${var.env_slug}.internal")
   ssm_param_prefix = "/ravion/sandboxes/${var.pool_id}/hosts"

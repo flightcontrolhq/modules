@@ -10,7 +10,10 @@ resource "aws_acm_certificate" "wildcard" {
   subject_alternative_names = [local.ingress_domain]
   validation_method         = "DNS"
 
-  tags = merge(local.tags, { Name = local.wildcard_domain })
+  # Named for the apex, not the wildcard: an AWS tag value may not contain `*`,
+  # so `Name = local.wildcard_domain` is rejected at create time. The certificate
+  # still covers `*.sbx.<env>.<domain>` — that is `domain_name` above.
+  tags = merge(local.tags, { Name = local.ingress_domain })
 
   lifecycle {
     create_before_destroy = true

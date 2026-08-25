@@ -137,11 +137,9 @@ variables {
   pool_id  = "pool1"
   env_slug = "prod"
 
-  execution_environment = {
-    vpc_id            = "vpc-12345678"
-    subnet_ids        = ["subnet-12345678", "subnet-87654321"]
-    security_group_id = "sg-0exec00000000000"
-  }
+  vpc_id             = "vpc-12345678"
+  private_subnet_ids = ["subnet-12345678", "subnet-87654321"]
+  public_subnet_ids  = ["subnet-0public0000000a", "subnet-0public0000000b"]
 
   host_ami_id = "ami-0123456789abcdef0"
 
@@ -188,6 +186,23 @@ run "defaults" {
   assert {
     condition     = aws_lb.this.internal == false
     error_message = "ingress.internet_facing defaults to true, so the NLB must not be internal."
+  }
+
+  # The pool is a tenant of the network module: hosts sit in its private subnets
+  # and only the load balancer reaches into the public ones.
+  assert {
+    condition     = tolist(aws_lb.this.subnets) == tolist(var.public_subnet_ids)
+    error_message = "An internet-facing NLB with no nlb_subnet_ids must default to the network's public subnets."
+  }
+
+  assert {
+    condition     = tolist(output.subnet_ids) == tolist(var.private_subnet_ids)
+    error_message = "Hosts must be launched into the network's private subnets."
+  }
+
+  assert {
+    condition     = aws_launch_template.host.vpc_security_group_ids == toset([aws_security_group.host.id])
+    error_message = "A host carries the pool's own security group and nothing else — there is no base SG to layer on."
   }
 
   assert {
@@ -421,6 +436,11 @@ run "internal_external_zone" {
   assert {
     condition     = aws_lb.this.internal == true
     error_message = "internet_facing = false must produce an internal NLB."
+  }
+
+  assert {
+    condition     = tolist(aws_lb.this.subnets) == tolist(var.private_subnet_ids)
+    error_message = "An internal NLB with no nlb_subnet_ids must default to the network's private subnets."
   }
 
   assert {

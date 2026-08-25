@@ -1,16 +1,18 @@
 ################################################################################
 # Host security group
 #
-# Layered on top of the execution environment's SG rather than replacing it:
-# hosts carry both. In vpc-ip mode the sandbox IPs are secondary addresses on
-# the host ENI, so these rules govern sandbox traffic too — the per-sandbox
-# policy (nftables, keyed by tap/IP) is enforced below this, on the host.
+# The only security group a host carries. The pool is a tenant of a Ravion
+# network module, which publishes subnets rather than a workload SG, so this
+# group states the whole envelope on its own. In vpc-ip mode the sandbox IPs are
+# secondary addresses on the host ENI, so these rules govern sandbox traffic too
+# — the per-sandbox policy (nftables, keyed by tap/IP) is enforced below this,
+# on the host.
 ################################################################################
 
 resource "aws_security_group" "host" {
   name        = "${local.name_prefix}-host"
   description = "Sandbox hosts for pool ${var.pool_id}"
-  vpc_id      = var.execution_environment.vpc_id
+  vpc_id      = var.vpc_id
 
   tags = merge(local.tags, { Name = "${local.name_prefix}-host" })
 
@@ -147,7 +149,7 @@ resource "aws_vpc_security_group_egress_rule" "host_ipv6" {
 resource "aws_security_group" "nlb" {
   name        = "${local.name_prefix}-nlb"
   description = "Sandbox ingress NLB for pool ${var.pool_id}"
-  vpc_id      = var.execution_environment.vpc_id
+  vpc_id      = var.vpc_id
 
   tags = merge(local.tags, { Name = "${local.name_prefix}-nlb" })
 
