@@ -78,6 +78,16 @@ module "eks_service" {
 
   name   = var.name
   region = var.region
+
+  # Release teardown wired the way the module definitions wire it. The cluster
+  # does not exist in this fixture, so the destroy provisioner takes its
+  # "cluster absent, nothing to uninstall" path — which is exactly the branch a
+  # destroy after the cluster stack has gone relies on.
+  workload_release_cleanup_enabled = true
+  cluster_name                     = "${var.name}-cluster"
+  ravion_runner_role_arn           = "arn:aws:iam::123456789012:role/${var.name}-cluster-ravion-runner"
+  release_name                     = var.name
+  release_namespace                = "terratest"
   vpc_id = module.vpc.vpc_id
 
   # ECR repository for the worker's image. Non-default values are used for

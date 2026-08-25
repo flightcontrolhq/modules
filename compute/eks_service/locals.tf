@@ -26,4 +26,9 @@ locals {
   # The health check speaks the same protocol as the target group unless the
   # caller overrides it, which is what ECS does via primary_health_check_protocol.
   health_check_protocol = coalesce(var.target_group_health_check.protocol, var.target_group_protocol)
+
+  # The release teardown needs every piece of the release's identity and the
+  # means to reach the cluster; the resource's precondition refuses an apply
+  # that enables it without them, rather than a destroy that fails late.
+  workload_release_cleanup_enabled = var.workload_release_cleanup_enabled
 }

@@ -44,6 +44,14 @@ module "web" {
     matcher = "200-399"
   }
 
+  # Destroying the stack uninstalls the Helm release Ravion deployed for this
+  # workload, before the target group and repository are removed.
+  workload_release_cleanup_enabled = true
+  cluster_name                     = "acme-prod"
+  ravion_runner_role_arn           = "arn:aws:iam::123456789012:role/acme-prod-ravion-runner"
+  release_name                     = "acme-prod-api"
+  release_namespace                = "acme-prod"
+
   tags = {
     Owner = "Ravion"
   }
@@ -68,6 +76,27 @@ module "worker" {
 }
 ```
 
+## Workload release teardown
+
+Ravion installs the workload's Helm release from the deploy path, not from
+Terraform, but destroying this stack removes it all the same. With
+`workload_release_cleanup_enabled`, a `terraform_data` resource carries a
+destroy-time provisioner that runs `helm uninstall <release_name> -n
+<release_namespace> --wait` against the cluster, authenticated with `aws eks
+get-token --role-arn <ravion_runner_role_arn>`. It depends on the target group,
+listener rule and repository, so Terraform runs it first and the workload drains
+while those still exist.
+
+- A cluster that no longer exists is treated as "nothing to uninstall" (the
+  cluster stack may be destroyed first); a release that is already gone is a
+  no-op. A cluster that exists but cannot be reached, or an uninstall that
+  fails, fails the destroy before anything else is removed.
+- The identity is captured in state at apply time, so the release removed is
+  the one installed, and re-pointing `release_name`/`release_namespace`
+  replaces the resource, which uninstalls the old release.
+- `helm` is downloaded (checksum-verified) when none is on PATH; `aws` is
+  required. The namespace itself is never deleted.
+
 ## Requirements
 
 | Name | Version |
@@ -90,6 +119,13 @@ module "worker" {
 | ecr_image_scan_on_push_enabled | Scan images for vulnerabilities on push | `bool` | `true` | no |
 | ecr_force_delete_enabled | Allow deleting the repository while it still holds images | `bool` | `false` | no |
 | ecr_default_lifecycle_policy_enabled | Apply the `containers/ecr` built-in lifecycle policy | `bool` | `false` | no |
+| workload_release_cleanup_enabled | Uninstall the workload's Helm release when the stack is destroyed | `bool` | `false` | no |
+| cluster_name | EKS cluster the release is installed on; required with `workload_release_cleanup_enabled` | `string` | `null` | no |
+| ravion_runner_role_arn | The cluster's `<cluster>-ravion-runner` role, assumed via `aws eks get-token` for the uninstall | `string` | `null` | no |
+| release_name | Helm release name Ravion installs for this workload | `string` | `null` | no |
+| release_namespace | Namespace the release is installed into (never removed itself) | `string` | `null` | no |
+| workload_release_helm_version | Helm downloaded for the uninstall when none is on PATH | `string` | `"v4.2.4"` | no |
+| workload_release_uninstall_timeout | `helm uninstall --wait` timeout | `string` | `"10m"` | no |
 | container_port | Port the application container listens on | `number` | `8080` | no |
 | target_group_protocol | Protocol the load balancer uses to reach pods (`HTTP` or `HTTPS`) | `string` | `"HTTP"` | no |
 | target_group_deregistration_delay | Seconds before a target is deregistered, letting in-flight requests drain | `number` | `300` | no |
