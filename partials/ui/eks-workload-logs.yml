@@ -28,7 +28,7 @@
   name: Application logs
   enabled: << module.input.logs_rendering_providers == nil || "loki" in module.input.logs_rendering_providers >>
   source:
-    type: loki
+    type: eks_loki
     cluster_arn: << module.input.cluster_arn >>
     selector: '{namespace="<< module.input.namespace >>", workload="<< module.input.name >>"}'
 # CloudWatch Logs fallback. The add-ons module writes the whole cluster to one
