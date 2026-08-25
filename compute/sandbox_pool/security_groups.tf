@@ -210,34 +210,3 @@ resource "aws_vpc_security_group_egress_rule" "nlb_to_hosts" {
   tags = local.tags
 }
 
-################################################################################
-# VPC endpoint security group
-################################################################################
-
-resource "aws_security_group" "endpoints" {
-  count = var.create_vpc_endpoints ? 1 : 0
-
-  name        = "${local.name_prefix}-endpoints"
-  description = "Interface VPC endpoints for pool ${var.pool_id}"
-  vpc_id      = var.execution_environment.vpc_id
-
-  tags = merge(local.tags, { Name = "${local.name_prefix}-endpoints" })
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_vpc_security_group_ingress_rule" "endpoints_https" {
-  count = var.create_vpc_endpoints ? 1 : 0
-
-  security_group_id = aws_security_group.endpoints[0].id
-  description       = "HTTPS from sandbox hosts"
-
-  referenced_security_group_id = aws_security_group.host.id
-  ip_protocol                  = "tcp"
-  from_port                    = 443
-  to_port                      = 443
-
-  tags = local.tags
-}

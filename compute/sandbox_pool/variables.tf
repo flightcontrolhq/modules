@@ -384,18 +384,6 @@ variable "force_destroy_snapshots_bucket" {
 # VPC endpoints
 ################################################################################
 
-variable "create_vpc_endpoints" {
-  type        = bool
-  description = "Create the S3 gateway endpoint plus SSM, SSMMESSAGES and ECR api/dkr interface endpoints. Snapshot traffic is the bulk of a pool's bytes and it is all S3, so the gateway endpoint alone usually pays for the rest."
-  default     = true
-}
-
-variable "s3_gateway_route_table_ids" {
-  type        = list(string)
-  description = "Route tables to attach the S3 gateway endpoint to. null attaches it to every route table in the VPC."
-  default     = null
-}
-
 ################################################################################
 # Certificate validation
 ################################################################################

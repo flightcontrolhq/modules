@@ -12,7 +12,6 @@ Provisions the static half of a Ravion sandbox pool in a customer's AWS account:
 - ACM wildcard certificate for `*.sbx.<env>.<domain>`, validated automatically when the Route 53 zone is yours and reported as records to add when it is not
 - Route 53 wildcard alias record, plus a private hosted zone (`sbx.<env>.internal`) for per-sandbox records in `vpc-ip` mode
 - S3 snapshot chunk store: SSE, public access blocked, versioning off, lifecycle expiry with a tag-based exemption for pinned objects
-- Optional VPC endpoints: S3 gateway (where the snapshot bytes actually move) plus SSM, SSMMESSAGES and ECR api/dkr
 - Launch template with `cpu_options.nested_virtualization = "enabled"`, IMDSv2 required, a chunk-cache data volume and user-data that writes `/etc/ravion/sandbox-host.env`
 - Host and sandbox CloudWatch log groups
 
@@ -22,7 +21,7 @@ Provisions the static half of a Ravion sandbox pool in a customer's AWS account:
 
 ```hcl
 module "sandbox_pool" {
-  source = "git::https://github.com/ravionhq/modules.git//compute/sandbox_pool?ref=rvn-sandbox-pool@0.1.0"
+  source = "git::https://github.com/ravionhq/modules.git//sandbox-pool?ref=v1.0.0"
 
   pool_id  = "clz9x8y7w6v5u4t3"
   env_slug = "prod"
@@ -53,7 +52,7 @@ Sandboxes are then reachable at `<sandboxId>-<port>.sbx.prod.example.com`, and i
 
 ```hcl
 module "sandbox_pool" {
-  source = "git::https://github.com/ravionhq/modules.git//compute/sandbox_pool?ref=rvn-sandbox-pool@0.1.0"
+  source = "git::https://github.com/ravionhq/modules.git//sandbox-pool?ref=v1.0.0"
 
   pool_id  = "clz9x8y7w6v5u4t3"
   env_slug = "staging"
@@ -133,7 +132,6 @@ See `variables.tf`. The ones that shape everything else:
 | `ingress`                 | `{domain, hosted_zone_id?, internet_facing?, allowed_cidrs?}`                                           | —                         |
 | `private_zone_name`       | Private hosted zone name                                                                                | `sbx.<env_slug>.internal` |
 | `snapshot_retention_days` | Expiry for unpinned snapshot objects                                                                    | `30`                      |
-| `create_vpc_endpoints`    | S3 gateway + SSM/SSMMESSAGES/ECR interface endpoints                                                    | `true`                    |
 | `ravion_role_arn`         | Grants the Ravion cross-account role access to the snapshots bucket                                     | `null`                    |
 
 ## Outputs
@@ -169,6 +167,6 @@ The tests run entirely in plan mode against a mocked AWS provider — no credent
 
 ## Notes
 
-- **VPC endpoints.** `ec2messages` is not created: Session Manager on agent 3.x needs only `ssm` and `ssmmessages`. Add it if you rely on Run Command. Nor is a `logs` endpoint — log delivery goes out the same path as everything else.
+- **VPC endpoints.** None are created here: the execution environment's network stack owns the S3 gateway and SSM/ECR interface endpoints the hosts use.
 - **Host egress** defaults to TCP 443 plus DNS, matching the plan. Sandboxes that need other outbound ports need `host_allow_all_egress = true`; per-sandbox egress policy is enforced on the host by nftables either way, so this security group is the outer envelope, not the policy.
 - **TCP exposure** pre-authorises `tcp_exposure_port_range` on both security groups. The NLB still drops traffic on any port without a listener, and listeners are added per exposed port by Tower.

@@ -26,12 +26,6 @@ mock_provider "aws" {
     }
   }
 
-  override_data {
-    target = data.aws_route_tables.vpc
-    values = {
-      ids = ["rtb-1234567890abcdef0"]
-    }
-  }
 
   # Resources that need valid ARNs or stable ids
   override_resource {
@@ -261,10 +255,6 @@ run "defaults" {
     error_message = "The sandbox log group must follow the /ravion/sandboxes/<pool>/sandbox convention."
   }
 
-  assert {
-    condition     = length(aws_vpc_endpoint.s3) == 1 && length(aws_vpc_endpoint.interface) == 4
-    error_message = "create_vpc_endpoints must produce the S3 gateway plus ssm, ssmmessages, ecr.api and ecr.dkr."
-  }
 
   assert {
     condition     = length(aws_route53_record.wildcard) == 1
@@ -425,8 +415,7 @@ run "internal_external_zone" {
       internet_facing = false
       allowed_cidrs   = ["10.0.0.0/8"]
     }
-    create_vpc_endpoints = false
-    private_zone_name    = "sbx.internal.example"
+    private_zone_name = "sbx.internal.example"
   }
 
   assert {
@@ -449,10 +438,6 @@ run "internal_external_zone" {
     error_message = "With an external zone the validation records are the whole point of the output."
   }
 
-  assert {
-    condition     = length(aws_vpc_endpoint.interface) == 0 && length(aws_vpc_endpoint.s3) == 0
-    error_message = "create_vpc_endpoints = false must create no endpoints."
-  }
 
   assert {
     condition     = aws_route53_zone.private.name == "sbx.internal.example"
