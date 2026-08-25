@@ -10,7 +10,7 @@
 # rejects a values document that declares it. That is also why the charts'
 # `ravion.secretStores` names are left at their defaults, which match the EKS
 # Add-ons module's ClusterSecretStore names.
-engine: helm
+type: helm
 release_name: << module.input.name >>
 namespace: << module.input.namespace >>
 create_namespace: '<< module.input.namespace_creation_enabled != nil ? module.input.namespace_creation_enabled : true >>'

@@ -83,7 +83,7 @@ module:
       min_current_value: true
       required: true
       type: string
-      values: $values:aws/eks_versions?region=<<module.input.aws_region>>&currentVersion=<<instance.input.kubernetes_version>>
+      values: $values:aws/eks-versions?region=<<module.input.aws_region>>&currentVersion=<<instance.input.kubernetes_version>>
     - default: true
       description: Prevent the cluster from being deleted via the AWS API. Must be turned off before this module can be destroyed.
       id: deletion_protection_enabled

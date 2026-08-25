@@ -51,7 +51,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
+    type: amp
     aws_account_id: << module.input.aws_account_id >>
     region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
@@ -62,8 +62,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
-    aws_account_id: << module.input.aws_account_id >>
+    type: eks_prometheus
     cluster_arn: << module.input.cluster_arn >>
     endpoint: << module.input.prometheus_endpoint >>
     query: 'sum(rate(container_cpu_usage_seconds_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
@@ -88,7 +87,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
+    type: amp
     aws_account_id: << module.input.aws_account_id >>
     region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
@@ -99,8 +98,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
-    aws_account_id: << module.input.aws_account_id >>
+    type: eks_prometheus
     cluster_arn: << module.input.cluster_arn >>
     endpoint: << module.input.prometheus_endpoint >>
     query: 'sum(container_memory_working_set_bytes{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"})'
@@ -125,7 +123,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
+    type: amp
     aws_account_id: << module.input.aws_account_id >>
     region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
@@ -135,8 +133,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
-    aws_account_id: << module.input.aws_account_id >>
+    type: eks_prometheus
     cluster_arn: << module.input.cluster_arn >>
     endpoint: << module.input.prometheus_endpoint >>
     query: 'sum(increase(kube_pod_container_status_restarts_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
@@ -164,7 +161,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
+    type: amp
     aws_account_id: << module.input.aws_account_id >>
     region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
@@ -175,8 +172,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
-    aws_account_id: << module.input.aws_account_id >>
+    type: eks_prometheus
     cluster_arn: << module.input.cluster_arn >>
     endpoint: << module.input.prometheus_endpoint >>
     query: 'sum(rate(container_network_receive_bytes_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
@@ -201,7 +197,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
+    type: amp
     aws_account_id: << module.input.aws_account_id >>
     region: << module.input.amp_workspace_region >>
     workspace_id: << module.input.amp_workspace_id >>
@@ -212,8 +208,7 @@
   type: line
   enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
   source:
-    type: prometheus
-    aws_account_id: << module.input.aws_account_id >>
+    type: eks_prometheus
     cluster_arn: << module.input.cluster_arn >>
     endpoint: << module.input.prometheus_endpoint >>
     query: 'sum(rate(container_network_transmit_bytes_total{namespace="<< module.input.namespace >>",pod=~"<< module.input.name >>-[a-z0-9]+-[a-z0-9]+"}[$__interval]))'
@@ -240,43 +235,51 @@
 - id: link_datadog
   name: Open in Datadog
   type: link
-  provider: datadog
   enabled: >-
     << module.input.metrics_external_links != nil
     && len(filter(module.input.metrics_external_links, #.provider == "datadog")) > 0 >>
-  href: >-
-    << module.input.metrics_external_links == nil ? "" :
-    reduce(filter(module.input.metrics_external_links, #.provider == "datadog"), #acc + #.href_prefix, "")
-    + "kube_namespace%3A" + module.input.namespace + "%20pod_name%3A" + module.input.name + "-%2A" >>
+  source:
+    type: link
+    provider: datadog
+    href: >-
+      << module.input.metrics_external_links == nil ? "" :
+      reduce(filter(module.input.metrics_external_links, #.provider == "datadog"), #acc + #.href_prefix, "")
+      + "kube_namespace%3A" + module.input.namespace + "%20pod_name%3A" + module.input.name + "-%2A" >>
 - id: link_grafana_cloud
   name: Open in Grafana Cloud
   type: link
-  provider: grafana_cloud
   enabled: >-
     << module.input.metrics_external_links != nil
     && len(filter(module.input.metrics_external_links, #.provider == "grafana_cloud")) > 0 >>
-  href: >-
-    << module.input.metrics_external_links == nil ? "" :
-    reduce(filter(module.input.metrics_external_links, #.provider == "grafana_cloud"), #acc + #.href_prefix, "")
-    + "%7Bnamespace%3D%22" + module.input.namespace + "%22%2Cpod%3D~%22" + module.input.name + "-.%2A%22%7D" >>
+  source:
+    type: link
+    provider: grafana_cloud
+    href: >-
+      << module.input.metrics_external_links == nil ? "" :
+      reduce(filter(module.input.metrics_external_links, #.provider == "grafana_cloud"), #acc + #.href_prefix, "")
+      + "%7Bnamespace%3D%22" + module.input.namespace + "%22%2Cpod%3D~%22" + module.input.name + "-.%2A%22%7D" >>
 - id: link_new_relic
   name: Open in New Relic
   type: link
-  provider: new_relic
   enabled: >-
     << module.input.metrics_external_links != nil
     && len(filter(module.input.metrics_external_links, #.provider == "new_relic")) > 0 >>
-  href: >-
-    << module.input.metrics_external_links == nil ? "" :
-    reduce(filter(module.input.metrics_external_links, #.provider == "new_relic"), #acc + #.href_prefix, "")
-    + "k8s.namespaceName%3A%27" + module.input.namespace + "%27%20AND%20k8s.podName%3A%27" + module.input.name + "-%2A%27" >>
+  source:
+    type: link
+    provider: new_relic
+    href: >-
+      << module.input.metrics_external_links == nil ? "" :
+      reduce(filter(module.input.metrics_external_links, #.provider == "new_relic"), #acc + #.href_prefix, "")
+      + "k8s.namespaceName%3A%27" + module.input.namespace + "%27%20AND%20k8s.podName%3A%27" + module.input.name + "-%2A%27" >>
 - id: link_otlp
   name: Open in the OTLP destination
   type: link
-  provider: otlp
   enabled: >-
     << module.input.metrics_external_links != nil
     && len(filter(module.input.metrics_external_links, #.provider == "otlp")) > 0 >>
-  href: >-
-    << module.input.metrics_external_links == nil ? "" :
-    reduce(filter(module.input.metrics_external_links, #.provider == "otlp"), #acc + #.href_prefix, "") >>
+  source:
+    type: link
+    provider: otlp
+    href: >-
+      << module.input.metrics_external_links == nil ? "" :
+      reduce(filter(module.input.metrics_external_links, #.provider == "otlp"), #acc + #.href_prefix, "") >>

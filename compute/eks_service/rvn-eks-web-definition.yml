@@ -336,11 +336,11 @@ module:
       $merge:
         - ../../partials/deploy/eks-workload-helm-definition-common.yml
         - source:
-            type: inline
-            repo: https://github.com/ravionhq/modules
+            type: git
+            repo_url: https://github.com/ravionhq/modules
             branch: main
             ref: $local.module_tag
-            chart: charts/rvn-eks-web
+            base_path: charts/rvn-eks-web
           values:
             $merge:
               - ../../partials/deploy/eks-workload-helm-values-common.yml
@@ -395,7 +395,7 @@ module:
         type: line
         enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
-          type: prometheus
+          type: amp
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
@@ -405,8 +405,7 @@ module:
         type: line
         enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
         source:
-          type: prometheus
-          aws_account_id: << module.input.aws_account_id >>
+          type: eks_prometheus
           cluster_arn: << module.input.cluster_arn >>
           endpoint: << module.input.prometheus_endpoint >>
           query: 'sum(kube_deployment_status_replicas_available{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'
@@ -440,7 +439,7 @@ module:
         type: line
         enabled: << module.input.metrics_rendering_providers == nil || "amp" in module.input.metrics_rendering_providers >>
         source:
-          type: prometheus
+          type: amp
           aws_account_id: << module.input.aws_account_id >>
           region: << module.input.amp_workspace_region >>
           workspace_id: << module.input.amp_workspace_id >>
@@ -450,8 +449,7 @@ module:
         type: line
         enabled: << module.input.metrics_rendering_providers != nil && "prometheus" in module.input.metrics_rendering_providers >>
         source:
-          type: prometheus
-          aws_account_id: << module.input.aws_account_id >>
+          type: eks_prometheus
           cluster_arn: << module.input.cluster_arn >>
           endpoint: << module.input.prometheus_endpoint >>
           query: 'sum(kube_deployment_spec_replicas{namespace="<< module.input.namespace >>",deployment="<< module.input.name >>"})'

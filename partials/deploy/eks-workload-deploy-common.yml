@@ -17,7 +17,6 @@ infrastructure:
   cluster_name: << module.input.cluster_name >>
   cluster_endpoint: << module.input.cluster_endpoint >>
   cluster_certificate_authority_data: << module.input.cluster_certificate_authority_data >>
-  region: << module.input.aws_region >>
   ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
   # Which saved execution environment the deploy runner launches into. Absent
   # means the default environment of the account that owns the cluster, so there

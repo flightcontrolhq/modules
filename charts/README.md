@@ -14,18 +14,18 @@ is values synthesis onto these charts, not per-user chart codegen.
 
 The Ravion deploy runner consumes these charts by **cloning this repository and
 resolving a repo-relative path**, not by pulling from a chart registry. The
-module deploy block names an `inline` chart source:
+module deploy block names a `git` chart source:
 
 ```yaml
 source:
-  type: inline
-  repo: https://github.com/ravionhq/modules
+  type: git
+  repo_url: https://github.com/ravionhq/modules
   branch: main
-  ref: rvn-eks@0.1.0        # exact tag or SHA — this is what pins the version
-  chart: charts/rvn-eks-web # resolved against the clone root
+  ref: rvn-eks@0.1.0             # exact tag or SHA — this is what pins the version
+  base_path: charts/rvn-eks-web  # resolved against the clone root
 ```
 
-The runner stats `<clone-root>/<chart>/Chart.yaml` and runs
+The runner stats `<clone-root>/<base_path>/Chart.yaml` and runs
 `helm upgrade --install <release> <that directory>`. Any depth would work
 mechanically, so placement is a readability decision, and `charts/` at the root
 is the one that matches what these charts are:
