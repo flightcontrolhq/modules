@@ -6,7 +6,7 @@ locals {
   # Tags
   default_tags = {
     ManagedBy = "terraform"
-    Module    = "sandbox-pool"
+    Module    = "aws-sandboxes"
   }
   tags = merge(local.default_tags, var.tags, {
     "ravion:pool" = var.pool_id

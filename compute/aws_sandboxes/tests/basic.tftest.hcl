@@ -1,4 +1,4 @@
-# Basic sandbox-pool Module Tests
+# Basic aws-sandboxes Module Tests
 # Run with: tofu test
 
 # Mock AWS provider with overridden data sources

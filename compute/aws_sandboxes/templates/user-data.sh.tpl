@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rendered by the ravion/sandbox-pool Terraform module.
+# Rendered by the rvn-aws-sandboxes Terraform module.
 #
 # Everything a host needs to know about its pool that it cannot discover from
 # IMDS. Host prep itself — kvm group, firecracker, jailer chroot base, nftables

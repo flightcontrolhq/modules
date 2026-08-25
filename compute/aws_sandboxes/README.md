@@ -1,4 +1,4 @@
-# Sandbox Pool Module
+# Ravion AWS Sandboxes Module
 
 Provisions the static half of a Ravion sandbox pool in a customer's AWS account: the host identity, the ingress path, the snapshot store and the launch template hosts are stamped from.
 
@@ -20,8 +20,8 @@ Provisions the static half of a Ravion sandbox pool in a customer's AWS account:
 ### A pool on a Route 53 zone you own
 
 ```hcl
-module "sandbox_pool" {
-  source = "git::https://github.com/ravionhq/modules.git//sandbox-pool?ref=v1.0.0"
+module "aws_sandboxes" {
+  source = "git::https://github.com/ravionhq/modules.git//compute/aws_sandboxes?ref=rvn-aws-sandboxes@0.1.0"
 
   pool_id  = "clz9x8y7w6v5u4t3"
   env_slug = "prod"
@@ -51,8 +51,8 @@ Sandboxes are then reachable at `<sandboxId>-<port>.sbx.prod.example.com`, and i
 ### An internal pool with an externally hosted zone
 
 ```hcl
-module "sandbox_pool" {
-  source = "git::https://github.com/ravionhq/modules.git//sandbox-pool?ref=v1.0.0"
+module "aws_sandboxes" {
+  source = "git::https://github.com/ravionhq/modules.git//compute/aws_sandboxes?ref=rvn-aws-sandboxes@0.1.0"
 
   pool_id  = "clz9x8y7w6v5u4t3"
   env_slug = "staging"
@@ -107,8 +107,8 @@ The **SSM host credential** grant used to be in that list, and is not any more. 
 
 This module is Ravion-owned and reaches customer accounts through the module system, not by being applied by hand:
 
-1. The directory is mirrored to `github.com/ravionhq/modules` under `sandbox-pool/` and tagged.
-2. `module.yaml` here is the `ModuleVersion.config` for the Ravion-owned `ravion/sandbox-pool` `ModuleDefinition` (`organizationId = null`). Its `ref` pins the tag from step 1 — bump both together.
+1. The directory is mirrored to `github.com/ravionhq/modules` under `compute/aws_sandboxes/` and tagged.
+2. `module.yaml` here is the `ModuleVersion.config` for the Ravion-owned `rvn-aws-sandboxes` `ModuleDefinition` (`organizationId = null`). Its `ref` pins the tag from step 1 — bump both together.
 3. Enabling sandboxes on an environment creates a **system-managed** `ModuleInstance` in that environment: hidden from the module canvas, not user-editable, with the pool's settings as its inputs. Upgrades are a new `ModuleVersion`; Tower rolls system-managed instances onto it.
 
 No output may be marked `sensitive`: the runner drops sensitive outputs before they reach `Stack.output`, so a sensitive output would simply never arrive at the pool's module-output cache.
@@ -157,7 +157,7 @@ Exactly the surface Tower caches on `SandboxPool` and hands to the reconciler:
 ## Testing
 
 ```bash
-cd packages/terraform/sandbox-pool
+cd packages/terraform/aws-sandboxes
 tofu init -backend=false
 tofu validate
 tofu test
