@@ -3,18 +3,21 @@
 #
 # One wildcard alias for the whole pool. Sandbox hostnames are created and
 # destroyed far too fast to be DNS records; the proxy resolves them in process.
+#
+# Gated on `local.create_dns`, which is false both when the pool has no ingress
+# at all and when its zone is hosted outside this account.
 ################################################################################
 
 resource "aws_route53_record" "wildcard" {
   count = local.create_dns ? 1 : 0
 
-  zone_id = var.ingress.hosted_zone_id
+  zone_id = local.ingress_hosted_zone_id
   name    = local.wildcard_domain
   type    = "A"
 
   alias {
-    name                   = aws_lb.this.dns_name
-    zone_id                = aws_lb.this.zone_id
+    name                   = aws_lb.this[0].dns_name
+    zone_id                = aws_lb.this[0].zone_id
     evaluate_target_health = false
   }
 }
@@ -22,13 +25,13 @@ resource "aws_route53_record" "wildcard" {
 resource "aws_route53_record" "wildcard_ipv6" {
   count = local.create_dns && var.ipv6_enabled ? 1 : 0
 
-  zone_id = var.ingress.hosted_zone_id
+  zone_id = local.ingress_hosted_zone_id
   name    = local.wildcard_domain
   type    = "AAAA"
 
   alias {
-    name                   = aws_lb.this.dns_name
-    zone_id                = aws_lb.this.zone_id
+    name                   = aws_lb.this[0].dns_name
+    zone_id                = aws_lb.this[0].zone_id
     evaluate_target_health = false
   }
 }

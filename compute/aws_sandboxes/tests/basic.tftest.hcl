@@ -179,19 +179,19 @@ run "defaults" {
   }
 
   assert {
-    condition     = aws_lb.this.load_balancer_type == "network"
+    condition     = aws_lb.this[0].load_balancer_type == "network"
     error_message = "Sandbox ingress must be an NLB."
   }
 
   assert {
-    condition     = aws_lb.this.internal == false
+    condition     = aws_lb.this[0].internal == false
     error_message = "ingress.internet_facing defaults to true, so the NLB must not be internal."
   }
 
   # The pool is a tenant of the network module: hosts sit in its private subnets
   # and only the load balancer reaches into the public ones.
   assert {
-    condition     = tolist(aws_lb.this.subnets) == tolist(var.public_subnet_ids)
+    condition     = tolist(aws_lb.this[0].subnets) == tolist(var.public_subnet_ids)
     error_message = "An internet-facing NLB with no nlb_subnet_ids must default to the network's public subnets."
   }
 
@@ -206,12 +206,12 @@ run "defaults" {
   }
 
   assert {
-    condition     = aws_lb_listener.https.port == 443 && aws_lb_listener.https.protocol == "TLS"
+    condition     = aws_lb_listener.https[0].port == 443 && aws_lb_listener.https[0].protocol == "TLS"
     error_message = "The pool must terminate TLS on 443."
   }
 
   assert {
-    condition     = aws_lb_target_group.proxy.port == 8443 && aws_lb_target_group.proxy.target_type == "instance"
+    condition     = aws_lb_target_group.proxy[0].port == 8443 && aws_lb_target_group.proxy[0].target_type == "instance"
     error_message = "The proxy target group must be an instance group on the proxy port."
   }
 
@@ -221,7 +221,7 @@ run "defaults" {
   }
 
   assert {
-    condition     = aws_acm_certificate.wildcard.domain_name == "*.sbx.prod.example.com"
+    condition     = aws_acm_certificate.wildcard[0].domain_name == "*.sbx.prod.example.com"
     error_message = "The wildcard certificate must cover every sandbox hostname in the pool."
   }
 
@@ -284,6 +284,11 @@ run "defaults" {
   assert {
     condition     = output.ingress_domain == "sbx.prod.example.com"
     error_message = "Sandbox hostnames live under sbx.<env>.<domain>."
+  }
+
+  assert {
+    condition     = output.ingress_enabled
+    error_message = "A pool given an ingress block must report ingress as enabled."
   }
 
   assert {
@@ -385,7 +390,7 @@ run "vpc_ip_mode" {
   }
 
   assert {
-    condition     = aws_lb.this.ip_address_type == "dualstack"
+    condition     = aws_lb.this[0].ip_address_type == "dualstack"
     error_message = "ipv6_enabled must make the NLB dualstack."
   }
 
@@ -434,12 +439,12 @@ run "internal_external_zone" {
   }
 
   assert {
-    condition     = aws_lb.this.internal == true
+    condition     = aws_lb.this[0].internal == true
     error_message = "internet_facing = false must produce an internal NLB."
   }
 
   assert {
-    condition     = tolist(aws_lb.this.subnets) == tolist(var.private_subnet_ids)
+    condition     = tolist(aws_lb.this[0].subnets) == tolist(var.private_subnet_ids)
     error_message = "An internal NLB with no nlb_subnet_ids must default to the network's private subnets."
   }
 
@@ -552,12 +557,12 @@ run "long_pool_id" {
   }
 
   assert {
-    condition     = length(aws_lb.this.name) <= 32
+    condition     = length(aws_lb.this[0].name) <= 32
     error_message = "The NLB name must fit AWS's 32-character limit for any pool id."
   }
 
   assert {
-    condition     = length(aws_lb_target_group.proxy.name) <= 32
+    condition     = length(aws_lb_target_group.proxy[0].name) <= 32
     error_message = "The target group name must fit AWS's 32-character limit for any pool id."
   }
 
@@ -592,12 +597,165 @@ run "ravion_pool_id" {
   }
 
   assert {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*$", aws_lb.this.name)) && length(aws_lb.this.name) <= 32
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*$", aws_lb.this[0].name)) && length(aws_lb.this[0].name) <= 32
     error_message = "The NLB name must be lowercase alphanumerics and hyphens within 32 characters."
   }
 
   assert {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*$", aws_lb_target_group.proxy.name)) && length(aws_lb_target_group.proxy.name) <= 32
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*$", aws_lb_target_group.proxy[0].name)) && length(aws_lb_target_group.proxy[0].name) <= 32
     error_message = "The target group name must be lowercase alphanumerics and hyphens within 32 characters."
+  }
+}
+
+# Test 8: no ingress at all.
+#
+# The pool still provisions — hosts, snapshots bucket, log groups, IAM and the
+# private zone are all untouched — but nothing on the public path is created.
+# This is the case that lets a pool come up without a domain, without a
+# certificate and, crucially, without an apply that parks for 45 minutes
+# waiting on DNS validation records a human has to add by hand.
+run "no_ingress" {
+  command = plan
+
+  variables {
+    ingress = null
+  }
+
+  assert {
+    condition     = length(aws_lb.this) == 0
+    error_message = "A pool without ingress must not create a load balancer."
+  }
+
+  assert {
+    condition     = length(aws_lb_listener.https) == 0
+    error_message = "A pool without ingress must not create a TLS listener."
+  }
+
+  assert {
+    condition     = length(aws_lb_target_group.proxy) == 0 && length(aws_lb_target_group.tcp) == 0
+    error_message = "A pool without ingress must not create either target group."
+  }
+
+  assert {
+    condition     = length(aws_security_group.nlb) == 0
+    error_message = "A pool without ingress must not create the NLB security group."
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.host_proxy) == 0 && length(aws_vpc_security_group_ingress_rule.host_tcp_exposure) == 0
+    error_message = "The host security group rules that reference the NLB group must go with it."
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.nlb_https) == 0 && length(aws_vpc_security_group_egress_rule.nlb_to_hosts) == 0
+    error_message = "No NLB security group means no rules on it either."
+  }
+
+  assert {
+    condition     = length(aws_acm_certificate.wildcard) == 0
+    error_message = "A pool without ingress must not request a wildcard certificate."
+  }
+
+  assert {
+    condition     = length(aws_acm_certificate_validation.wildcard) == 0
+    error_message = "Without a certificate there is nothing to block the apply waiting for validation."
+  }
+
+  assert {
+    condition     = length(aws_route53_record.wildcard) == 0 && length(aws_route53_record.wildcard_ipv6) == 0 && length(aws_route53_record.acm_validation) == 0
+    error_message = "A pool without ingress must write no public DNS records."
+  }
+
+  assert {
+    condition     = output.ingress_enabled == false
+    error_message = "ingress_enabled must report false so the control plane can tell a pool has no ingress."
+  }
+
+  assert {
+    condition     = output.ingress_domain == null
+    error_message = "There is no domain to report when the pool has no ingress."
+  }
+
+  assert {
+    condition     = output.nlb_dns_name == null && output.nlb_arn == null && output.certificate_arn == null
+    error_message = "Every load balancer and certificate output must be null when the pool has no ingress."
+  }
+
+  assert {
+    condition     = output.nlb_target_group_arn == null && output.nlb_ip_target_group_arn == null
+    error_message = "Both target group outputs must be null when the pool has no ingress."
+  }
+
+  assert {
+    condition     = length(output.acm_validation_records) == 0
+    error_message = "There are no validation records to hand an operator when no certificate was requested."
+  }
+
+  # The private path is not ingress and does not go away with it: this is what
+  # keeps a no-ingress pool useful.
+  assert {
+    condition     = aws_route53_zone.private.name == "sbx.prod.internal"
+    error_message = "The private hosted zone is not part of ingress and must still be created."
+  }
+
+  assert {
+    condition     = aws_launch_template.host.vpc_security_group_ids == toset([aws_security_group.host.id])
+    error_message = "Hosts must still be provisioned, on their own security group, when the pool has no ingress."
+  }
+
+  assert {
+    condition     = output.snapshots_bucket == "rvn-sbx-prod-snapshots-123456789012" && output.ssm_param_prefix == "/ravion/sandboxes/pool1/hosts"
+    error_message = "Storage and the host credential prefix are not part of ingress and must survive without it."
+  }
+
+  # The host reads its pool config from user-data. Empty here is not an
+  # oversight — it is the signal the agent refuses `expose-port` on.
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.host.user_data), "RAVION_INGRESS_DOMAIN=\n")
+    error_message = "With no ingress the host must be told the ingress domain is empty."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.host.user_data), "RAVION_TARGET_GROUP_ARN=\n")
+    error_message = "With no ingress there is no target group for the host to register itself into."
+  }
+
+  assert {
+    condition     = strcontains(base64decode(aws_launch_template.host.user_data), "RAVION_TCP_TARGET_GROUP_ARN=\n")
+    error_message = "With no ingress the TCP target group ARN must be rendered empty too."
+  }
+}
+
+# Test 9: an ingress object with no domain in it.
+#
+# Not a hypothetical. The module.yaml mapping renders `ingress:` and its four
+# keys unconditionally, so a pool whose ingress_domain input is unset reaches
+# Terraform as an object with a null domain rather than as no object at all.
+# It has to mean the same thing as `ingress = null`, or such a pool would ask
+# ACM for a certificate covering `*.sbx.prod.` and park forever.
+run "blank_ingress_domain" {
+  command = plan
+
+  variables {
+    ingress = {
+      domain          = ""
+      internet_facing = true
+      allowed_cidrs   = ["0.0.0.0/0"]
+    }
+  }
+
+  assert {
+    condition     = output.ingress_enabled == false
+    error_message = "An ingress block with a blank domain must mean the same as no ingress at all."
+  }
+
+  assert {
+    condition     = length(aws_lb.this) == 0 && length(aws_acm_certificate.wildcard) == 0
+    error_message = "A blank domain must not produce a load balancer or a certificate."
+  }
+
+  assert {
+    condition     = output.ingress_domain == null
+    error_message = "A blank domain must not be reported as `sbx.prod.`."
   }
 }

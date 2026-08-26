@@ -24,10 +24,12 @@ resource "aws_security_group" "host" {
 # --- ingress ----------------------------------------------------------------
 
 resource "aws_vpc_security_group_ingress_rule" "host_proxy" {
+  count = local.ingress_enabled ? 1 : 0
+
   security_group_id = aws_security_group.host.id
   description       = "Ingress proxy traffic from the NLB"
 
-  referenced_security_group_id = aws_security_group.nlb.id
+  referenced_security_group_id = aws_security_group.nlb[0].id
   ip_protocol                  = "tcp"
   from_port                    = var.proxy_port
   to_port                      = var.proxy_port
@@ -38,12 +40,12 @@ resource "aws_vpc_security_group_ingress_rule" "host_proxy" {
 # Arbitrary TCP exposure: the NLB's IP targets are sandbox IPs riding on host
 # ENIs, so the host SG has to admit the whole envelope Tower may register in.
 resource "aws_vpc_security_group_ingress_rule" "host_tcp_exposure" {
-  count = var.enable_tcp_exposure ? 1 : 0
+  count = local.tcp_exposure_enabled ? 1 : 0
 
   security_group_id = aws_security_group.host.id
   description       = "TCP exposure targets from the NLB"
 
-  referenced_security_group_id = aws_security_group.nlb.id
+  referenced_security_group_id = aws_security_group.nlb[0].id
   ip_protocol                  = "tcp"
   from_port                    = var.tcp_exposure_port_range.from
   to_port                      = var.tcp_exposure_port_range.to
@@ -52,7 +54,9 @@ resource "aws_vpc_security_group_ingress_rule" "host_tcp_exposure" {
 }
 
 # Direct in-VPC reach to sandbox IPs (VPN, peered VPCs), which is the whole
-# point of the private hosted zone in vpc-ip mode.
+# point of the private hosted zone in vpc-ip mode. Independent of ingress: on a
+# pool with `ingress = null` this is the only way in, and the only way sandboxes
+# are reached at all.
 resource "aws_vpc_security_group_ingress_rule" "host_internal" {
   for_each = local.vpc_ip_mode ? toset(var.internal_access_cidrs) : toset([])
 
@@ -144,9 +148,15 @@ resource "aws_vpc_security_group_egress_rule" "host_ipv6" {
 
 ################################################################################
 # NLB security group
+#
+# Exists only alongside the NLB. With `ingress = null` neither this group nor
+# any rule that references it is created — including the host group's rules
+# above, which is why those are gated on the same switch.
 ################################################################################
 
 resource "aws_security_group" "nlb" {
+  count = local.ingress_enabled ? 1 : 0
+
   name        = "${local.name_prefix}-nlb"
   description = "Sandbox ingress NLB for pool ${var.pool_id}"
   vpc_id      = var.vpc_id
@@ -161,7 +171,7 @@ resource "aws_security_group" "nlb" {
 resource "aws_vpc_security_group_ingress_rule" "nlb_https" {
   for_each = toset(local.ingress_cidrs)
 
-  security_group_id = aws_security_group.nlb.id
+  security_group_id = aws_security_group.nlb[0].id
   description       = "HTTPS from ${each.value}"
 
   cidr_ipv4   = each.value
@@ -173,9 +183,9 @@ resource "aws_vpc_security_group_ingress_rule" "nlb_https" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "nlb_https_ipv6" {
-  count = var.ipv6_enabled ? 1 : 0
+  count = local.ingress_enabled && var.ipv6_enabled ? 1 : 0
 
-  security_group_id = aws_security_group.nlb.id
+  security_group_id = aws_security_group.nlb[0].id
   description       = "HTTPS over IPv6"
 
   cidr_ipv6   = "::/0"
@@ -187,9 +197,9 @@ resource "aws_vpc_security_group_ingress_rule" "nlb_https_ipv6" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "nlb_tcp_exposure" {
-  for_each = var.enable_tcp_exposure ? toset(local.ingress_cidrs) : toset([])
+  for_each = local.tcp_exposure_enabled ? toset(local.ingress_cidrs) : toset([])
 
-  security_group_id = aws_security_group.nlb.id
+  security_group_id = aws_security_group.nlb[0].id
   description       = "TCP exposure ports from ${each.value}"
 
   cidr_ipv4   = each.value
@@ -201,7 +211,9 @@ resource "aws_vpc_security_group_ingress_rule" "nlb_tcp_exposure" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "nlb_to_hosts" {
-  security_group_id = aws_security_group.nlb.id
+  count = local.ingress_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.nlb[0].id
   description       = "Forward to sandbox hosts"
 
   referenced_security_group_id = aws_security_group.host.id

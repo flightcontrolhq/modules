@@ -36,23 +36,38 @@ output "snapshots_bucket" {
   value       = aws_s3_bucket.snapshots.bucket
 }
 
+output "ingress_enabled" {
+  description = "Whether this pool has a public ingress path at all. False means no NLB, no certificate and no wildcard DNS: sandboxes run, but no port can be published and every ingress output below is null or empty."
+  value       = local.ingress_enabled
+}
+
 output "nlb_target_group_arn" {
-  description = "Instance target group for the host ingress proxy. Hosts are registered on ready and deregistered on cordon."
-  value       = aws_lb_target_group.proxy.arn
+  description = "Instance target group for the host ingress proxy. Hosts are registered on ready and deregistered on cordon. Null when the pool has no ingress."
+  value       = one(aws_lb_target_group.proxy[*].arn)
 }
 
 output "nlb_ip_target_group_arn" {
-  description = "IP target group for raw TCP exposure of sandbox IPs. Null when tcp exposure is disabled."
-  value       = var.enable_tcp_exposure ? aws_lb_target_group.tcp[0].arn : null
+  description = "IP target group for raw TCP exposure of sandbox IPs. Null when tcp exposure is disabled or the pool has no ingress."
+  value       = one(aws_lb_target_group.tcp[*].arn)
 }
 
 output "nlb_dns_name" {
-  description = "NLB DNS name, for an external zone's CNAME or for direct use."
-  value       = aws_lb.this.dns_name
+  description = "NLB DNS name, for an external zone's CNAME or for direct use. Null when the pool has no ingress."
+  value       = one(aws_lb.this[*].dns_name)
+}
+
+output "nlb_arn" {
+  description = "ARN of the ingress NLB. Null when the pool has no ingress."
+  value       = one(aws_lb.this[*].arn)
+}
+
+output "certificate_arn" {
+  description = "ARN of the wildcard certificate covering every sandbox hostname. Null when the pool has no ingress."
+  value       = one(aws_acm_certificate.wildcard[*].arn)
 }
 
 output "ingress_domain" {
-  description = "Zone sandbox hostnames live under: <sandboxId>-<port>.<ingress_domain>."
+  description = "Zone sandbox hostnames live under: <sandboxId>-<port>.<ingress_domain>. Null when the pool has no ingress."
   value       = local.ingress_domain
 }
 
@@ -67,9 +82,9 @@ output "ssm_param_prefix" {
 }
 
 output "acm_validation_records" {
-  description = "DNS records that validate the wildcard certificate. Already created when ingress.hosted_zone_id is set; otherwise these are what an operator must add to an externally hosted zone."
+  description = "DNS records that validate the wildcard certificate. Already created when ingress.hosted_zone_id is set; otherwise these are what an operator must add to an externally hosted zone. Empty when the pool has no ingress."
   value = [
-    for dvo in aws_acm_certificate.wildcard.domain_validation_options : {
+    for dvo in local.acm_validation_options : {
       name  = dvo.resource_record_name
       type  = dvo.resource_record_type
       value = dvo.resource_record_value

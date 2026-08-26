@@ -3,9 +3,16 @@
 #
 # One cert covers every sandbox hostname, because hostnames are minted per
 # request and no per-sandbox certificate could ever be issued in time.
+#
+# Requested only when the pool has ingress. This matters beyond tidiness: the
+# validation resource below blocks the apply until the certificate is ISSUED,
+# and with an externally hosted zone that means a human adding two DNS records.
+# A pool with `ingress = null` provisions straight through with no such gate.
 ################################################################################
 
 resource "aws_acm_certificate" "wildcard" {
+  count = local.ingress_enabled ? 1 : 0
+
   domain_name               = local.wildcard_domain
   subject_alternative_names = [local.ingress_domain]
   validation_method         = "DNS"
@@ -23,7 +30,7 @@ resource "aws_acm_certificate" "wildcard" {
 # When the zone is ours, validation is a pair of records and a short wait.
 resource "aws_route53_record" "acm_validation" {
   for_each = local.create_dns ? {
-    for dvo in aws_acm_certificate.wildcard.domain_validation_options :
+    for dvo in local.acm_validation_options :
     dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
@@ -31,7 +38,7 @@ resource "aws_route53_record" "acm_validation" {
     }
   } : {}
 
-  zone_id         = var.ingress.hosted_zone_id
+  zone_id         = local.ingress_hosted_zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -45,9 +52,9 @@ resource "aws_route53_record" "acm_validation" {
 # visible in the plan). A listener cannot attach a PENDING_VALIDATION
 # certificate, so there is nothing useful to do before that happens.
 resource "aws_acm_certificate_validation" "wildcard" {
-  count = var.wait_for_certificate_validation ? 1 : 0
+  count = local.ingress_enabled && var.wait_for_certificate_validation ? 1 : 0
 
-  certificate_arn         = aws_acm_certificate.wildcard.arn
+  certificate_arn         = aws_acm_certificate.wildcard[0].arn
   validation_record_fqdns = local.create_dns ? [for r in aws_route53_record.acm_validation : r.fqdn] : null
 
   timeouts {

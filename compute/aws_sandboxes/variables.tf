@@ -88,7 +88,7 @@ variable "public_subnet_ids" {
 
 variable "nlb_subnet_ids" {
   type        = list(string)
-  description = "Subnets for the ingress NLB. Defaults to `public_subnet_ids` when the pool is internet-facing and `private_subnet_ids` when it is not."
+  description = "Subnets for the ingress NLB. Defaults to `public_subnet_ids` when the pool is internet-facing and `private_subnet_ids` when it is not. Ignored when `ingress` is null."
   default     = null
 
   validation {
@@ -134,7 +134,10 @@ variable "ingress" {
     allowed_cidrs   = optional(list(string), ["0.0.0.0/0"])
   })
   description = <<-EOT
-    Public ingress for the HTTP proxy. Sandboxes are addressed as
+    Public ingress for the HTTP proxy. Optional: leave it null and the pool is
+    provisioned with no load balancer, no certificate and no public DNS at all.
+
+    With ingress, sandboxes are addressed as
     `<sandboxId>-<port>.sbx.<env_slug>.<domain>`.
 
       domain          — the customer's apex/delegated domain, e.g. `example.com`.
@@ -144,15 +147,26 @@ variable "ingress" {
                         `acm_validation_records` output for the operator to add.
       internet_facing — false makes the NLB internal (VPC/VPN reach only).
       allowed_cidrs   — who may reach the NLB on 443.
-  EOT
 
+    Without ingress, sandboxes are still fully usable and still reachable from
+    inside the VPC by their own address through the private hosted zone
+    (`<sandboxId>.sbx.<env_slug>.internal`, `vpc-ip` mode). What is lost is
+    published ports: `expose-port` in either `http` or `tcp` mode has nowhere to
+    publish to and is refused. Ingress can be added later — that is an ordinary
+    Terraform change run on the pool, not a re-create.
+  EOT
+  default     = null
+
+  # A blank or absent domain is the "no ingress" spelling, not a typo: the
+  # module.yaml mapping always renders the object's keys, so an unset domain
+  # reaches Terraform as `{ domain = null, ... }`.
   validation {
-    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.ingress.domain))
-    error_message = "The ingress.domain must be a valid DNS name, e.g. 'example.com'."
+    condition     = var.ingress == null || try(trimspace(var.ingress.domain), "") == "" || can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.ingress.domain))
+    error_message = "The ingress.domain must be a valid DNS name, e.g. 'example.com', or be left empty for a pool with no ingress."
   }
 
   validation {
-    condition     = length(coalesce(var.ingress.allowed_cidrs, ["0.0.0.0/0"])) > 0
+    condition     = var.ingress == null || length(coalesce(var.ingress.allowed_cidrs, ["0.0.0.0/0"])) > 0
     error_message = "At least one CIDR is required in ingress.allowed_cidrs."
   }
 }
@@ -174,7 +188,7 @@ variable "private_zone_name" {
 
 variable "proxy_port" {
   type        = number
-  description = "The port the host ingress proxy listens on. The NLB's TLS listener forwards to it."
+  description = "The port the host ingress proxy listens on. The NLB's TLS listener forwards to it. Unused when `ingress` is null."
   default     = 8443
 
   validation {
@@ -185,13 +199,13 @@ variable "proxy_port" {
 
 variable "ssl_policy" {
   type        = string
-  description = "TLS policy for the NLB's 443 listener."
+  description = "TLS policy for the NLB's 443 listener. Unused when `ingress` is null."
   default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 }
 
 variable "enable_tcp_exposure" {
   type        = bool
-  description = "Create the NLB IP-target group used to expose arbitrary sandbox TCP ports, and pre-authorise `tcp_exposure_port_range` through the NLB and host security groups. Tower adds the per-port listeners at runtime."
+  description = "Create the NLB IP-target group used to expose arbitrary sandbox TCP ports, and pre-authorise `tcp_exposure_port_range` through the NLB and host security groups. Tower adds the per-port listeners at runtime. Has no effect when `ingress` is null: there is no load balancer to expose through."
   default     = true
 }
 
@@ -403,7 +417,7 @@ variable "force_destroy_snapshots_bucket" {
 
 variable "wait_for_certificate_validation" {
   type        = bool
-  description = "Block the apply until the wildcard certificate is ISSUED. Leave true: an ELB listener cannot attach a pending certificate. Set false only when the certificate is known to be issued already and the wait is dead time."
+  description = "Block the apply until the wildcard certificate is ISSUED. Leave true: an ELB listener cannot attach a pending certificate. Set false only when the certificate is known to be issued already and the wait is dead time. Has no effect when `ingress` is null: no certificate is requested."
   default     = true
 }
 

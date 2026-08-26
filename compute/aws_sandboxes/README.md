@@ -1,6 +1,6 @@
 # Ravion AWS Sandboxes Module
 
-Provisions the static half of a Ravion sandbox pool in a customer's AWS account: the host identity, the ingress path, the snapshot store and the launch template hosts are stamped from.
+Provisions the static half of a Ravion sandbox pool in a customer's AWS account: the host identity, the snapshot store, the launch template hosts are stamped from and — optionally — the public ingress path.
 
 **Hosts are not in here.** The pool's fleet is dynamic — the Tower reconciler launches, cordons, drains and terminates EC2 instances from this module's launch template and tags them `ravion:pool=<pool_id>`, so a pool can scale from zero to hundreds of hosts without a Terraform run. This module knows nothing about individual instances, and nothing in its state changes when the fleet does. Everything else a pool needs is here, exactly once.
 
@@ -8,9 +8,8 @@ Provisions the static half of a Ravion sandbox pool in a customer's AWS account:
 
 - Host IAM role, instance profile and a least-privilege policy: its own M2M credential from SSM, read/write on the snapshots bucket, log delivery, public-ECR auth, and — in `vpc-ip` mode — ENI address management scoped to the pool's own ENIs
 - Self-contained host and NLB security groups — a host carries the pool's own group and nothing else
-- Network Load Balancer with a TLS listener on 443, an instance target group for the host ingress proxy, and an IP target group for raw TCP exposure of sandbox IPs
-- ACM wildcard certificate for `*.sbx.<env>.<domain>`, validated automatically when the Route 53 zone is yours and reported as records to add when it is not
-- Route 53 wildcard alias record, plus a private hosted zone (`sbx.<env>.internal`) for per-sandbox records in `vpc-ip` mode
+- A private hosted zone (`sbx.<env>.internal`) for per-sandbox records in `vpc-ip` mode
+- **Optional ingress** (`ingress`, default `null`) — when set: a Network Load Balancer with a TLS listener on 443, an instance target group for the host ingress proxy, an IP target group for raw TCP exposure of sandbox IPs, an ACM wildcard certificate for `*.sbx.<env>.<domain>` validated automatically when the Route 53 zone is yours and reported as records to add when it is not, and a Route 53 wildcard alias record
 - S3 snapshot chunk store: SSE, public access blocked, versioning off, lifecycle expiry with a tag-based exemption for pinned objects
 - Launch template with `cpu_options.nested_virtualization = "enabled"`, IMDSv2 required, a chunk-cache data volume and user-data that writes `/etc/ravion/sandbox-host.env`
 - Host and sandbox CloudWatch log groups
@@ -75,6 +74,35 @@ module "aws_sandboxes" {
 
 With no `hosted_zone_id` the apply parks on certificate validation: add the CNAME pair the plan shows (also exported as `acm_validation_records`) to your DNS provider and the apply continues. A listener cannot attach a `PENDING_VALIDATION` certificate, so there is no way to skip that wait — see `acm_validation_timeout`.
 
+### A pool with no ingress
+
+```hcl
+module "aws_sandboxes" {
+  source = "git::https://github.com/ravionhq/modules.git//compute/aws_sandboxes?ref=rvn-aws-sandboxes@0.1.0"
+
+  pool_id  = "clz9x8y7w6v5u4t3"
+  env_slug = "dev"
+
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+
+  host_ami_id = var.host_ami_id
+
+  # No `ingress` block. That is the whole difference.
+  internal_access_cidrs = ["10.0.0.0/8"]
+}
+```
+
+`ingress` defaults to `null`, so a pool needs no domain to exist. Nothing on the public path is created: no load balancer, no listener, neither target group, no NLB security group, no certificate and no public DNS record. Nothing else changes — hosts, IAM, the snapshot store, the log groups and the private hosted zone are identical to a pool with ingress.
+
+**What you get.** Sandboxes run normally, and in `vpc-ip` mode each one still owns a VPC private IP and a record in the private zone, so anything inside the VPC, across a peering connection or on the VPN reaches it at `<sandboxId>.sbx.dev.internal` on any port with stock tools. Add the client ranges to `internal_access_cidrs` — with no ingress that is the only path in, so leaving it empty leaves sandboxes reachable only from inside the pool's own security group.
+
+**What you lose.** `expose-port` — in either `http` or `tcp` mode. There is no hostname to publish and no target group to register into, so the host agent refuses the request rather than reporting a port as published that answers nothing. The API refuses it earlier, with `Ravion:SandboxPool:INGRESS_NOT_CONFIGURED`.
+
+**Adding ingress later.** Set `ingress` on the pool (through the API, `PUT /sandbox-pool` with an `ingress` object). That is an ordinary Terraform change run on the pool's module instance: the load balancer, certificate and DNS are created, the hosts' launch template gets a new version carrying the domain and target group, and existing hosts pick it up on the next rollout. Nothing is destroyed and no sandbox is lost. If the zone is not in this account the apply will park on certificate validation exactly as it does for a pool created with ingress, so budget for the records.
+
+Removing ingress from a pool that has it is the same run in reverse, and does destroy the load balancer and certificate — every published port stops answering.
+
 ## Network modes
 
 | mode               | how a sandbox is addressed                                                                                                                                                                                                                 | trade-off                                                                                                                                    |
@@ -94,7 +122,7 @@ The **SSM host credential** grant used to be in that list, and is not any more. 
 
 ## Certificate validation
 
-`acm_validation_records` is always exported, whether or not the module wrote the records itself. With `ingress.hosted_zone_id` set, the records are created and validation completes unattended; without it, the output is the instruction list.
+`acm_validation_records` is exported whenever there is a certificate, whether or not the module wrote the records itself. With `ingress.hosted_zone_id` set, the records are created and validation completes unattended; without it, the output is the instruction list. On a pool with no ingress there is no certificate and the output is an empty list.
 
 ## Provider version
 
@@ -129,7 +157,7 @@ See `variables.tf`. The ones that shape everything else:
 | `host_ami_id`             | Ravion sandbox host AMI, shared to this account for this region                                         | —                         |
 | `host_instance_types`     | Preference-ordered; the launch template pins the first, the reconciler uses the rest as fleet overrides | `["m8i.2xlarge"]`         |
 | `network_mode`            | `vpc-ip` or `nat`                                                                                       | `vpc-ip`                  |
-| `ingress`                 | `{domain, hosted_zone_id?, internet_facing?, allowed_cidrs?}`                                           | —                         |
+| `ingress`                 | `{domain, hosted_zone_id?, internet_facing?, allowed_cidrs?}`. Optional — `null` provisions the pool with no load balancer, certificate or public DNS, and no port can be published | `null`                    |
 | `private_zone_name`       | Private hosted zone name                                                                                | `sbx.<env_slug>.internal` |
 | `snapshot_retention_days` | Expiry for unpinned snapshot objects                                                                    | `30`                      |
 | `ravion_role_arn`         | Grants the Ravion cross-account role access to the snapshots bucket                                     | `null`                    |
@@ -146,13 +174,17 @@ Exactly the surface Tower caches on `SandboxPool` and hands to the reconciler:
 | `host_sg_id`                     | Pool host security group                              |
 | `instance_profile_arn`           | Instance profile every host boots with                |
 | `snapshots_bucket`               | Snapshot chunk store                                  |
-| `nlb_target_group_arn`           | Instance target group for the ingress proxy           |
-| `nlb_ip_target_group_arn`        | IP target group for TCP exposure (null when disabled) |
-| `nlb_dns_name`                   | NLB DNS name                                          |
-| `ingress_domain`                 | `sbx.<env>.<domain>`                                  |
+| `ingress_enabled`                | Whether the pool has a public ingress path at all     |
+| `nlb_target_group_arn`           | Instance target group for the ingress proxy (null without ingress) |
+| `nlb_ip_target_group_arn`        | IP target group for TCP exposure (null when disabled or without ingress) |
+| `nlb_dns_name`                   | NLB DNS name (null without ingress)                   |
+| `nlb_arn`                        | NLB ARN (null without ingress)                        |
+| `certificate_arn`                | Wildcard certificate ARN (null without ingress)       |
+| `ingress_domain`                 | `sbx.<env>.<domain>` (null without ingress)           |
 | `private_zone_id`                | Private hosted zone for per-sandbox records           |
+| `private_zone_name`              | Private hosted zone name, never derived by the caller |
 | `ssm_param_prefix`               | Where the reconciler writes per-host M2M credentials  |
-| `acm_validation_records`         | Certificate validation records                        |
+| `acm_validation_records`         | Certificate validation records (empty without ingress) |
 
 ## Testing
 
@@ -163,10 +195,11 @@ tofu validate
 tofu test
 ```
 
-The tests run entirely in plan mode against a mocked AWS provider — no credentials, no API calls. They cover the defaults, both network modes, an internal pool on an external zone, the host policy's scoping, and the name-length folding a long pool id triggers.
+The tests run entirely in plan mode against a mocked AWS provider — no credentials, no API calls. They cover the defaults, both network modes, an internal pool on an external zone, a pool with no ingress at all (and the equivalent spelling, an ingress object with a blank domain), the host policy's scoping, and the name-length folding a long pool id triggers.
 
 ## Notes
 
 - **VPC endpoints.** None are created here: the `rvn-aws-network` module the pool is bound to owns the S3 gateway and SSM/ECR interface endpoints the hosts use.
 - **Host egress** defaults to TCP 443 plus DNS, matching the plan. Sandboxes that need other outbound ports need `host_allow_all_egress = true`; per-sandbox egress policy is enforced on the host by nftables either way, so this security group is the outer envelope, not the policy.
-- **TCP exposure** pre-authorises `tcp_exposure_port_range` on both security groups. The NLB still drops traffic on any port without a listener, and listeners are added per exposed port by Tower.
+- **TCP exposure** pre-authorises `tcp_exposure_port_range` on both security groups. The NLB still drops traffic on any port without a listener, and listeners are added per exposed port by Tower. `enable_tcp_exposure` has no effect on a pool with no ingress: it is a property of the load balancer, and there is none.
+- **Resource addresses.** Making ingress optional gave every resource on the public path a `count`, so `aws_lb.this` is now `aws_lb.this[0]` and so on. `moved.tf` states each rename, so an existing pool that keeps its ingress replans with no replacement. No resource address changed in a way that forces one.

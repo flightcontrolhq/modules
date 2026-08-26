@@ -29,11 +29,45 @@ locals {
   partition  = data.aws_partition.current.partition
 
   # Ingress: <sandboxId>-<port>.sbx.<env>.<domain>
-  ingress_domain   = "sbx.${var.env_slug}.${var.ingress.domain}"
-  wildcard_domain  = "*.sbx.${var.env_slug}.${var.ingress.domain}"
-  create_dns       = var.ingress.hosted_zone_id != null
-  internet_facing  = coalesce(var.ingress.internet_facing, true)
-  ingress_cidrs    = coalesce(var.ingress.allowed_cidrs, ["0.0.0.0/0"])
+  #
+  # The whole public path — NLB, TLS listener, both target groups, the NLB
+  # security group, the wildcard certificate and its validation, the wildcard
+  # alias record — hangs off this one switch. A pool without it still runs
+  # sandboxes; it simply has nowhere to publish a port to, and every in-VPC
+  # path (the private zone below, `vpc-ip` addressing, internal_access_cidrs)
+  # is untouched. Turning it on later is an ordinary change run.
+  #
+  # A null `ingress` and an ingress whose `domain` is null or blank mean the
+  # same thing. Both spellings have to work: the module.yaml mapping renders the
+  # object's keys unconditionally, so an unset domain arrives as
+  # `{ domain = null, internet_facing = true, ... }` rather than as no object at
+  # all, and treating that as "ingress requested" would produce a certificate
+  # for `*.sbx.<env>.` and an apply that never validates.
+  ingress_enabled = try(trimspace(var.ingress.domain), "") != ""
+
+  # Read through `try` rather than `var.ingress.x`: a conditional in Terraform
+  # is not reliably short-circuiting, so an attribute access on a null object
+  # can be evaluated even in the branch that is not taken.
+  ingress_domain_input          = try(var.ingress.domain, null)
+  ingress_hosted_zone_id        = try(var.ingress.hosted_zone_id, null)
+  ingress_internet_facing_input = try(var.ingress.internet_facing, null)
+  ingress_allowed_cidrs_input   = try(var.ingress.allowed_cidrs, null)
+
+  ingress_domain  = local.ingress_enabled ? "sbx.${var.env_slug}.${local.ingress_domain_input}" : null
+  wildcard_domain = local.ingress_enabled ? "*.sbx.${var.env_slug}.${local.ingress_domain_input}" : null
+  create_dns      = local.ingress_enabled && local.ingress_hosted_zone_id != null
+  internet_facing = local.ingress_enabled && coalesce(local.ingress_internet_facing_input, true)
+  ingress_cidrs   = local.ingress_enabled ? coalesce(local.ingress_allowed_cidrs_input, ["0.0.0.0/0"]) : []
+
+  # Raw TCP exposure is a property of the ingress NLB, so it cannot outlive it.
+  tcp_exposure_enabled = local.ingress_enabled && var.enable_tcp_exposure
+
+  # Certificate validation records, empty when there is no certificate.
+  # Splatted through the attribute rather than `one(...)` over the resource: the
+  # certificate object as a whole carries a sensitive mark, and a sensitive
+  # value cannot be a `for_each` key or an unmarked output.
+  acm_validation_options = flatten(aws_acm_certificate.wildcard[*].domain_validation_options)
+
   nlb_subnet_ids   = length(coalesce(var.nlb_subnet_ids, [])) > 0 ? var.nlb_subnet_ids : (local.internet_facing ? var.public_subnet_ids : var.private_subnet_ids)
   ip_address_type  = var.ipv6_enabled ? "dualstack" : "ipv4"
   private_zone     = coalesce(var.private_zone_name, "sbx.${var.env_slug}.internal")
