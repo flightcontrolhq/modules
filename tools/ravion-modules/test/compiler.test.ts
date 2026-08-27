@@ -11,7 +11,7 @@ describe("compiler", () => {
     const compiled = await compileDefinitionFile(join(fixturesDir, "modules", "networking", "vpc", "ravion-aws-vpc-definition.yml"));
 
     assert.equal(compiled.published, true);
-    assert.equal(compiled.global, true);
+    assert.equal(compiled.global, undefined);
     assert.equal(compiled.type, "ravion-aws-vpc");
     assert.equal(compiled.name, "AWS VPC");
     assert.equal(compiled.description, "AWS VPC and subnets");

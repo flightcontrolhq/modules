@@ -217,8 +217,9 @@ export async function publishDefinitions(
     );
     const categoryChanged = categories.length > 0 &&
       (categoryIds.length !== categories.length || !haveSameValues(remoteCategoryIds, categoryIds));
-    const shouldPlanGlobalPublication = isInitialPublication && definition.global;
-    const shouldPublishDefinitionAfterVersion = isInitialPublication && definition.global;
+    const shouldPublishDefinitionGlobally =
+      (isInitialPublication && definition.global !== false) ||
+      (!isInitialPublication && definition.global === true && remoteDefinition?.isGlobalPublished !== true);
     if (!remoteDefinition) {
       items.push(
         createItem(
@@ -295,7 +296,7 @@ export async function publishDefinitions(
     const latestRemoteVersion = remoteDefinition
       ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
       : undefined;
-    const globalPublicationItem = shouldPlanGlobalPublication
+    const globalPublicationItem = shouldPublishDefinitionGlobally
       ? createItem(
           definition,
           "patch-definition",
@@ -330,7 +331,7 @@ export async function publishDefinitions(
       if (globalPublicationItem) {
         items.push(globalPublicationItem);
       }
-      if (!dryRun && shouldPublishDefinitionAfterVersion) {
+      if (!dryRun && shouldPublishDefinitionGlobally) {
         remoteDefinition = await client.patchModuleDefinition({
           id: remoteDefinition.id,
           isGlobalPublished: true,
@@ -369,7 +370,7 @@ export async function publishDefinitions(
         });
       }
       await createVersionOrConfirmDuplicate(client, remoteDefinition.id, definition);
-      if (shouldPublishDefinitionAfterVersion) {
+      if (shouldPublishDefinitionGlobally) {
         remoteDefinition = await client.patchModuleDefinition({
           id: remoteDefinition.id,
           isGlobalPublished: true,

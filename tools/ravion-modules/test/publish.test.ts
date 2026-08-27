@@ -189,6 +189,31 @@ describe("publish", () => {
     assert.deepEqual(client.patchedDefinitions, [{ id: "vpc", isGlobalPublished: true }]);
   });
 
+  it("retries an explicit global publication when the first visibility patch fails", async () => {
+    const compiled = createCompiledDefinition({ global: true });
+    const client = new MockRavionClient();
+    let failGlobalPatch = true;
+    client.onPatchDefinition = async (input) => {
+      if (failGlobalPatch && input.isGlobalPublished) {
+        failGlobalPatch = false;
+        throw new Error("Global publication failed");
+      }
+    };
+
+    await assert.rejects(
+      () => publishDefinitions([compiled], client, { dryRun: false }),
+      /Global publication failed/,
+    );
+
+    const result = await publishDefinitions([compiled], client, { dryRun: false });
+
+    assert.deepEqual(result.items.map(({ action }) => action), ["skip-version", "patch-definition"]);
+    assert.deepEqual(client.patchedDefinitions, [
+      { id: "definition-1", isGlobalPublished: true },
+      { id: "definition-1", isGlobalPublished: true },
+    ]);
+  });
+
   it("validates pending module versions through the server dry-run API", async () => {
     const client = new MockRavionClient({
       definitions: [{ id: "vpc", type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets." }],
@@ -821,7 +846,6 @@ function createCompiledDefinition(overrides: Partial<CompiledDefinition> = {}): 
   return {
     filePath: join("/repo", "networking", "vpc", "ravion-aws-vpc-definition.yml"),
     published: true,
-    global: true,
     type: "ravion-aws-vpc",
     name: "AWS VPC",
     description: "AWS VPC and subnets.",
@@ -859,6 +883,7 @@ class MockRavionClient implements RavionModuleApiClient {
   onListModuleVersions?: (moduleDefinitionId: string) => Promise<RemoteModuleVersion[]>;
   onCreateVersion?: (input: ModuleVersionInput) => Promise<void>;
   onDryRunVersion?: (input: ModuleVersionInput) => Promise<void>;
+  onPatchDefinition?: (input: ModuleDefinitionPatchInput) => Promise<void>;
 
   constructor(options: { categories?: RemoteModuleCategory[]; definitions?: RemoteModuleDefinition[]; versionsByDefinitionId?: Record<string, RemoteModuleVersion[]> } = {}) {
     this.categories = options.categories ?? [];
@@ -922,6 +947,9 @@ class MockRavionClient implements RavionModuleApiClient {
 
   async patchModuleDefinition(input: ModuleDefinitionPatchInput): Promise<RemoteModuleDefinition> {
     this.patchedDefinitions.push(input);
+    if (this.onPatchDefinition) {
+      await this.onPatchDefinition(input);
+    }
     const patched = this.definitions.map((definition) => {
       if (definition.id !== input.id) {
         return definition;

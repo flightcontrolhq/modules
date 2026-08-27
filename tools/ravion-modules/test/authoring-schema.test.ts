@@ -10,7 +10,7 @@ describe("authoring schema", () => {
     const definition = await parseAuthoringDefinitionFile(join(fixturesDir, "valid-definition.yml"));
 
     assert.equal(definition.published, true);
-    assert.equal(definition.global, true);
+    assert.equal(definition.global, undefined);
     assert.equal(definition.definition.type, "ravion-aws-vpc");
     assert.equal(definition.release.version, "1.2.3");
     assert.deepEqual(definition.module.inputs, [
@@ -39,6 +39,17 @@ describe("authoring schema", () => {
     });
 
     assert.equal(definition.global, false);
+  });
+
+  it("preserves an explicit global publication request", () => {
+    const definition = validateAuthoringDefinition({
+      global: true,
+      definition: { type: "ravion-aws-vpc", name: "AWS VPC", description: "AWS VPC and subnets" },
+      release: { version: "1.2.3", description: "Add subnet options." },
+      module: {},
+    });
+
+    assert.equal(definition.global, true);
   });
 
   it("rejects a non-boolean publication setting", () => {

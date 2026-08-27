@@ -3,7 +3,7 @@ import YAML from "yaml";
 
 export interface AuthoringDefinition {
   published: boolean;
-  global: boolean;
+  global?: boolean;
   definition: {
     type: string;
     name: string;
@@ -96,7 +96,7 @@ export function validateAuthoringDefinition(value: unknown, filePath = "*-defini
 
   return {
     published: value.published !== false,
-    global: value.global !== false,
+    global: value.global as boolean | undefined,
     definition: value.definition as AuthoringDefinition["definition"],
     release: value.release as AuthoringDefinition["release"],
     module: value.module as AuthoringDefinition["module"],

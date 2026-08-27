@@ -7,7 +7,7 @@ import { validateUniqueDefinitionTypes } from "./guardrails.js";
 export interface CompiledDefinition {
   filePath: string;
   published: boolean;
-  global: boolean;
+  global?: boolean;
   type: string;
   name: string;
   description: string;
