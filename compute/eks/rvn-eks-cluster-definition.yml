@@ -5,7 +5,7 @@ definition:
   description: Production-ready Amazon EKS cluster with default managed capacity, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
   version: 0.2.0
-  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, use consistent endpoint and control-plane logging field names, clarify node group, security group, and controller settings, keep the Ravion Runner role in advanced settings, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
+  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, define Fargate profiles and cluster access entries with guided forms instead of raw JSON, use consistent endpoint and control-plane logging field names, clarify node group and controller settings, keep the Ravion Runner role in advanced settings, manage the Ravion Runner security group automatically, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
 module:
   inputs:
     - id: network
@@ -242,10 +242,58 @@ module:
       type: section
     - collapsible: true
       default: {}
-      description: 'Run selected namespaces on AWS Fargate instead of EC2 nodes. Define optional profiles keyed by name; each value follows the composite module''s fargate_profiles object shape, for example {"selectors": [{"namespace": "my-namespace"}]}.'
+      description: Run pods from selected namespaces on AWS Fargate instead of EC2 nodes.
       id: fargate_profiles
+      item_inputs:
+        - add_button_label: Add selector
+          description: Namespaces whose pods run on this profile. At least one selector is required.
+          id: selectors
+          item_inputs:
+            - description: Kubernetes namespace matched by this selector.
+              id: namespace
+              label: Namespace
+              placeholder: my-namespace
+              required: true
+              type: string
+            - collapsible: true
+              default: {}
+              description: Optional pod labels that narrow the match to specific pods in the namespace. Leave empty to match every pod.
+              id: labels
+              label: Pod labels
+              type: keyvalue
+          item_label: Selector
+          item_title:
+            fallback: Selector
+            template: "{namespace}"
+          label: Selectors
+          required: true
+          type: object_array
+        - add_button_label: Add subnet ID
+          collapsible: true
+          description: Private subnets for Fargate pods in this profile. Leave empty to use the cluster's private subnets. Public subnets are not supported by Fargate.
+          id: subnet_ids
+          label: Subnet IDs
+          placeholder: subnet-0123456789abcdef0
+          type: string_array
+        - collapsible: true
+          description: Existing pod execution role for this profile. Leave blank to create one automatically.
+          id: pod_execution_role_arn
+          label: Pod execution role ARN
+          placeholder: arn:aws:iam::123456789012:role/my-fargate-pod-execution-role
+          type: string
+      item_label: Fargate profile
+      item_title:
+        template: "{key}"
+      key:
+        description: Unique Fargate profile name.
+        label: Profile name
+        patterns:
+          - message: 1-63 letters, numbers, hyphens, and underscores. Start with a letter or number.
+            pattern: ^[A-Za-z0-9][A-Za-z0-9-_]{0,62}$
+        placeholder: serverless-jobs
       label: Fargate profiles
-      type: object
+      required: false
+      type: object_map
     - id: section_access
       label: Cluster access
       type: section
@@ -267,11 +315,6 @@ module:
       show_when:
         endpoint_public_access_enabled: true
       type: string_array
-    - default: true
-      description: Create a security group allowed to reach the Kubernetes API endpoint. Attach it to the Ravion execution environment used by modules that talk to the cluster (such as EKS Add-ons with Karpenter) so their pipeline runs can reach a private endpoint.
-      id: ravion_runner_security_group_creation_enabled
-      label: Ravion Runner security group
-      type: boolean
     - collapsible: true
       default: true
       description: Create an IAM role that Ravion Runner step executions assume for Kubernetes API access, registered as an EKS access entry with cluster-admin. Used by the EKS Add-ons module to install Helm charts.
@@ -280,10 +323,106 @@ module:
       type: boolean
     - collapsible: true
       default: {}
-      description: Additional IAM principals that need cluster access. The principal that creates the cluster receives admin access automatically. Define entries by a stable key; each value follows the composite module's access_entries object shape (principal_arn, type, kubernetes_groups, policy_associations).
+      description: Additional IAM principals that need cluster access. The principal that creates the cluster receives admin access automatically.
       id: access_entries
+      item_inputs:
+        - description: IAM role or user granted access to the cluster.
+          id: principal_arn
+          label: IAM principal ARN
+          placeholder: arn:aws:iam::123456789012:role/PlatformAdmins
+          required: true
+          type: string
+        - default: STANDARD
+          description: Standard covers people and automation. The node types register node roles and are normally managed by the module that creates the nodes.
+          id: type
+          label: Entry type
+          required: true
+          type: string
+          values:
+            - label: Standard
+              value: STANDARD
+            - label: EC2 Linux node
+              value: EC2_LINUX
+            - label: EC2 Windows node
+              value: EC2_WINDOWS
+            - label: Fargate Linux node
+              value: FARGATE_LINUX
+        - add_button_label: Add group
+          collapsible: true
+          default: []
+          description: Kubernetes RBAC groups this principal is mapped to, in addition to any access policies below. Group names cannot start with "system:".
+          id: kubernetes_groups
+          label: Kubernetes groups
+          placeholder: platform-admins
+          show_when:
+            type: STANDARD
+          type: string_array
+        - collapsible: true
+          description: Kubernetes user name this principal is mapped to. Leave blank to let EKS derive one.
+          id: user_name
+          label: Kubernetes user name
+          show_when:
+            type: STANDARD
+          type: string
+        - collapsible: true
+          default: {}
+          description: EKS access policies granted to this principal, such as cluster admin or namespace-scoped admin.
+          id: policy_associations
+          item_inputs:
+            - description: ARN of the EKS access policy to grant.
+              id: policy_arn
+              label: Policy ARN
+              placeholder: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+              required: true
+              type: string
+            - default: cluster
+              description: Grant the policy across the whole cluster or only in selected namespaces.
+              id: access_scope_type
+              label: Access scope
+              required: true
+              type: string
+              values:
+                - label: Whole cluster
+                  value: cluster
+                - label: Selected namespaces
+                  value: namespace
+            - add_button_label: Add namespace
+              description: Namespaces the policy applies to.
+              id: access_scope_namespaces
+              label: Namespaces
+              placeholder: my-namespace
+              required: true
+              show_when:
+                access_scope_type: namespace
+              type: string_array
+          item_label: Access policy
+          item_title:
+            template: "{key}"
+          key:
+            description: Unique key for this policy association.
+            label: Policy key
+            patterns:
+              - message: Lowercase letters, numbers, and hyphens only.
+                pattern: ^[a-z0-9-]+$
+            placeholder: cluster-admin
+          label: Access policies
+          required: false
+          show_when:
+            type: STANDARD
+          type: object_map
+      item_label: Access entry
+      item_title:
+        template: "{key}"
+      key:
+        description: Unique key identifying this access entry.
+        label: Entry key
+        patterns:
+          - message: Lowercase letters, numbers, and hyphens only.
+            pattern: ^[a-z0-9-]+$
+        placeholder: platform-admins
       label: Access entries
-      type: object
+      required: false
+      type: object_map
     - id: section_observability
       label: Observability
       type: section
@@ -335,7 +474,6 @@ module:
         endpoint_private_access_enabled: << module.input.endpoint_private_access_enabled >>
         endpoint_public_access_enabled: << module.input.endpoint_public_access_enabled >>
         public_access_cidrs: << module.input.endpoint_public_access_cidrs || ["0.0.0.0/0"] >>
-        ravion_runner_security_group_creation_enabled: << module.input.ravion_runner_security_group_creation_enabled >>
         ravion_runner_role_creation_enabled: << module.input.ravion_runner_role_creation_enabled >>
         system_node_group:
           instance_types: << module.input.system_node_instance_types >>
@@ -472,7 +610,7 @@ module:
 
     ### Default capacity
 
-    Every cluster gets a required managed node group that provides default compute for cluster components such as CoreDNS, add-ons, and workloads without stricter placement. It defaults to 2-10 On-demand `t3.medium` nodes. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds. Each workload module can select Any capacity, On-demand, or Spot placement.
+    Every cluster gets a required managed node group that provides default compute for cluster components such as CoreDNS, add-ons, and workloads without stricter placement. It defaults to 2-10 On-demand `t3.medium` nodes. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds. Each workload module can use automatic placement or target EC2 On-demand, EC2 Spot, or a dedicated Fargate profile.
 
     ### Additional node groups
 
@@ -484,17 +622,17 @@ module:
 
     ### Fargate
 
-    Fargate profiles run pods from selected namespaces on serverless compute instead of EC2 nodes. Each profile matches one or more namespace selectors, optionally narrowed by pod labels.
+    Fargate profiles run pods from selected namespaces on serverless compute instead of EC2 nodes. Each profile matches one or more namespace selectors, optionally narrowed by pod labels. Profiles use the cluster's private subnets and a generated pod execution role unless you override them.
 
     ## Cluster access
 
     By default the Kubernetes API server is reachable only from inside the VPC. Enable **Public endpoint access** to reach it from the internet, and restrict the allowed source ranges with **Public access CIDRs**.
 
-    A **Ravion Runner security group** is created by default and allowed to reach the API endpoint on port 443. Attach it to the Ravion execution environment used by modules that talk to the Kubernetes API (such as **EKS Add-ons** with Karpenter enabled) so their pipeline runs can reach a private endpoint. Its ID is available as the `ravion_runner_security_group_id` stack output.
+    A **Ravion Runner security group** is created automatically and allowed to reach the API endpoint on port 443. Modules that talk to the Kubernetes API (such as **EKS Add-ons** with Karpenter enabled) pick it up from this cluster so their pipeline runs can reach a private endpoint, so there is nothing to configure. Its ID is available as the `ravion_runner_security_group_id` stack output.
 
     A **Ravion Runner role** is also created by default: a stable IAM role registered as an EKS access entry with cluster-admin, which Ravion Runner step executions assume when they need the Kubernetes API. This keeps per-run pipeline roles out of the cluster's access configuration — the EKS Add-ons module assumes it automatically via `aws eks get-token`. Its ARN is available as the `ravion_runner_role_arn` stack output. The trust policy admits only this AWS account; tighten it further with the `ravion_runner_role_trusted_principal_arns` Terraform variable.
 
-    EKS access entries control which IAM principals can access the cluster. The IAM principal that creates the cluster is granted admin access automatically. Additional principals can be granted access through the **Access entries** map. Automatic access for Ravion deploys will be wired here in a future release.
+    EKS access entries control which IAM principals can access the cluster. The IAM principal that creates the cluster is granted admin access automatically. Grant additional principals access through the **Access entries** form: give each entry an IAM principal ARN, then attach EKS access policies scoped to the whole cluster or to selected namespaces, and optionally map the principal to Kubernetes RBAC groups. Automatic access for Ravion deploys will be wired here in a future release.
 
     ## Observability
 
@@ -513,12 +651,11 @@ module:
     | Secrets encryption     | No       | `true`               | Envelope-encrypt Kubernetes secrets with KMS           |
     | Private endpoint access| No       | `true`               | Reach the API server from inside the VPC               |
     | Public endpoint access | No       | `false`              | Expose the API server to the internet                  |
-    | Ravion Runner security group | No | `true`               | Security group allowed to reach the API endpoint       |
     | Ravion Runner role     | No       | `true`               | Assumable IAM role with cluster-admin access entry     |
     | Default capacity       | No       | 2-10 `t3.medium`     | Capacity type, instance types, size bounds, and disk size   |
     | Additional node groups | No       | -                    | Structured On-demand or Spot managed node groups       |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
-    | Access entries         | No       | -                    | Extra IAM principals with cluster access               |
+    | Access entries         | No       | -                    | Extra IAM principals with cluster access and policies  |
     | Control plane logs     | No       | api, audit, authenticator | Log types shipped to CloudWatch                   |
     | Tags                   | No       | Ravion defaults      | Custom tags applied to all resources                   |
 

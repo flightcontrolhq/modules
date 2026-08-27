@@ -11,7 +11,7 @@ module "pod_execution_role" {
 
   source = "../../../../security/iam"
 
-  name        = "${var.cluster_name}-${var.name}-fargate"
+  name        = local.pod_execution_role_name
   description = "EKS Fargate pod execution role for ${var.cluster_name}/${var.name}"
 
   trusted_services = ["eks-fargate-pods.amazonaws.com"]

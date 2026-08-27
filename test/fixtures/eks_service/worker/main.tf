@@ -88,7 +88,7 @@ module "eks_service" {
   ravion_runner_role_arn           = "arn:aws:iam::123456789012:role/${var.name}-cluster-ravion-runner"
   release_name                     = var.name
   release_namespace                = "terratest"
-  vpc_id = module.vpc.vpc_id
+  vpc_id                           = module.vpc.vpc_id
 
   # ECR repository for the worker's image. Non-default values are used for
   # tag mutability so the test can prove the setting is forwarded.

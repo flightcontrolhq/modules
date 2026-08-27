@@ -93,3 +93,13 @@
   # only after the cluster stack had applied, leaving this required field empty
   # while adding a workload. Matches ecs-service-cluster-common-mapped-inputs.
   default: <<ref.input.vpc_id>>
+- id: cluster_private_subnet_ids
+  immutable: true
+  label: Cluster private subnet IDs
+  type: string_array
+  description: Private subnets from the selected EKS cluster. A workload targeting Fargate launches pod network interfaces in these subnets; EKS Fargate does not support public subnets.
+  placeholder: subnet-0123456789abcdef0
+  required: true
+  show_when:
+    compute_target: fargate
+  default: <<ref.input.subnet_ids>>

@@ -39,6 +39,38 @@ variable "vpc_id" {
 }
 
 ################################################################################
+# Fargate
+################################################################################
+
+variable "fargate_profile" {
+  type = object({
+    name       = string
+    subnet_ids = list(string)
+    selectors = list(object({
+      namespace = string
+      labels    = map(string)
+    }))
+  })
+  description = "Optional EKS Fargate profile for this workload. Set to null to schedule without a workload-managed profile. EKS Fargate is on-demand only and requires private subnets."
+  default     = null
+
+  validation {
+    condition     = var.fargate_profile == null || try(can(regex("^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$", var.fargate_profile.name)), false)
+    error_message = "The fargate_profile.name must be 1-63 alphanumeric, hyphen, or underscore characters and start with an alphanumeric character."
+  }
+
+  validation {
+    condition     = var.fargate_profile == null || try(length(var.fargate_profile.selectors) >= 1, false)
+    error_message = "The fargate_profile must include at least one selector."
+  }
+
+  validation {
+    condition     = var.fargate_profile == null || var.cluster_name != null
+    error_message = "The cluster_name must be set when fargate_profile is configured."
+  }
+}
+
+################################################################################
 # Target Group
 ################################################################################
 
@@ -248,7 +280,7 @@ variable "workload_release_cleanup_enabled" {
 
 variable "cluster_name" {
   type        = string
-  description = "Name of the EKS cluster the workload's Helm release is installed on. Required when workload_release_cleanup_enabled is true."
+  description = "Name of the EKS cluster the workload runs on. Required when workload_release_cleanup_enabled is true or fargate_profile is set."
   default     = null
 }
 

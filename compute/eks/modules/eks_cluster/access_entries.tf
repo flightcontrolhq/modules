@@ -25,9 +25,10 @@ resource "aws_eks_access_policy_association" "this" {
     for entry_key, entry in var.access_entries : {
       for assoc_key, assoc in entry.policy_associations :
       "${entry_key}:${assoc_key}" => {
-        entry_key  = entry_key
-        policy_arn = assoc.policy_arn
-        scope      = assoc.access_scope
+        entry_key        = entry_key
+        policy_arn       = assoc.policy_arn
+        scope_type       = assoc.access_scope_type
+        scope_namespaces = assoc.access_scope_namespaces
       }
     }
   ]...)
@@ -37,7 +38,7 @@ resource "aws_eks_access_policy_association" "this" {
   policy_arn    = each.value.policy_arn
 
   access_scope {
-    type       = each.value.scope.type
-    namespaces = each.value.scope.type == "namespace" ? each.value.scope.namespaces : null
+    type       = each.value.scope_type
+    namespaces = each.value.scope_type == "namespace" ? each.value.scope_namespaces : null
   }
 }

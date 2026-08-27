@@ -1,19 +1,27 @@
 - id: section_resources
   label: Resources
   type: section
-- id: capacity_type
-  label: Capacity type
+- id: compute_target
+  moved_from:
+    - capacity_type
+  label: Compute target
   type: string
-  description: Choose where Kubernetes may schedule this workload. The selected EKS cluster or Karpenter NodePool must provide that capacity type.
+  description: Choose whether Kubernetes schedules this workload automatically, on a specific EC2 capacity type, or on a dedicated EKS Fargate profile. EKS Fargate capacity is on-demand only.
   required: true
   default: any
   values:
-    - label: Any capacity
+    - label: Automatic
+      description: Let Kubernetes choose any matching compute target available in the cluster. EKS Fargate, when matched, is on-demand only.
       value: any
-    - label: On-demand
+    - label: EC2 on-demand
+      description: Require an on-demand EKS managed node or Karpenter node.
       value: on_demand
-    - label: Spot
+    - label: EC2 Spot
+      description: Require an EKS managed Spot node or Karpenter Spot node; interruptions are possible.
       value: spot
+    - label: Fargate
+      description: Create a dedicated EKS Fargate profile for this workload. EKS Fargate is on-demand only and does not offer Spot capacity.
+      value: fargate
 - id: cpu_request
   label: CPU request
   type: string

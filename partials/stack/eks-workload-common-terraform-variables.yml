@@ -2,8 +2,9 @@
 #
 # All three workloads point at the same compute/eks_service root module. Web
 # adds the load balancer variables on top; worker and cron pass
-# listener_arn: null and get nothing but the ECR repository, which is the same
-# shape compute/ecs_service uses with a nullable load_balancer_attachment.
+# listener_arn: null and get only the optional ECR repository and Fargate
+# profile, which is the same load-balancer gating shape compute/ecs_service
+# uses with a nullable load_balancer_attachment.
 #
 # The ECR repository exists only for the Dockerfile and Railpack build sources.
 # On the image_registry path the module deploys an image someone else built and
@@ -26,5 +27,9 @@ cluster_name: << module.input.cluster_name >>
 ravion_runner_role_arn: << module.input.ravion_runner_role_arn >>
 release_name: << module.input.name >>
 release_namespace: << module.input.namespace >>
+fargate_profile: >-
+  << module.input.compute_target == "fargate" ? {"name": module.input.name + "-fargate",
+  "subnet_ids": module.input.cluster_private_subnet_ids, "selectors": [{"namespace": module.input.namespace,
+  "labels": {"app.kubernetes.io/instance": module.input.name}}]} : nil >>
 tags:
   $include: ./ravion-tags.yml

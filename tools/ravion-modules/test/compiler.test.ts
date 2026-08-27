@@ -218,6 +218,7 @@ describe("compiler", () => {
     assert.ok(clusterInputs.findIndex((input) => input.id === "section_access") < clusterInputs.findIndex((input) => input.id === "endpoint_private_access_enabled"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "section_fargate") < clusterInputs.findIndex((input) => input.id === "section_access"));
     assert.ok(clusterInputs.findIndex((input) => input.id === "access_entries") < clusterInputs.findIndex((input) => input.id === "section_observability"));
+    assert.equal(clusterInputs.some((input) => input.id === "ravion_runner_security_group_creation_enabled"), false);
     assert.equal(clusterInputs.some((input) => input.id === "public_access_cidrs"), false);
     assert.equal(clusterInputs.some((input) => input.id === "enabled_cluster_log_types"), false);
     assert.equal(clusterInputs.some((input) => input.id === "cluster_log_retention_in_days"), false);
@@ -233,9 +234,44 @@ describe("compiler", () => {
       findInput(additionalNodeGroupFields, "instance_types").values,
       systemNodeInstanceTypes.values,
     );
+
+    const fargateProfiles = findInput(clusterInputs, "fargate_profiles");
+    assert.equal(fargateProfiles.type, "object_map");
+    const fargateProfileFields = (fargateProfiles.item_inputs as unknown[]).map((input) =>
+      assertRecord(input, "fargate_profiles.item_inputs[]"),
+    );
+    const fargateSelectors = findInput(fargateProfileFields, "selectors");
+    assert.equal(fargateSelectors.type, "object_array");
+    assert.equal(fargateSelectors.required, true);
+    const fargateSelectorFields = (fargateSelectors.item_inputs as unknown[]).map((input) =>
+      assertRecord(input, "fargate_profiles.selectors.item_inputs[]"),
+    );
+    assert.equal(findInput(fargateSelectorFields, "namespace").required, true);
+    assert.equal(findInput(fargateSelectorFields, "labels").type, "keyvalue");
+    assert.equal(findInput(fargateProfileFields, "subnet_ids").type, "string_array");
+    assert.equal(findInput(fargateProfileFields, "pod_execution_role_arn").type, "string");
+
+    const accessEntries = findInput(clusterInputs, "access_entries");
+    assert.equal(accessEntries.type, "object_map");
+    const accessEntryFields = (accessEntries.item_inputs as unknown[]).map((input) =>
+      assertRecord(input, "access_entries.item_inputs[]"),
+    );
+    assert.equal(findInput(accessEntryFields, "principal_arn").required, true);
+    const policyAssociations = findInput(accessEntryFields, "policy_associations");
+    assert.equal(policyAssociations.type, "object_map");
+    const policyAssociationFields = (policyAssociations.item_inputs as unknown[]).map((input) =>
+      assertRecord(input, "access_entries.policy_associations.item_inputs[]"),
+    );
+    assert.equal(findInput(policyAssociationFields, "policy_arn").required, true);
+    assert.equal(findInput(policyAssociationFields, "access_scope_type").default, "cluster");
+    assert.deepEqual(findInput(policyAssociationFields, "access_scope_namespaces").show_when, {
+      access_scope_type: "namespace",
+    });
+
     const systemNodeGroup = assertRecord(getTerraformVariable(cluster.module, "system_node_group"), "system_node_group");
     assert.equal(systemNodeGroup.instance_types, "<< module.input.system_node_instance_types >>");
     assert.equal("desired_size" in systemNodeGroup, false);
+    assert.equal(getTerraformVariable(cluster.module, "ravion_runner_security_group_creation_enabled"), undefined);
 
     const karpenterNodePool = assertRecord(
       getTerraformVariable(addons.module, "karpenter_default_node_pool"),
@@ -247,11 +283,35 @@ describe("compiler", () => {
     );
 
     const deploy = assertRecord(web.module.deploy, "module.deploy");
+    const webInputs = getModuleInputs(web.module);
+    const computeTarget = findInput(webInputs, "compute_target");
+    assert.equal(computeTarget.default, "any");
+    assert.deepEqual(computeTarget.moved_from, ["capacity_type"]);
+    assert.deepEqual(getValueOptions(computeTarget), ["any", "on_demand", "spot", "fargate"]);
+    const clusterInput = findInput(webInputs, "cluster");
+    const mappedInputs = (clusterInput.mapped_inputs as unknown[]).map((input) =>
+      assertRecord(input, "cluster.mapped_inputs[]"),
+    );
+    const clusterPrivateSubnetIds = findInput(mappedInputs, "cluster_private_subnet_ids");
+    assert.equal(clusterPrivateSubnetIds.required, true);
+    assert.deepEqual(clusterPrivateSubnetIds.show_when, { compute_target: "fargate" });
     const definition = assertRecord(deploy.definition, "module.deploy.definition");
     const values = assertRecord(definition.values, "module.deploy.definition.values");
     assert.equal(
       values.affinity,
-      '<< module.input.capacity_type == nil || module.input.capacity_type == "any" ? {} : {"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"eks.amazonaws.com/capacityType","operator":"In","values":[module.input.capacity_type == "spot" ? "SPOT" : "ON_DEMAND"]}]},{"matchExpressions":[{"key":"karpenter.sh/capacity-type","operator":"In","values":[module.input.capacity_type == "spot" ? "spot" : "on-demand"]}]}]}}} >>',
+      '<< module.input.compute_target == "on_demand" || module.input.compute_target == "spot" ? {"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"eks.amazonaws.com/capacityType","operator":"In","values":[module.input.compute_target == "spot" ? "SPOT" : "ON_DEMAND"]}]},{"matchExpressions":[{"key":"karpenter.sh/capacity-type","operator":"In","values":[module.input.compute_target == "spot" ? "spot" : "on-demand"]}]}]}}} : {} >>',
+    );
+    assert.equal(
+      values.podLabels,
+      '<< module.input.compute_target == "fargate" ? {"eks.amazonaws.com/fargate-profile": module.input.name + "-fargate"} : {} >>',
+    );
+    assert.equal(
+      values.podAnnotations,
+      '<< module.input.compute_target == "on_demand" || module.input.compute_target == "spot" ? {"eks.amazonaws.com/compute-type": "ec2"} : {} >>',
+    );
+    assert.equal(
+      getTerraformVariable(web.module, "fargate_profile"),
+      '<< module.input.compute_target == "fargate" ? {"name": module.input.name + "-fargate", "subnet_ids": module.input.cluster_private_subnet_ids, "selectors": [{"namespace": module.input.namespace, "labels": {"app.kubernetes.io/instance": module.input.name}}]} : nil >>',
     );
   });
 

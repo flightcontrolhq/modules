@@ -1,8 +1,8 @@
 # EKS Service Infrastructure
 
-The AWS-side infrastructure for a single EKS workload: an optional ECR repository for its container image, plus an optional Application Load Balancer attachment made of one IP-mode `aws_lb_target_group` and one `aws_lb_listener_rule` on a shared listener created by [`compute/eks/addons`](../eks/addons).
+The AWS-side infrastructure for a single EKS workload: an optional ECR repository, an optional workload-specific EKS Fargate profile, plus an optional Application Load Balancer attachment made of one IP-mode `aws_lb_target_group` and one `aws_lb_listener_rule` on a shared listener created by [`compute/eks/addons`](../eks/addons).
 
-Both halves are independently optional, which is what lets one root module serve all three EKS workload definitions:
+Each part is independently optional, which is what lets one root module serve all three EKS workload definitions. Selecting Fargate adds a profile and pod execution role to any row below; omitting `fargate_profile` leaves scheduling to existing cluster compute:
 
 | Caller | `ecr_repository_creation_enabled` | `listener_arn` | Creates |
 |--------|-----------------------------------|----------------|---------|
@@ -51,6 +51,18 @@ module "web" {
   ravion_runner_role_arn           = "arn:aws:iam::123456789012:role/acme-prod-ravion-runner"
   release_name                     = "acme-prod-api"
   release_namespace                = "acme-prod"
+
+  # Optional: create a dedicated on-demand Fargate profile for this workload.
+  fargate_profile = {
+    name       = "acme-prod-api-fargate"
+    subnet_ids = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"]
+    selectors = [{
+      namespace = "acme-prod"
+      labels = {
+        "app.kubernetes.io/instance" = "acme-prod-api"
+      }
+    }]
+  }
 
   tags = {
     Owner = "Ravion"
@@ -119,8 +131,9 @@ while those still exist.
 | ecr_image_scan_on_push_enabled | Scan images for vulnerabilities on push | `bool` | `true` | no |
 | ecr_force_delete_enabled | Allow deleting the repository while it still holds images | `bool` | `false` | no |
 | ecr_default_lifecycle_policy_enabled | Apply the `containers/ecr` built-in lifecycle policy | `bool` | `false` | no |
+| fargate_profile | Workload-specific EKS Fargate profile with `name`, private `subnet_ids`, and one or more namespace/label `selectors`; `null` disables it | `object` | `null` | no |
 | workload_release_cleanup_enabled | Uninstall the workload's Helm release when the stack is destroyed | `bool` | `false` | no |
-| cluster_name | EKS cluster the release is installed on; required with `workload_release_cleanup_enabled` | `string` | `null` | no |
+| cluster_name | EKS cluster the workload runs on; required with `workload_release_cleanup_enabled` or `fargate_profile` | `string` | `null` | no |
 | ravion_runner_role_arn | The cluster's `<cluster>-ravion-runner` role, assumed via `aws eks get-token` for the uninstall | `string` | `null` | no |
 | release_name | Helm release name Ravion installs for this workload | `string` | `null` | no |
 | release_namespace | Namespace the release is installed into (never removed itself) | `string` | `null` | no |
@@ -182,14 +195,17 @@ Each entry is `{ type, values }`. Supported types: `host-header`, `path-pattern`
 | ecr_repository_arn | ARN of the ECR repository, the build's push destination |
 | ecr_repository_name | Name of the ECR repository |
 | ecr_repository_url | URL of the ECR repository, passed to the chart as `image.repository` |
+| fargate_profile_name | Name of the workload's EKS Fargate profile |
+| fargate_profile_arn | ARN of the workload's EKS Fargate profile |
 | vpc_id | ID of the VPC the target group was created in |
 | region | AWS region where the resources are deployed |
 
-Every load balancer output is `null` when `listener_arn` is `null`, and every `ecr_*` output is `null` when `ecr_repository_creation_enabled` is `false`. Consumers can read them unconditionally.
+Every load balancer output is `null` when `listener_arn` is `null`, every `ecr_*` output is `null` when `ecr_repository_creation_enabled` is `false`, and both `fargate_profile_*` outputs are `null` when `fargate_profile` is `null`. Consumers can read them unconditionally.
 
 ## Design decisions
 
-- **One root module for all three workloads.** Web, worker, and cron each need an ECR repository when Ravion builds their image, and only web needs a load balancer. Rather than split the repository into its own module, both halves are gated here, exactly as `compute/ecs_service` gates ECR and its `load_balancer_attachment`. A worker stack that creates a single repository is still cheaper to reason about than two stacks per workload.
+- **One root module for all three workloads.** Web, worker, and cron each need an ECR repository when Ravion builds their image, any of them may need a Fargate profile, and only web needs a load balancer. Gating all three resource groups here keeps one stack per workload while matching `compute/ecs_service`'s optional ECR and load-balancer pattern.
+- **Fargate profiles are workload-specific.** A profile can select one release by namespace and its standard `app.kubernetes.io/instance` label. Fargate uses on-demand capacity and private subnets only; callers that omit the object create no profile or pod execution role.
 - **The ECR repository is created, not referenced.** The build needs a push destination that exists before the first build, and a per-module repository keeps image lifecycle and access scoped to one workload. Callers deploying a pre-built image set `ecr_repository_creation_enabled = false` and the module creates no repository.
 - **One target group, no alternate.** `compute/ecs_service` creates a `tg-1`/`tg-2` pair plus a test listener rule so ECS's native controller can shift traffic between them. The 2026-08-06 load balancer ADR on ENG-5033 scopes EKS v1 to rolling Deployment updates, so there is no alternate target group, no test rule, and no traffic-shift configuration here.
 - **No `ignore_changes` on the listener rule action.** The ECS module has to ignore `action` because the ECS deployment controller rewrites it mid-deploy. Nothing outside Terraform touches this rule, so drift here is real drift and should be corrected.
