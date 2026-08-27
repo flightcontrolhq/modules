@@ -9,7 +9,8 @@ const repoRoot = resolve("../..");
 
 test("renders one sorted row per definition with its release version", async () => {
   const compiled = await compileAllDefinitions(repoRoot);
-  const table = renderModuleDefinitionsTable(compiled, repoRoot);
+  const unpublished = { ...compiled[0], published: false, type: "ravion-disabled-example" };
+  const table = renderModuleDefinitionsTable([...compiled, unpublished], repoRoot);
   const rows = table.split("\n").slice(2);
 
   assert.equal(rows.length, compiled.length);
@@ -22,6 +23,7 @@ test("renders one sorted row per definition with its release version", async () 
       `expected a row for ${definition.type}@${definition.version}`,
     );
   }
+  assert.doesNotMatch(table, /`ravion-disabled-example`/);
 });
 
 test("replaces only the content between the generated markers", () => {
