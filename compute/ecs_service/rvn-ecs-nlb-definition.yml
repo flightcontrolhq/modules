@@ -4,7 +4,7 @@ definition:
   description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
 release:
   version: 1.2.0
-  description: Enable SOCI lazy loading by default so Fargate starts tasks before the full image finishes downloading, cutting startup time for large images. Turn it off for small images or EC2 capacity.
+  description: Enable SOCI lazy loading by default so Fargate starts tasks before the full image finishes downloading, cutting task startup time. The larger the image the more it saves. Turn it off for EC2 capacity.
 module:
   inputs:
     - id: section_cluster
