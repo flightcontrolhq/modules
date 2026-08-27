@@ -3,8 +3,8 @@ definition:
   name: ECS Web Service
   description: Web server ECS service for running an HTTP application behind an ECS cluster load balancer.
 release:
-  version: 1.1.0
-  description: Add Builder IAM policies inputs that attach extra IAM managed policies to the EC2 build runner role or replace the step default policies entirely for the duration of each build.
+  version: 1.2.0
+  description: Enable SOCI lazy loading by default so Fargate starts tasks before the full image finishes downloading, cutting startup time for large images. Turn it off for small images or EC2 capacity.
 module:
   inputs:
     - id: section_cluster
@@ -366,7 +366,9 @@ module:
       destroy:
         pipeline_id: << defaults.destroy_pipeline_id >>
   build:
-    $include: ../../partials/build/ecs-service-image-build.yml
+    $merge:
+      - ../../partials/build/ecs-service-image-build.yml
+    soci_enabled: << module.input.soci_enabled >>
   deploy:
     $merge:
       - ../../partials/deploy/ecs-service-deploy-common.yml
