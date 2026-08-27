@@ -97,7 +97,7 @@ variable "pod_execution_role_arn" {
   default     = null
 
   validation {
-    condition     = var.pod_execution_role_arn == null || can(regex("^arn:aws[a-zA-Z-]*:iam::", var.pod_execution_role_arn))
+    condition     = var.pod_execution_role_arn == null || trimspace(var.pod_execution_role_arn) == "" || can(regex("^arn:aws[a-zA-Z-]*:iam::", var.pod_execution_role_arn))
     error_message = "The pod_execution_role_arn must be a valid IAM role ARN."
   }
 }

@@ -2,8 +2,8 @@
 # Target Group
 #
 # Every load balancer output is null when var.listener_arn is null, so a worker
-# or cron stack that uses this module only for its ECR repository still
-# resolves them. one() is the null-safe read of a count = 0/1 resource.
+# or cron stack that uses this module for an ECR repository or Fargate profile
+# still resolves them. one() is the null-safe read of a count = 0/1 resource.
 ################################################################################
 
 output "target_group_arn" {
@@ -76,6 +76,20 @@ output "ecr_repository_name" {
 output "ecr_repository_url" {
   description = "The URL of the ECR repository (null if disabled)."
   value       = var.ecr_repository_creation_enabled ? module.ecr[0].repository_url : null
+}
+
+################################################################################
+# Fargate Profile
+################################################################################
+
+output "fargate_profile_name" {
+  description = "Name of the workload's EKS Fargate profile, or null when disabled."
+  value       = one(module.fargate_profile[*].fargate_profile_name)
+}
+
+output "fargate_profile_arn" {
+  description = "ARN of the workload's EKS Fargate profile, or null when disabled."
+  value       = one(module.fargate_profile[*].fargate_profile_arn)
 }
 
 ################################################################################

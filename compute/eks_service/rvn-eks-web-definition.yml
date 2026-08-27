@@ -5,7 +5,7 @@ definition:
   description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 1.0.0
-  description: Simplify health configuration and form layout, use consistent routing, scaling, release, and builder field names, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
+  description: Simplify health configuration and form layout, use consistent routing, scaling, release, and builder field names, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target automatic, EC2 on-demand, EC2 Spot, or on-demand Fargate compute.
 module:
   inputs:
     - id: section_cluster
@@ -542,7 +542,7 @@ module:
 
     | Part | Owns | Changes when |
     | ---- | ---- | ------------ |
-    | Terraform stack | Load balancer target group, listener rule, and the ECR repository | You change routing, health checks, the container port, or the build source |
+    | Terraform stack | Load balancer target group, listener rule, optional ECR repository, and optional EKS Fargate profile | You change routing, health checks, the container port, build source, or compute target |
     | Build | The container image, from a Dockerfile or Railpack | Every build, unless the build source is an existing registry image |
     | Helm deploy | Deployment, Service, HPA, secrets wiring | Every release, and whenever runtime settings change |
 
@@ -647,10 +647,12 @@ module:
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
-    | Capacity type | Any capacity | Schedule on any node, or require On-demand or Spot capacity |
+    | Compute target | Automatic | Let Kubernetes choose, require EC2 on-demand or EC2 Spot, or create a dedicated EKS Fargate profile |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
     | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
+
+    **Fargate** creates a dedicated profile matching this service's namespace and standard app instance label. Fargate pods launch only in the selected cluster's private subnets and use on-demand capacity; EKS Fargate does not offer Spot pricing. Choose an EC2 target when you need Spot savings or node-level capabilities unavailable on Fargate.
 
     Set the memory request close to steady-state usage and the limit above the worst legitimate spike. Because the CPU target is a percentage of the CPU request, a request set far above real usage keeps the autoscaler from ever scaling out.
 
@@ -734,7 +736,7 @@ module:
     | Path rules | No | - | Path patterns such as /*, /api/*, or /app/* |
     | Listener rule priority | No | Auto | Explicit ALB rule order |
     | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
-    | Capacity type | Yes | Any capacity | Required node capacity type |
+    | Compute target | Yes | Automatic | Automatic, EC2 on-demand, EC2 Spot, or on-demand EKS Fargate placement |
     | CPU limit | No | - | Optional CPU ceiling |
     | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |
@@ -763,6 +765,7 @@ module:
     - **One target group, no blue/green.** ECS Web Server keeps a production and an alternate target group so the ECS controller can shift traffic between them. EKS releases roll through the Kubernetes Deployment controller instead, so there is no alternate target group and no traffic-shift strategy to choose.
     - **`helm upgrade --atomic`.** A failed release reverts rather than leaving the cluster half-updated. The tradeoff is that a failing deploy takes the full rollout timeout before it reports failure.
     - **One ECR repository per module, created only when Ravion builds.** A build needs somewhere to push, and a per-module repository keeps image lifecycle and access scoped to the service. On the Pull from image registry path nothing is built, so no repository is created.
+    - **One Fargate profile per Fargate workload.** The profile selects only this release's namespace and app instance label, while an explicit pod label chooses it when profiles overlap. Automatic and EC2 targets create no profile.
     - **No Nixpacks.** ECS still carries a Nixpacks build source for services created before Railpack existed. EKS has no such history, so Dockerfile and Railpack are the only builders.
     - **Service name and container port are fixed after creation.** Both feed target group identity; changing them would orphan the existing target group and its registrations.
     - **Pod Identity, not IRSA.** The chart emits a stable ServiceAccount name and no role annotation, so an `aws_eks_pod_identity_association` can bind an IAM role to it by namespace and name.
@@ -770,6 +773,7 @@ module:
     ## Learn more
 
     - [Amazon EKS](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html)
+    - [AWS Fargate profile](https://docs.aws.amazon.com/eks/latest/userguide/fargate-profile.html)
     - [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
     - [Configure liveness, readiness and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
     - [HorizontalPodAutoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)

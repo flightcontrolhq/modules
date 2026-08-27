@@ -150,11 +150,9 @@ variable "access_entries" {
     kubernetes_groups = optional(list(string), [])
     user_name         = optional(string)
     policy_associations = optional(map(object({
-      policy_arn = string
-      access_scope = object({
-        type       = string
-        namespaces = optional(list(string))
-      })
+      policy_arn              = string
+      access_scope_type       = optional(string, "cluster")
+      access_scope_namespaces = optional(list(string), [])
     })), {})
   }))
   description = <<-EOT
@@ -167,8 +165,8 @@ variable "access_entries" {
         principal_arn = "arn:aws:iam::123456789012:role/PlatformAdmins"
         policy_associations = {
           "cluster-admin" = {
-            policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-            access_scope = { type = "cluster" }
+            policy_arn        = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+            access_scope_type = "cluster"
           }
         }
       }
@@ -180,6 +178,25 @@ variable "access_entries" {
   validation {
     condition     = alltrue([for e in var.access_entries : contains(["STANDARD", "EC2_LINUX", "EC2_WINDOWS", "FARGATE_LINUX"], e.type)])
     error_message = "Each access_entries.*.type must be 'STANDARD', 'EC2_LINUX', 'EC2_WINDOWS', or 'FARGATE_LINUX'."
+  }
+
+  validation {
+    condition = alltrue([
+      for e in var.access_entries : alltrue([
+        for a in values(e.policy_associations) : contains(["cluster", "namespace"], a.access_scope_type)
+      ])
+    ])
+    error_message = "Each access_entries.*.policy_associations.*.access_scope_type must be 'cluster' or 'namespace'."
+  }
+
+  validation {
+    condition = alltrue([
+      for e in var.access_entries : alltrue([
+        for a in values(e.policy_associations) :
+        a.access_scope_type != "namespace" || length(a.access_scope_namespaces) >= 1
+      ])
+    ])
+    error_message = "Each namespace-scoped policy association must list at least one namespace in access_scope_namespaces."
   }
 }
 

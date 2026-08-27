@@ -198,11 +198,9 @@ variable "access_entries" {
     kubernetes_groups = optional(list(string), [])
     user_name         = optional(string)
     policy_associations = optional(map(object({
-      policy_arn = string
-      access_scope = object({
-        type       = string
-        namespaces = optional(list(string))
-      })
+      policy_arn              = string
+      access_scope_type       = optional(string, "cluster")
+      access_scope_namespaces = optional(list(string), [])
     })), {})
   }))
   description = "Map of EKS access entries to create. Map keys are arbitrary stable identifiers."

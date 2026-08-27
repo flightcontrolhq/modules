@@ -14,8 +14,8 @@ locals {
 
   # A listener ARN is what makes this workload web-facing. Worker and cron
   # stacks pass null, and the target group, listener rule, and load balancer
-  # lookup all drop out, leaving the ECR repository as the module's only
-  # resource. This mirrors compute/ecs_service, where a nullable
+  # lookup all drop out, leaving only the optional ECR repository and Fargate
+  # profile. This mirrors compute/ecs_service, where a nullable
   # load_balancer_attachment gates the same objects.
   enable_load_balancer = var.listener_arn != null
 

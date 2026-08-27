@@ -5,7 +5,7 @@ definition:
   description: Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the selected observability providers, group add-ons with cluster selection, use consistent scaling, release, and builder field names, clarify ECR image scanning and deletion settings, keep default build policies in advanced settings, and let workloads target On-demand, Spot, or any available node capacity.
+  description: Follow the selected observability providers, group add-ons with cluster selection, use consistent scaling, release, and builder field names, clarify ECR settings, keep default build policies in advanced settings, and let workloads target automatic, EC2 on-demand, EC2 Spot, or on-demand Fargate compute.
 module:
   inputs:
     - id: section_cluster
@@ -101,8 +101,8 @@ module:
     - $include: ../../partials/inputs/terraform-settings.yml
   stack:
     # A worker has no load balancer, so listener_arn is null and
-    # compute/eks_service reduces to the ECR repository the build pushes to.
-    # This is the same shape rvn-ecs-worker uses with load_balancer_attachment.
+    # compute/eks_service creates only its optional ECR repository and Fargate
+    # profile. This is the same load-balancer gating shape rvn-ecs-worker uses.
     $template: ../../partials/templates/opentofu-stack.yml
     with:
       base_path: compute/eks_service
@@ -202,7 +202,7 @@ module:
 
     The chart deliberately includes no Service, no container port, and no probes. A worker is reached by nothing; it reaches out.
 
-    The only AWS resource this module creates is the ECR repository that Dockerfile and Railpack builds push to, so its Terraform stack is a single repository and nothing else. On the Pull from image registry path the stack creates nothing at all. Everything else the module needs - cluster endpoint, certificate authority data, and the Ravion Runner role - comes from the selected EKS Cluster module.
+    The Terraform stack creates the ECR repository that Dockerfile and Railpack builds push to and, when Fargate is selected, a workload-specific EKS Fargate profile and pod execution role. On the Pull from image registry path with automatic or EC2 compute, the stack creates no AWS resources. Everything else the module needs - cluster endpoint, certificate authority data, private subnet IDs, and the Ravion Runner role - comes from the selected EKS Cluster module.
 
     Chart source: [ravionhq/modules/charts/rvn-eks-worker](https://github.com/ravionhq/modules/tree/$local.module_tag/charts/rvn-eks-worker)
 
@@ -264,10 +264,12 @@ module:
     | Field | Default | Description |
     | ----- | ------- | ----------- |
     | CPU request | 100m | CPU reserved for the pod; the autoscaler's CPU target is a percentage of this |
-    | Capacity type | Any capacity | Schedule on any node, or require On-demand or Spot capacity |
+    | Compute target | Automatic | Let Kubernetes choose, require EC2 on-demand or EC2 Spot, or create a dedicated EKS Fargate profile |
     | CPU limit | - | Optional CPU ceiling. Leaving it blank lets a pod burst into spare node CPU |
     | Memory request | 256Mi | Memory reserved for the pod |
     | Memory limit | 512Mi | Memory ceiling; exceeding it terminates the container with OOMKilled |
+
+    **Fargate** creates a dedicated profile matching this worker's namespace and standard app instance label. Fargate pods launch only in the selected cluster's private subnets and use on-demand capacity; EKS Fargate does not offer Spot pricing. Choose EC2 Spot instead when interruption tolerance and lower compute cost matter more than serverless pod placement.
 
     Autoscaling is **off** by default, unlike the web module. CPU utilization is a poor proxy for worker demand: a worker blocked on a queue poll uses almost no CPU no matter how deep the backlog. Enable it when the work is genuinely CPU-bound, and prefer a fixed pod count otherwise.
 
@@ -335,7 +337,7 @@ module:
     | Start command | No | [] | Overrides the image entrypoint |
     | Start command arguments | No | [] | Overrides the image default arguments |
     | CPU request | Yes | 100m | CPU reserved per pod, in cores or millicores |
-    | Capacity type | Yes | Any capacity | Required node capacity type |
+    | Compute target | Yes | Automatic | Automatic, EC2 on-demand, EC2 Spot, or on-demand EKS Fargate placement |
     | CPU limit | No | - | Optional CPU ceiling |
     | Memory request | Yes | 256Mi | Memory reserved per pod |
     | Memory limit | Yes | 512Mi | Memory ceiling per pod |
@@ -361,7 +363,7 @@ module:
 
     ## Design decisions
 
-    - **The stack exists only for the image registry.** The worker itself is entirely Helm-owned; the Terraform stack creates the ECR repository a Dockerfile or Railpack build pushes to, and nothing else. On the Pull from image registry path it creates nothing.
+    - **Terraform owns AWS-side workload infrastructure.** The worker itself is Helm-owned; the stack creates an ECR repository when Ravion builds the image and a dedicated EKS Fargate profile when Fargate is selected. With a pulled image and automatic or EC2 compute, it creates nothing.
     - **No Nixpacks.** ECS still carries a Nixpacks build source for services created before Railpack existed. EKS has no such history, so Dockerfile and Railpack are the only builders.
     - **No Service and no probes.** A worker exposes no port, so there is nothing to route to and no HTTP endpoint to check. Liveness for a worker is better expressed by letting the process exit on a fatal error and letting Kubernetes restart it.
     - **Autoscaling defaults off.** CPU utilization rarely tracks worker demand. Turning it on by default would produce autoscaling that looks configured but never fires.
@@ -370,6 +372,7 @@ module:
 
     ## Learn more
 
+    - [AWS Fargate profile](https://docs.aws.amazon.com/eks/latest/userguide/fargate-profile.html)
     - [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
     - [Pod termination and graceful shutdown](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination)
     - [HorizontalPodAutoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
