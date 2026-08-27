@@ -1,7 +1,7 @@
 definition:
   type: rvn-ecs-nlb
   name: ECS Network Service
-  description: Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
+  description: Network Load Balanced ECS service for exposing one to five TCP, UDP, or TLS ports through an ECS cluster Network Load Balancer.
 release:
   version: 1.2.0
   description: Enable SOCI lazy loading by default so Fargate starts tasks before the full image finishes downloading, cutting task startup time. The larger the image the more it saves. Turn it off for EC2 capacity.
@@ -448,7 +448,7 @@ module:
           region: << stack.output.region >>
           statistic: Average
   readme: |
-    Network Load Balanced ECS service for running TCP, UDP, or TLS workloads behind an ECS cluster Network Load Balancer.
+    Network Load Balanced ECS service for exposing one to five TCP, UDP, or TLS ports through an ECS cluster Network Load Balancer.
 
     ## Overview
 
