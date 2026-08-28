@@ -174,13 +174,17 @@ export async function publishDefinitions(
   options: PublishOptions = {},
 ): Promise<PublishResult> {
   const dryRun = options.dryRun ?? true;
+  const publishedDefinitions = compiledDefinitions.filter((definition) => definition.published);
+  if (publishedDefinitions.length === 0) {
+    return { dryRun, categoryItems: [], items: [] };
+  }
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   options.logger?.(`Loaded ${inventory.definitions.length} remote module definitions.`);
   const definitionsToPublish = options.localDev
-    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main", {
+    ? applyLocalDevVersions(publishedDefinitions, inventory, options.localDevSourceRef ?? "main", {
         force: options.localDevForce,
       })
-    : compiledDefinitions;
+    : publishedDefinitions;
   const statuses = getReleaseStatuses(definitionsToPublish, { inventory });
   const errors = createPublishPlanErrors(statuses, definitionsToPublish, inventory);
   if (errors.length > 0) {
@@ -203,6 +207,8 @@ export async function publishDefinitions(
     left.type.localeCompare(right.type),
   )) {
     let remoteDefinition = definitionsByType.get(definition.type);
+    const isInitialPublication =
+      !remoteDefinition || (inventory.versionsByDefinitionId[remoteDefinition.id] ?? []).length === 0;
     const categories = categoryResult.byDefinitionType.get(definition.type) ?? [];
     const categoryIds = categories.flatMap((category) => category.id ? [category.id] : []);
     const remoteCategoryIds = remoteDefinition ? getRemoteModuleCategoryIds(remoteDefinition) : [];
@@ -211,11 +217,9 @@ export async function publishDefinitions(
     );
     const categoryChanged = categories.length > 0 &&
       (categoryIds.length !== categories.length || !haveSameValues(remoteCategoryIds, categoryIds));
-    const isOrganizationScoped = remoteDefinition !== undefined &&
-      (remoteDefinition.organizationId !== undefined || remoteDefinition.isGlobalPublished === false);
-    const shouldPlanGlobalPublication = isOrganizationScoped;
-    const shouldPublishDefinitionAfterVersion =
-      !remoteDefinition || isOrganizationScoped;
+    const shouldPublishDefinitionGlobally =
+      (isInitialPublication && definition.global !== false) ||
+      (!isInitialPublication && definition.global === true && remoteDefinition?.isGlobalPublished !== true);
     if (!remoteDefinition) {
       items.push(
         createItem(
@@ -292,7 +296,7 @@ export async function publishDefinitions(
     const latestRemoteVersion = remoteDefinition
       ? selectLatestVersion(inventory.versionsByDefinitionId[remoteDefinition.id] ?? [])
       : undefined;
-    const globalPublicationItem = shouldPlanGlobalPublication
+    const globalPublicationItem = shouldPublishDefinitionGlobally
       ? createItem(
           definition,
           "patch-definition",
@@ -327,7 +331,7 @@ export async function publishDefinitions(
       if (globalPublicationItem) {
         items.push(globalPublicationItem);
       }
-      if (!dryRun && shouldPublishDefinitionAfterVersion) {
+      if (!dryRun && shouldPublishDefinitionGlobally) {
         remoteDefinition = await client.patchModuleDefinition({
           id: remoteDefinition.id,
           isGlobalPublished: true,
@@ -357,7 +361,7 @@ export async function publishDefinitions(
           `Cannot create ${definition.type}@${definition.version}; module definition was not created.`,
         );
       }
-      if (shouldPublishDefinitionAfterVersion) {
+      if (isInitialPublication) {
         await client.dryRunModuleVersion({
           moduleDefinitionId: remoteDefinition.id,
           version: definition.version,
@@ -366,7 +370,7 @@ export async function publishDefinitions(
         });
       }
       await createVersionOrConfirmDuplicate(client, remoteDefinition.id, definition);
-      if (shouldPublishDefinitionAfterVersion) {
+      if (shouldPublishDefinitionGlobally) {
         remoteDefinition = await client.patchModuleDefinition({
           id: remoteDefinition.id,
           isGlobalPublished: true,
@@ -520,12 +524,16 @@ export async function dryRunModuleVersions(
   client: RavionModuleApiClient,
   options: ModuleVersionDryRunOptions = {},
 ): Promise<ModuleVersionDryRunResult[]> {
+  const publishedDefinitions = compiledDefinitions.filter((definition) => definition.published);
+  if (publishedDefinitions.length === 0) {
+    return [];
+  }
   const inventory = await loadRemoteInventory(client, { logger: options.logger });
   const definitionsToValidate = options.localDev
-    ? applyLocalDevVersions(compiledDefinitions, inventory, options.localDevSourceRef ?? "main", {
+    ? applyLocalDevVersions(publishedDefinitions, inventory, options.localDevSourceRef ?? "main", {
         force: options.localDevForce,
       })
-    : compiledDefinitions;
+    : publishedDefinitions;
   const statuses = getReleaseStatuses(definitionsToValidate, { inventory });
   const results = await Promise.all(
     statuses.map(async (status) => {
