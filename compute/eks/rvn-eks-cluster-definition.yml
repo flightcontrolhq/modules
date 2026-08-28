@@ -245,8 +245,7 @@ module:
       description: Run pods from selected namespaces on AWS Fargate instead of EC2 nodes.
       id: fargate_profiles
       item_inputs:
-        - add_button_label: Add selector
-          description: Namespaces whose pods run on this profile. At least one selector is required.
+        - description: Namespaces whose pods run on this profile. At least one selector is required.
           id: selectors
           item_inputs:
             - description: Kubernetes namespace matched by this selector.

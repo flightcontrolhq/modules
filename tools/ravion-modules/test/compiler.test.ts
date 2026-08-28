@@ -305,6 +305,7 @@ describe("compiler", () => {
     const fargateSelectors = findInput(fargateProfileFields, "selectors");
     assert.equal(fargateSelectors.type, "object_array");
     assert.equal(fargateSelectors.required, true);
+    assert.equal(fargateSelectors.add_button_label, undefined);
     const fargateSelectorFields = (fargateSelectors.item_inputs as unknown[]).map((input) =>
       assertRecord(input, "fargate_profiles.selectors.item_inputs[]"),
     );

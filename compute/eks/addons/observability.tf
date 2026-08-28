@@ -263,15 +263,6 @@ locals {
     if contains(["datadog", "new_relic", "grafana_cloud", "otlp_metrics"], secret.provider)
   ]
 
-  # A vendor provider that needs a credential and has no way to get one is a
-  # collector that starts and then fails every export, so the plan stops here.
-  vendor_providers_selected = concat(
-    local.logs_datadog_enabled || local.metrics_datadog_enabled ? ["datadog"] : [],
-    local.logs_new_relic_enabled || local.metrics_new_relic_enabled ? ["new_relic"] : [],
-    local.grafana_cloud_enabled ? ["grafana_cloud"] : [],
-    local.logs_splunk_enabled ? ["splunk"] : [],
-  )
-
   ##############################################################################
   # "Open in <vendor>" links
   #
