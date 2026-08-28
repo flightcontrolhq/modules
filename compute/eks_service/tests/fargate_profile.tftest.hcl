@@ -25,6 +25,22 @@ mock_provider "aws" {
       account_id = "123456789012"
     }
   }
+  mock_data "aws_lb_listener" {
+    defaults = {
+      load_balancer_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test/1234567890abcdef"
+    }
+  }
+  mock_data "aws_lb" {
+    defaults = {
+      dns_name = "test.us-east-1.elb.amazonaws.com"
+      zone_id  = "Z35SXDOTRQ7X7K"
+    }
+  }
+  mock_resource "aws_lb_target_group" {
+    defaults = {
+      arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/1234567890abcdef"
+    }
+  }
   mock_resource "aws_iam_role" {
     defaults = {
       arn = "arn:aws:iam::123456789012:role/mock-fargate-pod-execution-role"
@@ -101,6 +117,20 @@ run "supports_long_cluster_and_workload_names" {
   assert {
     condition     = output.fargate_profile_name == "test-workload-with-a-deliberately-long-name-fargate"
     error_message = "The profile name must remain stable when its generated pod execution role name needs shortening."
+  }
+}
+
+run "hashes_long_target_group_names" {
+  command = plan
+
+  variables {
+    name         = "shared-prefix-for-two-workloads-alpha"
+    listener_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/test/1234567890abcdef/1234567890abcdef"
+  }
+
+  assert {
+    condition     = output.target_group_name == "shared-prefix-for-tw-${substr(sha1("shared-prefix-for-two-workloads-alpha"), 0, 8)}-tg"
+    error_message = "Long target group names must include a stable hash within the ELBv2 name limit."
   }
 }
 

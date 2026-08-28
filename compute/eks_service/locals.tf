@@ -19,9 +19,9 @@ locals {
   # load_balancer_attachment gates the same objects.
   enable_load_balancer = var.listener_arn != null
 
-  # ELBv2 target group names are capped at 32 characters and the "-tg" suffix
-  # takes 3, mirroring the ECS service module's truncation.
-  target_group_name = "${substr(var.name, 0, min(length(var.name), 24))}-tg"
+  # Preserve short names. Long names include a stable hash so workloads that
+  # share a prefix cannot collide within ELBv2's 32-character limit.
+  target_group_name = length(var.name) <= 29 ? "${var.name}-tg" : "${substr(var.name, 0, 20)}-${substr(sha1(var.name), 0, 8)}-tg"
 
   # The health check speaks the same protocol as the target group unless the
   # caller overrides it, which is what ECS does via primary_health_check_protocol.
