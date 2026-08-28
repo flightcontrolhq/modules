@@ -150,11 +150,67 @@ aws ssm send-command \
 ## Storage and durability
 
 - The root volume and optional data volume are per-instance EBS. They are durable for the life of the instance: deploys, restarts, and stack updates never replace an instance, so local files such as an embedded database stay in place at local-disk latency, exactly as on an EC2 instance you launch yourself.
-- They are deleted with the instance, which happens for exactly three reasons: you terminate or recycle it (for example to roll out a new AMI), the group scales in, or it fails its Auto Scaling health check. Keep backups (EBS snapshots, dumps to S3) for critical data instead of avoiding local storage.
+- They are deleted with the instance, which happens for exactly three reasons: you terminate or recycle it (for example to roll out a new AMI), the group scales in, or it fails its Auto Scaling health check. On-disk databases such as SQLite and Postgres are supported when Backups are configured; without backups, a replacement loses the volume.
 - `health_check_type` defaults to `EC2`, which is the AWS instance/system status check — unreachable instance, broken boot or network state, failed underlying host. It ignores application state: a crashed app is restarted in place by supervisord, and a failing HTTP health check never replaces an instance. So health-driven replacement is rare and tied to hardware or hypervisor failure. Setting `health_check_type = "ELB"` makes load balancer health replace instances instead, which also breaks in-place deploys (they briefly deregister the instance).
-- Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container.
+- Mount an EFS file system (`efs_*` variables) when several instances must share the same files, or when a replacement instance must find data already in place; it is mounted on every instance and, for the container runtime, bind-mounted into the app container. EFS is for shared files, not a live SQLite or Postgres data directory.
+- Shared or multi-attach EBS block storage is deliberately not supported. A block device is not a shared filesystem; concurrent read/write mounts of XFS or ext4 can corrupt it. Reliable multi-writer access needs a cluster filesystem and fencing, while single-writer databases gain nothing from multi-attach.
 - When `docker_socket_mount_enabled` is enabled, the data volume and EFS host paths are mapped identically inside the app container. This lets sibling containers started through the host Docker socket resolve those same host-path binds correctly.
 - Launch template changes (AMI, user data, volumes) intentionally apply only to newly launched instances; there is no instance refresh, so applying a new AMI never replaces running instances by itself. Recycling instances to pick up the new AMI is a replacement, and it deletes their volumes.
+
+## Backups and restore
+
+Enable `backup_enabled` to create a service-specific Amazon Data Lifecycle Manager schedule. The default daily snapshot uses `filesystem_freeze` when a data volume exists, which runs `sync` and freezes only the data mount (never `/` or `/boot`) while the multi-volume snapshot set is taken. Use `crash_consistent` when filesystem freezing is unsuitable, or `custom` with both pre- and post-script commands for engine-specific quiescing. A safety timeout thaws a frozen filesystem if the post-script is delayed or lost.
+
+Snapshots are incremental EBS snapshots, but the schedule still costs storage and (for cross-region copies) transfer and destination-region storage. The honest RPO is `backup_interval_hours`: a failure immediately before a scheduled snapshot can lose up to that interval. Scheduled snapshots have no automatic restore. The RTO requires a human operator to deliberately select a snapshot and recycle an instance; a replacement instance otherwise boots with an empty data volume.
+
+To restore:
+
+1. Find a snapshot using the `RavionBackup=<service name>` tag, or the `backup_snapshot_filter` output.
+2. Set `data_volume_snapshot_id` to the selected `snap-...` ID while `data_volume_creation_enabled` remains enabled. Keep `data_volume_size` at least as large as the snapshot's size; the configured `data_volume_type` and size are passed to the restored volume, so AWS rejects an undersized restore instead of silently changing it.
+3. Apply the change and recycle the affected instance so it launches from the snapshot.
+4. Verify that the restored filesystem is mounted at `data_volume_mount_path` and that the application sees the expected data.
+5. Clear `data_volume_snapshot_id` and apply again, so future replacements do not keep booting from that pinned snapshot.
+
+## Logical dumps and replacement restore
+
+The logical-dump layer adds engine-native dumps for per-object recovery and replacement onto a different instance, Availability Zone, or region. Enable `backup_dump_enabled`, then provide the two halves of the command contract:
+
+- `backup_dump_command` runs as root and writes a complete logical dump into the module-created staging directory.
+- `backup_dump_restore_command` runs as root and reads that directory to restore the dump.
+
+The staging directory is exported to both commands as `RAVION_BACKUP_DIR`. The command must write its artifacts there; the module owns staging, manifests, upload/download, newest-backup discovery, and retention. For example, a SQLite command can use `.backup "$RAVION_BACKUP_DIR/app.db"`, while a PostgreSQL command can write `pg_dump` output there.
+
+The `${name}-backup` SSM Command document provides `backup-now` and `restore-latest` actions. The same script runs from the daily systemd timer and the planned-termination automation. Each run is stored under `<prefix><service name>/<UTC timestamp>/` and contains a manifest with completion time, instance ID, and the files present. Discovery reads manifests rather than trusting key names or object metadata.
+
+The schedule uses systemd `OnCalendar` syntax, including shorthand values such as `hourly` and `daily`. Set `backup_dump_max_interval_hours` to a value greater than the schedule interval; it controls the missing-success alarm window. The default AL2023 AMI supplies AWS CLI v2, which the S3 workflow checks for rather than attempting to install the unrelated `awscli` package.
+
+S3 is the default destination and uses a module-created encrypted, versioned, private bucket unless `backup_dump_s3_bucket_arn` supplies an existing one. Current and noncurrent versions are expired according to `backup_dump_retention_days` for a module-created bucket. A supplied bucket is owned by the caller: the module prunes old service artifacts from it, but bucket lifecycle, versioning, and object-lock policy remain the bucket owner's responsibility. Terraform does not delete a non-empty module-created bucket unless `backup_dump_force_deletion_enabled` is explicitly enabled. EFS uses the existing EFS mount and the same layout, but costs roughly ten times S3 storage, has no versioning or object lock of its own, and is available only in the VPC. EFS is a backup destination, not a live SQLite or Postgres data directory; `rsync` of a live database file is not a valid backup.
+
+When restore-on-first-boot is enabled, a replacement instance discovers the newest manifest, logs its exact completion timestamp and age, downloads the artifacts, runs the restore command, and writes a marker on the data volume only after success. A reboot does not restore again. A successful listing that contains no manifests is treated as a fresh service: the module logs that no restore is needed and writes the marker so the instance can initialize normally. Listing or download failures, failed restore commands, and stale backups identified by `backup_max_age_hours` remain fatal; they do not write the marker or start the application. The instance remains available for inspection rather than silently starting with stale or empty data and diverging from the backup.
+
+Planned ASG termination can run a final dump through an EventBridge-triggered SSM Automation lifecycle hook. `backup_on_termination_timeout_seconds` controls the lifecycle-hook heartbeat; the Automation step reserves 60 seconds of slack so `CompleteLifecycleAction` can still run before the hook expires. The standalone `backup_dump` document keeps its 3600-second limit for manual and scheduled invocations. The hook's `CONTINUE` safety result prevents a failed or slow dump from wedging the group. Hard crashes, Availability Zone loss, and instance-store failures cannot run this hook. If multiple instances restore the same dump, they then diverge independently; the feature is intentionally not gated on instance count.
+
+Logical-dump RPO is approximately the dump schedule interval, while a planned-termination dump can provide near-zero loss for planned replacement. Restore-on-first-boot automates the workflow but still depends on the newest available dump and a successful engine restore command. Scheduled EBS snapshot restore remains deliberate and manual for whole-volume recovery.
+
+## Continuous replication
+
+The continuous-replication layer adds native Litestream support for SQLite. Enable `backup_replication_enabled`, set `backup_replication_database_path` to an absolute path under the EBS data volume, and provide an S3 bucket ARN or let the module create one. The module installs its internally pinned Litestream 0.5.12 release after verifying its architecture-specific checksum, writes a Litestream configuration with the configured full-snapshot interval and retention, and runs `litestream replicate` as a supervised program. Litestream upgrades are module releases rather than a caller-controlled input. Its log is shipped to the same CloudWatch log group as application and logical-backup logs.
+
+When `backup_replication_restore_on_first_boot_enabled` is enabled, the first boot lists the replica's LTX files with Litestream's `ltx -level all -json` command before restoring. A successful empty listing is treated as a fresh service and marks restore complete; a non-zero discovery exit blocks startup, so credential and network failures cannot masquerade as an empty replica. Restore failures and replicas older than `backup_replication_max_age_hours` also block application startup without writing the marker. The replica is a supplement to snapshots and logical dumps, not a replacement: a corrupted SQLite database produces a corrupted replica.
+
+Litestream is SQLite-only. Keep the live database on the local EBS data volume, not EFS. The configured replication bucket is shared with logical dumps when both features are enabled: dumps use the logical-backup prefix and replicas use their own replication prefix. Do not run multiple instances against the same SQLite database and replica prefix: the replicas will conflict or corrupt. The module intentionally does not gate replication on instance count, so the operator must enforce single-writer deployment.
+
+PostgreSQL continuous archiving is not a module input. It requires engine-specific `archive_command` configuration in `postgresql.conf` and credentials that this module does not own. Use `additional_user_data` for a WAL-G or pgBackRest recipe and custom consistency hooks for deliberate snapshots instead of enabling an input that would only be partially configured.
+
+The three backup layers have different recovery characteristics:
+
+| Layer | Mechanism | Honest RPO | Restore path |
+| --- | --- | --- | --- |
+| Scheduled snapshots | EBS snapshots | Snapshot interval | Human selects a snapshot and recycles an instance |
+| Logical dumps | Engine-native dumps | Dump interval, with near-zero loss for planned termination | Optional restore-on-first-boot |
+| Continuous replication | Litestream SQLite replication | Typically seconds, based on the snapshot interval | Optional restore-on-first-boot |
+
+Use snapshots for whole-volume recovery, logical dumps for portable per-object recovery, and replication for low-RPO SQLite replacement recovery. Keep at least one snapshot or dump path because continuous replication preserves whatever state the source database has, including corruption.
 
 ## Requirements
 
@@ -195,6 +251,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | data_volume_size | Data volume size (GB) | `number` | `20` | no |
 | data_volume_type | Data volume type | `string` | `"gp3"` | no |
 | data_volume_mount_path | Host mount path for the data volume | `string` | `"/data"` | no |
+| data_volume_snapshot_id | Snapshot used to restore a replacement data volume | `string` | `null` | no |
 | additional_user_data | Extra shell script appended to bootstrap | `string` | `""` | no |
 | min_size | Minimum instances | `number` | `1` | no |
 | max_size | Maximum instances | `number` | `3` | no |
@@ -216,6 +273,38 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | log_retention_in_days | CloudWatch app log retention | `number` | `30` | no |
 | log_rotation_max_size_mb | Size at which supervisord rotates the on-instance app log | `number` | `20` | no |
 | log_rotation_backup_count | Rotated app log files kept on the instance | `number` | `5` | no |
+| backup_enabled | Schedule DLM EBS snapshots | `bool` | `false` | no |
+| backup_interval_hours | Hours between snapshots (1, 2, 3, 4, 6, 8, 12, or 24) | `number` | `24` | no |
+| backup_start_time | Snapshot schedule start time in UTC (HH:MM) | `string` | `"05:00"` | no |
+| backup_retention_count | Snapshots retained | `number` | `7` | no |
+| backup_root_volume_included | Include the root volume | `bool` | `false` | no |
+| backup_consistency_mode | `crash_consistent`, `filesystem_freeze`, or `custom` | `string` | automatic | no |
+| backup_pre_script_command | Custom pre-snapshot command | `string` | `null` | no |
+| backup_post_script_command | Custom post-snapshot command | `string` | `null` | no |
+| backup_cross_region_copy_destination | Destination AWS region for an additional copy | `string` | `null` | no |
+| backup_dump_enabled | Schedule engine-native logical dumps | `bool` | `false` | no |
+| backup_dump_command | Root dump command writing to `RAVION_BACKUP_DIR` | `string` | `null` | no |
+| backup_dump_restore_command | Root restore command reading `RAVION_BACKUP_DIR` | `string` | `null` | no |
+| backup_dump_schedule | systemd OnCalendar expression | `string` | `"*-*-* 04:00:00 UTC"` | no |
+| backup_dump_destination | `s3` or `efs` logical dump destination | `string` | `"s3"` | no |
+| backup_dump_s3_bucket_arn | Existing S3 bucket ARN, or null for a module-created bucket | `string` | `null` | no |
+| backup_dump_s3_prefix | Prefix for logical dump artifacts | `string` | `"backups/"` | no |
+| backup_dump_retention_days | Logical dump retention in days | `number` | `30` | no |
+| backup_dump_max_interval_hours | Maximum expected interval between successful dumps; set higher than the schedule interval | `number` | `48` | no |
+| backup_dump_force_deletion_enabled | Allow deletion of a non-empty module-created backup bucket | `bool` | `false` | no |
+| backup_dump_restore_on_first_boot_enabled | Restore latest dump before first application start | `bool` | `false` | no |
+| backup_max_age_hours | Maximum accepted restore age | `number` | `null` | no |
+| backup_on_termination_enabled | Run a dump before planned ASG termination | `bool` | `true` | no |
+| backup_on_termination_timeout_seconds | Planned-termination dump timeout, including lifecycle-hook heartbeat slack | `number` | `1800` | no |
+| backup_dump_failure_alarm_enabled | Alarm on missing recent dump success | `bool` | `true` | no |
+| backup_replication_enabled | Continuously replicate a SQLite database with Litestream | `bool` | `false` | no |
+| backup_replication_engine | Continuous replication engine | `string` | `"litestream"` | no |
+| backup_replication_database_path | SQLite database path under the data volume | `string` | `null` | no |
+| backup_replication_s3_bucket_arn | Existing S3 bucket ARN, or null for a module-created bucket | `string` | `null` | no |
+| backup_replication_restore_on_first_boot_enabled | Restore a replica before the first application start | `bool` | `false` | no |
+| backup_replication_snapshot_interval | Litestream full snapshot interval | `string` | `"1m"` | no |
+| backup_replication_retention | Litestream snapshot retention duration; must exceed the snapshot interval | `string` | `"24h"` | no |
+| backup_replication_max_age_hours | Maximum accepted replica age on restore | `number` | `null` | no |
 
 ## Outputs
 
@@ -235,3 +324,15 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | log_stream_prefix | Prefix of deployment- and instance-scoped app log streams |
 | aws_account_id | AWS account ID |
 | region | AWS region |
+| backup_policy_id | DLM policy ID when backups are enabled |
+| backup_target_tag | Tag targeted by the DLM policy |
+| backup_snapshot_filter | Tag filter for finding snapshots |
+| backup_ssm_document_name | Consistency SSM document when scripts are enabled |
+| backup_dump_bucket_name | Effective S3 logical dump bucket name |
+| backup_dump_bucket_arn | Effective S3 logical dump bucket ARN |
+| backup_dump_prefix | Service logical dump prefix |
+| backup_dump_ssm_document_name | SSM command document for backup-now and restore-latest |
+| backup_dump_termination_document_name | SSM Automation document for termination-time dumps |
+| backup_replication_bucket_name | Effective S3 bucket name for Litestream replicas |
+| backup_replication_bucket_arn | Effective S3 bucket ARN for Litestream replicas |
+| backup_replication_prefix | Service Litestream replica prefix |

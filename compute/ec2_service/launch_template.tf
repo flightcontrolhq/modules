@@ -48,6 +48,7 @@ resource "aws_launch_template" "app" {
       ebs {
         volume_size           = var.data_volume_size
         volume_type           = var.data_volume_type
+        snapshot_id           = var.data_volume_snapshot_id
         encrypted             = true
         delete_on_termination = true
       }
@@ -68,7 +69,8 @@ resource "aws_launch_template" "app" {
     resource_type = "instance"
 
     tags = merge(local.tags, {
-      Name = var.name
+      Name         = var.name
+      RavionBackup = var.name
     })
   }
 
@@ -76,7 +78,8 @@ resource "aws_launch_template" "app" {
     resource_type = "volume"
 
     tags = merge(local.tags, {
-      Name = var.name
+      Name         = var.name
+      RavionBackup = var.name
     })
   }
 
@@ -98,6 +101,59 @@ resource "aws_launch_template" "app" {
     precondition {
       condition     = !var.efs_enabled || var.efs_file_system_id != null
       error_message = "The efs_file_system_id is required when efs_enabled is true."
+    }
+
+    precondition {
+      condition     = var.data_volume_snapshot_id == null || var.data_volume_creation_enabled
+      error_message = "The data_volume_creation_enabled must be true when data_volume_snapshot_id is set."
+    }
+
+    precondition {
+      condition     = local.backup_consistency_mode != "custom" || (var.backup_pre_script_command != null && length(trimspace(var.backup_pre_script_command)) > 0 && var.backup_post_script_command != null && length(trimspace(var.backup_post_script_command)) > 0)
+      error_message = "The backup_pre_script_command and backup_post_script_command must both be set when backup_consistency_mode is custom."
+    }
+
+    precondition {
+      condition     = local.backup_consistency_mode != "filesystem_freeze" || var.data_volume_creation_enabled
+      error_message = "The data_volume_creation_enabled must be true when backup_consistency_mode is filesystem_freeze."
+    }
+
+    precondition {
+      condition     = !var.backup_dump_enabled || (var.backup_dump_command != null && length(trimspace(var.backup_dump_command)) > 0)
+      error_message = "The backup_dump_command must be set when backup_dump_enabled is true."
+    }
+
+    precondition {
+      condition     = !var.backup_replication_enabled || var.data_volume_creation_enabled
+      error_message = "The data_volume_creation_enabled must be true when backup_replication_enabled is true."
+    }
+
+    precondition {
+      condition = !var.backup_replication_enabled || (
+        var.backup_replication_database_path != null &&
+        startswith(var.backup_replication_database_path, "${trimsuffix(var.data_volume_mount_path, "/")}/")
+      )
+      error_message = "The backup_replication_database_path must be under the data_volume_mount_path when backup_replication_enabled is true."
+    }
+
+    precondition {
+      condition     = !var.backup_replication_enabled || local.backup_s3_enabled
+      error_message = "Litestream replication requires an S3 backup destination."
+    }
+
+    precondition {
+      condition     = !(var.backup_dump_enabled && var.backup_dump_destination == "s3" && var.backup_replication_enabled) || var.backup_dump_s3_bucket_arn == null || var.backup_replication_s3_bucket_arn == null || var.backup_dump_s3_bucket_arn == var.backup_replication_s3_bucket_arn
+      error_message = "Logical dumps and Litestream replication must use the same supplied S3 bucket when both are enabled."
+    }
+
+    precondition {
+      condition     = !var.backup_dump_restore_on_first_boot_enabled || (var.backup_dump_enabled && var.data_volume_creation_enabled && var.backup_dump_restore_command != null && length(trimspace(var.backup_dump_restore_command)) > 0)
+      error_message = "The backup_dump_restore_command, backup_dump_enabled, and data_volume_creation_enabled must be set when backup_dump_restore_on_first_boot_enabled is true."
+    }
+
+    precondition {
+      condition     = var.backup_dump_destination != "efs" || !var.backup_dump_enabled || var.efs_enabled
+      error_message = "The efs_enabled must be true when logical dump destination is efs."
     }
 
     precondition {

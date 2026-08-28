@@ -15,6 +15,18 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/app-logs.json <<CWCONFIG
             "log_group_name": "${log_group_name}",
             "log_stream_name": "deployment/$${DEPLOY_ID}/instance/{instance_id}",
             "timezone": "UTC"
+          },
+          {
+            "file_path": "${backup_log_path}",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "backup/instance/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "${replication_log_path}",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "replication/instance/{instance_id}",
+            "timezone": "UTC"
           }
         ]
       }

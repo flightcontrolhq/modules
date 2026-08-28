@@ -7,21 +7,39 @@ set -euo pipefail
 dnf install -y git jq unzip
 
 %{ if data_volume_creation_enabled ~}
-# Format and mount the data volume on first boot. The volume is the only
-# attached disk without a filesystem; on later boots fstab mounts it.
-DATA_DEVICE=""
-for dev in $(lsblk -dnpo NAME -e 7,11); do
-  if [ -z "$(lsblk -no FSTYPE "$dev" | tr -d '[:space:]')" ]; then
-    DATA_DEVICE="$dev"
-    break
+# Resolve the configured Xen device to its Nitro NVMe alias when needed.
+DATA_DEVICE="${data_volume_device_name}"
+if [ ! -b "$DATA_DEVICE" ]; then
+  DATA_DEVICE=$(readlink -f "${data_volume_device_name}" 2>/dev/null || true)
+fi
+if [ ! -b "$DATA_DEVICE" ]; then
+  EXPECTED_DEVICE="f"
+  DATA_DEVICE=$(for dev in /dev/nvme*n1; do
+    [ -b "$dev" ] || continue
+    if /sbin/ebsnvme-id "$dev" 2>/dev/null | grep -Eiq "((device name|block device mapping):[[:space:]]*)?(/dev/)?(xvd)?$${EXPECTED_DEVICE}([[:space:]]|$)"; then
+      echo "$dev"
+      break
+    fi
+  done)
+fi
+if [ -n "$DATA_DEVICE" ] && [ -b "$DATA_DEVICE" ]; then
+  DATA_FSTYPE=$(lsblk -no FSTYPE "$DATA_DEVICE" | tr -d '[:space:]')
+  if [ -z "$DATA_FSTYPE" ]; then
+    mkfs -t xfs "$DATA_DEVICE"
+    DATA_FSTYPE="xfs"
   fi
-done
-if [ -n "$DATA_DEVICE" ]; then
-  mkfs -t xfs "$DATA_DEVICE"
-  mkdir -p ${data_volume_mount_path}
+  mkdir -p "${data_volume_mount_path}"
   DATA_UUID=$(blkid -s UUID -o value "$DATA_DEVICE")
-  echo "UUID=$DATA_UUID ${data_volume_mount_path} xfs defaults,nofail 0 2" >> /etc/fstab
-  mount -a
+  sed -i "\|[[:space:]]${data_volume_mount_path}[[:space:]]|d" /etc/fstab
+  echo "UUID=$${DATA_UUID} ${data_volume_mount_path} $${DATA_FSTYPE} defaults,nofail 0 2" >> /etc/fstab
+  mount "${data_volume_mount_path}" || mount -a
+else
+  echo "FATAL: Data volume device ${data_volume_device_name} could not be resolved for mount path ${data_volume_mount_path}."
+  exit 1
+fi
+if ! findmnt -rn --mountpoint "${data_volume_mount_path}" >/dev/null 2>&1; then
+  echo "FATAL: Data volume device ${data_volume_device_name} is not mounted at ${data_volume_mount_path}."
+  exit 1
 fi
 %{ endif ~}
 
@@ -37,6 +55,55 @@ echo "${efs_file_system_id} ${efs_mount_path} efs _netdev,tls 0 0" >> /etc/fstab
 mount -a -t efs
 %{ endif ~}
 
+%{ if backup_dump_enabled ~}
+# AL2023 normally includes AWS CLI v2; fail clearly if an S3 destination lacks it.
+%{ if backup_dump_destination == "s3" ~}
+if ! command -v aws >/dev/null 2>&1; then
+  echo "FATAL: AWS CLI is required for S3 logical dumps but was not found on the AL2023 AMI."
+  exit 1
+fi
+%{ endif ~}
+mkdir -p "/var/log/ravion/${name}" /var/lib/ravion
+cat > "/usr/local/bin/${name}-backup" <<'RAVION_BACKUP_SCRIPT'
+${backup_dump_script}
+RAVION_BACKUP_SCRIPT
+chmod 700 "/usr/local/bin/${name}-backup"
+
+%{ if backup_dump_restore_enabled ~}
+if [ ! -f "${backup_dump_restore_marker}" ]; then
+  "/usr/local/bin/${name}-backup" restore-latest
+  touch "${backup_dump_restore_marker}"
+fi
+%{ endif ~}
+
+cat > "/etc/systemd/system/${name}-backup.service" <<'RAVION_BACKUP_SERVICE'
+[Unit]
+Description=Logical backup for ${name}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/${name}-backup backup-now
+RAVION_BACKUP_SERVICE
+
+cat > "/etc/systemd/system/${name}-backup.timer" <<'RAVION_BACKUP_TIMER'
+[Unit]
+Description=Logical backup schedule for ${name}
+
+[Timer]
+OnCalendar=${backup_dump_schedule}
+Persistent=true
+Unit=${name}-backup.service
+
+[Install]
+WantedBy=timers.target
+RAVION_BACKUP_TIMER
+
+systemctl daemon-reload
+systemctl enable --now "${name}-backup.timer"
+%{ endif ~}
+
 mkdir -p "$(dirname ${env_file_path})"
 
 # Install both runtime prerequisites so deploy mode can change without
@@ -46,10 +113,16 @@ dnf install -y docker
 systemctl enable --now docker
 ${supervisor_install_script}
 
+%{ if backup_replication_enabled ~}
+${backup_replication_script}
+%{ endif ~}
+
 # Initialize the app env file. Deploys refresh it before running either mode.
 ${env_file_script}
 
 dnf install -y amazon-cloudwatch-agent
+DEPLOY_ID="bootstrap"
+${deployment_log_script}
 
 %{ if additional_user_data != "" ~}
 # Additional user data
