@@ -87,6 +87,8 @@ module "alb" {
 # EKS Service
 ################################################################################
 
+# This fixture explicitly verifies configurable mutable tags used by reusable build-source tags.
+#trivy:ignore:AVD-AWS-0031
 module "eks_service" {
   source = "../../../../compute/eks_service"
 

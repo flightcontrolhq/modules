@@ -73,6 +73,8 @@ module "vpc" {
 # EKS Service
 ################################################################################
 
+# This fixture verifies the module's mutable-tag default alongside the repository name override.
+#trivy:ignore:AVD-AWS-0031
 module "eks_service" {
   source = "../../../../compute/eks_service"
 
