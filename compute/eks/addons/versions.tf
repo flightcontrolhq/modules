@@ -21,7 +21,7 @@ terraform {
     # TEMP: pointed at the local dev registry tunnel while providers.ravion.com
     # is not yet live — restore that hostname when the real registry exists.
     ravion = {
-      source  = "ravion-providers.ngrok.app/ravion/ravion"
+      source  = "provider-cf.siddharthsuresh.dev/ravion/ravion"
       version = "~> 1.0"
     }
   }
