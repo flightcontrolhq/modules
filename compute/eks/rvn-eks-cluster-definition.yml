@@ -237,63 +237,6 @@ module:
       label: Additional node groups
       required: false
       type: object_map
-    - id: section_fargate
-      label: Fargate
-      type: section
-    - collapsible: true
-      default: {}
-      description: Run pods from selected namespaces on AWS Fargate instead of EC2 nodes.
-      id: fargate_profiles
-      item_inputs:
-        - add_button_label: Add selector
-          description: Namespaces whose pods run on this profile. At least one selector is required.
-          id: selectors
-          item_inputs:
-            - description: Kubernetes namespace matched by this selector.
-              id: namespace
-              label: Namespace
-              placeholder: my-namespace
-              required: true
-              type: string
-            - collapsible: true
-              default: {}
-              description: Optional pod labels that narrow the match to specific pods in the namespace. Leave empty to match every pod.
-              id: labels
-              label: Pod labels
-              type: keyvalue
-          item_label: Selector
-          item_title:
-            fallback: Selector
-            template: "{namespace}"
-          label: Selectors
-          required: true
-          type: object_array
-        - add_button_label: Add subnet ID
-          collapsible: true
-          description: Private subnets for Fargate pods in this profile. Leave empty to use the cluster's private subnets. Public subnets are not supported by Fargate.
-          id: subnet_ids
-          label: Subnet IDs
-          placeholder: subnet-0123456789abcdef0
-          type: string_array
-        - collapsible: true
-          description: Existing pod execution role for this profile. Leave blank to create one automatically.
-          id: pod_execution_role_arn
-          label: Pod execution role ARN
-          placeholder: arn:aws:iam::123456789012:role/my-fargate-pod-execution-role
-          type: string
-      item_label: Fargate profile
-      item_title:
-        template: "{key}"
-      key:
-        description: Unique Fargate profile name.
-        label: Profile name
-        patterns:
-          - message: 1-63 letters, numbers, hyphens, and underscores. Start with a letter or number.
-            pattern: ^[A-Za-z0-9][A-Za-z0-9-_]{0,62}$
-        placeholder: serverless-jobs
-      label: Fargate profiles
-      required: false
-      type: object_map
     - id: section_access
       label: Cluster access
       type: section
@@ -482,7 +425,7 @@ module:
           max_size: << module.input.system_node_max_size >>
           disk_size: << module.input.system_node_disk_size >>
         node_groups: << module.input.node_groups || {} >>
-        fargate_profiles: << module.input.fargate_profiles || {} >>
+        fargate_profiles: {}
         access_entries: << module.input.access_entries || {} >>
         enabled_cluster_log_types: << module.input.control_plane_log_types >>
         cluster_log_retention_in_days: << module.input.control_plane_log_retention_days >>
