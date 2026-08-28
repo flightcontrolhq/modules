@@ -114,13 +114,33 @@ output "logging_bucket_domain_name" {
 }
 
 output "access_log_group_name" {
-  description = "Name of the CloudWatch Logs group receiving CloudFront access logs. Null unless logging_enabled is true and logging_destination is 'cloudwatch'."
+  description = "Name of the CloudWatch Logs group receiving CloudFront access logs. Null unless cloudwatch is an enabled logging destination."
   value       = try(aws_cloudwatch_log_group.access_logs[0].name, null)
 }
 
 output "access_log_group_arn" {
   description = "ARN of the CloudWatch Logs access-log group. Null unless CloudWatch logging is enabled."
   value       = try(aws_cloudwatch_log_group.access_logs[0].arn, null)
+}
+
+output "firehose_stream_name" {
+  description = "The name of the Firehose delivery stream receiving CloudFront access logs, or null when Firehose logging is disabled."
+  value       = try(aws_kinesis_firehose_delivery_stream.access_logs[0].name, null)
+}
+
+output "firehose_stream_arn" {
+  description = "The ARN of the Firehose delivery stream receiving CloudFront access logs, or null when Firehose logging is disabled."
+  value       = try(aws_kinesis_firehose_delivery_stream.access_logs[0].arn, null)
+}
+
+output "firehose_backup_bucket_id" {
+  description = "The ID of the module-managed S3 bucket used for failed Firehose HTTP endpoint deliveries, or null when Firehose logging is disabled."
+  value       = try(aws_s3_bucket.firehose_backup[0].id, null)
+}
+
+output "firehose_backup_bucket_arn" {
+  description = "The ARN of the module-managed S3 bucket used for failed Firehose HTTP endpoint deliveries, or null when Firehose logging is disabled."
+  value       = try(aws_s3_bucket.firehose_backup[0].arn, null)
 }
 
 ################################################################################

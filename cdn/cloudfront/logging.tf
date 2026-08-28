@@ -1,5 +1,5 @@
 locals {
-  s3_logging_enabled     = var.logging_enabled && var.logging_destination == "s3"
+  s3_logging_enabled     = contains(local.logging_destinations, "s3")
   logging_bucket_enabled = local.s3_logging_enabled && var.logging_bucket_creation_enabled
 }
 

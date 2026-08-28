@@ -481,13 +481,13 @@ variable "web_acl_id" {
 
 variable "logging_enabled" {
   type        = bool
-  description = "Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see logging_destination."
+  description = "Enable CloudFront access logging. Defaults to true with CloudWatch Logs delivery; see logging_destinations."
   default     = true
 }
 
 variable "logging_destination" {
   type        = string
-  description = "Where CloudFront delivers access logs when logging_enabled is true. 'cloudwatch' uses CloudFront standard logging v2 into a module-managed CloudWatch Logs group (viewable in the Ravion UI; ingestion costs more at very high traffic). 's3' uses legacy standard logging into an S3 bucket (cheapest for high traffic)."
+  description = "Legacy single CloudFront access-log destination retained for backward compatibility. Use logging_destinations for new configurations."
   default     = "cloudwatch"
 
   validation {
@@ -496,33 +496,44 @@ variable "logging_destination" {
   }
 }
 
+variable "logging_destinations" {
+  type        = set(string)
+  description = "CloudFront access-log destinations to enable simultaneously. Valid values are cloudwatch, s3, and firehose. When null, logging_destination is used for backward compatibility."
+  default     = null
+
+  validation {
+    condition     = var.logging_destinations == null || alltrue([for destination in var.logging_destinations : contains(["cloudwatch", "s3", "firehose"], destination)])
+    error_message = "The logging_destinations must contain only 'cloudwatch', 's3', or 'firehose'."
+  }
+}
+
 variable "logging_bucket_domain_name" {
   type        = string
-  description = "The domain name of an existing S3 bucket for access logs (e.g., mybucket.s3.amazonaws.com). Only applies when logging_destination is 's3'."
+  description = "The domain name of an existing S3 bucket for access logs (e.g., mybucket.s3.amazonaws.com). Applies when s3 is included in logging_destinations."
   default     = null
 }
 
 variable "logging_prefix" {
   type        = string
-  description = "The S3 key prefix for access log files. Only applies when logging_destination is 's3'."
+  description = "The S3 key prefix for access log files. Applies when s3 is included in logging_destinations."
   default     = ""
 }
 
 variable "logging_cookies_enabled" {
   type        = bool
-  description = "Whether to include cookies in access logs. Only applies when logging_destination is 's3'."
+  description = "Whether to include cookies in access logs. Applies when s3 is included in logging_destinations."
   default     = false
 }
 
 variable "logging_bucket_creation_enabled" {
   type        = bool
-  description = "Whether to create a new S3 bucket for access logging. Only applies when logging_enabled is true and logging_destination is 's3'."
+  description = "Whether to create a new S3 bucket for legacy CloudFront access logging. Applies when logging_enabled is true and s3 is included in logging_destinations."
   default     = false
 }
 
 variable "logging_bucket_retention_days" {
   type        = number
-  description = "Days to retain CloudFront access logs — the CloudWatch log group retention or the S3 lifecycle expiry on the module-created bucket, depending on logging_destination."
+  description = "Days to retain CloudFront access logs in the CloudWatch log group and module-managed S3 buckets. CloudWatch retention must use a supported retention value."
   default     = 90
 
   validation {
@@ -531,9 +542,81 @@ variable "logging_bucket_retention_days" {
   }
 
   validation {
-    condition     = var.logging_destination != "cloudwatch" || contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.logging_bucket_retention_days)
-    error_message = "When logging_destination is 'cloudwatch', logging_bucket_retention_days must be a valid CloudWatch Logs retention value (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, or 3653)."
+    condition     = !(var.logging_destinations != null ? contains(var.logging_destinations, "cloudwatch") : var.logging_destination == "cloudwatch") || contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.logging_bucket_retention_days)
+    error_message = "When CloudWatch logging is enabled, logging_bucket_retention_days must be a valid CloudWatch Logs retention value (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, or 3653)."
   }
+}
+
+variable "logging_firehose_endpoint_url" {
+  type        = string
+  description = "HTTPS URL for the Firehose HTTP endpoint. Required when firehose is included in logging_destinations."
+  default     = null
+
+  validation {
+    condition     = var.logging_firehose_endpoint_url == null || can(regex("^https://", var.logging_firehose_endpoint_url))
+    error_message = "The logging_firehose_endpoint_url must be an HTTPS URL."
+  }
+
+  validation {
+    condition     = !(var.logging_enabled && (var.logging_destinations != null ? contains(var.logging_destinations, "firehose") : var.logging_destination == "firehose")) || (var.logging_firehose_endpoint_url != null && length(trimspace(var.logging_firehose_endpoint_url)) > 0)
+    error_message = "The logging_firehose_endpoint_url must be set when Firehose logging is enabled."
+  }
+}
+
+variable "logging_firehose_endpoint_name" {
+  type        = string
+  description = "Optional display name for the Firehose HTTP endpoint."
+  default     = null
+}
+
+variable "logging_firehose_access_key_secret_arn" {
+  type        = string
+  description = "Secrets Manager ARN containing the Firehose HTTP endpoint access key. Exactly one of this ARN or logging_firehose_access_key is required when Firehose logging is enabled."
+  default     = null
+
+  validation {
+    condition     = var.logging_firehose_access_key_secret_arn == null || can(regex("^arn:[^:]+:secretsmanager:[^:]+:[^:]+:secret:.+$", var.logging_firehose_access_key_secret_arn))
+    error_message = "The logging_firehose_access_key_secret_arn must be a valid Secrets Manager secret ARN."
+  }
+}
+
+variable "logging_firehose_access_key_secret_kms_key_arn" {
+  type        = string
+  description = "KMS key ARN used to encrypt the Firehose HTTP endpoint access-key secret. Grants the Firehose role kms:Decrypt on this key when set."
+  default     = null
+
+  validation {
+    condition     = var.logging_firehose_access_key_secret_kms_key_arn == null || can(regex("^arn:[^:]+:kms:[^:]+:[^:]+:key/.+$", var.logging_firehose_access_key_secret_kms_key_arn))
+    error_message = "The logging_firehose_access_key_secret_kms_key_arn must be a valid KMS key ARN."
+  }
+}
+
+variable "logging_firehose_access_key" {
+  type        = string
+  description = "Sensitive Firehose HTTP endpoint access key. Prefer logging_firehose_access_key_secret_arn so the key remains in Secrets Manager. Exactly one of this key or the secret ARN is required when Firehose logging is enabled."
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = !(var.logging_enabled && (var.logging_destinations != null ? contains(var.logging_destinations, "firehose") : var.logging_destination == "firehose")) || ((var.logging_firehose_access_key_secret_arn != null) != (var.logging_firehose_access_key != null && length(trimspace(var.logging_firehose_access_key)) > 0))
+    error_message = "Exactly one of logging_firehose_access_key_secret_arn or logging_firehose_access_key must be set when Firehose logging is enabled."
+  }
+}
+
+variable "logging_firehose_record_fields" {
+  type        = list(string)
+  description = "CloudFront standard logging v2 fields delivered to Firehose in JSON format."
+  default = [
+    "timestamp",
+    "c-ip",
+    "x-edge-location",
+    "cs-uri-stem",
+    "cs-uri-query",
+    "x-host-header",
+    "cs(User-Agent)",
+    "cs(Referer)",
+    "sc-status",
+  ]
 }
 
 ################################################################################
