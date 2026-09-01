@@ -290,7 +290,7 @@ variable "min_size" {
 variable "max_size" {
   type        = number
   description = "Maximum instances in the Auto Scaling Group."
-  default     = 3
+  default     = 1
 
   validation {
     condition     = var.max_size >= 1
