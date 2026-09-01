@@ -197,7 +197,7 @@ Instances need outbound access to SSM, ECR/S3, CloudWatch Logs, PyPI for the pin
 | data_volume_mount_path | Host mount path for the data volume | `string` | `"/data"` | no |
 | additional_user_data | Extra shell script appended to bootstrap | `string` | `""` | no |
 | min_size | Minimum instances | `number` | `1` | no |
-| max_size | Maximum instances | `number` | `3` | no |
+| max_size | Maximum instances | `number` | `1` | no |
 | desired_capacity | Desired instances (null = group-managed) | `number` | `null` | no |
 | health_check_type | ASG health check: `EC2` or `ELB` | `string` | `"EC2"` | no |
 | health_check_grace_period | Seconds before ASG health checks apply | `number` | `300` | no |
