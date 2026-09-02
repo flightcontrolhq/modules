@@ -1,10 +1,10 @@
 definition:
   type: rvn-aws-kms
   name: AWS KMS Key
-  description: Creates an AWS KMS key and alias for encryption, signing, MAC generation, or key agreement.
+  description: Creates a regional symmetric AWS KMS encryption key and stable alias.
 release:
   version: 0.1.0
-  description: Create customer-managed AWS KMS keys and aliases for encryption, signing, MAC generation, and key agreement.
+  description: Create regional symmetric AWS KMS encryption keys with optional key-user access.
 module:
   inputs:
     - $include: ../../partials/inputs/aws-account.yml
@@ -22,180 +22,18 @@ module:
           pattern: ^[A-Za-z0-9/_-]{1,64}$
       required: true
       type: string
-    - description: Description stored on the KMS key. Defaults to a description based on the key name.
-      id: description
-      label: Description
-      type: string
-    - collapsible: true
-      description: Alias suffix without the alias/ prefix. Defaults to the key name.
-      id: alias
-      immutable: true
-      label: Alias override
-      patterns:
-        - message: Letters, numbers, slashes, underscores, or hyphens only.
-          pattern: ^[A-Za-z0-9/_-]+$
-      placeholder: application/data
-      type: string
-    - default:
-        key_spec: SYMMETRIC_DEFAULT
-        key_usage: ENCRYPT_DECRYPT
-      description: Cryptographic algorithm and operation. AWS does not allow these settings to change after key creation.
-      fields:
-        - key_spec
-        - key_usage
-      id: key_configuration
-      immutable: true
-      label: Key configuration
-      required: true
-      type: compound
-      values:
-        - description: General-purpose envelope encryption and data key generation.
-          group_label: Encryption and decryption
-          key_spec: SYMMETRIC_DEFAULT
-          key_usage: ENCRYPT_DECRYPT
-          label: Symmetric encryption
-        - description: RSA encryption with a 2048-bit key.
-          group_label: Encryption and decryption
-          key_spec: RSA_2048
-          key_usage: ENCRYPT_DECRYPT
-          label: RSA 2048 encryption
-        - description: RSA encryption with a 3072-bit key.
-          group_label: Encryption and decryption
-          key_spec: RSA_3072
-          key_usage: ENCRYPT_DECRYPT
-          label: RSA 3072 encryption
-        - description: RSA encryption with a 4096-bit key.
-          group_label: Encryption and decryption
-          key_spec: RSA_4096
-          key_usage: ENCRYPT_DECRYPT
-          label: RSA 4096 encryption
-        - description: RSA signing and verification with a 2048-bit key.
-          group_label: Signing and verification
-          key_spec: RSA_2048
-          key_usage: SIGN_VERIFY
-          label: RSA 2048 signing
-        - description: RSA signing and verification with a 3072-bit key.
-          group_label: Signing and verification
-          key_spec: RSA_3072
-          key_usage: SIGN_VERIFY
-          label: RSA 3072 signing
-        - description: RSA signing and verification with a 4096-bit key.
-          group_label: Signing and verification
-          key_spec: RSA_4096
-          key_usage: SIGN_VERIFY
-          label: RSA 4096 signing
-        - description: ECDSA signing and verification with the NIST P-256 curve.
-          group_label: Signing and verification
-          key_spec: ECC_NIST_P256
-          key_usage: SIGN_VERIFY
-          label: ECC NIST P-256 signing
-        - description: ECDSA signing and verification with the NIST P-384 curve.
-          group_label: Signing and verification
-          key_spec: ECC_NIST_P384
-          key_usage: SIGN_VERIFY
-          label: ECC NIST P-384 signing
-        - description: ECDSA signing and verification with the NIST P-521 curve.
-          group_label: Signing and verification
-          key_spec: ECC_NIST_P521
-          key_usage: SIGN_VERIFY
-          label: ECC NIST P-521 signing
-        - description: ECDSA signing and verification with the secp256k1 curve.
-          group_label: Signing and verification
-          key_spec: ECC_SECG_P256K1
-          key_usage: SIGN_VERIFY
-          label: ECC secp256k1 signing
-        - description: HMAC generation and verification with a 224-bit key.
-          group_label: MAC generation and verification
-          key_spec: HMAC_224
-          key_usage: GENERATE_VERIFY_MAC
-          label: HMAC 224
-        - description: HMAC generation and verification with a 256-bit key.
-          group_label: MAC generation and verification
-          key_spec: HMAC_256
-          key_usage: GENERATE_VERIFY_MAC
-          label: HMAC 256
-        - description: HMAC generation and verification with a 384-bit key.
-          group_label: MAC generation and verification
-          key_spec: HMAC_384
-          key_usage: GENERATE_VERIFY_MAC
-          label: HMAC 384
-        - description: HMAC generation and verification with a 512-bit key.
-          group_label: MAC generation and verification
-          key_spec: HMAC_512
-          key_usage: GENERATE_VERIFY_MAC
-          label: HMAC 512
-        - description: Shared-secret derivation with the NIST P-256 curve.
-          group_label: Key agreement
-          key_spec: ECC_NIST_P256
-          key_usage: KEY_AGREEMENT
-          label: ECC NIST P-256 key agreement
-        - description: Shared-secret derivation with the NIST P-384 curve.
-          group_label: Key agreement
-          key_spec: ECC_NIST_P384
-          key_usage: KEY_AGREEMENT
-          label: ECC NIST P-384 key agreement
-        - description: Shared-secret derivation with the NIST P-521 curve.
-          group_label: Key agreement
-          key_spec: ECC_NIST_P521
-          key_usage: KEY_AGREEMENT
-          label: ECC NIST P-521 key agreement
-        - description: SM2 encryption and decryption in supported AWS Regions.
-          group_label: SM2
-          key_spec: SM2
-          key_usage: ENCRYPT_DECRYPT
-          label: SM2 encryption
-        - description: SM2 signing and verification in supported AWS Regions.
-          group_label: SM2
-          key_spec: SM2
-          key_usage: SIGN_VERIFY
-          label: SM2 signing
-        - description: SM2 shared-secret derivation in supported AWS Regions.
-          group_label: SM2
-          key_spec: SM2
-          key_usage: KEY_AGREEMENT
-          label: SM2 key agreement
     - id: section_key_policy
-      label: Key policy principals
+      label: Key access
       type: section
-    - add_button_label: Add administrator principal
-      default: []
-      description: IAM principals that can administer the key but cannot perform cryptographic operations through this grant.
-      id: key_administrator_role_arns
-      label: Key administrator principal ARNs
-      patterns:
-        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
-          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
-      placeholder: arn:aws:iam::123456789012:role/kms-admin
-      type: string_array
     - add_button_label: Add key user principal
       default: []
-      description: IAM principals allowed to use cryptographic operations appropriate for the selected key configuration.
+      description: IAM principals allowed to encrypt, decrypt, re-encrypt, generate data keys, and describe the key.
       id: key_user_role_arns
       label: Key user principal ARNs
       patterns:
         - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
           pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
       placeholder: arn:aws:iam::123456789012:role/application
-      type: string_array
-    - add_button_label: Add signer principal
-      default: []
-      description: IAM principals allowed to sign or generate MACs. This grant applies only to signing and MAC key configurations.
-      id: signer_role_arns
-      label: Signer principal ARNs
-      patterns:
-        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
-          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
-      placeholder: arn:aws:iam::123456789012:role/signer
-      type: string_array
-    - add_button_label: Add public key reader principal
-      default: []
-      description: IAM principals allowed to read public key material and key metadata without signing or verification permissions.
-      id: public_key_reader_role_arns
-      label: Public key reader principal ARNs
-      patterns:
-        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
-          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
-      placeholder: arn:aws:iam::123456789012:role/public-key-reader
       type: string_array
     - $include: ../../partials/inputs/misc-section.yml
     - $include: ../../partials/inputs/tags.yml
@@ -209,16 +47,9 @@ module:
       base_path: security/kms
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
-        alias: << module.input.alias || nil >>
-        description: << module.input.description || nil >>
-        key_administrator_role_arns: << module.input.key_administrator_role_arns || [] >>
-        key_spec: << module.input.key_configuration.key_spec >>
-        key_usage: << module.input.key_configuration.key_usage >>
         key_user_role_arns: << module.input.key_user_role_arns || [] >>
         name: << module.input.name >>
-        public_key_reader_role_arns: << module.input.public_key_reader_role_arns || [] >>
         region: << module.input.aws_region >>
-        signer_role_arns: << module.input.signer_role_arns || [] >>
         tags:
           $include: ../../partials/stack/ravion-tags.yml
   ui:
@@ -229,47 +60,34 @@ module:
       []
       >>
   readme: |
-    Creates an AWS KMS key and alias for encryption, signing, MAC generation, or key agreement.
+    Creates a regional symmetric AWS KMS encryption key and stable alias.
 
     ## Overview
 
-    Use this module to create one customer-managed AWS KMS key and a stable alias. Choose a valid algorithm and operation together, then grant narrowly scoped access to IAM principals.
+    Use this module to create one customer-managed key for application data, secrets, storage, and envelope encryption. The key uses the standard AWS KMS symmetric encryption configuration and receives a stable alias derived from the key name.
 
-    The module creates a key policy that preserves account-root IAM administration and adds separate grants for key administrators, key users, signers, and public key readers. Empty principal lists are allowed so the key can be created before its consumers.
+    The module creates a key policy that preserves account-root IAM administration and can grant encryption access directly to selected IAM principals. The key can be created before its consumers because the key user list may be empty.
 
     ## Use cases
 
     | Scenario | Benefit |
     | --- | --- |
-    | Application data encryption | Use a symmetric key for envelope encryption, decryption, and data key generation. |
-    | JWT or artifact signing | Use an RSA or ECC signing key while separating signers from public key readers. |
-    | Message authentication | Use an HMAC key for MAC generation and verification. |
-    | Shared-secret derivation | Use a supported ECC or SM2 key for key agreement. |
+    | Application data encryption | Encrypt application data directly or through envelope encryption. |
+    | AWS service encryption | Supply the key ARN to services that support customer-managed KMS keys. |
+    | Secrets and credentials | Encrypt sensitive values with a key whose access policy is managed independently. |
+    | Data key generation | Allow workloads to generate data keys while keeping the root key material inside KMS. |
 
-    ## Key configuration
+    ## Encryption defaults
 
-    Key configuration combines the AWS KMS key spec and key usage into one selector. This prevents unsupported combinations such as an HMAC key configured for encryption. AWS fixes both values when the key is created, so Ravion treats the selection as immutable.
+    The standard form creates a regional `SYMMETRIC_DEFAULT` key with `ENCRYPT_DECRYPT` usage. Annual automatic rotation is enabled, and the deletion waiting period is 30 days. The alias defaults to `alias/<key name>`, and the generated key description also uses the key name.
 
-    Symmetric encryption is the default and is the usual choice for encrypting application data, secrets, storage, or data encryption keys. Asymmetric encryption keeps the private key inside KMS and allows compatible public-key operations outside KMS. Signing keys support RSA, ECC, and SM2 algorithms. HMAC keys keep the shared secret inside KMS.
+    Specialized settings such as asymmetric keys, signing, HMAC, key agreement, custom aliases, multi-Region keys, key administrators, signers, public key readers, rotation changes, and shorter deletion windows remain available through Advanced Terraform variables.
 
-    SM2 is available only in AWS Regions that support it. Confirm regional availability before selecting an SM2 configuration.
+    ## Key access
 
-    ## Key policy principals
+    Key user principal ARNs grants the selected account roots, IAM roles, or IAM users permission to encrypt, decrypt, re-encrypt, generate data keys, and describe the key. Keep the list as narrow as possible.
 
-    | Grant | Permissions |
-    | --- | --- |
-    | Key administrator principal ARNs | Manage key settings and lifecycle without receiving cryptographic-use permissions from this grant. |
-    | Key user principal ARNs | Perform the non-signing cryptographic operations appropriate for the selected configuration. |
-    | Signer principal ARNs | Sign data or generate MACs for signing and HMAC configurations. |
-    | Public key reader principal ARNs | Read public key material and metadata without permission to sign or verify. |
-
-    The account root principal remains in the key policy with `kms:*`, following the AWS pattern that allows IAM policies in the account to delegate administration. Keep every additional principal list as narrow as possible. A principal may require both a key policy grant and an IAM identity policy, depending on how access is managed in the account.
-
-    ## Rotation and deletion
-
-    Automatic key rotation defaults to enabled and applies only to symmetric encryption keys. AWS does not support automatic rotation for asymmetric or HMAC keys; use an application-aware manual rotation process for those configurations.
-
-    The deletion waiting period defaults to 30 days, the maximum AWS recovery window. Destroying the stack schedules the key for deletion rather than deleting key material immediately. Applications remain responsible for migrating encrypted or signed data before a key is retired.
+    The account root principal remains in the key policy with `kms:*`, following the AWS pattern that allows IAM policies in the account to delegate administration. A principal may require both a key policy grant and an IAM identity policy, depending on how access is managed in the account.
 
     ## Configuration
 
@@ -277,14 +95,8 @@ module:
     | --- | --- | --- | --- |
     | AWS account | Yes | None | AWS account where the KMS key is created. |
     | Region | Yes | None | AWS Region where the key is created. |
-    | Key name | Yes | Project, environment, and module given IDs | Used for the default alias, description, and tags. |
-    | Description | No | KMS key for the key name | Description stored on the key. |
-    | Alias override | No | Key name | Alias suffix without the `alias/` prefix. |
-    | Key configuration | Yes | Symmetric encryption | Algorithm and permitted cryptographic operation. |
-    | Key administrator principal ARNs | No | Empty list | Principals granted key administration actions. |
-    | Key user principal ARNs | No | Empty list | Principals granted configuration-appropriate key use. |
-    | Signer principal ARNs | No | Empty list | Principals allowed to sign or generate MACs when applicable. |
-    | Public key reader principal ARNs | No | Empty list | Principals allowed to read public key material and metadata. |
+    | Key name | Yes | Project, environment, and module given IDs | Used for the alias, generated description, and tags. |
+    | Key user principal ARNs | No | Empty list | Principals granted encryption and data-key operations. |
     | Tags | No | Standard Ravion tags | Additional tags merged with Ravion ownership and identity tags. |
     | Terraform execution environment | No | None | Optional runner environment override. |
     | OpenTofu version override | No | Environment default | Optional OpenTofu version override. |
@@ -293,9 +105,9 @@ module:
 
     ## Design decisions
 
-    The module always creates an alias so consumers can use a stable, readable identifier. Key name, alias, key configuration, AWS account, and Region are immutable in Ravion because changing them alters key identity or requires replacement.
+    The standard form deliberately targets regional symmetric encryption, which covers the common customer-managed key use case without exposing uncommon cryptographic or lifecycle controls. Advanced Terraform variables remain available for exceptional requirements.
 
-    Key policies separate administration, ordinary key use, signing, and public key reads. This makes it possible to publish a public key without also granting the publisher permission to create signatures.
+    The module always creates an alias so consumers can use a stable, readable identifier. Key name, AWS account, and Region are immutable in Ravion because changing them alters key identity or deployment target.
 
     Ravion adds standard tags for ownership and traceability. User-provided Tags are merged on top for team, cost, or environment metadata.
 

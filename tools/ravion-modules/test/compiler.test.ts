@@ -125,15 +125,10 @@ describe("compiler", () => {
     );
   });
 
-  it("compiles complete KMS IAM principal ARN validation", async () => {
+  it("compiles focused KMS inputs with complete key user ARN validation", async () => {
     const compiled = await compileDefinitionFile(join(repoRoot, "security", "kms", "rvn-aws-kms-definition.yml"));
     const inputs = getModuleInputs(compiled.module);
-    const principalInputIds = [
-      "key_administrator_role_arns",
-      "key_user_role_arns",
-      "signer_role_arns",
-      "public_key_reader_role_arns",
-    ];
+    const input = findInput(inputs, "key_user_role_arns");
     const validArns = [
       "arn:aws:iam::123456789012:root",
       "arn:aws-us-gov:iam::123456789012:role/team/application",
@@ -146,15 +141,43 @@ describe("compiler", () => {
       "arn:aws:iam::123456789012:group/developers",
     ];
 
-    for (const inputId of principalInputIds) {
-      const input = findInput(inputs, inputId);
-      assert.ok(Array.isArray(input.patterns), `${inputId}.patterns should be an array`);
-      assert.equal(input.patterns.length, 1);
-      const validation = assertRecord(input.patterns[0], `${inputId}.patterns[0]`);
-      const pattern = new RegExp(assertString(validation.pattern));
+    assert.ok(Array.isArray(input.patterns), "key_user_role_arns.patterns should be an array");
+    assert.equal(input.patterns.length, 1);
+    const validation = assertRecord(input.patterns[0], "key_user_role_arns.patterns[0]");
+    const pattern = new RegExp(assertString(validation.pattern));
 
-      for (const arn of validArns) assert.match(arn, pattern, `${inputId} should accept ${arn}`);
-      for (const arn of invalidArns) assert.doesNotMatch(arn, pattern, `${inputId} should reject ${arn}`);
+    for (const arn of validArns) assert.match(arn, pattern, `key_user_role_arns should accept ${arn}`);
+    for (const arn of invalidArns) assert.doesNotMatch(arn, pattern, `key_user_role_arns should reject ${arn}`);
+
+    const specializedInputIds = [
+      "alias",
+      "deletion_window_in_days",
+      "description",
+      "key_administrator_role_arns",
+      "key_configuration",
+      "key_rotation_enabled",
+      "multi_region_enabled",
+      "public_key_reader_role_arns",
+      "signer_role_arns",
+    ];
+    for (const inputId of specializedInputIds) {
+      assert.equal(inputs.some((candidate) => candidate.id === inputId), false);
+    }
+
+    const specializedTerraformVariables = [
+      "alias",
+      "deletion_window_in_days",
+      "description",
+      "key_administrator_role_arns",
+      "key_rotation_enabled",
+      "key_spec",
+      "key_usage",
+      "multi_region_enabled",
+      "public_key_reader_role_arns",
+      "signer_role_arns",
+    ];
+    for (const variableName of specializedTerraformVariables) {
+      assert.equal(getTerraformVariable(compiled.module, variableName), undefined);
     }
   });
 
