@@ -3,8 +3,8 @@ definition:
   name: EC2 Service
   description: Runs supervised workloads on a stable EC2 Auto Scaling Group, with optional shared ALB routing and switchable container or manual in-place deploys.
 release:
-  version: 1.4.1
-  description: Document how to choose an instance type, so services run on the newest instance generation their region offers instead of an outdated one.
+  version: 1.4.2
+  description: Default new services to a single instance, so a service only scales out when you raise Maximum instances.
 module:
   inputs:
     - id: network
@@ -569,6 +569,7 @@ module:
         max_capacity_overrides:
           label: Maximum instances
           required: true
+          default: 1
     - id: cpu_autoscaling_enabled
       label: CPU autoscaling
       type: boolean
@@ -1109,7 +1110,7 @@ module:
     | Per-instance deploy timeout (secs) | No | 1200 | SSM script timeout for either deploy mode |
     | Run in private subnets | No | true | Use private subnets without public IPs; outbound access is still required |
     | Instance type | Yes | - | EC2 type used for every instance; architecture must match the app |
-    | Minimum instances / Maximum instances | Yes | 1 / 3 | Auto Scaling Group capacity bounds |
+    | Minimum instances / Maximum instances | Yes | 1 / 1 | Auto Scaling Group capacity bounds |
     | CPU autoscaling | No | false | Target-tracking scaling on average EC2 CPU utilization |
     | CPU target (%) | No | 70 | CPU target used when autoscaling is enabled |
     | Desired instances | No | - | Initial target when CPU autoscaling is off; blank starts at the minimum |
