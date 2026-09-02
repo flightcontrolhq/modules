@@ -6,17 +6,6 @@
         - dockerfile
         - railpack
         - nixpacks
-- id: soci_enabled
-  label: SOCI lazy loading
-  type: boolean
-  description: Build a SOCI-enabled image so Fargate can lazily load it, starting tasks before the full image is downloaded. On by default, and the larger the image the more it saves. Turn it off for EC2 capacity, where the gzip layer compression SOCI requires makes builds slower without speeding up task startup. Lazy loading also changes how long tasks take to report healthy, so services behind a load balancer may need a longer health check grace period.
-  collapsible: true
-  show_when:
-    build_source:
-      - dockerfile
-      - railpack
-      - nixpacks
-  default: true
 - id: section_ecr
   label: Image registry lifecycle
   type: section
