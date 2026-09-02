@@ -154,25 +154,6 @@ module:
           key_spec: SM2
           key_usage: KEY_AGREEMENT
           label: SM2 key agreement
-    - default: false
-      description: Create a multi-Region primary key. This module does not create replica keys in other Regions.
-      id: multi_region_enabled
-      immutable: true
-      label: Multi-Region key
-      type: boolean
-    - default: true
-      description: Enable automatic annual rotation. AWS applies this setting only to symmetric encryption keys.
-      id: key_rotation_enabled
-      label: Automatic key rotation
-      type: boolean
-    - collapsible: true
-      default: 30
-      description: Number of days AWS waits before permanently deleting a scheduled key.
-      id: deletion_window_in_days
-      label: Deletion waiting period days
-      max: 30
-      min: 7
-      type: number
     - id: section_key_policy
       label: Key policy principals
       type: section
@@ -229,14 +210,11 @@ module:
       terraform_variables:
         ...overrides: << module.input.advanced_terraform_variables >>
         alias: << module.input.alias || nil >>
-        deletion_window_in_days: << module.input.deletion_window_in_days >>
         description: << module.input.description || nil >>
         key_administrator_role_arns: << module.input.key_administrator_role_arns || [] >>
-        key_rotation_enabled: << module.input.key_rotation_enabled >>
         key_spec: << module.input.key_configuration.key_spec >>
         key_usage: << module.input.key_configuration.key_usage >>
         key_user_role_arns: << module.input.key_user_role_arns || [] >>
-        multi_region_enabled: << module.input.multi_region_enabled >>
         name: << module.input.name >>
         public_key_reader_role_arns: << module.input.public_key_reader_role_arns || [] >>
         region: << module.input.aws_region >>
@@ -255,7 +233,7 @@ module:
 
     ## Overview
 
-    Use this module to create one customer-managed AWS KMS key and a stable alias. Choose a valid algorithm and operation together, grant narrowly scoped access to IAM principals, and optionally enable multi-Region behavior.
+    Use this module to create one customer-managed AWS KMS key and a stable alias. Choose a valid algorithm and operation together, then grant narrowly scoped access to IAM principals.
 
     The module creates a key policy that preserves account-root IAM administration and adds separate grants for key administrators, key users, signers, and public key readers. Empty principal lists are allowed so the key can be created before its consumers.
 
@@ -267,7 +245,6 @@ module:
     | JWT or artifact signing | Use an RSA or ECC signing key while separating signers from public key readers. |
     | Message authentication | Use an HMAC key for MAC generation and verification. |
     | Shared-secret derivation | Use a supported ECC or SM2 key for key agreement. |
-    | Regional resilience | Create a multi-Region primary key that can be replicated separately into other Regions. |
 
     ## Key configuration
 
@@ -294,23 +271,16 @@ module:
 
     The deletion waiting period defaults to 30 days, the maximum AWS recovery window. Destroying the stack schedules the key for deletion rather than deleting key material immediately. Applications remain responsible for migrating encrypted or signed data before a key is retired.
 
-    ## Multi-Region keys
-
-    Multi-Region key creates a multi-Region primary key. It does not create replicas. Replica keys must be provisioned separately in each required Region, and multi-Region keys can increase cost and operational complexity.
-
     ## Configuration
 
     | Setting | Required | Default | Notes |
     | --- | --- | --- | --- |
     | AWS account | Yes | None | AWS account where the KMS key is created. |
-    | Region | Yes | None | AWS Region for the primary key. |
+    | Region | Yes | None | AWS Region where the key is created. |
     | Key name | Yes | Project, environment, and module given IDs | Used for the default alias, description, and tags. |
     | Description | No | KMS key for the key name | Description stored on the key. |
     | Alias override | No | Key name | Alias suffix without the `alias/` prefix. |
     | Key configuration | Yes | Symmetric encryption | Algorithm and permitted cryptographic operation. |
-    | Multi-Region key | No | false | Creates a multi-Region primary key without replicas. |
-    | Automatic key rotation | No | true | Applies only to symmetric encryption keys. |
-    | Deletion waiting period days | No | 30 | AWS permits 7 through 30 days. |
     | Key administrator principal ARNs | No | Empty list | Principals granted key administration actions. |
     | Key user principal ARNs | No | Empty list | Principals granted configuration-appropriate key use. |
     | Signer principal ARNs | No | Empty list | Principals allowed to sign or generate MACs when applicable. |
@@ -323,7 +293,7 @@ module:
 
     ## Design decisions
 
-    The module always creates an alias so consumers can use a stable, readable identifier. Key name, alias, key configuration, AWS account, Region, and multi-Region mode are immutable in Ravion because changing them alters key identity or requires replacement.
+    The module always creates an alias so consumers can use a stable, readable identifier. Key name, alias, key configuration, AWS account, and Region are immutable in Ravion because changing them alters key identity or requires replacement.
 
     Key policies separate administration, ordinary key use, signing, and public key reads. This makes it possible to publish a public key without also granting the publisher permission to create signatures.
 
@@ -334,5 +304,4 @@ module:
     - [AWS KMS concepts](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html)
     - [AWS KMS key policies](https://docs.aws.amazon.com/kms/latest/developerguide/key-policies.html)
     - [AWS KMS key rotation](https://docs.aws.amazon.com/kms/latest/developerguide/rotate-keys.html)
-    - [Multi-Region keys](https://docs.aws.amazon.com/kms/latest/developerguide/multi-region-keys-overview.html)
     - [Source module](https://github.com/ravionhq/modules/tree/$local.module_tag/security/kms)
