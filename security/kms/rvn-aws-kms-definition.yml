@@ -163,8 +163,8 @@ module:
       id: key_administrator_role_arns
       label: Key administrator principal ARNs
       patterns:
-        - message: Use a valid IAM principal ARN.
-          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
+          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
       placeholder: arn:aws:iam::123456789012:role/kms-admin
       type: string_array
     - add_button_label: Add key user principal
@@ -173,8 +173,8 @@ module:
       id: key_user_role_arns
       label: Key user principal ARNs
       patterns:
-        - message: Use a valid IAM principal ARN.
-          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
+          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
       placeholder: arn:aws:iam::123456789012:role/application
       type: string_array
     - add_button_label: Add signer principal
@@ -183,8 +183,8 @@ module:
       id: signer_role_arns
       label: Signer principal ARNs
       patterns:
-        - message: Use a valid IAM principal ARN.
-          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
+          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
       placeholder: arn:aws:iam::123456789012:role/signer
       type: string_array
     - add_button_label: Add public key reader principal
@@ -193,8 +193,8 @@ module:
       id: public_key_reader_role_arns
       label: Public key reader principal ARNs
       patterns:
-        - message: Use a valid IAM principal ARN.
-          pattern: "^arn:aws[a-zA-Z-]*:iam::"
+        - message: Invalid IAM principal ARN. Use an account root, role, or user ARN with a 12-digit account ID.
+          pattern: "^arn:aws(-us-gov|-cn|-iso|-iso-b|-iso-e|-iso-f)?:iam::[0-9]{12}:(root|(role|user)/[!-~]*[A-Za-z0-9+=,.@_-])$"
       placeholder: arn:aws:iam::123456789012:role/public-key-reader
       type: string_array
     - $include: ../../partials/inputs/misc-section.yml

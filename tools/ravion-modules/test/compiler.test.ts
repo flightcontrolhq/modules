@@ -125,6 +125,39 @@ describe("compiler", () => {
     );
   });
 
+  it("compiles complete KMS IAM principal ARN validation", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "security", "kms", "rvn-aws-kms-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
+    const principalInputIds = [
+      "key_administrator_role_arns",
+      "key_user_role_arns",
+      "signer_role_arns",
+      "public_key_reader_role_arns",
+    ];
+    const validArns = [
+      "arn:aws:iam::123456789012:root",
+      "arn:aws-us-gov:iam::123456789012:role/team/application",
+      "arn:aws-cn:iam::123456789012:user/developer",
+    ];
+    const invalidArns = [
+      "arn:aws:iam::",
+      "arn:aws:iam::12345678901:root",
+      "arn:aws:iam::123456789012:role/",
+      "arn:aws:iam::123456789012:group/developers",
+    ];
+
+    for (const inputId of principalInputIds) {
+      const input = findInput(inputs, inputId);
+      assert.ok(Array.isArray(input.patterns), `${inputId}.patterns should be an array`);
+      assert.equal(input.patterns.length, 1);
+      const validation = assertRecord(input.patterns[0], `${inputId}.patterns[0]`);
+      const pattern = new RegExp(assertString(validation.pattern));
+
+      for (const arn of validArns) assert.match(arn, pattern, `${inputId} should accept ${arn}`);
+      for (const arn of invalidArns) assert.doesNotMatch(arn, pattern, `${inputId} should reject ${arn}`);
+    }
+  });
+
   it("fails when a local token remains after compilation", async () => {
     await assert.rejects(
       compileDefinitionFile(join(fixturesDir, "invalid-local-token.yml")),
