@@ -28,15 +28,15 @@
 ################################################################################
 
 locals {
-  beacon_grafana_cloud_logs_secret_name    = "ravion-observability-grafana-cloud-logs"
-  beacon_grafana_cloud_metrics_secret_name = "ravion-observability-grafana-cloud-metrics"
+  ravion_operator_grafana_cloud_logs_secret_name    = "ravion-observability-grafana-cloud-logs"
+  ravion_operator_grafana_cloud_metrics_secret_name = "ravion-observability-grafana-cloud-metrics"
 
   # Materialized into Beacon's namespace, not the collectors': the agent mounts
   # them, and a Secret is not readable across namespaces.
-  beacon_proxy_credential_secrets = concat(
-    var.beacon_enabled && local.logs_grafana_cloud_enabled && local.grafana_cloud_config.token_secret_arn != null && local.grafana_cloud_config.logs_user != null ? [{
-      name      = local.beacon_grafana_cloud_logs_secret_name
-      namespace = var.beacon_namespace
+  ravion_operator_proxy_credential_secrets = concat(
+    var.ravion_operator_enabled && local.logs_grafana_cloud_enabled && local.grafana_cloud_config.token_secret_arn != null && local.grafana_cloud_config.logs_user != null ? [{
+      name      = local.ravion_operator_grafana_cloud_logs_secret_name
+      namespace = var.ravion_operator_namespace
       template = {
         username = local.grafana_cloud_config.logs_user
         password = "{{ .token }}"
@@ -46,9 +46,9 @@ locals {
         remoteRef = local.grafana_cloud_config.token_secret_arn
       }]
     }] : [],
-    var.beacon_enabled && local.metrics_grafana_cloud_enabled && local.grafana_cloud_config.token_secret_arn != null && local.grafana_cloud_config.metrics_user != null ? [{
-      name      = local.beacon_grafana_cloud_metrics_secret_name
-      namespace = var.beacon_namespace
+    var.ravion_operator_enabled && local.metrics_grafana_cloud_enabled && local.grafana_cloud_config.token_secret_arn != null && local.grafana_cloud_config.metrics_user != null ? [{
+      name      = local.ravion_operator_grafana_cloud_metrics_secret_name
+      namespace = var.ravion_operator_namespace
       template = {
         username = local.grafana_cloud_config.metrics_user
         password = "{{ .token }}"
@@ -61,37 +61,37 @@ locals {
   )
 
   # Prefixes, in the order the dashboard's fallback chain reads them.
-  beacon_proxy_allowed_endpoints = compact(concat(
+  ravion_operator_proxy_allowed_endpoints = compact(concat(
     [local.loki_enabled ? local.loki_endpoint : ""],
     [local.grafana_cloud_logs_query_url != null ? local.grafana_cloud_logs_query_url : ""],
     [local.grafana_cloud_metrics_query_url != null ? local.grafana_cloud_metrics_query_url : ""],
     [local.prometheus_endpoint != null ? local.prometheus_endpoint : ""],
   ))
 
-  beacon_proxy_credentials = concat(
-    local.grafana_cloud_logs_query_url != null && length([for secret in local.beacon_proxy_credential_secrets : secret if secret.name == local.beacon_grafana_cloud_logs_secret_name]) > 0 ? [{
+  ravion_operator_proxy_credentials = concat(
+    local.grafana_cloud_logs_query_url != null && length([for secret in local.ravion_operator_proxy_credential_secrets : secret if secret.name == local.ravion_operator_grafana_cloud_logs_secret_name]) > 0 ? [{
       endpointPrefix = local.grafana_cloud_logs_query_url
-      secretName     = local.beacon_grafana_cloud_logs_secret_name
+      secretName     = local.ravion_operator_grafana_cloud_logs_secret_name
       kind           = "basic"
     }] : [],
-    local.grafana_cloud_metrics_query_url != null && length([for secret in local.beacon_proxy_credential_secrets : secret if secret.name == local.beacon_grafana_cloud_metrics_secret_name]) > 0 ? [{
+    local.grafana_cloud_metrics_query_url != null && length([for secret in local.ravion_operator_proxy_credential_secrets : secret if secret.name == local.ravion_operator_grafana_cloud_metrics_secret_name]) > 0 ? [{
       endpointPrefix = local.grafana_cloud_metrics_query_url
-      secretName     = local.beacon_grafana_cloud_metrics_secret_name
+      secretName     = local.ravion_operator_grafana_cloud_metrics_secret_name
       kind           = "basic"
     }] : [],
   )
 
   # The single name the control plane carries as `auth_secret` on a source it
   # proxies. Logs first: the Logs tab is the one that reaches an external store
-  # in 0.8.x. beacon_proxy_credentials is the full mapping.
-  observability_credentials_secret_name = length(local.beacon_proxy_credentials) > 0 ? local.beacon_proxy_credentials[0].secretName : null
+  # in 0.8.x. ravion_operator_proxy_credentials is the full mapping.
+  observability_credentials_secret_name = length(local.ravion_operator_proxy_credentials) > 0 ? local.ravion_operator_proxy_credentials[0].secretName : null
 
-  beacon_observability_proxy_values = var.beacon_enabled && length(local.beacon_proxy_allowed_endpoints) > 0 ? [
+  ravion_operator_observability_proxy_values = var.ravion_operator_enabled && length(local.ravion_operator_proxy_allowed_endpoints) > 0 ? [
     yamlencode({
       httpProxy = {
         enabled          = true
-        allowedEndpoints = local.beacon_proxy_allowed_endpoints
-        credentials      = local.beacon_proxy_credentials
+        allowedEndpoints = local.ravion_operator_proxy_allowed_endpoints
+        credentials      = local.ravion_operator_proxy_credentials
       }
     }),
   ] : []

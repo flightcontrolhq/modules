@@ -241,36 +241,36 @@ output "private_nlb_security_group_id" {
 # Ravion Operator
 ################################################################################
 
-output "beacon_namespace" {
+output "ravion_operator_namespace" {
   description = "Kubernetes namespace where the Ravion Operator is installed (null if disabled)."
-  value       = var.beacon_enabled ? helm_release.beacon[0].namespace : null
+  value       = var.ravion_operator_enabled ? helm_release.ravion_operator[0].namespace : null
 }
 
-output "beacon_chart_version" {
+output "ravion_operator_chart_version" {
   description = "Installed version of the Ravion Operator Helm chart (null if disabled). This is the chart version, not the running agent version — the control plane owns that."
-  value       = var.beacon_enabled ? helm_release.beacon[0].version : null
+  value       = var.ravion_operator_enabled ? helm_release.ravion_operator[0].version : null
 }
 
-output "beacon_agent_id" {
+output "ravion_operator_agent_id" {
   description = "Ravion Operator record id (opagt_...) for this cluster (null if disabled). Stable across rotations — correlate agent logs by it."
   # A computed attribute of the credential resource, not secret material: the
   # client secret is the only sensitive attribute and is never output.
-  value = var.beacon_enabled ? ravion_operator_credential.this[0].operator_agent_id : null
+  value = var.ravion_operator_enabled ? ravion_operator_credential.this[0].operator_agent_id : null
 }
 
-output "beacon_client_id" {
+output "ravion_operator_client_id" {
   description = "WorkOS M2M client id the agent authenticates as (null if disabled). Not a secret, and identical for every cluster in the organization — the shared application's client id."
-  value       = var.beacon_enabled ? ravion_operator_credential.this[0].client_id : null
+  value       = var.ravion_operator_enabled ? ravion_operator_credential.this[0].client_id : null
 }
 
-output "beacon_client_secret_id" {
+output "ravion_operator_client_secret_id" {
   description = "WorkOS id of the secret issued to this cluster (null if disabled). Not the secret itself: it identifies which credential a connecting agent is presenting."
-  value       = var.beacon_enabled ? ravion_operator_credential.this[0].secret_id : null
+  value       = var.ravion_operator_enabled ? ravion_operator_credential.this[0].secret_id : null
 }
 
-output "beacon_credential_secret_arn" {
+output "ravion_operator_credential_secret_arn" {
   description = "ARN of the AWS Secrets Manager secret mirroring the agent's credential (null if disabled). An operator recovery copy of what Terraform state holds — nothing reads it back."
-  value       = var.beacon_enabled ? aws_secretsmanager_secret.beacon_credential[0].arn : null
+  value       = var.ravion_operator_enabled ? aws_secretsmanager_secret.ravion_operator_credential[0].arn : null
 }
 
 ################################################################################
@@ -465,7 +465,7 @@ output "observability_credentials_secret_name" {
 
 output "observability_proxy_credentials" {
   description = "Every proxy credential this module materialized: { endpointPrefix, secretName, kind }. observability_credentials_secret_name is the first of them; this is the full mapping for a cluster that renders from more than one external store."
-  value       = local.beacon_proxy_credentials
+  value       = local.ravion_operator_proxy_credentials
 }
 
 output "observability_namespace" {

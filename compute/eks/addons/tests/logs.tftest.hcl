@@ -66,7 +66,7 @@ mock_provider "aws" {
 
 mock_provider "helm" {}
 
-# Beacon's credential is minted by Ravion's own provider, which refuses to
+# Ravion Operator's credential is minted by Ravion's own provider, which refuses to
 # configure without a runner JWT.
 mock_provider "ravion" {}
 
@@ -147,15 +147,15 @@ run "logs_enabled_creates_bucket_loki_and_alloy" {
   }
 
   # In-cluster only: the endpoint is a ClusterIP Service URL, which is what
-  # makes Beacon's tunnel the sole route to it.
+  # makes Ravion Operator's tunnel the sole route to it.
   assert {
     condition     = output.loki_endpoint == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
-    error_message = "Loki's endpoint must be the in-cluster Service URL in Beacon's namespace"
+    error_message = "Loki's endpoint must be the in-cluster Service URL in Ravion Operator's namespace"
   }
 
   assert {
     condition     = output.loki_namespace == "ravion-beacon"
-    error_message = "Loki defaults to Beacon's namespace"
+    error_message = "Loki defaults to Ravion Operator's namespace"
   }
 
   assert {
@@ -353,25 +353,25 @@ run "alloy_attaches_the_agreed_label_set" {
 }
 
 ################################################################################
-# Beacon's proxy allowlist — the only route from Ravion to Loki.
+# Ravion Operator's proxy allowlist — the only route from Ravion to Loki.
 ################################################################################
 
-run "beacon_receives_the_loki_endpoint" {
+run "ravion_operator_receives_the_loki_endpoint" {
   command = plan
 
   variables {
-    logs_providers = ["loki"]
-    beacon_enabled = true
+    logs_providers          = ["loki"]
+    ravion_operator_enabled = true
   }
 
   assert {
-    condition     = length(local.beacon_observability_proxy_values) == 1
-    error_message = "Beacon must be handed a proxy allowlist document when logs are on"
+    condition     = length(local.ravion_operator_observability_proxy_values) == 1
+    error_message = "Ravion Operator must be handed a proxy allowlist document when logs are on"
   }
 
   assert {
-    condition     = join(",", yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.allowedEndpoints) == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
-    error_message = "Beacon's proxy allowlist must name exactly the Loki endpoint"
+    condition     = join(",", yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints) == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
+    error_message = "Ravion Operator's proxy allowlist must name exactly the Loki endpoint"
   }
 
   assert {
@@ -380,20 +380,20 @@ run "beacon_receives_the_loki_endpoint" {
   }
 }
 
-run "beacon_gets_no_allowlist_without_logs" {
+run "ravion_operator_gets_no_allowlist_without_logs" {
   command = plan
 
   variables {
-    beacon_enabled = true
+    ravion_operator_enabled = true
   }
 
   assert {
-    condition     = length(local.beacon_observability_proxy_values) == 0
+    condition     = length(local.ravion_operator_observability_proxy_values) == 0
     error_message = "With logs off there is nothing to proxy to, so no allowlist document is rendered"
   }
 }
 
-run "loki_alone_gives_beacon_nothing_to_proxy" {
+run "loki_alone_gives_ravion_operator_nothing_to_proxy" {
   command = plan
 
   variables {
@@ -401,8 +401,8 @@ run "loki_alone_gives_beacon_nothing_to_proxy" {
   }
 
   assert {
-    condition     = length(local.beacon_observability_proxy_values) == 0
-    error_message = "Without Beacon there is no proxy to allowlist for"
+    condition     = length(local.ravion_operator_observability_proxy_values) == 0
+    error_message = "Without Ravion Operator there is no proxy to allowlist for"
   }
 }
 
@@ -412,30 +412,30 @@ run "loki_alone_gives_beacon_nothing_to_proxy" {
 # input — asserted while set, gone when removed — never frozen into the state.
 ################################################################################
 
-run "beacon_release_passes_no_image_tag_by_default" {
+run "ravion_operator_release_passes_no_image_tag_by_default" {
   command = plan
 
   variables {
-    beacon_enabled = true
+    ravion_operator_enabled = true
   }
 
   assert {
-    condition     = length(helm_release.beacon[0].set) == 0
-    error_message = "With beacon_image_tag unset the release must pass no image tag, so the chart preserves whatever the agent is running"
+    condition     = length(helm_release.ravion_operator[0].set) == 0
+    error_message = "With ravion_operator_image_tag unset the release must pass no image tag, so the chart preserves whatever the agent is running"
   }
 }
 
-run "beacon_image_tag_is_a_pin_while_set" {
+run "ravion_operator_image_tag_is_a_pin_while_set" {
   command = plan
 
   variables {
-    beacon_enabled   = true
-    beacon_image_tag = "v9.9.9"
+    ravion_operator_enabled   = true
+    ravion_operator_image_tag = "v9.9.9"
   }
 
   assert {
-    condition     = length(helm_release.beacon[0].set) == 1 && one(helm_release.beacon[0].set).name == "image.tag" && one(helm_release.beacon[0].set).value == "v9.9.9"
-    error_message = "A configured beacon_image_tag must reach the chart as image.tag, and nothing else may travel in `set`"
+    condition     = length(helm_release.ravion_operator[0].set) == 1 && one(helm_release.ravion_operator[0].set).name == "image.tag" && one(helm_release.ravion_operator[0].set).value == "v9.9.9"
+    error_message = "A configured ravion_operator_image_tag must reach the chart as image.tag, and nothing else may travel in `set`"
   }
 }
 

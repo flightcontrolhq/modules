@@ -70,7 +70,7 @@ mock_provider "aws" {
 
 mock_provider "helm" {}
 
-# Beacon's credential resource is minted by Ravion's own provider, which refuses
+# Ravion Operator's credential resource is minted by Ravion's own provider, which refuses
 # to configure without a runner JWT. Nothing here exercises it.
 mock_provider "ravion" {}
 
@@ -362,13 +362,13 @@ run "datadog_ships_both_signals_from_one_credential" {
   }
 }
 
-run "grafana_cloud_is_a_second_loki_write_and_a_beacon_destination" {
+run "grafana_cloud_is_a_second_loki_write_and_a_ravion_operator_destination" {
   command = plan
 
   variables {
-    logs_providers    = ["loki", "grafana_cloud"]
-    metrics_providers = ["grafana_cloud"]
-    beacon_enabled    = true
+    logs_providers          = ["loki", "grafana_cloud"]
+    metrics_providers       = ["grafana_cloud"]
+    ravion_operator_enabled = true
     logs_grafana_cloud = {
       url              = "https://logs-prod-006.grafana.net/loki/api/v1/push"
       user             = "111111"
@@ -407,35 +407,35 @@ run "grafana_cloud_is_a_second_loki_write_and_a_beacon_destination" {
     error_message = "The metrics query URL is the remote-write URL with the push path removed"
   }
 
-  # Beacon is the only route from Ravion to any of these.
+  # Ravion Operator is the only route from Ravion to any of these.
   assert {
-    condition     = contains(yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.allowedEndpoints, "https://logs-prod-006.grafana.net/loki")
-    error_message = "Grafana Cloud's query endpoint must be on Beacon's proxy allowlist"
+    condition     = contains(yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints, "https://logs-prod-006.grafana.net/loki")
+    error_message = "Grafana Cloud's query endpoint must be on Ravion Operator's proxy allowlist"
   }
 
   assert {
-    condition     = yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.credentials[0].secretName == "ravion-observability-grafana-cloud-logs"
-    error_message = "Beacon must be given the Secret to authenticate a proxied Grafana Cloud query with"
+    condition     = yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.credentials[0].secretName == "ravion-observability-grafana-cloud-logs"
+    error_message = "Ravion Operator must be given the Secret to authenticate a proxied Grafana Cloud query with"
   }
 
   assert {
-    condition     = yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.credentials[0].kind == "basic"
+    condition     = yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.credentials[0].kind == "basic"
     error_message = "Grafana Cloud authenticates with basic auth"
   }
 
   assert {
     condition     = output.observability_credentials_secret_name == "ravion-observability-grafana-cloud-logs"
-    error_message = "The control plane needs the name of the Secret Beacon presents"
+    error_message = "The control plane needs the name of the Secret Ravion Operator presents"
   }
 
-  # Materialized into Beacon's namespace, because a Secret cannot be mounted
+  # Materialized into Ravion Operator's namespace, because a Secret cannot be mounted
   # across namespaces.
   assert {
     condition = length([
       for secret in yamldecode(helm_release.observability_secrets[0].values[0]).externalSecrets :
       secret if secret.namespace == "ravion-beacon" && secret.name == "ravion-observability-grafana-cloud-metrics"
     ]) == 1
-    error_message = "The proxy credential must land in Beacon's namespace"
+    error_message = "The proxy credential must land in Ravion Operator's namespace"
   }
 
   assert {
@@ -604,9 +604,9 @@ run "in_cluster_prometheus_is_a_rendering_provider" {
   command = plan
 
   variables {
-    logs_providers    = []
-    metrics_providers = ["amp", "prometheus"]
-    beacon_enabled    = true
+    logs_providers          = []
+    metrics_providers       = ["amp", "prometheus"]
+    ravion_operator_enabled = true
     metrics_prometheus = {
       retention_days = 30
       storage_size   = "100Gi"
@@ -636,7 +636,7 @@ run "in_cluster_prometheus_is_a_rendering_provider" {
 
   assert {
     condition     = output.prometheus_endpoint == "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090"
-    error_message = "The in-cluster endpoint is what Beacon proxies to and what the service modules map"
+    error_message = "The in-cluster endpoint is what Ravion Operator proxies to and what the service modules map"
   }
 
   assert {
@@ -644,10 +644,10 @@ run "in_cluster_prometheus_is_a_rendering_provider" {
     error_message = "The collector must remote-write the same series into the in-cluster store"
   }
 
-  # It has no route out of the cluster, so Beacon is the only way to read it.
+  # It has no route out of the cluster, so Ravion Operator is the only way to read it.
   assert {
-    condition     = contains(yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.allowedEndpoints, "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090")
-    error_message = "The in-cluster Prometheus must be on Beacon's proxy allowlist"
+    condition     = contains(yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints, "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090")
+    error_message = "The in-cluster Prometheus must be on Ravion Operator's proxy allowlist"
   }
 }
 

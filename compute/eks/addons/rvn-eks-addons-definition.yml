@@ -6,35 +6,9 @@ definition:
 release:
   version: 0.8.4
   description: >-
-    Automatically attach the EKS cluster's Ravion Runner security group to add-on OpenTofu runs so private Kubernetes endpoints are reachable,
-    render cluster metrics from Amazon Managed Prometheus, and provision new installations with supported Ravion Operator credentials.
-    Clarify which settings create managed resources and distinguish AWS account records, bucket names,
-    excluded namespaces, and enhanced observability. Configure the default Karpenter NodePool's On-demand and Spot capacity, instance categories,
-    architectures, CPU limit, and node lifetime directly in the module form. Ravion Operator chart 0.4.1,
-    and beacon_image_tag is a plain pin. Every release so far ignored the tag
-    after its first apply (the original "floor, not a pin" design), which froze whatever tag was
-    first applied into the state for good: a cluster once given a since-retired tag was rolled back
-    to it on every upgrade and wedged when that image could not start. Now the pin is asserted for
-    exactly as long as it is configured and removing it hands
-    the version back to the control plane on the next apply. The 0.4.1 chart preserves the running
-    image whole (registry included, so a stale image.repository in beacon_helm_values no longer
-    re-renders a tag that registry never held) and only when the release's rollout has settled;
-    a wedged release takes the chart's floor, so a plain re-apply repairs it. If your instance has
-    beacon_image_tag or an image.repository override in its advanced variables from before 0.8.0,
-    remove both when upgrading.
-    Previously (0.8.3): Ravion Operator chart 0.4.0 - an add-ons apply no longer moves the agent version;
-    the chart re-emits the running image on every helm upgrade, and gains httpProxy.credentials
-    for rendering Grafana Cloud and in-cluster Prometheus through the agent.
-    Previously (0.8.2): the pre-0.8.0 logs_enabled / metrics_enabled / cloudwatch_observability_enabled
-    Terraform variables are gone; the provider lists are the only switch. An instance still on 0.7.x
-    should upgrade to 0.8.1 first, which is what reads them.
-    Form guidance now uses concise, field-specific instructions and documents accepted version,
-    duration, storage, endpoint, and credential formats. Shared load balancer settings now appear
-    directly below Ravion EKS Management. User-facing module text and form field IDs now use the
-    Ravion Operator name. New configurations enable Ravion Operator, operator-run deployments,
-    and the public Application Load Balancer by default. Default NodePool creation and log retention
-    now stay collapsed until customized. Load balancer, Loki, AMP, and metrics credential fields now
-    use names that reflect their exact scope.
+    Rename the Terraform-facing Ravion Operator variables and outputs from beacon_* to ravion_operator_*.
+    Automatically attach the cluster's Ravion Runner security group to add-on runs, render metrics from
+    Amazon Managed Prometheus, and provision new installations with supported Ravion Operator credentials.
 module:
   inputs:
     - id: cluster
@@ -1145,12 +1119,12 @@ module:
         eso_chart_version: << module.input.eso_chart_version || "2.8.0" >>
         eso_namespace: << module.input.eso_namespace || "external-secrets" >>
         eso_secret_and_parameter_arns: '<< module.input.eso_secret_and_parameter_arns != nil ? module.input.eso_secret_and_parameter_arns : [] >>'
-        beacon_enabled: << module.input.ravion_operator_enabled >>
-        beacon_deploy_enabled: << module.input.ravion_operator_deploy_enabled >>
-        beacon_deploy_namespaces: '<< module.input.ravion_operator_deploy_namespaces != nil ? module.input.ravion_operator_deploy_namespaces : [] >>'
-        beacon_project_id: << project.id >>
-        beacon_environment_id: << environment.id >>
-        beacon_aws_account_record_id: << module.input.aws_account_id >>
+        ravion_operator_enabled: << module.input.ravion_operator_enabled >>
+        ravion_operator_deploy_enabled: << module.input.ravion_operator_deploy_enabled >>
+        ravion_operator_deploy_namespaces: '<< module.input.ravion_operator_deploy_namespaces != nil ? module.input.ravion_operator_deploy_namespaces : [] >>'
+        ravion_operator_project_id: << project.id >>
+        ravion_operator_environment_id: << environment.id >>
+        ravion_operator_aws_account_record_id: << module.input.aws_account_id >>
         public_subnet_ids: << module.input.public_subnet_ids >>
         load_balancer_deletion_protection_enabled: << module.input.load_balancer_deletion_protection_enabled >>
         public_alb_creation_enabled: << module.input.public_alb_creation_enabled >>
@@ -1324,12 +1298,12 @@ module:
 
     | Terraform variable | Default | What it changes |
     | ------------------ | ------- | --------------- |
-    | `beacon_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
-    | `beacon_chart_version` | `0.4.0` | Ravion Operator **chart** version, pinned per module release; never the agent version — the chart keeps whatever the release is running and Ravion rolls it forward. Set to `null` to track the registry's latest |
-    | `beacon_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
-    | `beacon_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
+    | `ravion_operator_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
+    | `ravion_operator_chart_version` | `0.4.1` | Ravion Operator **chart** version, pinned per module release; never the agent version — the chart keeps whatever the release is running and Ravion rolls it forward. Set to `null` to track the registry's latest |
+    | `ravion_operator_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
+    | `ravion_operator_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
 
-    **Deployment namespaces** falls back to `beacon_namespace_scope` when left empty, so a cluster scoped through the advanced variable also bounds Ravion Operator's deploys by default.
+    **Deployment namespaces** falls back to `ravion_operator_namespace_scope` when left empty, so a cluster scoped through the advanced variable also bounds Ravion Operator's deploys by default.
 
     ## External secrets
 

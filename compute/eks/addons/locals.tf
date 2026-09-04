@@ -31,7 +31,7 @@ locals {
   # observability_namespace deliberately defaults to Beacon's namespace rather
   # than to a namespace of its own: moving Loki would change the Service URL the
   # control plane defaults to, for no gain.
-  observability_namespace = coalesce(var.observability_namespace, var.beacon_namespace)
+  observability_namespace = coalesce(var.observability_namespace, var.ravion_operator_namespace)
   metrics_namespace       = coalesce(var.metrics_namespace, local.observability_namespace)
   logs_namespace          = coalesce(var.logs_namespace, local.observability_namespace)
   grafana_namespace       = coalesce(var.grafana_namespace, local.observability_namespace)

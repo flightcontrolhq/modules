@@ -15,7 +15,7 @@
 #
 #   2. PROXY CREDENTIALS, in Beacon's namespace: the basic-auth pair the agent
 #      presents when the dashboard queries an external store through it
-#      (observability_beacon.tf). Same ARN, different namespace and shape,
+#      (observability_ravion_operator.tf). Same ARN, different namespace and shape,
 #      because a Secret cannot be mounted across namespaces.
 #
 # Delivered as a local chart because the Helm provider is this stack's only
@@ -40,7 +40,7 @@ locals {
 
   observability_external_secrets = concat(
     local.observability_collector_secrets,
-    local.beacon_proxy_credential_secrets,
+    local.ravion_operator_proxy_credential_secrets,
   )
 
   observability_secrets_enabled = length(local.observability_external_secrets) > 0

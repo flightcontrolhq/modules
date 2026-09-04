@@ -17,7 +17,7 @@ terraform {
       version = ">= 3.0"
     }
     # Ravion's own provider, served from Ravion's provider registry. Used only by
-    # beacon.tf, to mint the Beacon agent credential server-side.
+    # ravion_operator.tf, to mint the Ravion Operator credential server-side.
     # TEMP: pointed at the local dev registry tunnel while providers.ravion.com
     # is not yet live — restore that hostname when the real registry exists.
     ravion = {

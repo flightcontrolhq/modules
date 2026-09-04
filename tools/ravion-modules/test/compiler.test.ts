@@ -424,9 +424,19 @@ describe("compiler", () => {
     assert.equal(inputs.some((input) => input.id === "beacon_deploy_enabled"), false);
     assert.equal(inputs.some((input) => input.id === "beacon_deploy_namespaces"), false);
     assert.equal(
-      getTerraformVariable(compiled.module, "beacon_deploy_enabled"),
+      getTerraformVariable(compiled.module, "ravion_operator_deploy_enabled"),
       "<< module.input.ravion_operator_deploy_enabled >>",
     );
+    for (const legacyVariable of [
+      "beacon_enabled",
+      "beacon_deploy_enabled",
+      "beacon_deploy_namespaces",
+      "beacon_project_id",
+      "beacon_environment_id",
+      "beacon_aws_account_record_id",
+    ]) {
+      assert.equal(getTerraformVariable(compiled.module, legacyVariable), undefined);
+    }
     for (const sectionId of ["section_ravion_operator", "section_karpenter", "section_external_secrets"]) {
       assert.doesNotMatch(String(findInput(inputs, sectionId).description), /Terraform runner/);
     }
