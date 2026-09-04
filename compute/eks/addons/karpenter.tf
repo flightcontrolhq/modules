@@ -54,9 +54,12 @@ resource "helm_release" "karpenter" {
   )
 
   # The controller pod needs the Pod Identity association and interruption
-  # queue to exist before it starts.
+  # queue to exist before it starts. When the AWS Load Balancer Controller is
+  # installed in the same apply, wait for its webhook endpoints before the
+  # Karpenter chart creates its Service.
   depends_on = [
     helm_release.karpenter_crd,
+    helm_release.lb_controller,
     module.karpenter,
   ]
 }

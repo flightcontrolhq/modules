@@ -8,7 +8,8 @@ release:
   description: >-
     Rename the Terraform-facing Ravion Operator variables and outputs from beacon_* to ravion_operator_*.
     Automatically attach the cluster's Ravion Runner security group to add-on runs, render metrics from
-    Amazon Managed Prometheus, and provision new installations with supported Ravion Operator credentials.
+    Amazon Managed Prometheus, provision new installations with supported Ravion Operator credentials,
+    and prevent first-time Karpenter installation failures when AWS Load Balancer Controller is enabled.
 module:
   inputs:
     - id: cluster
