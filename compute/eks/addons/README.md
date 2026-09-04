@@ -14,10 +14,10 @@ Selectable add-ons for an existing EKS cluster, each toggled independently:
 | **Vendor credentials** | any vendor provider | not selected | One `ExternalSecret` per vendor (local `charts/observability-secrets`), materializing a Secrets Manager secret into a Kubernetes Secret the collectors read as environment variables |
 | **Grafana read role** | `grafana_role_creation_enabled` | `false` | An IAM role trusted by `grafana.amazonaws.com` with query access to the AMP workspace — for Amazon Managed Grafana, which can read metrics but cannot reach in-cluster Loki |
 | **In-cluster Grafana** | `grafana_enabled` | `false` | A Grafana release preprovisioned with both datasources: AMP over SigV4 (with its own Pod Identity role) and the in-cluster Loki |
-| **Ravion Beacon** | `beacon_enabled` | `false` | Mints the cluster's WorkOS M2M credential through the `ravion` provider (`ravion_beacon_credential`), writes it into a Kubernetes `Secret` (local `charts/beacon-credential`) and mirrors it into an AWS Secrets Manager secret, and installs the `beacon` Helm chart — an in-cluster agent that dials Ravion outbound over a single WebSocket |
+| **Ravion Operator** | `beacon_enabled` | `false` | Mints the cluster's WorkOS M2M credential through the `ravion` provider (`ravion_operator_credential`), writes it into a Kubernetes `Secret` (local `charts/beacon-credential`) and mirrors it into an AWS Secrets Manager secret, and installs the `beacon` Helm chart — an in-cluster agent that dials Ravion outbound over a single WebSocket |
 | **Shared load balancers** | `public_alb_creation_enabled`, `private_alb_creation_enabled`, `public_nlb_creation_enabled`, `private_nlb_creation_enabled` | `false` | Terraform-managed ALBs/NLBs (via `networking/alb` and `networking/nlb`) that workloads attach to with the load balancer controller's `TargetGroupBinding` CRD, plus cluster security group ingress rules allowing each load balancer to reach pods |
 
-The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the AWS Load Balancer Controller, the External Secrets Operator, Beacon, and the metrics and logs pipelines additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
+The [`compute/eks`](..) composite intentionally creates none of these, so clusters only carry what they use. EBS CSI and Container Insights are native EKS add-ons installed purely through the AWS API. Karpenter, the AWS Load Balancer Controller, the External Secrets Operator, Ravion Operator, and the metrics and logs pipelines additionally install Helm charts, which are the only parts that need Kubernetes API connectivity.
 
 > **Connectivity contract (Helm add-ons only):** the machine running Terraform must be able to reach the cluster's Kubernetes API endpoint. For private-endpoint clusters, run inside the cluster VPC with the composite's Ravion Runner security group (`ravion_runner_security_group_id` output) attached, and have the AWS CLI on PATH for `aws eks get-token`. With `karpenter_enabled`, `eso_enabled`, `aws_load_balancer_controller_enabled`, `beacon_enabled`, and all four load balancer creation toggles off, no cluster connectivity is needed. `beacon_enabled` additionally requires reachability to the Ravion API from the Terraform runner, because the `ravion` provider mints the agent's credential during the run — but nothing beyond the provider binary: no `curl`, no API-token input.
 >
@@ -117,7 +117,7 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 
 | `logs_providers` | Collector | Destination | In Ravion |
 |---|---|---|---|
-| `loki` *(default)* | Alloy DaemonSet | In-cluster Loki, chunks in an S3 bucket in your account | **Renders**, through Beacon |
+| `loki` *(default)* | Alloy DaemonSet | In-cluster Loki, chunks in an S3 bucket in your account | **Renders**, through Ravion Operator |
 | `cloudwatch` | OpenTelemetry DaemonSet (`awscloudwatchlogs`) | Log group `/ravion/eks/<cluster>`, one stream per pod as `<namespace>/<pod>/<container>` | **Renders**, and is the fallback when the in-cluster agent is offline |
 | `grafana_cloud` | Alloy (`loki.write` with basic auth) | Your Grafana Cloud Loki endpoint | Ships + "Open in Grafana Cloud" |
 | `datadog` | OpenTelemetry (`datadog`) | Datadog intake for the chosen site | Ships + "Open in Datadog" |
@@ -129,7 +129,7 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 | `metrics_providers` | Exporter | Destination | In Ravion |
 |---|---|---|---|
 | `amp` *(default)* | `prometheusremotewrite` + SigV4 | Amazon Managed Prometheus workspace in your account | **Renders** |
-| `prometheus` | `prometheusremotewrite` | Prometheus in your cluster, PV-backed | **Renders**, through Beacon, behind AMP |
+| `prometheus` | `prometheusremotewrite` | Prometheus in your cluster, PV-backed | **Renders**, through Ravion Operator, behind AMP |
 | `cloudwatch` | the CloudWatch agent (add-on) | `ContainerInsights` metric namespace | **Renders**, last in the chain |
 | `grafana_cloud` | `prometheusremotewrite` + basic auth | Grafana Cloud Prometheus remote write | Ships + link |
 | `datadog` | `datadog` | Datadog intake | Ships + link |
@@ -144,7 +144,7 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 
 **Amazon OpenSearch Service authenticates with an IAM role, not a key.** The collector signs its requests with its Pod Identity role, published as `logs_opensearch_role_arn`; the domain's own access policy or fine-grained role mapping has to name that role, and this module cannot write it because it does not manage the domain. The IAM half it does write is scoped to `es:ESHttp*` on the account's domains in this region.
 
-**In-cluster Prometheus is a store, not a scraper.** Every scrape in this module belongs to the one collector, which owns the curated allow-list and the label contract; the Prometheus this provider installs runs with `web.enable-remote-write-receiver`, no scrape jobs, no alertmanager, no pushgateway and no second copy of the exporters already running. It needs a `StorageClass` for its PersistentVolume (`ebs_csi_driver_enabled` on a Ravion cluster). `metrics_prometheus.endpoint` points at a Prometheus you already run and skips the install entirely. Like Loki, it has no ingress: Ravion reads it through Beacon, whose allowlist this module writes.
+**In-cluster Prometheus is a store, not a scraper.** Every scrape in this module belongs to the one collector, which owns the curated allow-list and the label contract; the Prometheus this provider installs runs with `web.enable-remote-write-receiver`, no scrape jobs, no alertmanager, no pushgateway and no second copy of the exporters already running. It needs a `StorageClass` for its PersistentVolume (`ebs_csi_driver_enabled` on a Ravion cluster). `metrics_prometheus.endpoint` points at a Prometheus you already run and skips the install entirely. Like Loki, it has no ingress: Ravion reads it through Ravion Operator, whose allowlist this module writes.
 
 **Which collector runs.** Alloy carries the loki-family destinations (`loki`, `grafana_cloud`) because Ravion's log views are written against its label contract; the OpenTelemetry contrib DaemonSet carries the rest. A default cluster runs Alloy alone; a CloudWatch-only cluster runs the OpenTelemetry collector alone; a cluster with both runs both, each reading the same files once. `logs_excluded_namespaces` (default `kube-system`, `kube-node-lease`, `amazon-cloudwatch`, `ravion-beacon`) keeps a namespace out of both.
 
@@ -190,7 +190,7 @@ Prometheus anchors relabel regexes at both ends, so each entry must match a **wh
 
 **Identity.** The collector's service account is bound by EKS Pod Identity to a role whose only permission is `aps:RemoteWrite` on that single workspace ARN. The `sigv4auth` extension configures no credentials of its own — it signs with whatever the AWS SDK default credential chain resolves, which the Pod Identity Agent populates.
 
-**Namespace.** The metrics components share Beacon's namespace (`beacon_namespace`, default `ravion-beacon`), so Ravion's in-cluster components live in one place. `metrics_namespace` splits them if that is not wanted.
+**Namespace.** The metrics components share Ravion Operator's namespace (`beacon_namespace`, default `ravion-beacon`), so Ravion's in-cluster components live in one place. `metrics_namespace` splits them if that is not wanted.
 
 **Sizing.** One collector Deployment scrapes every node, which is comfortable to roughly 100 nodes at a 60-second interval. Past that, the escape hatch is the chart's target allocator with a StatefulSet — deliberately not in this release. `otel_collector_resources` defaults to requests of `100m` / `256Mi` and a memory limit of `512Mi`; the limit matters because the collector's `memory_limiter` processor sizes itself as a percentage of the container limit, and with no limit it would measure against the whole node.
 
@@ -198,7 +198,7 @@ Prometheus anchors relabel regexes at both ends, so each entry must match a **wh
 
 `loki` in `logs_providers` (the default) turns on a log pipeline that lives entirely in the customer's account: [Grafana Alloy](https://grafana.com/docs/alloy/latest/) as a DaemonSet reading every container's stdout off its own node, [Loki](https://grafana.com/docs/loki/latest/) in the cluster indexing and serving it, and an S3 bucket holding every chunk.
 
-**Loki is never exposed.** No ingress, no load balancer, not even the chart's nginx gateway — a ClusterIP Service on port 3100 and nothing else. Ravion reads it by asking the Beacon agent to proxy a query over the WebSocket Beacon already holds, so there is no inbound path to open, nothing to put a certificate on, and no log data leaving the account except as the answer to a query. That is also why `loki_endpoint` is an in-cluster URL: it is what Beacon's proxy allowlist names, not something to publish.
+**Loki is never exposed.** No ingress, no load balancer, not even the chart's nginx gateway — a ClusterIP Service on port 3100 and nothing else. Ravion reads it by asking the Ravion Operator to proxy a query over the WebSocket Ravion Operator already holds, so there is no inbound path to open, nothing to put a certificate on, and no log data leaving the account except as the answer to a query. That is also why `loki_endpoint` is an in-cluster URL: it is what Ravion Operator's proxy allowlist names, not something to publish.
 
 #### The label set is a contract
 
@@ -290,13 +290,13 @@ It cannot reach Loki unless it runs in the cluster. Note that SigV4 also require
 
 Values for every snippet come from module outputs: `amp_query_endpoint`, `amp_region`, `amp_workspace_id`, `grafana_role_arn`, `loki_endpoint`, `grafana_namespace`, `grafana_service`.
 
-### Ravion Beacon
+### Ravion Operator
 
-Beacon is Ravion's in-cluster agent. It dials the control plane **outbound** over a single WebSocket — the control plane can never dial in, because a private-endpoint EKS API is reachable from nowhere else — and reports workload state. Optionally, and separately, it can perform Ravion's Helm deploys from inside the cluster.
+Ravion Operator is Ravion's in-cluster agent. It dials the control plane **outbound** over a single WebSocket — the control plane can never dial in, because a private-endpoint EKS API is reachable from nowhere else — and reports workload state. Optionally, and separately, it can perform Ravion's Helm deploys from inside the cluster.
 
 Off by default. `beacon_enabled = true` does three things in one apply:
 
-1. **Mints** the cluster's credential with the `ravion` provider (`ravion_beacon_credential`). Ravion issues a client secret on the organization's shared WorkOS M2M application server-side, records it against this cluster's Beacon agent row, and returns a `client_id` + `client_secret` pair.
+1. **Mints** the cluster's credential with the `ravion` provider (`ravion_operator_credential`). Ravion issues a client secret on the organization's shared WorkOS M2M application server-side, records it against this cluster's Ravion Operator row, and returns a `client_id` + `client_secret` pair.
 2. **Stores** that pair — in a Kubernetes `Secret` named `ravion-beacon-credential` in `beacon_namespace` under the keys `clientId` and `clientSecret`, and, as a mirror, in an AWS Secrets Manager secret in *your* account (`ravion/beacon/<cluster>/credential`) carrying the same two keys.
 3. **Installs** the agent chart, wired to that Secret.
 
@@ -314,7 +314,7 @@ There is **no API-token input**. The `ravion` provider authenticates with `RAVIO
 
 #### The credential, and the mirror
 
-The client secret is minted by WorkOS and returned **exactly once**. Ravion keeps no plaintext copy, so `ravion_beacon_credential` has no refresh (its `Read` is a state passthrough) and cannot be imported. **Terraform state holds the credential.**
+The client secret is minted by WorkOS and returned **exactly once**. Ravion keeps no plaintext copy, so `ravion_operator_credential` has no refresh (its `Read` is a state passthrough) and cannot be imported. **Terraform state holds the credential.**
 
 The Secrets Manager secret is the operator's **recovery copy of what state holds** — a mirror, deliberately not an idempotency anchor. Nothing reads it back, and the module no longer asks it "has this cluster been enrolled already?"; that question belonged to the curl-era enrollment and is gone. Every argument of the resource is `RequiresReplace`, and **a create for a cluster ARN that already has an agent mints a new secret and revokes the previous one** — so there is no `409`, no destroy-first dance, and a half-failed apply is simply retryable. Rotation is `tofu apply -replace=…`; a lost state is recovered the same way, at the cost of one reconnect.
 
@@ -372,7 +372,7 @@ To exercise the real registry protocol instead of overriding it, that package's 
 
 #### The image tag is not Terraform's to own
 
-With `beacon_self_update_enabled` on (the default), the control plane rolls each cluster's agent forward by patching Beacon's own Deployment — a namespaced `Role` scoped by `resourceNames` to that one object, and the only write permission the chart creates by default. An apply that re-asserted the image tag would revert every staged rollout, so this module passes **no tag at all** by default and the chart (0.4.1+, `image.preserveOnUpgrade`) reads the image the release is already running back on every `helm upgrade` and re-emits it — registry and tag — once that release's rollout has settled. A fresh install starts at the chart's `appVersion` (the floor); every later apply leaves the version with whoever set it last. A release whose last rollout wedged is deliberately *not* preserved: the chart falls back to its floor, so a plain re-apply repairs it instead of re-asserting the image that could not start.
+With `beacon_self_update_enabled` on (the default), the control plane rolls each cluster's agent forward by patching Ravion Operator's own Deployment — a namespaced `Role` scoped by `resourceNames` to that one object, and the only write permission the chart creates by default. An apply that re-asserted the image tag would revert every staged rollout, so this module passes **no tag at all** by default and the chart (0.4.1+, `image.preserveOnUpgrade`) reads the image the release is already running back on every `helm upgrade` and re-emits it — registry and tag — once that release's rollout has settled. A fresh install starts at the chart's `appVersion` (the floor); every later apply leaves the version with whoever set it last. A release whose last rollout wedged is deliberately *not* preserved: the chart falls back to its floor, so a plain re-apply repairs it instead of re-asserting the image that could not start.
 
 `beacon_image_tag` is the one deliberate exception, and it is a **pin**:
 
@@ -386,7 +386,7 @@ With `beacon_self_update_enabled` on (the default), the control plane rolls each
 
 `beacon_namespace_scope` is the one value that turns a cluster-wide component into a bounded one, and it is enforced by Kubernetes rather than by the agent: non-empty renders **no observation ClusterRole at all**, one namespaced `Role`/`RoleBinding` per entry instead. A scoped install can read no `nodes` and no `namespaces`, so the node count in fleet health is reported as unknown; nothing else changes.
 
-`beacon_deploy_enabled` is the widest grant the chart can create and is off by default. In the namespaces it covers, Beacon can create, update and delete Deployments, Services, Jobs, Ingresses and Secrets. It can never create anything in `rbac.authorization.k8s.io`, no `namespaces`, and nothing cluster-scoped — so it cannot widen itself. It is bounded by `beacon_deploy_namespaces`, falling back to `beacon_namespace_scope`; **if both are empty the apply fails**, because there is deliberately no "deploy everywhere" posture. Declining it leaves a fully working agent and Ravion deploys to the cluster from outside as it always has.
+`beacon_deploy_enabled` is the widest grant the chart can create and is off by default. In the namespaces it covers, Ravion Operator can create, update and delete Deployments, Services, Jobs, Ingresses and Secrets. It can never create anything in `rbac.authorization.k8s.io`, no `namespaces`, and nothing cluster-scoped — so it cannot widen itself. It is bounded by `beacon_deploy_namespaces`, falling back to `beacon_namespace_scope`; **if both are empty the apply fails**, because there is deliberately no "deploy everywhere" posture. Declining it leaves a fully working agent and Ravion deploys to the cluster from outside as it always has.
 
 Values this module does not surface directly — `portForward.enabled`, `helmInventory.enabled`, `redaction.extraPatterns`, `image.repository`, resources, tolerations — go through `beacon_helm_values`. Read the chart's `README.md` before enabling any of the opt-in capabilities.
 
@@ -398,12 +398,12 @@ Rotation is now **replacement of the credential resource** — the control plane
 
 | Situation | What to do |
 |---|---|
-| **Routine rotation / compromised secret** | `tofu apply -replace='module.eks_addons.ravion_beacon_credential.this[0]'`. The create mints a new secret and the control plane deletes the previous one — there is no `409` and no destroy-first step. The agent reconnects with the new pair when its Secret is updated. |
+| **Routine rotation / compromised secret** | `tofu apply -replace='module.eks_addons.ravion_operator_credential.this[0]'`. The create mints a new secret and the control plane deletes the previous one — there is no `409` and no destroy-first step. The agent reconnects with the new pair when its Secret is updated. |
 | **Credential lost with Terraform state** | The same replace. The secret cannot be re-read, ever — not by this module and not by Ravion — so recovery is always minting a new one. Nothing is stuck: the create does not conflict with the existing agent row, and `beacon_agent_id` survives, so the cluster's history stays readable. |
 | **Stop the agent now, without touching Terraform** | Ravion's kill switch, in the control plane: revoking the agent disables it and closes the live connection, and no token can be minted afterwards by anyone holding any secret. A disabled agent that reconnects is still admitted and then immediately handed its disable directive, so re-enabling never requires a customer to run `helm upgrade` during an incident. |
-| **Offboard permanently** | `beacon_enabled = false` and apply. Destroying `ravion_beacon_credential` revokes the credential server-side, and the same apply removes both Helm releases (the agent and its Secret) and deletes the Secrets Manager mirror with no recovery window — the name is deterministic, so a 30-day window would block re-enabling Beacon on this cluster for a month. |
+| **Offboard permanently** | `beacon_enabled = false` and apply. Destroying `ravion_operator_credential` revokes the credential server-side, and the same apply removes both Helm releases (the agent and its Secret) and deletes the Secrets Manager mirror with no recovery window — the name is deterministic, so a 30-day window would block re-enabling Ravion Operator on this cluster for a month. |
 
-Unlike the previous curl-based enrollment, turning the flag off **does** revoke the credential, because the destroy runs through the provider. The Beacon agent row itself is retained (disabled) so the cluster's history is not orphaned.
+Unlike the previous curl-based enrollment, turning the flag off **does** revoke the credential, because the destroy runs through the provider. The Ravion Operator row itself is retained (disabled) so the cluster's history is not orphaned.
 
 ## Requirements
 
@@ -452,7 +452,7 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | ebs_csi_addon_version / ebs_csi_addon_configuration_values | EBS CSI pin / JSON overrides. | `string` | `null` | no |
 | logs_providers | Where container logs go: any of `loki`, `cloudwatch`, `grafana_cloud`, `datadog`, `new_relic`, `otlp`. `[]` turns logs off. Null falls back to the deprecated `logs_enabled`. | `list(string)` | `["loki"]` | no |
 | metrics_providers | Where metrics go: any of `amp`, `cloudwatch`, `grafana_cloud`, `datadog`, `new_relic`, `otlp`. `[]` turns metrics off. Null falls back to the deprecated `metrics_enabled`. | `list(string)` | `["amp"]` | no |
-| observability_namespace | Namespace for the collectors, the log store, and the materialized vendor credentials. Null shares Beacon's namespace, which is what keeps Loki's Service URL stable. | `string` | `null` | no |
+| observability_namespace | Namespace for the collectors, the log store, and the materialized vendor credentials. Null shares Ravion Operator's namespace, which is what keeps Loki's Service URL stable. | `string` | `null` | no |
 | logs_excluded_namespaces | Namespaces no log collector reads from, for every destination. | `list(string)` | `["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"]` | no |
 | logs_loki | `{ retention_days, s3_bucket_name, persistence_enabled, persistence_size }`. Falls back to the flat `log_retention_days` / `loki_s3_bucket_name` / `loki_persistence_*`. | `object` | `{}` | no |
 | logs_cloudwatch | `{ retention_days, log_group_name }`. Default group `/ravion/eks/<cluster>`, retention 30 days. | `object` | `{}` | no |
@@ -472,7 +472,7 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | amp_workspace_id | Existing AMP workspace to write into. Null creates one aliased `ravion-<cluster>`. | `string` | `null` | no |
 | amp_region | Region the AMP workspace lives in. Null uses the cluster's region. | `string` | `null` | no |
 | amp_alias | Alias for the created workspace. Null uses `ravion-<cluster_name>`. | `string` | `null` | no |
-| metrics_namespace | Namespace for the metrics components. Null shares Beacon's namespace. | `string` | `null` | no |
+| metrics_namespace | Namespace for the metrics components. Null shares Ravion Operator's namespace. | `string` | `null` | no |
 | scrape_interval_seconds | Scrape interval for every job (15-300). The first cost lever. | `number` | `60` | no |
 | metrics_additional_allowlist | Extra whole-name metric regexes appended to the curated allow-list on every job. | `list(string)` | `[]` | no |
 | otel_collector_chart_version | Community opentelemetry-collector chart version. | `string` | `"0.169.0"` | no |
@@ -488,7 +488,7 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | logs_enabled | Collect container logs with Alloy into an in-cluster Loki storing to S3 in this account. | `bool` | `false` | no |
 | loki_s3_bucket_name | Existing bucket for log chunks and index. Null creates `ravion-loki-<cluster>-<account>`. | `string` | `null` | no |
 | log_retention_days | How long logs stay queryable. Enforced by Loki's compactor; the bucket expires a week later as a backstop. | `number` | `30` | no |
-| logs_namespace | Namespace for Loki and Alloy. Null shares Beacon's namespace. | `string` | `null` | no |
+| logs_namespace | Namespace for Loki and Alloy. Null shares Ravion Operator's namespace. | `string` | `null` | no |
 | loki_chart_version | grafana/loki chart version. | `string` | `"7.3.0"` | no |
 | loki_service_account | Loki's service account; the Pod Identity association binds to this name. | `string` | `"ravion-loki"` | no |
 | loki_resources | Loki requests and limits. | `object` | requests `200m`/`512Mi`, limit `1Gi` | no |
@@ -500,21 +500,21 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | alloy_helm_values | Extra YAML docs merged into the Alloy chart values. | `list(string)` | `[]` | no |
 | grafana_enabled | Install Grafana in the cluster, preprovisioned with the AMP and Loki datasources. | `bool` | `false` | no |
 | grafana_chart_version | grafana chart version, from the grafana-community repository. | `string` | `"12.10.4"` | no |
-| grafana_namespace | Namespace for the in-cluster Grafana. Null shares Beacon's namespace. | `string` | `null` | no |
+| grafana_namespace | Namespace for the in-cluster Grafana. Null shares Ravion Operator's namespace. | `string` | `null` | no |
 | grafana_service_account | Grafana's service account; the AMP Pod Identity association binds to this name. | `string` | `"ravion-grafana"` | no |
 | grafana_helm_values | Extra YAML docs merged into the Grafana chart values (ingress, persistence, dashboards). | `list(string)` | `[]` | no |
-| beacon_enabled | Mint the cluster's Beacon credential (via the `ravion` provider) and install the Ravion Beacon agent. | `bool` | `false` | no |
+| beacon_enabled | Mint the cluster's Ravion Operator credential (via the `ravion` provider) and install the Ravion Operator. | `bool` | `false` | no |
 | beacon_endpoint | WebSocket endpoint the agent dials — the single destination an egress policy must allow. | `string` | `"wss://websockets.ravion.com/beacon/v1/connect"` | no |
 | beacon_chart_source | `oci://` reference, or a filesystem path to a chart directory for local testing. | `string` | `"oci://public.ecr.aws/ravion/beacon"` | no |
-| beacon_chart_version | Beacon **chart** version (not the agent version), pinned per module release. Null resolves the latest; ignored for a filesystem chart. | `string` | `"0.4.1"` | no |
+| beacon_chart_version | Ravion Operator **chart** version (not the agent version), pinned per module release. Null resolves the latest; ignored for a filesystem chart. | `string` | `"0.4.1"` | no |
 | beacon_namespace | Namespace for the agent and its credential Secret (created if missing). | `string` | `"ravion-beacon"` | no |
 | beacon_namespace_scope | Namespaces the agent may observe. Empty is cluster-wide; non-empty renders namespaced Roles and no observation ClusterRole at all. | `list(string)` | `[]` | no |
-| beacon_deploy_enabled | Let Beacon perform Ravion's Helm deploys from inside the cluster. The widest grant the chart can create. | `bool` | `false` | no |
-| beacon_deploy_namespaces | Namespaces Beacon may deploy into. Falls back to `beacon_namespace_scope`; both empty with deploy on fails the apply. | `list(string)` | `[]` | no |
-| beacon_exec_enabled | Grant `create` on `pods/exec` — the only way Beacon can run a command inside a container. | `bool` | `false` | no |
+| beacon_deploy_enabled | Let Ravion Operator perform Ravion's Helm deploys from inside the cluster. The widest grant the chart can create. | `bool` | `false` | no |
+| beacon_deploy_namespaces | Namespaces Ravion Operator may deploy into. Falls back to `beacon_namespace_scope`; both empty with deploy on fails the apply. | `list(string)` | `[]` | no |
+| beacon_exec_enabled | Grant `create` on `pods/exec` — the only way Ravion Operator can run a command inside a container. | `bool` | `false` | no |
 | beacon_self_update_enabled | Let the control plane roll the agent forward by patching its own Deployment. | `bool` | `true` | no |
 | beacon_image_tag | Agent image tag **pin**: asserted on every apply while set, released back to the control plane when removed (see above). Null: a fresh install starts at the chart's `appVersion` and upgrades keep the running image. | `string` | `null` | no |
-| beacon_helm_values | Extra YAML docs merged into the Beacon chart values (`portForward`, `helmInventory`, `redaction`, `image.repository`, …). | `list(string)` | `[]` | no |
+| beacon_helm_values | Extra YAML docs merged into the Ravion Operator chart values (`portForward`, `helmInventory`, `redaction`, `image.repository`, …). | `list(string)` | `[]` | no |
 | beacon_project_id / beacon_environment_id / beacon_aws_account_record_id | Ravion record ids recorded on the agent when its credential is minted. Optional. | `string` | `null` | no |
 | public_subnet_ids | Public subnets for internet-facing load balancers. Required when the public ALB or public NLB is enabled. | `list(string)` | `[]` | no |
 | load_balancer_deletion_protection_enabled | Deletion protection on the shared load balancers. | `bool` | `false` | no |
@@ -558,8 +558,8 @@ All outputs are null when the corresponding add-on is disabled.
 | logs_cloudwatch_log_group | `/ravion/eks/<cluster>`, one stream per pod as `<namespace>/<pod>/<container>` (null unless `cloudwatch` is a logs destination). |
 | logs_external_links / metrics_external_links | One `{ provider, name, href_prefix }` per ship-only destination; the caller appends its own query to `href_prefix`. |
 | prometheus_endpoint | In-cluster Prometheus base URL (null unless `prometheus` is a metrics destination). |
-| grafana_cloud_logs_query_url / grafana_cloud_metrics_query_url | Grafana Cloud query base URLs, derived from the push URLs and named in Beacon's proxy allowlist. |
-| observability_credentials_secret_name / observability_proxy_credentials | The Secret in Beacon's namespace the agent presents when proxying a query to an external store, and the full `{ endpointPrefix, secretName, kind }` mapping. |
+| grafana_cloud_logs_query_url / grafana_cloud_metrics_query_url | Grafana Cloud query base URLs, derived from the push URLs and named in Ravion Operator's proxy allowlist. |
+| observability_credentials_secret_name / observability_proxy_credentials | The Secret in Ravion Operator's namespace the agent presents when proxying a query to an external store, and the full `{ endpointPrefix, secretName, kind }` mapping. |
 | observability_namespace | Namespace the collectors, the log store, and the vendor credentials live in. |
 | otel_logs_collector_role_arn / logs_opensearch_role_arn | The log collector's Pod Identity role: scoped to the Ravion log group, and the role to map into an OpenSearch domain. |
 | prometheus_chart_version | Installed prometheus chart version (null unless the module installed one). |
@@ -569,7 +569,7 @@ All outputs are null when the corresponding add-on is disabled.
 | metrics_namespace | Namespace the metrics components are installed into. |
 | otel_collector_chart_version / kube_state_metrics_chart_version | Installed chart versions for the metrics pipeline. |
 | grafana_role_arn | Role Amazon Managed Grafana assumes to query the AMP workspace. |
-| loki_endpoint | In-cluster base URL of Loki. Reachable only from inside the cluster — it is what Beacon's proxy allowlist names. |
+| loki_endpoint | In-cluster base URL of Loki. Reachable only from inside the cluster — it is what Ravion Operator's proxy allowlist names. |
 | loki_namespace | Namespace Loki and Alloy are installed into. |
 | loki_s3_bucket / loki_s3_bucket_arn | Bucket holding the log chunks and index. |
 | loki_role_arn | Loki's Pod Identity role, scoped to read, write, and delete on that bucket alone. |
@@ -577,8 +577,8 @@ All outputs are null when the corresponding add-on is disabled.
 | loki_chart_version / alloy_chart_version | Installed chart versions for the logs pipeline. |
 | grafana_namespace / grafana_service | Where the in-cluster Grafana is, for a port-forward. |
 | grafana_amp_role_arn | In-cluster Grafana's Pod Identity role for querying AMP. Distinct from `grafana_role_arn`, which is for AMG reaching in from outside. |
-| beacon_namespace / beacon_chart_version | Beacon install location and **chart** version (not the running agent version — the control plane owns that). |
-| beacon_agent_id | Ravion agent record id (`bagt_…`). Stable across rotations — correlate agent logs by it. |
+| beacon_namespace / beacon_chart_version | Ravion Operator install location and **chart** version (not the running agent version — the control plane owns that). |
+| beacon_agent_id | Ravion Operator record id (`opagt_…`). Stable across rotations — correlate agent logs by it. |
 | beacon_client_id | WorkOS M2M client id the agent authenticates as. Not a secret, and shared by every cluster in the organization. |
 | beacon_client_secret_id | WorkOS id of the secret issued to this cluster (not the secret). Identifies which credential a connecting agent presents. |
 | beacon_credential_secret_arn | Secrets Manager secret mirroring the credential — an operator recovery copy of what Terraform state holds. |
@@ -602,10 +602,10 @@ All outputs are null when the corresponding add-on is disabled.
 - Every Helm chart and container image this module installs is **pinned by a variable with a default**, and the defaults move only in a module release. That includes both pipelines: `otel_collector_chart_version`, `otel_collector_image_tag`, `kube_state_metrics_chart_version`, `loki_chart_version`, `alloy_chart_version`, and `grafana_chart_version`. Overriding one is supported; letting a chart float is not an option the module offers, because a silent upstream bump is an unreviewable change to what runs in a customer's cluster.
 - The metrics collector scrapes the kubelet through the **API server proxy**, not each node's port 10250. That is why it needs `nodes/proxy` in its ClusterRole and why it works unchanged on private-endpoint clusters — the only network path it requires is to the Kubernetes API.
 - The AMP workspace uses the AWS provider's per-resource `region` argument rather than a second provider configuration, so `amp_region` moves the workspace without any aliased-provider plumbing in consumers.
-- Loki is reachable only from inside the cluster, and that is load-bearing rather than incidental: it is what removes the need for an ingress, a certificate, an authentication layer in front of it, and any inbound path into the customer's VPC. The one route in is Beacon's proxy, whose allowlist this module writes.
-- Beacon's credential `Secret` is a separate local chart (`charts/beacon-credential`) rather than a `kubernetes_secret` resource, for the same reason as the `ClusterSecretStore`s: the Helm provider is the only Kubernetes access this stack has. The credential reaches it through `values` wrapped in `sensitive()`, not through `set_sensitive` — Helm's `--set` parser splits on `,`, `.` and `=`, which silently truncates a client secret containing any of them.
-- The beacon chart deliberately creates no credential `Secret` of its own, and grants Beacon **no RBAC on Secrets at all**. The kubelet reads that object and projects it into the container as a read-only volume, which is what keeps the base ClusterRole free of Secret access.
-- The Beacon credential is a Terraform resource (`ravion_beacon_credential`), not a provisioner. A `local-exec` curl used to enroll the cluster and treat the Secrets Manager copy as the idempotency anchor, because the plaintext is returned once and a re-run on a fresh runner had to answer "already enrolled?" with no local state. The provider dissolves that problem rather than working around it: create is idempotent-by-replacement — a create for an already-registered cluster ARN mints a new secret and revokes the old one — so **state is the anchor and Secrets Manager is only a mirror**. It also means no `curl` on the runner, no API-token module input, and nothing enrolled during a plan nobody applies.
+- Loki is reachable only from inside the cluster, and that is load-bearing rather than incidental: it is what removes the need for an ingress, a certificate, an authentication layer in front of it, and any inbound path into the customer's VPC. The one route in is Ravion Operator's proxy, whose allowlist this module writes.
+- Ravion Operator's credential `Secret` is a separate local chart (`charts/beacon-credential`) rather than a `kubernetes_secret` resource, for the same reason as the `ClusterSecretStore`s: the Helm provider is the only Kubernetes access this stack has. The credential reaches it through `values` wrapped in `sensitive()`, not through `set_sensitive` — Helm's `--set` parser splits on `,`, `.` and `=`, which silently truncates a client secret containing any of them.
+- The Ravion Operator chart deliberately creates no credential `Secret` of its own, and grants Ravion Operator **no RBAC on Secrets at all**. The kubelet reads that object and projects it into the container as a read-only volume, which is what keeps the base ClusterRole free of Secret access.
+- The Ravion Operator credential is a Terraform resource (`ravion_operator_credential`), not a provisioner. A `local-exec` curl used to enroll the cluster and treat the Secrets Manager copy as the idempotency anchor, because the plaintext is returned once and a re-run on a fresh runner had to answer "already enrolled?" with no local state. The provider dissolves that problem rather than working around it: create is idempotent-by-replacement — a create for an already-registered cluster ARN mints a new secret and revokes the old one — so **state is the anchor and Secrets Manager is only a mirror**. It also means no `curl` on the runner, no API-token module input, and nothing enrolled during a plan nobody applies.
 - `beacon_enabled = false` now **does** revoke the credential, because the destroy runs through the provider. The agent row is retained, disabled, so the cluster's history is not orphaned.
 - Both collectors fan out rather than duplicating themselves: several destinations are several exporters (or several `loki.write` blocks) on one pipeline, so the node's log files are read once and the cluster scraped once regardless of how many vendors receive a copy. Vendor agents are deliberately not installed — each would be another DaemonSet with its own RBAC, upgrade cadence, and opinions about labels, and every vendor here accepts what Alloy or the OpenTelemetry Collector already produces.
 - The `awscloudwatchlogs` exporter is configured with both a static `log_group_name` and per-record `aws.log.group.names` / `aws.log.stream.names` resource attributes. The attributes are what give one stream per pod; the static value is the floor, so a collector version that ignores them still writes to the right group. Worth re-checking on a collector upgrade.

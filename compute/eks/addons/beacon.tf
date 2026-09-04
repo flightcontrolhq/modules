@@ -9,7 +9,7 @@
 #
 # Three things about the shape of this file:
 #
-#   1. THE CREDENTIAL IS A TERRAFORM RESOURCE. `ravion_beacon_credential` mints
+#   1. THE CREDENTIAL IS A TERRAFORM RESOURCE. `ravion_operator_credential` mints
 #      the WorkOS M2M client secret server-side and returns it exactly once, into
 #      Terraform state. There is no API token to pass and no curl to run: the
 #      provider authenticates with RAVION_API_KEY / RAVION_BASE_URL, which a
@@ -78,7 +78,7 @@ locals {
 # Neither an API token nor an API URL is a module input any more.
 ################################################################################
 
-resource "ravion_beacon_credential" "this" {
+resource "ravion_operator_credential" "this" {
   count = var.beacon_enabled ? 1 : 0
 
   # cluster_name and region are derivable from the ARN, but both are passed
@@ -138,8 +138,8 @@ resource "aws_secretsmanager_secret_version" "beacon_credential" {
   # Same two keys the Kubernetes Secret carries, so a value pasted from one is
   # readable in the other without reshaping.
   secret_string = jsonencode({
-    (local.beacon_client_id_key)     = ravion_beacon_credential.this[0].client_id
-    (local.beacon_client_secret_key) = ravion_beacon_credential.this[0].client_secret
+    (local.beacon_client_id_key)     = ravion_operator_credential.this[0].client_id
+    (local.beacon_client_secret_key) = ravion_operator_credential.this[0].client_secret
   })
 }
 
@@ -172,8 +172,8 @@ resource "helm_release" "beacon_credential" {
       secretName      = local.beacon_k8s_secret_name
       clientIdKey     = local.beacon_client_id_key
       clientSecretKey = local.beacon_client_secret_key
-      clientId        = ravion_beacon_credential.this[0].client_id
-      clientSecret    = ravion_beacon_credential.this[0].client_secret
+      clientId        = ravion_operator_credential.this[0].client_id
+      clientSecret    = ravion_operator_credential.this[0].client_secret
     })),
   ]
 }

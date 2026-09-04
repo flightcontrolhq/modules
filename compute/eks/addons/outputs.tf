@@ -238,34 +238,34 @@ output "private_nlb_security_group_id" {
 }
 
 ################################################################################
-# Ravion Beacon
+# Ravion Operator
 ################################################################################
 
 output "beacon_namespace" {
-  description = "Kubernetes namespace where the Beacon agent is installed (null if disabled)."
+  description = "Kubernetes namespace where the Ravion Operator is installed (null if disabled)."
   value       = var.beacon_enabled ? helm_release.beacon[0].namespace : null
 }
 
 output "beacon_chart_version" {
-  description = "Installed version of the Beacon Helm chart (null if disabled). This is the chart version, not the running agent version — the control plane owns that."
+  description = "Installed version of the Ravion Operator Helm chart (null if disabled). This is the chart version, not the running agent version — the control plane owns that."
   value       = var.beacon_enabled ? helm_release.beacon[0].version : null
 }
 
 output "beacon_agent_id" {
-  description = "Ravion Beacon agent record id (bagt_...) for this cluster (null if disabled). Stable across rotations — correlate agent logs by it."
+  description = "Ravion Operator record id (opagt_...) for this cluster (null if disabled). Stable across rotations — correlate agent logs by it."
   # A computed attribute of the credential resource, not secret material: the
   # client secret is the only sensitive attribute and is never output.
-  value = var.beacon_enabled ? ravion_beacon_credential.this[0].beacon_agent_id : null
+  value = var.beacon_enabled ? ravion_operator_credential.this[0].operator_agent_id : null
 }
 
 output "beacon_client_id" {
   description = "WorkOS M2M client id the agent authenticates as (null if disabled). Not a secret, and identical for every cluster in the organization — the shared application's client id."
-  value       = var.beacon_enabled ? ravion_beacon_credential.this[0].client_id : null
+  value       = var.beacon_enabled ? ravion_operator_credential.this[0].client_id : null
 }
 
 output "beacon_client_secret_id" {
   description = "WorkOS id of the secret issued to this cluster (null if disabled). Not the secret itself: it identifies which credential a connecting agent is presenting."
-  value       = var.beacon_enabled ? ravion_beacon_credential.this[0].secret_id : null
+  value       = var.beacon_enabled ? ravion_operator_credential.this[0].secret_id : null
 }
 
 output "beacon_credential_secret_arn" {
@@ -336,7 +336,7 @@ output "grafana_role_arn" {
 ################################################################################
 
 output "loki_endpoint" {
-  description = "In-cluster base URL of Loki (null if logs are disabled). Reachable only from inside the cluster, by design — Ravion queries it through the Beacon agent's tunnel, so this is the endpoint Beacon's proxy allowlist names, not something to publish."
+  description = "In-cluster base URL of Loki (null if logs are disabled). Reachable only from inside the cluster, by design — Ravion queries it through the Ravion Operator's tunnel, so this is the endpoint Ravion Operator's proxy allowlist names, not something to publish."
   value       = local.loki_endpoint
 }
 
@@ -444,12 +444,12 @@ output "metrics_external_links" {
 }
 
 output "prometheus_endpoint" {
-  description = "In-cluster Prometheus base URL (null unless prometheus is in metrics_providers). Reachable only from inside the cluster: Ravion queries it through Beacon, the same way it queries Loki."
+  description = "In-cluster Prometheus base URL (null unless prometheus is in metrics_providers). Reachable only from inside the cluster: Ravion queries it through Ravion Operator, the same way it queries Loki."
   value       = local.prometheus_endpoint
 }
 
 output "grafana_cloud_logs_query_url" {
-  description = "Grafana Cloud Loki query base URL, derived from the push URL (null unless grafana_cloud is in logs_providers). Named in Beacon's proxy allowlist so the dashboard can read it through the agent."
+  description = "Grafana Cloud Loki query base URL, derived from the push URL (null unless grafana_cloud is in logs_providers). Named in Ravion Operator's proxy allowlist so the dashboard can read it through the agent."
   value       = local.grafana_cloud_logs_query_url
 }
 
@@ -459,7 +459,7 @@ output "grafana_cloud_metrics_query_url" {
 }
 
 output "observability_credentials_secret_name" {
-  description = "Name of the Kubernetes Secret in Beacon's namespace holding the credential the agent presents when proxying a query to an external store (null when there is none). Keys are username/password. This is the name the control plane carries as auth_secret — it never sees the value."
+  description = "Name of the Kubernetes Secret in Ravion Operator's namespace holding the credential the agent presents when proxying a query to an external store (null when there is none). Keys are username/password. This is the name the control plane carries as auth_secret — it never sees the value."
   value       = local.observability_credentials_secret_name
 }
 

@@ -373,6 +373,11 @@ run "beacon_receives_the_loki_endpoint" {
     condition     = join(",", yamldecode(local.beacon_observability_proxy_values[0]).httpProxy.allowedEndpoints) == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
     error_message = "Beacon's proxy allowlist must name exactly the Loki endpoint"
   }
+
+  assert {
+    condition     = length(ravion_operator_credential.this) == 1
+    error_message = "Ravion Operator installations must use the supported operator credential resource"
+  }
 }
 
 run "beacon_gets_no_allowlist_without_logs" {
