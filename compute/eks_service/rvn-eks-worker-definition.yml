@@ -5,7 +5,7 @@ definition:
   description: Background worker on EKS for running a long-lived private process with no exposed port, and no Kubernetes manifests or Helm charts to write.
 release:
   version: 0.4.0
-  description: Follow the selected observability providers, group add-ons with cluster selection, use consistent scaling, release, and builder field names, clarify ECR settings, keep default build policies in advanced settings, and let workloads target automatic, EC2 on-demand, EC2 Spot, or on-demand Fargate compute.
+  description: Follow the selected observability providers, group add-ons with cluster selection, use consistent scaling, release, and builder field names, use Ravion Operator terminology, clarify ECR settings, keep default build policies in advanced settings, and let workloads target automatic, EC2 on-demand, EC2 Spot, or on-demand Fargate compute.
 module:
   inputs:
     - id: section_cluster
@@ -300,7 +300,7 @@ module:
     | Logs | In-cluster store (Loki) -> Amazon CloudWatch Logs |
     | Metrics | Amazon Managed Prometheus -> Prometheus in your cluster -> CloudWatch Container Insights |
 
-    The practical effect is that the in-cluster store's one weakness stops being fatal. Loki is reached through the Beacon agent, so with the agent offline those logs are unavailable - but if CloudWatch Logs is also selected, the tab shows CloudWatch and says so, then switches back when the agent returns.
+    The practical effect is that the in-cluster store's one weakness stops being fatal. Loki is reached through the Ravion Operator, so with the agent offline those logs are unavailable - but if CloudWatch Logs is also selected, the tab shows CloudWatch and says so, then switches back when the agent returns.
 
     Charts are the same five golden signals whichever store answers: CPU, memory working set, container restarts, network in, and network out. Two things differ on the CloudWatch link of the chain, and are worth knowing before you read a number off it:
 

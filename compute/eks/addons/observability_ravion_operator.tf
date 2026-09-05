@@ -1,5 +1,5 @@
 ################################################################################
-# What Beacon may proxy a query to
+# What Ravion Operator may proxy a query to
 #
 # Ravion never dials into a cluster: the dashboard's Logs and Metrics tabs read
 # a store by asking the agent to make the request from inside. Which URLs the
@@ -21,7 +21,7 @@
 #   3. NOTHING ELSE. A ship-only vendor gets a link in the tab, not a proxy
 #      entry — Ravion does not query Datadog on the customer's behalf.
 #
-# The credential entries name a Secret, never a value. Beacon attaches the
+# The credential entries name a Secret, never a value. Ravion Operator attaches the
 # Authorization header for requests under the matching prefix and forwards no
 # caller-supplied one, which is the rule that keeps this from being an open
 # proxy with the cluster's credentials attached.
@@ -31,7 +31,7 @@ locals {
   ravion_operator_grafana_cloud_logs_secret_name    = "ravion-observability-grafana-cloud-logs"
   ravion_operator_grafana_cloud_metrics_secret_name = "ravion-observability-grafana-cloud-metrics"
 
-  # Materialized into Beacon's namespace, not the collectors': the agent mounts
+  # Materialized into Ravion Operator's namespace, not the collectors': the agent mounts
   # them, and a Secret is not readable across namespaces.
   ravion_operator_proxy_credential_secrets = concat(
     var.ravion_operator_enabled && local.logs_grafana_cloud_enabled && local.grafana_cloud_config.token_secret_arn != null && local.grafana_cloud_config.logs_user != null ? [{

@@ -149,12 +149,12 @@ run "logs_enabled_creates_bucket_loki_and_alloy" {
   # In-cluster only: the endpoint is a ClusterIP Service URL, which is what
   # makes Ravion Operator's tunnel the sole route to it.
   assert {
-    condition     = output.loki_endpoint == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
+    condition     = output.loki_endpoint == "http://ravion-loki.ravion-operator.svc.cluster.local:3100"
     error_message = "Loki's endpoint must be the in-cluster Service URL in Ravion Operator's namespace"
   }
 
   assert {
-    condition     = output.loki_namespace == "ravion-beacon"
+    condition     = output.loki_namespace == "ravion-operator"
     error_message = "Loki defaults to Ravion Operator's namespace"
   }
 
@@ -347,7 +347,7 @@ run "alloy_attaches_the_agreed_label_set" {
   }
 
   assert {
-    condition     = strcontains(yamldecode(helm_release.alloy[0].values[0]).alloy.configMap.content, "url = \"http://ravion-loki.ravion-beacon.svc.cluster.local:3100/loki/api/v1/push\"")
+    condition     = strcontains(yamldecode(helm_release.alloy[0].values[0]).alloy.configMap.content, "url = \"http://ravion-loki.ravion-operator.svc.cluster.local:3100/loki/api/v1/push\"")
     error_message = "Alloy must push to the in-cluster Loki"
   }
 }
@@ -370,7 +370,7 @@ run "ravion_operator_receives_the_loki_endpoint" {
   }
 
   assert {
-    condition     = join(",", yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints) == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
+    condition     = join(",", yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints) == "http://ravion-loki.ravion-operator.svc.cluster.local:3100"
     error_message = "Ravion Operator's proxy allowlist must name exactly the Loki endpoint"
   }
 
@@ -476,7 +476,7 @@ run "grafana_provisions_both_datasources" {
   }
 
   assert {
-    condition     = yamldecode(helm_release.grafana[0].values[0]).datasources["datasources.yaml"].datasources[1].url == "http://ravion-loki.ravion-beacon.svc.cluster.local:3100"
+    condition     = yamldecode(helm_release.grafana[0].values[0]).datasources["datasources.yaml"].datasources[1].url == "http://ravion-loki.ravion-operator.svc.cluster.local:3100"
     error_message = "The Loki datasource must point at the in-cluster Service"
   }
 

@@ -433,7 +433,7 @@ run "grafana_cloud_is_a_second_loki_write_and_a_ravion_operator_destination" {
   assert {
     condition = length([
       for secret in yamldecode(helm_release.observability_secrets[0].values[0]).externalSecrets :
-      secret if secret.namespace == "ravion-beacon" && secret.name == "ravion-observability-grafana-cloud-metrics"
+      secret if secret.namespace == "ravion-operator" && secret.name == "ravion-observability-grafana-cloud-metrics"
     ]) == 1
     error_message = "The proxy credential must land in Ravion Operator's namespace"
   }
@@ -635,18 +635,18 @@ run "in_cluster_prometheus_is_a_rendering_provider" {
   }
 
   assert {
-    condition     = output.prometheus_endpoint == "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090"
+    condition     = output.prometheus_endpoint == "http://ravion-prometheus-server.ravion-operator.svc.cluster.local:9090"
     error_message = "The in-cluster endpoint is what Ravion Operator proxies to and what the service modules map"
   }
 
   assert {
-    condition     = yamldecode(helm_release.otel_collector[0].values[0]).config.exporters["prometheusremotewrite/in_cluster"].endpoint == "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090/api/v1/write"
+    condition     = yamldecode(helm_release.otel_collector[0].values[0]).config.exporters["prometheusremotewrite/in_cluster"].endpoint == "http://ravion-prometheus-server.ravion-operator.svc.cluster.local:9090/api/v1/write"
     error_message = "The collector must remote-write the same series into the in-cluster store"
   }
 
   # It has no route out of the cluster, so Ravion Operator is the only way to read it.
   assert {
-    condition     = contains(yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints, "http://ravion-prometheus-server.ravion-beacon.svc.cluster.local:9090")
+    condition     = contains(yamldecode(local.ravion_operator_observability_proxy_values[0]).httpProxy.allowedEndpoints, "http://ravion-prometheus-server.ravion-operator.svc.cluster.local:9090")
     error_message = "The in-cluster Prometheus must be on Ravion Operator's proxy allowlist"
   }
 }

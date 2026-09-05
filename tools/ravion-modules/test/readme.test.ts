@@ -24,8 +24,8 @@ test("renders one sorted row per definition with its release version", async () 
       `expected a row for ${definition.type}@${definition.version}`,
     );
   }
-  assert.doesNotMatch(table, /`ravion-disabled-example`/);
   assert.doesNotMatch(table, /`rvn-eks-cron`/);
+  assert.doesNotMatch(table, /`ravion-disabled-example`/);
 });
 
 test("replaces only the content between the generated markers", () => {

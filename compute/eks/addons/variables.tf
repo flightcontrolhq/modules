@@ -721,7 +721,19 @@ variable "ravion_operator_chart_version" {
 variable "ravion_operator_namespace" {
   type        = string
   description = "Kubernetes namespace the agent and its credential Secret are installed into. Created if it does not exist."
-  default     = "ravion-beacon"
+  default     = "ravion-operator"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.ravion_operator_namespace))
+    error_message = "The ravion_operator_namespace must be a valid Kubernetes namespace: 1-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit."
+  }
+}
+
+variable "ravion_operator_namespaces_creation_enabled" {
+  type        = bool
+  description = "Create missing observation and deployment namespaces before installing Ravion Operator RBAC. Existing namespaces are reused without adoption. Created namespaces are retained when removed from the configuration or when the add-ons are destroyed. Disable only when namespaces are provisioned separately."
+  default     = true
   nullable    = false
 }
 
@@ -730,6 +742,11 @@ variable "ravion_operator_namespace_scope" {
   description = "Namespaces the agent may observe. Empty (the default) is the whole cluster. Non-empty renders no observation ClusterRole at all — one namespaced Role and RoleBinding per entry instead — so the restriction is enforced by Kubernetes rather than by the agent. A scoped install can read no nodes and no namespaces, so the node count in fleet health is reported as unknown."
   default     = []
   nullable    = false
+
+  validation {
+    condition     = alltrue([for namespace in var.ravion_operator_namespace_scope : can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", namespace))])
+    error_message = "Each ravion_operator_namespace_scope entry must be a valid Kubernetes namespace (1-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit)."
+  }
 }
 
 variable "ravion_operator_deploy_enabled" {
@@ -744,6 +761,11 @@ variable "ravion_operator_deploy_namespaces" {
   description = "Namespaces Ravion Operator may deploy into. Required when ravion_operator_deploy_enabled is true, falling back to ravion_operator_namespace_scope when empty. If both are empty the install fails rather than granting cluster-wide write: there is no 'deploy everywhere' posture, by design."
   default     = []
   nullable    = false
+
+  validation {
+    condition     = alltrue([for namespace in var.ravion_operator_deploy_namespaces : can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", namespace))])
+    error_message = "Each ravion_operator_deploy_namespaces entry must be a valid Kubernetes namespace (1-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit)."
+  }
 }
 
 variable "ravion_operator_exec_enabled" {
@@ -1159,7 +1181,7 @@ variable "observability_namespace" {
 variable "logs_excluded_namespaces" {
   type        = list(string)
   description = "Namespaces no log collector reads from. Applies to every logs provider: Alloy drops them at discovery, the OpenTelemetry collector never opens their files. Ravion's own namespace is excluded by default so the collectors do not tail themselves into a loop."
-  default     = ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"]
+  default     = ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-operator", "ravion-beacon"]
   nullable    = false
 }
 

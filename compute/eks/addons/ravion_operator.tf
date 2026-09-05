@@ -266,7 +266,8 @@ resource "helm_release" "ravion_operator" {
 
   # The Secret must exist before the pod starts; it is mounted, not read
   # through the API, so a missing one is a container that never runs.
-  depends_on = [helm_release.ravion_operator_credential]
+  # Scoped namespaces must exist before the chart creates Roles/RoleBindings.
+  depends_on = [helm_release.ravion_operator_credential, helm_release.ravion_operator_namespaces]
 
   lifecycle {
     precondition {

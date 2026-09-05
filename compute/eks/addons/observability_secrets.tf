@@ -13,7 +13,7 @@
 #   1. COLLECTOR CREDENTIALS, in the observability namespace: the API key or
 #      token each collector presents to the vendor when it ships.
 #
-#   2. PROXY CREDENTIALS, in Beacon's namespace: the basic-auth pair the agent
+#   2. PROXY CREDENTIALS, in Ravion Operator's namespace: the basic-auth pair the agent
 #      presents when the dashboard queries an external store through it
 #      (observability_ravion_operator.tf). Same ARN, different namespace and shape,
 #      because a Secret cannot be mounted across namespaces.

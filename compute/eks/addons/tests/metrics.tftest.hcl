@@ -72,7 +72,7 @@ mock_provider "aws" {
 
 mock_provider "helm" {}
 
-# Beacon's credential is minted by Ravion's own provider, which refuses to
+# Ravion Operator's credential is minted by Ravion's own provider, which refuses to
 # configure without a runner JWT.
 mock_provider "ravion" {}
 
@@ -155,11 +155,11 @@ run "metrics_enabled_creates_workspace_and_collector" {
     error_message = "metrics_enabled must install the collector and kube-state-metrics"
   }
 
-  # Both land in Beacon's namespace: one namespace for Ravion's in-cluster
+  # Both land in Ravion Operator's namespace: one namespace for Ravion's in-cluster
   # components, which is what metrics_namespace overrides.
   assert {
-    condition     = helm_release.otel_collector[0].namespace == "ravion-beacon" && helm_release.kube_state_metrics[0].namespace == "ravion-beacon"
-    error_message = "Metrics components default to Beacon's namespace"
+    condition     = helm_release.otel_collector[0].namespace == "ravion-operator" && helm_release.kube_state_metrics[0].namespace == "ravion-operator"
+    error_message = "Metrics components default to Ravion Operator's namespace"
   }
 
   assert {

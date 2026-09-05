@@ -5,7 +5,7 @@ definition:
   description: Web server on EKS for running any HTTP application on your Kubernetes cluster behind a shared load balancer, with no Kubernetes manifests or Helm charts to write.
 release:
   version: 1.0.0
-  description: Simplify health configuration and form layout, use consistent routing, scaling, release, and builder field names, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target automatic, EC2 on-demand, EC2 Spot, or on-demand Fargate compute.
+  description: Simplify health configuration and form layout, use consistent routing, scaling, release, and builder field names, use Ravion Operator terminology, clarify target group and ECR settings, keep default build policies in advanced settings, and let workloads target automatic, EC2 on-demand, EC2 Spot, or on-demand Fargate compute.
 module:
   inputs:
     - id: section_cluster
@@ -683,7 +683,7 @@ module:
     | Logs | In-cluster store (Loki) -> Amazon CloudWatch Logs |
     | Metrics | Amazon Managed Prometheus -> Prometheus in your cluster -> CloudWatch Container Insights |
 
-    The practical effect is that the in-cluster store's one weakness stops being fatal. Loki is reached through the Beacon agent, so with the agent offline those logs are unavailable - but if CloudWatch Logs is also selected, the tab shows CloudWatch and says so, then switches back when the agent returns.
+    The practical effect is that the in-cluster store's one weakness stops being fatal. Loki is reached through the Ravion Operator, so with the agent offline those logs are unavailable - but if CloudWatch Logs is also selected, the tab shows CloudWatch and says so, then switches back when the agent returns.
 
     Charts are the same five golden signals whichever store answers: CPU, memory working set, container restarts, network in, and network out, plus replicas available and desired. Two things differ on the CloudWatch link of the chain, and are worth knowing before you read a number off it:
 

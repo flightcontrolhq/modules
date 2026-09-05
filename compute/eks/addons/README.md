@@ -73,10 +73,40 @@ the new names, so module instances configured through the form need no input
 changes.
 
 Terraform resource labels were renamed as well. Included `moved` blocks preserve
-the Secrets Manager and Helm resources, so the rename does not recreate them.
-Runtime contracts remain unchanged: the Helm release and namespace still use
-`ravion-beacon`, the chart is still published as `beacon`, and existing endpoint
-and secret paths remain valid.
+the Secrets Manager and Helm resource addresses; that address rename alone does
+not recreate them. The Helm release remains `ravion-beacon`, the chart is still
+published as `beacon`, and existing endpoint and secret paths remain valid.
+
+### Namespace migration
+
+The default `ravion_operator_namespace` is now **`ravion-operator`**. Shared
+observability components follow this default unless their namespace is explicitly
+overridden. Moving existing releases from `ravion-beacon` requires Helm release
+replacement, including the credential Secret release. The API credential and AWS
+Secrets Manager mirror do not need replacement just to change namespaces.
+
+Expect a logs/metrics interruption while the old releases are removed and the new
+ones start. Namespace changes **do not migrate PVCs or local data**: inspect and
+back up persistent volumes before applying. The existing Loki S3 bucket and AMP
+workspace remain unchanged. Review the fresh plan for expected Helm replacements;
+a namespace migration is not a no-destroy plan.
+Keep `ravion_operator_namespace = "ravion-beacon"` explicitly to defer the move.
+
+### Workload namespace bootstrap
+
+Apply creates missing deployment and observation namespaces before installing
+the Operator's namespaced Roles and RoleBindings. For example,
+`ravion_operator_deploy_namespaces = ["rvn-app"]` now works on a fresh cluster.
+This does not give the Operator namespace-creation permissions.
+
+A separate `ravion-operator-namespaces` Helm release in `kube-system` owns only
+namespaces it creates. Existing namespaces are reused without changing ownership.
+Created namespaces carry Helm's `keep` policy: removing a namespace from the list,
+disabling Operator, or uninstalling add-ons leaves that namespace and its workloads
+in place. Namespace deletion remains an explicit administrative operation. Set
+`ravion_operator_namespaces_creation_enabled = false` when another stack provisions
+all scoped namespaces. Raw Helm values that override scope must be kept in sync
+with the Terraform namespace inputs used for bootstrap.
 
 ### Shared load balancers
 
@@ -160,7 +190,7 @@ Each signal is one multi-select. **Loki and Amazon Managed Prometheus are the de
 
 **In-cluster Prometheus is a store, not a scraper.** Every scrape in this module belongs to the one collector, which owns the curated allow-list and the label contract; the Prometheus this provider installs runs with `web.enable-remote-write-receiver`, no scrape jobs, no alertmanager, no pushgateway and no second copy of the exporters already running. It needs a `StorageClass` for its PersistentVolume (`ebs_csi_driver_enabled` on a Ravion cluster). `metrics_prometheus.endpoint` points at a Prometheus you already run and skips the install entirely. Like Loki, it has no ingress: Ravion reads it through Ravion Operator, whose allowlist this module writes.
 
-**Which collector runs.** Alloy carries the loki-family destinations (`loki`, `grafana_cloud`) because Ravion's log views are written against its label contract; the OpenTelemetry contrib DaemonSet carries the rest. A default cluster runs Alloy alone; a CloudWatch-only cluster runs the OpenTelemetry collector alone; a cluster with both runs both, each reading the same files once. `logs_excluded_namespaces` (default `kube-system`, `kube-node-lease`, `amazon-cloudwatch`, `ravion-beacon`) keeps a namespace out of both.
+**Which collector runs.** Alloy carries the loki-family destinations (`loki`, `grafana_cloud`) because Ravion's log views are written against its label contract; the OpenTelemetry contrib DaemonSet carries the rest. A default cluster runs Alloy alone; a CloudWatch-only cluster runs the OpenTelemetry collector alone; a cluster with both runs both, each reading the same files once. `logs_excluded_namespaces` (default `kube-system`, `kube-node-lease`, `amazon-cloudwatch`, `ravion-operator`, `ravion-beacon`) keeps a namespace out of both, including the legacy namespace during migration.
 
 **Migration from 0.7.x.** `logs_enabled`, `metrics_enabled` and `cloudwatch_observability_enabled` were read as fallbacks in 0.8.0 and 0.8.1, and are **removed in 0.8.2** — an instance still on 0.7.x should pass through 0.8.1, which maps them onto the lists:
 
@@ -204,7 +234,7 @@ Prometheus anchors relabel regexes at both ends, so each entry must match a **wh
 
 **Identity.** The collector's service account is bound by EKS Pod Identity to a role whose only permission is `aps:RemoteWrite` on that single workspace ARN. The `sigv4auth` extension configures no credentials of its own — it signs with whatever the AWS SDK default credential chain resolves, which the Pod Identity Agent populates.
 
-**Namespace.** The metrics components share Ravion Operator's namespace (`ravion_operator_namespace`, default `ravion-beacon`), so Ravion's in-cluster components live in one place. `metrics_namespace` splits them if that is not wanted.
+**Namespace.** The metrics components share Ravion Operator's namespace (`ravion_operator_namespace`, default `ravion-operator`), so Ravion's in-cluster components live in one place. `metrics_namespace` splits them if that is not wanted.
 
 **Sizing.** One collector Deployment scrapes every node, which is comfortable to roughly 100 nodes at a 60-second interval. Past that, the escape hatch is the chart's target allocator with a StatefulSet — deliberately not in this release. `otel_collector_resources` defaults to requests of `100m` / `256Mi` and a memory limit of `512Mi`; the limit matters because the collector's `memory_limiter` processor sizes itself as a percentage of the container limit, and with no limit it would measure against the whole node.
 
@@ -404,7 +434,7 @@ With `ravion_operator_self_update_enabled` on (the default), the control plane r
 
 Values this module does not surface directly — `portForward.enabled`, `helmInventory.enabled`, `redaction.extraPatterns`, `image.repository`, resources, tolerations — go through `ravion_operator_helm_values`. Read the chart's `README.md` before enabling any of the opt-in capabilities.
 
-> **In the Ravion dashboard**, the `rvn-eks-addons` module definition surfaces only `ravion_operator_enabled`, `ravion_operator_deploy_enabled` and `ravion_operator_deploy_namespaces` as form fields. Every other variable in this section — including `ravion_operator_endpoint`, `ravion_operator_chart_version`, `ravion_operator_namespace` and `ravion_operator_namespace_scope` — is tuning rather than a product surface, so it is set through **Advanced Terraform variables** and otherwise falls back to the defaults documented under [Inputs](#inputs). Applying this module directly, every variable below is available as normal.
+> **In the Ravion dashboard**, the `rvn-eks-addons` module definition surfaces `ravion_operator_enabled`, `ravion_operator_deploy_enabled`, `ravion_operator_deploy_namespaces` and `ravion_operator_namespaces_creation_enabled` as form fields. Every other variable in this section — including `ravion_operator_endpoint`, `ravion_operator_chart_version`, `ravion_operator_namespace` and `ravion_operator_namespace_scope` — is tuning rather than a product surface, so it is set through **Advanced Terraform variables** and otherwise falls back to the defaults documented under [Inputs](#inputs). Applying this module directly, every variable below is available as normal.
 
 #### Rotating and revoking
 
@@ -467,7 +497,7 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | logs_providers | Where container logs go: any of `loki`, `cloudwatch`, `grafana_cloud`, `datadog`, `new_relic`, `otlp`. `[]` turns logs off. Null falls back to the deprecated `logs_enabled`. | `list(string)` | `["loki"]` | no |
 | metrics_providers | Where metrics go: any of `amp`, `cloudwatch`, `grafana_cloud`, `datadog`, `new_relic`, `otlp`. `[]` turns metrics off. Null falls back to the deprecated `metrics_enabled`. | `list(string)` | `["amp"]` | no |
 | observability_namespace | Namespace for the collectors, the log store, and the materialized vendor credentials. Null shares Ravion Operator's namespace, which is what keeps Loki's Service URL stable. | `string` | `null` | no |
-| logs_excluded_namespaces | Namespaces no log collector reads from, for every destination. | `list(string)` | `["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"]` | no |
+| logs_excluded_namespaces | Namespaces no log collector reads from, for every destination. | `list(string)` | `["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-operator", "ravion-beacon"]` | no |
 | logs_loki | `{ retention_days, s3_bucket_name, persistence_enabled, persistence_size }`. Falls back to the flat `log_retention_days` / `loki_s3_bucket_name` / `loki_persistence_*`. | `object` | `{}` | no |
 | logs_cloudwatch | `{ retention_days, log_group_name }`. Default group `/ravion/eks/<cluster>`, retention 30 days. | `object` | `{}` | no |
 | logs_grafana_cloud / metrics_grafana_cloud | `{ url, user, token_secret_arn, stack_url }` — the Loki push URL / Prometheus remote-write URL, the tenant id, the Secrets Manager ARN of the token, and the stack URL used for the deep link. | `object` | `{}` | no |
@@ -521,7 +551,8 @@ Unlike the previous curl-based enrollment, turning the flag off **does** revoke 
 | ravion_operator_endpoint | WebSocket endpoint the agent dials — the single destination an egress policy must allow. | `string` | `"wss://websockets.ravion.com/beacon/v1/connect"` | no |
 | ravion_operator_chart_source | `oci://` reference, or a filesystem path to a chart directory for local testing. | `string` | `"oci://public.ecr.aws/a8z1i1r2/beacon"` | no |
 | ravion_operator_chart_version | Ravion Operator **chart** version (not the agent version), pinned per module release. Null resolves the latest; ignored for a filesystem chart. | `string` | `"0.4.1"` | no |
-| ravion_operator_namespace | Namespace for the agent and its credential Secret (created if missing). | `string` | `"ravion-beacon"` | no |
+| ravion_operator_namespace | Namespace for the agent and its credential Secret (created if missing). Shared observability components use it by default. | `string` | `"ravion-operator"` | no |
+| ravion_operator_namespaces_creation_enabled | Create missing observation and deployment namespaces before installing Operator RBAC; reuse existing namespaces and retain created namespaces on removal. | `bool` | `true` | no |
 | ravion_operator_namespace_scope | Namespaces the agent may observe. Empty is cluster-wide; non-empty renders namespaced Roles and no observation ClusterRole at all. | `list(string)` | `[]` | no |
 | ravion_operator_deploy_enabled | Let Ravion Operator perform Ravion's Helm deploys from inside the cluster. The widest grant the chart can create. | `bool` | `false` | no |
 | ravion_operator_deploy_namespaces | Namespaces Ravion Operator may deploy into. Falls back to `ravion_operator_namespace_scope`; both empty with deploy on fails the apply. | `list(string)` | `[]` | no |

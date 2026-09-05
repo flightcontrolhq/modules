@@ -69,7 +69,7 @@
 - id: prometheus_endpoint
   label: In-cluster Prometheus endpoint
   type: string
-  description: URL of the Prometheus running in the cluster, queried through the Beacon agent when Prometheus is a selected metrics provider.
+  description: URL of the Prometheus running in the cluster, queried through the Ravion Operator when Prometheus is a selected metrics provider.
   collapsible: true
   placeholder: http://prometheus.monitoring.svc.cluster.local:9090
   required: false
@@ -91,14 +91,14 @@
   required: false
   default: <<ref.stack.output.metrics_external_links>>
 # The two Grafana Cloud query URLs and the credentials secret are what the
-# Beacon agent needs to read Grafana Cloud on the dashboard's behalf, rather
+# Ravion Operator needs to read Grafana Cloud on the dashboard's behalf, rather
 # than only linking out to it. The add-ons module publishes them now so an
 # instance upgraded today is ready; the log source and metric source that
-# consume them arrive with the Beacon proxy work.
+# consume them arrive with the Ravion Operator proxy work.
 - id: grafana_cloud_logs_query_url
   label: Grafana Cloud logs query URL
   type: string
-  description: Grafana Cloud Loki query endpoint, used when Ravion reads Grafana Cloud logs through the Beacon agent.
+  description: Grafana Cloud Loki query endpoint, used when Ravion reads Grafana Cloud logs through the Ravion Operator.
   collapsible: true
   placeholder: https://logs-prod-us-central1.grafana.net/loki/api/v1
   required: false
@@ -106,7 +106,7 @@
 - id: grafana_cloud_metrics_query_url
   label: Grafana Cloud metrics query URL
   type: string
-  description: Grafana Cloud Prometheus query endpoint, used when Ravion reads Grafana Cloud metrics through the Beacon agent.
+  description: Grafana Cloud Prometheus query endpoint, used when Ravion reads Grafana Cloud metrics through the Ravion Operator.
   collapsible: true
   placeholder: https://prometheus-prod-01-prod-us-central-0.grafana.net/api/prom
   required: false
@@ -114,7 +114,7 @@
 - id: observability_credentials_secret_name
   label: Observability credentials secret
   type: string
-  description: Name of the Kubernetes Secret in the Beacon namespace holding vendor query credentials. A name only - Ravion never reads the values.
+  description: Name of the Kubernetes Secret in the Ravion Operator namespace holding vendor query credentials. A name only - Ravion never reads the values.
   collapsible: true
   placeholder: ravion-observability-credentials
   required: false

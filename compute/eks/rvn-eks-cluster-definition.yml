@@ -5,7 +5,7 @@ definition:
   description: Production-ready Amazon EKS cluster with default managed capacity, core add-ons, and optional Fargate compute. Extend with the EKS Add-ons module (Karpenter, load balancer controller, EBS CSI, Container Insights).
 release:
   version: 0.2.0
-  description: Configure default and additional capacity together with a ten-node scaling ceiling, manage API endpoint and IAM access together, define Fargate profiles and cluster access entries with guided forms instead of raw JSON, use consistent endpoint and control-plane logging field names, clarify node group and controller settings, keep the Ravion Runner role in advanced settings, manage the Ravion Runner security group automatically, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
+  description: Configure collapsible default capacity with a four-node scaling ceiling alongside additional capacity, manage API endpoint and IAM access together, define Fargate profiles and cluster access entries with guided forms instead of raw JSON, use consistent endpoint and control-plane logging field names, clarify node group and controller settings, keep the Ravion Runner role in advanced settings, manage the Ravion Runner security group automatically, prevent Kubernetes version downgrades, and remove empty Container Insights charts from the cluster Metrics tab.
 module:
   inputs:
     - id: network
@@ -107,7 +107,8 @@ module:
       id: section_capacity
       label: Default capacity
       type: section
-    - default: ON_DEMAND
+    - collapsible: true
+      default: ON_DEMAND
       description: On-demand is stable default capacity; Spot is lower cost but nodes can be interrupted.
       id: system_node_capacity_type
       label: Capacity type
@@ -117,7 +118,8 @@ module:
           value: ON_DEMAND
         - label: Spot
           value: SPOT
-    - default:
+    - collapsible: true
+      default:
         - t3.medium
       description: EC2 instance types AWS may use for this node group. Multiple types improve Spot availability.
       id: system_node_instance_types
@@ -126,13 +128,15 @@ module:
       required: true
       type: string_array
       values: $values:aws/ec2/instances?awsAccountId=<<module.input.aws_account_id>>&region=<<module.input.aws_region>>
-    - default: 2
+    - collapsible: true
+      default: 2
       description: Minimum nodes in the default managed node group. Set it high enough to run cluster components and leave spare capacity for workloads and rolling node updates.
       id: system_node_min_size
       label: Minimum nodes
       min: 1
       type: number
-    - default: 10
+    - collapsible: true
+      default: 4
       description: Maximum nodes in the default managed node group. Set it high enough for peak workloads and replacement capacity during rolling node updates, otherwise pods can remain pending.
       id: system_node_max_size
       label: Maximum nodes
@@ -609,7 +613,7 @@ module:
 
     ### Default capacity
 
-    Every cluster gets a required managed node group that provides default compute for cluster components such as CoreDNS, add-ons, and workloads without stricter placement. It defaults to 2-10 On-demand `t3.medium` nodes. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds. Each workload module can use automatic placement or target EC2 On-demand, EC2 Spot, or a dedicated Fargate profile.
+    Every cluster gets a required managed node group that provides default compute for cluster components such as CoreDNS, add-ons, and workloads without stricter placement. It defaults to 2-4 On-demand `t3.medium` nodes. Its settings are collapsed by default so teams using Karpenter can keep the recommended baseline without extra configuration. The minimum node count is also used as the initial size; after creation, the running node count is managed by Kubernetes autoscalers, and Terraform only enforces the min/max bounds. Each workload module can use automatic placement or target EC2 On-demand, EC2 Spot, or a dedicated Fargate profile.
 
     ### Additional node groups
 
@@ -651,7 +655,7 @@ module:
     | Private endpoint access| No       | `true`               | Reach the API server from inside the VPC               |
     | Public endpoint access | No       | `false`              | Expose the API server to the internet                  |
     | Ravion Runner role     | No       | `true`               | Assumable IAM role with cluster-admin access entry     |
-    | Default capacity       | No       | 2-10 `t3.medium`     | Capacity type, instance types, size bounds, and disk size   |
+    | Default capacity       | No       | 2-4 `t3.medium`      | Capacity type, instance types, size bounds, and disk size   |
     | Additional node groups | No       | -                    | Structured On-demand or Spot managed node groups       |
     | Fargate profiles       | No       | -                    | Serverless compute for selected namespaces             |
     | Access entries         | No       | -                    | Extra IAM principals with cluster access and policies  |

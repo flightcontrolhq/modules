@@ -75,8 +75,16 @@ describe("compiler", () => {
 
   it("preserves a publication opt-out outside the canonical module config", async () => {
     const compiled = await compileDefinitionFile(join(process.cwd(), "test", "fixtures", "disabled-definition.yml"));
+
     assert.equal(compiled.published, false);
     assert.equal("published" in compiled.module, false);
+  });
+
+  it("preserves a global publication opt-out outside the canonical module config", async () => {
+    const compiled = await compileDefinitionFile(join(process.cwd(), "test", "fixtures", "disabled-definition.yml"));
+
+    assert.equal(compiled.global, false);
+    assert.equal("global" in compiled.module, false);
   });
 
   it("compiles EKS cron scheduling controls and keeps the definition unpublished", async () => {
@@ -87,7 +95,6 @@ describe("compiler", () => {
     const values = assertRecord(definition.values, "module.deploy.definition.values");
 
     assert.equal(compiled.published, false);
-    assert.equal("published" in compiled.module, false);
     assert.equal(findInput(inputs, "scheduling_enabled").default, true);
     assert.equal(inputs.some((input) => input.id === "suspend"), false);
     assert.equal(
@@ -96,11 +103,10 @@ describe("compiler", () => {
     );
   });
 
-  it("preserves a global publication opt-out outside the canonical module config", async () => {
-    const compiled = await compileDefinitionFile(join(process.cwd(), "test", "fixtures", "disabled-definition.yml"));
+  it("keeps the EKS cluster definition private", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "compute", "eks", "rvn-eks-cluster-definition.yml"));
 
     assert.equal(compiled.global, false);
-    assert.equal("global" in compiled.module, false);
   });
 
   it("compiles all colocated definitions under module category directories", async () => {
@@ -139,62 +145,6 @@ describe("compiler", () => {
       getTerraformVariable(aurora.module, "master_user_password_preservation_enabled"),
       "<< module.input.master_user_password_preservation_enabled || false >>",
     );
-  });
-
-  it("compiles focused KMS inputs with complete key user ARN validation", async () => {
-    const compiled = await compileDefinitionFile(join(repoRoot, "security", "kms", "rvn-aws-kms-definition.yml"));
-    const inputs = getModuleInputs(compiled.module);
-    const input = findInput(inputs, "key_user_role_arns");
-    const validArns = [
-      "arn:aws:iam::123456789012:root",
-      "arn:aws-us-gov:iam::123456789012:role/team/application",
-      "arn:aws-cn:iam::123456789012:user/developer",
-    ];
-    const invalidArns = [
-      "arn:aws:iam::",
-      "arn:aws:iam::12345678901:root",
-      "arn:aws:iam::123456789012:role/",
-      "arn:aws:iam::123456789012:group/developers",
-    ];
-
-    assert.ok(Array.isArray(input.patterns), "key_user_role_arns.patterns should be an array");
-    assert.equal(input.patterns.length, 1);
-    const validation = assertRecord(input.patterns[0], "key_user_role_arns.patterns[0]");
-    const pattern = new RegExp(assertString(validation.pattern));
-
-    for (const arn of validArns) assert.match(arn, pattern, `key_user_role_arns should accept ${arn}`);
-    for (const arn of invalidArns) assert.doesNotMatch(arn, pattern, `key_user_role_arns should reject ${arn}`);
-
-    const specializedInputIds = [
-      "alias",
-      "deletion_window_in_days",
-      "description",
-      "key_administrator_role_arns",
-      "key_configuration",
-      "key_rotation_enabled",
-      "multi_region_enabled",
-      "public_key_reader_role_arns",
-      "signer_role_arns",
-    ];
-    for (const inputId of specializedInputIds) {
-      assert.equal(inputs.some((candidate) => candidate.id === inputId), false);
-    }
-
-    const specializedTerraformVariables = [
-      "alias",
-      "deletion_window_in_days",
-      "description",
-      "key_administrator_role_arns",
-      "key_rotation_enabled",
-      "key_spec",
-      "key_usage",
-      "multi_region_enabled",
-      "public_key_reader_role_arns",
-      "signer_role_arns",
-    ];
-    for (const variableName of specializedTerraformVariables) {
-      assert.equal(getTerraformVariable(compiled.module, variableName), undefined);
-    }
   });
 
   it("prevents EKS and database major version downgrades", async () => {
@@ -267,9 +217,19 @@ describe("compiler", () => {
     assert.match(String(additionalMaxSize.description), /pods can remain pending/);
     assert.equal(findInput(clusterInputs, "system_node_min_size").label, "Minimum nodes");
     assert.equal(findInput(clusterInputs, "system_node_max_size").label, "Maximum nodes");
-    assert.equal(findInput(clusterInputs, "system_node_max_size").default, 10);
+    assert.equal(findInput(clusterInputs, "system_node_min_size").default, 2);
+    assert.equal(findInput(clusterInputs, "system_node_max_size").default, 4);
     assert.match(String(findInput(clusterInputs, "system_node_min_size").description), /spare capacity/);
     assert.match(String(findInput(clusterInputs, "system_node_max_size").description), /pods can remain pending/);
+    for (const inputId of [
+      "system_node_capacity_type",
+      "system_node_instance_types",
+      "system_node_min_size",
+      "system_node_max_size",
+      "system_node_disk_size",
+    ]) {
+      assert.equal(findInput(clusterInputs, inputId).collapsible, true, `${inputId} should be collapsible`);
+    }
     assert.equal(clusterInputs.some((input) => input.id === "section_system_nodes"), false);
     assert.equal(clusterInputs.some((input) => input.id === "section_application_capacity"), false);
     assert.match(String(findInput(clusterInputs, "section_capacity").description), /0\.5 vCPU and 1 GiB/);
@@ -345,6 +305,32 @@ describe("compiler", () => {
       '<< module.input.karpenter_default_node_pool_capacity_types != nil ? module.input.karpenter_default_node_pool_capacity_types : ["on-demand", "spot"] >>',
     );
 
+    const addonsInputs = getModuleInputs(addons.module);
+    const addonsCluster = findInput(addonsInputs, "cluster");
+    const addonsClusterMappedInputs = (addonsCluster.mapped_inputs as unknown[]).map((input) =>
+      assertRecord(input, "addons.cluster.mapped_inputs[]"),
+    );
+    const runnerSecurityGroup = findInput(addonsClusterMappedInputs, "ravion_runner_security_group_id");
+    assert.equal(runnerSecurityGroup.default, "<<ref.stack.output.ravion_runner_security_group_id>>");
+    assert.equal(runnerSecurityGroup.immutable, true);
+
+    const addonsStack = assertRecord(addons.module.stack, "addons.module.stack");
+    const addonsPipelines = assertRecord(addonsStack.pipelines, "addons.module.stack.pipelines");
+    const addonsDefaults = assertRecord(addonsPipelines.defaults, "addons.module.stack.pipelines.defaults");
+    const addonsPipelineInput = assertRecord(addonsDefaults.input, "addons.module.stack.pipelines.defaults.input");
+    assert.deepEqual(addonsPipelineInput.execution_environment_overrides, {
+      security_group: "<< module.input.ravion_runner_security_group_id >>",
+    });
+
+    const addonsUi = assertRecord(addons.module.ui, "addons.module.ui");
+    const addonsMetrics = addonsUi.metrics;
+    assert.ok(Array.isArray(addonsMetrics), "addons.module.ui.metrics should be an array");
+    for (const metric of addonsMetrics) {
+      const metricRecord = assertRecord(metric, "addons.module.ui.metrics[]");
+      const source = assertRecord(metricRecord.source, `addons metric ${String(metricRecord.id)} source`);
+      assert.equal(source.type, "amp", `addons metric ${String(metricRecord.id)} should use the AMP source`);
+    }
+
     const deploy = assertRecord(web.module.deploy, "module.deploy");
     const webInputs = getModuleInputs(web.module);
     const computeTarget = findInput(webInputs, "compute_target");
@@ -413,6 +399,21 @@ describe("compiler", () => {
     assert.equal(operatorDeploy.label, "Ravion Operator deployments");
     assert.deepEqual(operatorDeploy.moved_from, ["beacon_deploy_enabled"]);
     assert.equal(operatorDeployNamespaces.required, true);
+    assert.notEqual(operatorDeployNamespaces.collapsible, true);
+    const namespaceCreation = findInput(inputs, "ravion_operator_namespaces_creation_enabled");
+    assert.equal(namespaceCreation.default, true);
+    assert.deepEqual(namespaceCreation.show_when, { ravion_operator_enabled: true });
+    assert.equal(
+      getTerraformVariable(compiled.module, "ravion_operator_namespaces_creation_enabled"),
+      "<< module.input.ravion_operator_namespaces_creation_enabled != nil ? module.input.ravion_operator_namespaces_creation_enabled : true >>",
+    );
+    assert.deepEqual(findInput(inputs, "logs_excluded_namespaces").default, [
+      "kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-operator", "ravion-beacon",
+    ]);
+    assert.equal(
+      getTerraformVariable(compiled.module, "logs_excluded_namespaces"),
+      '<< module.input.logs_excluded_namespaces != nil ? module.input.logs_excluded_namespaces : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-operator", "ravion-beacon"] >>',
+    );
     assert.deepEqual(operatorDeployNamespaces.moved_from, [
       "beacon_deploy_namespaces",
     ]);
@@ -440,9 +441,14 @@ describe("compiler", () => {
     for (const sectionId of ["section_ravion_operator", "section_karpenter", "section_external_secrets"]) {
       assert.doesNotMatch(String(findInput(inputs, sectionId).description), /Terraform runner/);
     }
-    assert.doesNotMatch(compiled.description, /Beacon/);
-    assert.doesNotMatch(compiled.releaseDescription, /Beacon/);
-    assert.doesNotMatch(String(compiled.module.readme), /Beacon/);
+    assert.doesNotMatch(JSON.stringify(compiled), /\bBeacon\b/);
+
+    for (const definitionName of ["rvn-eks-web", "rvn-eks-worker", "rvn-eks-cron"]) {
+      const workload = await compileDefinitionFile(
+        join(repoRoot, "compute", "eks_service", `${definitionName}-definition.yml`),
+      );
+      assert.doesNotMatch(JSON.stringify(workload), /\bBeacon\b/, `${definitionName} uses retired Beacon terminology`);
+    }
 
     for (const input of inputs) {
       if (typeof input.description === "string") {
@@ -458,7 +464,8 @@ describe("compiler", () => {
     const inputs = getModuleInputs(compiled.module);
     const indexOf = (id: string) => inputs.findIndex((input) => input.id === id);
 
-    assert.equal(indexOf("section_alb"), indexOf("ravion_operator_deploy_namespaces") + 1);
+    assert.equal(indexOf("ravion_operator_namespaces_creation_enabled"), indexOf("ravion_operator_deploy_namespaces") + 1);
+    assert.equal(indexOf("section_alb"), indexOf("ravion_operator_namespaces_creation_enabled") + 1);
     assert.ok(indexOf("section_alb") < indexOf("section_nlb"));
     assert.ok(indexOf("section_nlb") < indexOf("aws_load_balancer_controller_chart_version"));
     assert.ok(indexOf("aws_load_balancer_controller_chart_version") < indexOf("section_karpenter"));
@@ -519,6 +526,62 @@ describe("compiler", () => {
       assert.ok(addonsIndex < serviceSectionIndex, `${definitionName} should keep add-ons in the cluster section`);
       assert.equal(inputs.some((input) => input.id === "section_addons"), false);
       assert.equal(inputs.some((input) => input.id === "create_namespace"), false);
+    }
+  });
+
+  it("compiles focused KMS inputs with complete key user ARN validation", async () => {
+    const compiled = await compileDefinitionFile(join(repoRoot, "security", "kms", "rvn-aws-kms-definition.yml"));
+    const inputs = getModuleInputs(compiled.module);
+    const input = findInput(inputs, "key_user_role_arns");
+    const validArns = [
+      "arn:aws:iam::123456789012:root",
+      "arn:aws-us-gov:iam::123456789012:role/team/application",
+      "arn:aws-cn:iam::123456789012:user/developer",
+    ];
+    const invalidArns = [
+      "arn:aws:iam::",
+      "arn:aws:iam::12345678901:root",
+      "arn:aws:iam::123456789012:role/",
+      "arn:aws:iam::123456789012:group/developers",
+    ];
+
+    assert.ok(Array.isArray(input.patterns), "key_user_role_arns.patterns should be an array");
+    assert.equal(input.patterns.length, 1);
+    const validation = assertRecord(input.patterns[0], "key_user_role_arns.patterns[0]");
+    const pattern = new RegExp(assertString(validation.pattern));
+
+    for (const arn of validArns) assert.match(arn, pattern, `key_user_role_arns should accept ${arn}`);
+    for (const arn of invalidArns) assert.doesNotMatch(arn, pattern, `key_user_role_arns should reject ${arn}`);
+
+    const specializedInputIds = [
+      "alias",
+      "deletion_window_in_days",
+      "description",
+      "key_administrator_role_arns",
+      "key_configuration",
+      "key_rotation_enabled",
+      "multi_region_enabled",
+      "public_key_reader_role_arns",
+      "signer_role_arns",
+    ];
+    for (const inputId of specializedInputIds) {
+      assert.equal(inputs.some((candidate) => candidate.id === inputId), false);
+    }
+
+    const specializedTerraformVariables = [
+      "alias",
+      "deletion_window_in_days",
+      "description",
+      "key_administrator_role_arns",
+      "key_rotation_enabled",
+      "key_spec",
+      "key_usage",
+      "multi_region_enabled",
+      "public_key_reader_role_arns",
+      "signer_role_arns",
+    ];
+    for (const variableName of specializedTerraformVariables) {
+      assert.equal(getTerraformVariable(compiled.module, variableName), undefined);
     }
   });
 

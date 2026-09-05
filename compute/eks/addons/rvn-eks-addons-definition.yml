@@ -9,7 +9,9 @@ release:
     Rename the Terraform-facing Ravion Operator variables and outputs from beacon_* to ravion_operator_*.
     Automatically attach the cluster's Ravion Runner security group to add-on runs, render metrics from
     Amazon Managed Prometheus, provision new installations with supported Ravion Operator credentials,
-    and prevent first-time Karpenter installation failures when AWS Load Balancer Controller is enabled.
+    prevent first-time Karpenter installation failures when AWS Load Balancer Controller is enabled,
+    create missing Operator workload namespaces safely, and move the default Operator and observability
+    namespace to ravion-operator (existing Helm releases are replaced).
 module:
   inputs:
     - id: cluster
@@ -109,8 +111,7 @@ module:
         ravion_operator_enabled: true
       type: boolean
     - add_button_label: Add namespace
-      collapsible: true
-      description: Namespaces Ravion Operator may deploy into. If empty, the advanced operator observation scope is used. Installation fails if neither list contains a namespace.
+      description: Namespaces Ravion Operator may deploy into. Missing namespaces are created during apply by default and retained on removal. If empty, the advanced operator observation scope is used. Installation fails if neither list contains a namespace.
       id: ravion_operator_deploy_namespaces
       label: Deployment namespaces
       moved_from:
@@ -120,6 +121,14 @@ module:
       show_when:
         ravion_operator_deploy_enabled: true
       type: string_array
+    - default: true
+      description: Create missing observation and deployment namespaces before installing Operator permissions. Existing namespaces are reused without adoption; created namespaces are retained on removal or uninstall. Disable only when namespaces are provisioned separately.
+      id: ravion_operator_namespaces_creation_enabled
+      label: Create workload namespaces
+      collapsible: true
+      show_when:
+        ravion_operator_enabled: true
+      type: boolean
     - description: Shared Application Load Balancers for HTTP and HTTPS workloads. EKS Web services attach through TargetGroupBinding.
       id: section_alb
       label: Application load balancers
@@ -748,6 +757,7 @@ module:
         - kube-system
         - kube-node-lease
         - amazon-cloudwatch
+        - ravion-operator
         - ravion-beacon
       description: Kubernetes namespaces whose container logs are excluded from every destination.
       id: logs_excluded_namespaces
@@ -1058,7 +1068,7 @@ module:
         # lists and never the toggles.
         logs_providers: '<< module.input.logs_enabled == false ? [] : (module.input.logs_providers != nil ? module.input.logs_providers : ["loki"]) >>'
         metrics_providers: '<< module.input.metrics_enabled == false ? [] : (module.input.metrics_providers != nil ? module.input.metrics_providers : ["amp"]) >>'
-        logs_excluded_namespaces: '<< module.input.logs_excluded_namespaces != nil ? module.input.logs_excluded_namespaces : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-beacon"] >>'
+        logs_excluded_namespaces: '<< module.input.logs_excluded_namespaces != nil ? module.input.logs_excluded_namespaces : ["kube-system", "kube-node-lease", "amazon-cloudwatch", "ravion-operator", "ravion-beacon"] >>'
         logs_loki:
           retention_days: '<< module.input.loki_retention_days != nil ? module.input.loki_retention_days : 30 >>'
           s3_bucket_name: << module.input.loki_s3_bucket_name >>
@@ -1123,6 +1133,7 @@ module:
         ravion_operator_enabled: << module.input.ravion_operator_enabled >>
         ravion_operator_deploy_enabled: << module.input.ravion_operator_deploy_enabled >>
         ravion_operator_deploy_namespaces: '<< module.input.ravion_operator_deploy_namespaces != nil ? module.input.ravion_operator_deploy_namespaces : [] >>'
+        ravion_operator_namespaces_creation_enabled: '<< module.input.ravion_operator_namespaces_creation_enabled != nil ? module.input.ravion_operator_namespaces_creation_enabled : true >>'
         ravion_operator_project_id: << project.id >>
         ravion_operator_environment_id: << environment.id >>
         ravion_operator_aws_account_record_id: << module.input.aws_account_id >>
@@ -1301,10 +1312,14 @@ module:
     | ------------------ | ------- | --------------- |
     | `ravion_operator_endpoint` | `wss://websockets.ravion.com/beacon/v1/connect` | WebSocket endpoint the agent dials — the single destination an egress policy must allow. Override only for a staging or self-hosted control plane |
     | `ravion_operator_chart_version` | `0.4.1` | Ravion Operator **chart** version, pinned per module release; never the agent version — the chart keeps whatever the release is running and Ravion rolls it forward. Set to `null` to track the registry's latest |
-    | `ravion_operator_namespace` | `ravion-beacon` | Namespace the agent and its credential secret are installed into, created if missing |
+    | `ravion_operator_namespace` | `ravion-operator` | Namespace the agent and its credential secret are installed into, created if missing; also the default for shared observability components |
     | `ravion_operator_namespace_scope` | `[]` (cluster-wide read) | Namespaces the agent may observe. Naming namespaces renders no cluster-scoped read role at all, only one namespaced role per entry, so the restriction is enforced by Kubernetes rather than by the agent. A scoped agent cannot read nodes, so cluster node counts show as unknown |
 
     **Deployment namespaces** falls back to `ravion_operator_namespace_scope` when left empty, so a cluster scoped through the advanced variable also bounds Ravion Operator's deploys by default.
+
+    **Create workload namespaces** is enabled by default. Apply creates missing deployment and observation namespaces before installing Operator permissions. Namespaces managed elsewhere are reused without changing ownership. Namespaces created here are retained when removed from the list or when add-ons are uninstalled, so removing Operator does not delete application workloads. The Operator itself still cannot create namespaces.
+
+    **Namespace migration:** the default shared namespace is now `ravion-operator`. Existing Operator and observability Helm releases in `ravion-beacon` are replaced, interrupting logs and metrics while they restart. Review persistent volumes and back up any local-only data first; namespace changes do not migrate PVCs or their contents. The AWS credential and S3/AMP resources are unchanged. An explicit namespace override continues to take precedence. Chart names, Helm release names, credential Secret names, and connection paths are unchanged.
 
     ## External secrets
 
